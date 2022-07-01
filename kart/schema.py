@@ -133,9 +133,16 @@ class ColumnSchema(
     )
 ):
     """
-    The schema for a single column. A column has a unique ID that is constant for the columns lifetime
-    - even if the column is moved or renamed - and it has a name, a datatype, info about if this
-    column is one of the primary keys, and potentially extra info about the specific datatype.
+    The schema for a single column.
+
+    - A column may have a unique ID that is constant for the columns lifetime - even if the column is moved or renamed.
+    This ID is Kart-specific and doesn't reflect anything in the working copy, since working copies don't provide
+    a way of uniquely tracking columns through renames.
+    - A column has a name - that is externally considered to be its unique identifier, but it can change from
+    version to version. For working copy types where renames are not possible, the ID is None and the name is
+    effectively the ID.
+    - A column also has a datatype, info about whether this column is one of the primary keys, and potentially extra
+    info about the specific datatype.
     """
 
     @staticmethod
@@ -155,7 +162,7 @@ class ColumnSchema(
     @classmethod
     def from_dict(cls, d):
         d = d.copy()
-        id_ = d.pop("id")
+        id_ = d.pop("id", None)
         name = d.pop("name")
         data_type = d.pop("dataType")
         pk_index = d.pop("primaryKeyIndex", None)
@@ -164,6 +171,8 @@ class ColumnSchema(
 
     def to_dict(self):
         result = {"id": self.id, "name": self.name, "dataType": self.data_type}
+        if self.id is None:
+            del result["id"]
         if self.pk_index is not None:
             result["primaryKeyIndex"] = self.pk_index
         for key, value in self.extra_type_info.items():
@@ -198,6 +207,10 @@ class ColumnSchema(
         for key in list(col_dict.keys()):
             if key not in ("id", "name", "dataType") and col_dict[key] is None:
                 del col_dict[key]
+
+    @property
+    def id_or_name(self):
+        return self.id if self.id is not None else self.name
 
 
 class Schema:
@@ -244,10 +257,10 @@ class Schema:
         return bool(self.geometry_columns)
 
     def __getitem__(self, i):
-        """Return the _i_th ColumnSchema, or, the ColumnSchema with the given ID."""
+        """Return the _i_th ColumnSchema, or, the ColumnSchema with the given ID or name."""
         if isinstance(i, str):
             try:
-                return next(c for c in self.columns if c.id == i)
+                return next(c for c in self.columns if c.id == i or c.name == i)
             except StopIteration:
                 raise KeyError(f"No such column: {i}")
 

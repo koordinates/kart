@@ -390,7 +390,6 @@ class TableV3(RichTableDataset):
         """Apply a meta diff to this dataset. Checks for conflicts."""
         if not meta_diff:
             return
-        self._check_meta_diff_is_commitable(meta_diff)
 
         has_conflicts = False
 
@@ -420,26 +419,6 @@ class TableV3(RichTableDataset):
             raise InvalidOperation(
                 "Patch does not apply",
                 exit_code=PATCH_DOES_NOT_APPLY,
-            )
-
-    def _check_meta_diff_is_commitable(self, meta_diff):
-        # This is currently the only case where we sometimes generate a diff we cannot commit -
-        # if the user has tried to attach more than one XML metadata blob to a dataset.
-        if "metadata.xml" in meta_diff and isinstance(
-            meta_diff["metadata.xml"].new_value, list
-        ):
-            raise NotYetImplemented(
-                "Sorry, committing more than one XML metadata file is not supported"
-            )
-
-    @classmethod
-    def check_source_is_importable(cls, source):
-        # This is currently the only case where we sometimes generate meta items we cannot import -
-        # if there is more than one XML metadata blob attached to a single dataset.
-        metadata_xml = source.meta_items().get("metadata.xml")
-        if isinstance(metadata_xml, list):
-            raise NotYetImplemented(
-                f"Sorry, importing more than one XML metadata file for a single dataset ({source.dest_path}) is not supported"
             )
 
     def _apply_meta_deltas_to_tree(

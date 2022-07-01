@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from .base_diff_writer import BaseDiffWriter
+from .list_of_conflicts import ListOfConflicts
 from .output_util import format_wkt_for_output, resolve_output_path
 from .tabular.feature_output import feature_as_text, feature_field_as_text
 from .schema import Schema
@@ -67,7 +68,9 @@ class TextDiffWriter(BaseDiffWriter):
             for key, delta in ds_diff["tile"].sorted_items():
                 self.write_dict_delta_only_show_diffs(ds_path, "tile", key, delta)
 
-    def write_simple_delta(self, ds_path, item_type, key, delta):
+    def write_full_delta(self, ds_path, item_type, key, delta):
+        """Writes the old and new halves of a delta in full - ie, not just those parts that have changed."""
+
         if delta.old:
             click.secho(
                 f"--- {ds_path}:{item_type}:{delta.old_key}", bold=True, **self.pecho
@@ -78,14 +81,19 @@ class TextDiffWriter(BaseDiffWriter):
             )
 
         if delta.old:
-            output = self._prefix_simple_item(delta.old_value, delta.old_key, "- ")
+            output = self._prefix_item(delta.old_value, delta.old_key, "- ")
             click.secho(output, fg="red", **self.pecho)
         if delta.new:
-            output = self._prefix_simple_item(delta.new_value, delta.new_key, "+ ")
+            output = self._prefix_item(delta.new_value, delta.new_key, "+ ")
             click.secho(output, fg="green", **self.pecho)
 
     def write_meta_delta(self, ds_path, key, delta):
-        if key == "schema.json" and delta.old and delta.new:
+        if (
+            key == "schema.json"
+            and delta.old
+            and delta.new
+            and not isinstance(delta.new_value, ListOfConflicts)
+        ):
             # Make a more readable schema diff.
             click.secho(f"--- {ds_path}:meta:schema.json", bold=True, **self.pecho)
             click.secho(f"+++ {ds_path}:meta:schema.json", bold=True, **self.pecho)
@@ -95,21 +103,26 @@ class TextDiffWriter(BaseDiffWriter):
             )
             click.echo(output, **self.pecho)
         else:
-            self.write_simple_delta(ds_path, "meta", key, delta)
+            self.write_full_delta(ds_path, "meta", key, delta)
 
     @classmethod
-    def _prefix_simple_item(cls, meta_item, meta_item_name, prefix):
-        if meta_item_name.endswith(".wkt"):
-            return cls._prefix_wkt(meta_item, prefix)
-        elif isinstance(meta_item, dict) or meta_item_name.endswith(".json"):
-            return cls._prefix_json(meta_item, prefix)
+    def _prefix_item(cls, item, item_name, prefix):
+        output = cls._format_item(item, item_name)
+        return re.sub("^", prefix, output, flags=re.MULTILINE)
+
+    @classmethod
+    def _format_item(cls, item, item_name):
+        if isinstance(item, ListOfConflicts):
+            conflict_output = "\n======== \n".join(
+                cls._format_item(i, item_name) for i in item
+            )
+            return f"<<<<<<< \n{conflict_output}\n>>>>>>> "
+        elif item_name.endswith(".wkt"):
+            return format_wkt_for_output(item)
+        elif isinstance(item, (dict, list)) or item_name.endswith(".json"):
+            return json.dumps(item, indent=2)
         else:
-            return re.sub("^", prefix, str(meta_item), flags=re.MULTILINE)
-
-    @classmethod
-    def _prefix_wkt(cls, wkt, prefix):
-        wkt = format_wkt_for_output(wkt)
-        return re.sub("^", prefix, wkt, flags=re.MULTILINE)
+            return str(item)
 
     @classmethod
     def _prefix_json(cls, jdict, prefix):
@@ -231,8 +244,8 @@ class TextDiffWriter(BaseDiffWriter):
 
     @classmethod
     def _diff_schema(cls, old_schema, new_schema):
-        old_ids = [c.id for c in old_schema]
-        new_ids = [c.id for c in new_schema]
+        old_ids = [c.id_or_name for c in old_schema]
+        new_ids = [c.id_or_name for c in new_schema]
 
         def transform(id_pair):
             old_id, new_id = id_pair

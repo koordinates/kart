@@ -5,7 +5,13 @@ import sys
 
 import click
 
-from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
+from kart.crs_util import normalise_wkt
+from kart.list_of_conflicts import ListOfConflicts
+from kart.exceptions import (
+    InvalidOperation,
+    INVALID_FILE_FORMAT,
+    WORKING_COPY_OR_IMPORT_CONFLICT,
+)
 from kart.output_util import format_json_for_output, format_wkt_for_output
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf,
@@ -15,15 +21,6 @@ from kart.point_cloud.schema_util import (
 
 
 L = logging.getLogger(__name__)
-
-
-class ListOfConflicts(list):
-    """
-    A list of conflicting possibilities.
-    Having one of these in a merged_metadata means that the metadata couldn't be fully merged.
-    """
-
-    pass
 
 
 class RewriteMetadata(Enum):
@@ -127,7 +124,7 @@ def _check_for_non_homogenous_meta_item(
             click.echo(f"The input files have more than one {output_name}:", err=True)
         click.echo(disparity, err=True)
         raise InvalidOperation(
-            "Non-homogenous dataset supplied", exit_code=INVALID_FILE_FORMAT
+            "Non-homogenous dataset supplied", exit_code=WORKING_COPY_OR_IMPORT_CONFLICT
         )
 
 
@@ -243,7 +240,7 @@ def extract_pc_tile_metadata(
     result = {
         "format": format_info,
         "tile": tile_info,
-        "crs": compound_crs or horizontal_crs,
+        "crs": normalise_wkt(compound_crs or horizontal_crs),
     }
     if extract_schema:
         result["schema"] = pdal_schema_to_kart_schema(

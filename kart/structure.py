@@ -17,6 +17,7 @@ from .exceptions import (
     NotYetImplemented,
 )
 from .key_filters import RepoKeyFilter
+from . import list_of_conflicts
 from .pack_util import packfile_object_builder
 from .schema import Schema
 from .tabular.version import extra_blobs_for_version, dataset_class_for_version
@@ -349,6 +350,7 @@ class RepoStructure:
         if not self.ref:
             raise RuntimeError("Can't commit diff - no reference to add commit to")
 
+        list_of_conflicts.check_diff_is_committable(wcdiff)
         self.check_values_match_schema(wcdiff)
 
         with packfile_object_builder(self.repo, self.tree) as object_builder:

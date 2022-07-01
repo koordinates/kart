@@ -284,9 +284,7 @@ def fast_import_tables(
         extra_blobs_for_version(repo.table_dataset_version) if not from_commit else []
     )
 
-    TableImportSource.check_valid(
-        sources, dataset_class_for_version(repo.table_dataset_version)
-    )
+    TableImportSource.check_valid(sources)
 
     if replace_existing == ReplaceExisting.DONT_REPLACE:
         for source in sources:

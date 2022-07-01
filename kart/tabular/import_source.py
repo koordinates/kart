@@ -1,6 +1,7 @@
 import click
 
 from kart.exceptions import NO_TABLE, NotFound
+from kart import list_of_conflicts
 from kart.schema import Schema
 from kart.output_util import InputMode, get_input_mode
 
@@ -39,13 +40,11 @@ class TableImportSource:
             return OgrTableImportSource.open(full_spec, table=table)
 
     @classmethod
-    def check_valid(cls, import_sources, dataset_class=None, param_hint=None):
+    def check_valid(cls, import_sources, param_hint=None):
         """Given an iterable of TableImportSources, checks that all are fully specified and none of their dest_paths collide."""
         dest_paths = {}
         for s1 in import_sources:
             s1.check_fully_specified()
-            if dataset_class is not None:
-                dataset_class.check_source_is_importable(s1)
             dest_path = s1.dest_path
             if dest_path not in dest_paths:
                 dest_paths[dest_path] = s1
@@ -55,6 +54,7 @@ class TableImportSource:
                     f"Can't import both {s1} and {s2} as {dest_path}",
                     param_hint=param_hint,
                 )
+        list_of_conflicts.check_sources_are_importable(import_sources)
 
     def check_fully_specified(self):
         """
