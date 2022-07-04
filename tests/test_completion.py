@@ -1,5 +1,10 @@
 import os
 from pathlib import Path
+import subprocess
+
+from pytest_mock import mocker
+from pathlib import Path
+import shellingham
 
 from kart.cli_util import OutputFormatType
 from kart.completion_shared import conflict_completer, ref_completer, path_completer
@@ -125,3 +130,34 @@ def test_show_output_format_completer(data_archive_readonly):
             "json",
             "json-lines",
         ]
+
+
+def test_completion_install_powershell(cli_runner, mocker):
+    completion_path: Path = Path.home() / os.path.join(
+        ".config", "powershell", "Microsoft.PowerShell_profile.ps1"
+    )
+    text = ""
+    if completion_path.is_file():
+        text = completion_path.read_text()
+
+    mocker.patch.object(
+        shellingham, "detect_shell", return_value=("pwsh", "/usr/bin/pwsh")
+    )
+    mocker.patch.object(
+        subprocess,
+        "run",
+        return_value=subprocess.CompletedProcess(
+            ["pwsh"], returncode=0, stdout=str(completion_path)
+        ),
+    )
+    result = cli_runner.invoke(["config", "--install-tab-completion", "auto"])
+    install_script = "Register-ArgumentCompleter -Native -CommandName mocked-typer-testing-app -ScriptBlock $scriptblock"
+    parent: Path = completion_path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    completion_path.write_text(install_script)
+    new_text = completion_path.read_text()
+    completion_path.write_text(text)
+    assert install_script not in text
+    assert install_script in new_text
+    assert "completion installed in" in result.stdout
+    assert "Completion will take effect once you restart the terminal" in result.stdout
