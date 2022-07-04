@@ -235,8 +235,10 @@ class PointCloudV1(BaseDataset):
         """
         meta_diff = dataset_diff.get("meta")
         if meta_diff:
-            raise NotYetImplemented(
-                "Sorry, committing meta diffs for point cloud datasets is not yet supported"
+            self.apply_meta_diff(
+                meta_diff,
+                object_builder,
+                resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
 
         tile_diff = dataset_diff.get("tile")

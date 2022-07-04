@@ -385,17 +385,21 @@ class TableV3(RichTableDataset):
                 yield self.encode_feature(feature, schema)
 
     def apply_meta_diff(
-        self, meta_diff, object_builder, *, resolve_missing_values_from_ds=False
+        self, meta_diff, object_builder, *, resolve_missing_values_from_ds=None
     ):
         """Apply a meta diff to this dataset. Checks for conflicts."""
         if not meta_diff:
             return
 
-        has_conflicts = False
+        no_conflicts = True
+
+        resolve_missing_values_from_tree = None
+        if resolve_missing_values_from_ds:
+            resolve_missing_values_from_tree = resolve_missing_values_from_ds.meta_tree
 
         # Apply diff to hidden meta items folder: <dataset>/.table-dataset/meta/<item-name>
         with object_builder.chdir(f"{self.inner_path}/{self.META_PATH}"):
-            has_conflicts |= self._apply_meta_deltas_to_tree(
+            no_conflicts &= self._apply_meta_deltas_to_tree(
                 (
                     d
                     for d in meta_diff.values()
@@ -403,19 +407,24 @@ class TableV3(RichTableDataset):
                 ),
                 object_builder,
                 self.meta_tree if self.inner_tree is not None else None,
-                resolve_missing_values_from_ds=resolve_missing_values_from_ds,
+                resolve_missing_values_from_tree=resolve_missing_values_from_tree,
+            )
+
+        if resolve_missing_values_from_ds:
+            resolve_missing_values_from_tree = (
+                resolve_missing_values_from_ds.attachment_tree
             )
 
         # Apply diff to visible attachment meta items: <dataset>/<item-name>
         with object_builder.chdir(self.path):
-            has_conflicts |= self._apply_meta_deltas_to_tree(
+            no_conflicts &= self._apply_meta_deltas_to_tree(
                 (d for d in meta_diff.values() if d.key in self.ATTACHMENT_META_ITEMS),
                 object_builder,
                 self.attachment_tree,
-                resolve_missing_values_from_ds=resolve_missing_values_from_ds,
+                resolve_missing_values_from_tree=resolve_missing_values_from_tree,
             )
 
-        if has_conflicts:
+        if not no_conflicts:
             raise InvalidOperation(
                 "Patch does not apply",
                 exit_code=PATCH_DOES_NOT_APPLY,
@@ -427,7 +436,7 @@ class TableV3(RichTableDataset):
         object_builder,
         existing_tree,
         *,
-        resolve_missing_values_from_ds=False,
+        resolve_missing_values_from_tree=None,
     ):
         # Applying diffs works even if there is no tree yet created for the dataset,
         # as is the case when the dataset is first being created right now.
@@ -435,92 +444,65 @@ class TableV3(RichTableDataset):
             # This lets us test if something is in existing_tree without crashing.
             existing_tree = ()
 
-        has_conflicts = False
+        no_conflicts = True
         for delta in deltas:
-            name = delta.key
-            old_value = delta.old_value
-            new_value = delta.new_value
-
             # Schema.json needs some special-casing - for one thing, we need to write the legend too.
-            if name == "schema.json":
-                old_schema = Schema.from_column_dicts(old_value) if old_value else None
-                new_schema = Schema.from_column_dicts(new_value) if new_value else None
-
-                if old_schema and new_schema:
-                    if not old_schema.is_pk_compatible(new_schema):
-                        raise NotYetImplemented(
-                            "Schema changes that involve primary key changes are not yet supported"
-                        )
-                if new_schema:
-                    legend = new_schema.legend
-                    object_builder.insert(
-                        f"{self.LEGEND_DIRNAME}/{legend.hexhash()}",
-                        legend.dumps(),
-                    )
-                path_encoder = self.feature_path_encoder
-                if (
-                    new_schema
-                    and not existing_tree
-                    and path_encoder is not PathEncoder.LEGACY_ENCODER
-                ):
-                    object_builder.insert(
-                        "path-structure.json", json_pack(path_encoder.to_dict())
-                    )
-
-            # Conflict detection
-            if delta.type == "delete" and name not in existing_tree:
-                has_conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to delete nonexistent meta item: {name}",
-                    err=True,
+            if delta.key == "schema.json":
+                no_conflicts &= self._apply_schema_json_delta_to_tree(
+                    delta,
+                    object_builder,
+                    existing_tree,
+                    resolve_missing_values_from_tree=resolve_missing_values_from_tree,
                 )
-                continue
-            if delta.type == "insert" and name in existing_tree:
-                current_data = (existing_tree / name).data
-                if current_data:
-                    if resolve_missing_values_from_ds is not None:
-                        old_data = (
-                            resolve_missing_values_from_ds.meta_tree / name
-                        ).data
-                        if old_data != current_data:
-                            has_conflicts = True
-                            click.echo(
-                                f"{self.path}: Meta item was modified since patch: {name}",
-                                err=True,
-                            )
-                            continue
-
-                    else:
-                        has_conflicts = True
-                        click.echo(
-                            f"{self.path}: Trying to create meta item that already exists: {name}",
-                            err=True,
-                        )
-                        continue
-
-            if delta.type == "update" and name not in existing_tree:
-                has_conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update nonexistent meta item: {name}",
-                    err=True,
-                )
-                continue
-            if delta.type == "update" and self.get_meta_item(name) != old_value:
-                has_conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update out-of-date meta item: {name}",
-                    err=True,
-                )
-                continue
-
-            # General case
-            if new_value is not None:
-                if name.endswith(".json"):
-                    new_value = json_pack(new_value)
-                else:
-                    new_value = ensure_bytes(new_value)
-                object_builder.insert(name, new_value)
             else:
-                object_builder.remove(name)
+                # General case:
+                no_conflicts &= self._apply_meta_delta_to_tree(
+                    delta,
+                    object_builder,
+                    existing_tree,
+                    resolve_missing_values_from_tree=resolve_missing_values_from_tree,
+                )
 
-        return has_conflicts
+        return no_conflicts
+
+    def _apply_schema_json_delta_to_tree(
+        self,
+        delta,
+        object_builder,
+        existing_tree,
+        *,
+        resolve_missing_values_from_tree=False,
+    ):
+        old_value = delta.old_value
+        new_value = delta.new_value
+
+        old_schema = Schema.from_column_dicts(old_value) if old_value else None
+        new_schema = Schema.from_column_dicts(new_value) if new_value else None
+
+        if old_schema and new_schema:
+            if not old_schema.is_pk_compatible(new_schema):
+                raise NotYetImplemented(
+                    "Schema changes that involve primary key changes are not yet supported"
+                )
+        if new_schema:
+            legend = new_schema.legend
+            object_builder.insert(
+                f"{self.LEGEND_DIRNAME}/{legend.hexhash()}",
+                legend.dumps(),
+            )
+        path_encoder = self.feature_path_encoder
+        if (
+            new_schema
+            and not existing_tree
+            and path_encoder is not PathEncoder.LEGACY_ENCODER
+        ):
+            object_builder.insert(
+                "path-structure.json", json_pack(path_encoder.to_dict())
+            )
+
+        return self._apply_meta_delta_to_tree(
+            delta,
+            object_builder,
+            existing_tree,
+            resolve_missing_values_from_tree=resolve_missing_values_from_tree,
+        )
