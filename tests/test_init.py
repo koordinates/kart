@@ -869,7 +869,9 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
-    r = cli_runner.invoke(["init", str(repo_path), "--workingcopy-path=wc.gpkg"])
+    gpkg_path = repo_path / "wc.gpkg"
+
+    r = cli_runner.invoke(["init", str(repo_path), f"--workingcopy-path={gpkg_path}"])
     assert r.exit_code == 0, r
 
     ARCHIVE_PATHS = (

@@ -8,7 +8,6 @@ import click
 from .exceptions import InvalidOperation
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
-from .working_copy import PartType
 
 
 def get_directory_from_url(url, is_bare):

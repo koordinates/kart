@@ -84,7 +84,9 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         gpkg_path = Path(wc_location)
         if not gpkg_path.is_absolute():
             try:
-                return str(gpkg_path.resolve().relative_to(repo.workdir_path.resolve()))
+                return str(
+                    os.path.relpath(gpkg_path.resolve(), repo.workdir_path.resolve())
+                )
             except ValueError:
                 pass
         return str(gpkg_path)
