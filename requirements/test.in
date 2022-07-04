@@ -11,4 +11,5 @@ pytest-helpers-namespace
 pytest-benchmark[aspect]
 pytest-profiling
 pytest-shard
+pytest-mock
 html5lib

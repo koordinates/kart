@@ -549,6 +549,8 @@ jobs:
           brew uninstall --force php composer
           brew update-reset
           sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
+          brew install bash
+          echo "/usr/local/bin" >> $GITHUB_PATH
           brew upgrade python@3.9 || echo "The link step of `brew upgrade python@3.9` fails. This is okay."
           brew install --force ccache pkg-config sqlite3 pandoc
           brew install --force --cask Packages

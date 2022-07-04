@@ -7,6 +7,7 @@ Pygments
 Rtree~=0.9.4
 sqlalchemy
 pyodbc ; platform_system!="Linux"
+shellingham
 
 # jsonschema>=4.2 pulls in importlib_resources, which breaks PyInstaller<4.8
 # https://github.com/pyinstaller/pyinstaller/pull/6195

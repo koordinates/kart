@@ -17,6 +17,7 @@ from . import core  # noqa
 from .cli_util import add_help_subcommand, call_and_exit_flag, tool_environment
 from .context import Context
 from .exec import execvp
+from kart.completion import Shells, install_callback
 
 MODULE_COMMANDS = {
     "annotations.cli": {"build-annotations"},
@@ -280,6 +281,13 @@ def reflog(ctx, args):
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
+@click.option(
+    "--install-tab-completion",
+    type=click.Choice([s.value for s in Shells] + ["auto"]),
+    callback=install_callback,
+    expose_value=False,
+    help="Install tab completion for the specific or current shell",
+)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def config(ctx, args):
     """Get and set repository or global options"""
