@@ -138,6 +138,14 @@ vendor-install:
 	-$(RM) $(vendor-install)
 	$(MAKE) $(vendor-install)
 
+man-build := $(VIRTUAL_ENV)/man
+
+.PHONY: man
+man:
+	click-man --target $(man-build) kart
+	gzip -f $(man-build)/*
+	sudo mv -f $(man-build)/* /usr/share/man/man1
+
 # Install Python (just release) dependencies
 .PHONY: py-deps
 py-deps: $(vendor-install) $(py-install-main) | $(VIRTUAL_ENV)
@@ -145,6 +153,7 @@ py-deps: $(vendor-install) $(py-install-main) | $(VIRTUAL_ENV)
 # Install Python (development & release) py-deps
 .PHONY: py-deps-dev
 py-deps-dev: py-deps $(py-install-dev) $(py-install-tools)
+
 
 # App code
 kart-app-release = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/kart
