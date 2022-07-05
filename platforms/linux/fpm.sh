@@ -21,6 +21,12 @@ if [ "$TYPE" = "deb" ]; then
     OPTS+="--depends openssh-client "
     OPTS+="--depends libstdc++6 "
     OPTS+="--depends libgcc1 "
+    OPTS+="--depends libbz2-1.0 "
+    OPTS+="--depends libexpat1 "
+    OPTS+="--depends liblzma5 "
+    OPTS+="--depends libstdc++6 "
+    OPTS+="--depends libtinfo5 "
+    OPTS+="--depends zlib1g "
     OPTS+="--deb-recommends libodbc1 "
     OPTS+="--deb-recommends odbcinst "
 elif [ "$TYPE" = "rpm" ]; then
@@ -28,6 +34,12 @@ elif [ "$TYPE" = "rpm" ]; then
     OPTS+="--depends openssh-clients "
     OPTS+="--depends libstdc++ "
     OPTS+="--depends libgcc "
+    OPTS+="--depends bzip2-libs "
+    OPTS+="--depends expat "
+    OPTS+="--depends xz-libs "
+    OPTS+="--depends libstdc++ "
+    OPTS+="--depends ncurses-libs "
+    OPTS+="--depends zlib "
 fi
 
 # build package

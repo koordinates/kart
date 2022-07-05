@@ -106,11 +106,15 @@ endif
 		'pip-tools==5.*' \
 		liccheck \
 		pipdeptree \
-		'pyinstaller==3.6.*' \
 		$(WHEELTOOL)
 
+	echo "Build bootloader with client for helper mode"
+	(cd pyinstaller/bootloader && python3 ./waf all)
+	pip install ./pyinstaller
+
 	# disable the pyodbc hook. TODO: We can override it in PyInstaller 4.x
-	rm $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/PyInstaller/hooks/hook-pyodbc.py
+	echo "disable pyodbc hook"
+	rm $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/_pyinstaller_hooks_contrib/hooks/stdhooks/hook-pyodbc.py
 
 	touch $@
 

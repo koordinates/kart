@@ -111,6 +111,10 @@ gdal.UseExceptions()
 ogr.UseExceptions()
 osr.UseExceptions()
 
+if is_linux:
+    import certifi
+    os.environ['SSL_CERT_FILE'] = certifi.where()
+
 # Libgit2 options
 import pygit2
 

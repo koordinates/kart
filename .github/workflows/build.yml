@@ -63,6 +63,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       #
       # python distribution
@@ -288,6 +290,8 @@ jobs:
           toolset: 14.0
 
       - uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       #
       # python distribution
@@ -501,30 +505,21 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
       PY_VER: "3.7"
-      PY3_PKG: python-3.7.6-macosx10.9.pkg
-      PY3_URL: https://www.python.org/ftp/python/3.7.6/python-3.7.6-macosx10.9.pkg
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       #
       # python distribution
       #
-
-      - name: "python: cache"
-        id: cache-pydist
-        uses: actions/cache@v2
+      - name: "python"
+        uses: actions/setup-python@v2
         with:
-          path: .cache/pydist
-          key: pydist-${{ runner.os }}-${{ env.PY3_PKG }}
-
-      - name: "python: download"
-        if: steps.cache-pydist.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p .cache/pydist
-          wget -nv ${{ env.PY3_URL }} -O .cache/pydist/${{ env.PY3_PKG }}
-
+          python-version: ${{ env.PY_VER }}
+          
       - name: "python: pip cache"
         uses: actions/cache@v2
         with:
@@ -809,6 +804,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       #
       # setup
@@ -926,6 +923,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       #
       # setup
@@ -1039,6 +1038,8 @@ jobs:
       )
     steps:
       - uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       #
       # python distribution

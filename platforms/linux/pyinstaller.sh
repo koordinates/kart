@@ -5,6 +5,10 @@ source /root/.bashrc
 
 set -xu
 
+export PY_VERSION=3.7
+export PY_SITEPACKAGES="lib/python$PY_VERSION/site-packages"
+export VIRTUAL_ENV=/venv
+
 export PATH=/opt/python/cp37-cp37m-shared/bin:${PATH}
 
 python3 --version
@@ -25,8 +29,14 @@ pip install --no-deps --ignore-installed -r requirements.txt
 pip install --no-deps \
     /tmp/wheelhouse/*.whl
 
-{ echo ">> Downgrading PyInstaller (https://github.com/pyinstaller/pyinstaller/issues/4674) ..."; } 2> /dev/null
-pip install "pyinstaller==3.5.*"
+{ echo ">> Building PyInstaller bootloaders ..."; } 2> /dev/null
+yum install -y zlib-devel
+(cd /src/pyinstaller/bootloader && python3 ./waf all)
+pip install /src/pyinstaller
+
+# disable the pyodbc hook. TODO: We can override it in PyInstaller 4.x
+echo "disable pyodbc hook"
+rm "$VIRTUAL_ENV/$PY_SITEPACKAGES/_pyinstaller_hooks_contrib/hooks/stdhooks/hook-pyodbc.py"
 
 python3 setup.py install
 

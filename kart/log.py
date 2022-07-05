@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import sys
@@ -16,7 +17,7 @@ from .cli_util import (
     tool_environment,
 )
 from .exceptions import NotYetImplemented, SubprocessError
-from .exec import execvp
+from .exec import run_and_wait
 from .key_filters import RepoKeyFilter
 from .output_util import dump_json_output
 from .repo import KartRepoState
@@ -383,7 +384,7 @@ def log(
         if fmt:
             options.append(f"--format={fmt}")
         git_args = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
-        execvp("git", git_args)
+        run_and_wait("git", git_args)
 
     elif output_type in ("json", "json-lines"):
         try:

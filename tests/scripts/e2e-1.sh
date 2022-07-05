@@ -4,7 +4,7 @@ set -eu
 if ! command -v realpath >/dev/null; then
     # MacOS doesn't have realpath or readlink -f by default
     function realpath() {
-        python -c 'import os, sys; print os.path.realpath(sys.argv[1])' "$1"
+        python -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
     }
 fi
 
@@ -27,10 +27,11 @@ trap do_cleanup EXIT
 
 KART_PATH=$(dirname "$(realpath "$(command -v kart)")")
 echo "Kart is at: ${KART_PATH}"
-
 mkdir "${TMP_PATH}/test"
 cd "${TMP_PATH}/test"
 set -x
+
+echo "Using helper mode: ${KART_USE_HELPER:-0}"
 
 kart init --initial-branch=main .
 kart config user.name "Kart E2E Test 1"

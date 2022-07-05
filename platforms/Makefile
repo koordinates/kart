@@ -13,6 +13,11 @@ pyinstaller := $(abspath ../venv/bin/pyinstaller)
 
 export PATH := $(abspath ../venv/bin):$(PATH)
 
+PY_VERSION ?= 3.7
+# Python binaries like python, pip in the venv will take precedence.
+VIRTUAL_ENV ?= ../venv
+PY_SITEPACKAGES = lib/python$(PY_VERSION)/site-packages
+
 pyapp-Linux = linux/dist/kart/kart_cli
 pyapp-Darwin = macos/dist/Kart.app
 deb = linux/dist/kart_$(VERSION)-1_amd64.deb
