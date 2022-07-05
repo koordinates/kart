@@ -42,6 +42,31 @@ class ListOfConflicts(list):
     - can be resolved by the user selecting which version will be the winner, by name eg ancestor, ours or theirs.
     """
 
+    def print_error_message(self, item_name, ds_path, is_import_cmd=False):
+        error_message = getattr(self, "error_message", None)
+        if not error_message:
+            error_message = self._generate_error_message(
+                item_name, ds_path, is_import_cmd=is_import_cmd
+            )
+        click.echo(error_message, err=True)
+
+    def _generate_error_message(self, item_name, ds_path, is_import_cmd=False):
+        verb = "Importing" if is_import_cmd else "Committing"
+        return f"{verb} more than one {item_name!r} for {ds_path!r} is not supported"
+
+
+class InvalidNewValue(ListOfConflicts):
+    """
+    Less commonly than multiple conflicting values, sometimes there are single values that are disallowed in the Kart model.
+
+    Extending "ListOfConflicts" means to cover this use-case means we only need to handle the one special case during diffs -
+    - an InvalidNewValue is mostly just a ListOfConflicts of length 1, but with a different error message.
+    """
+
+    def _generate_error_message(self, item_name, ds_path, is_import_cmd=False):
+        verb = "import" if is_import_cmd else "commit"
+        return f"Cannot {verb} invalid {item_name!r} for {ds_path!r}"
+
 
 def check_diff_is_committable(repo_diff):
     has_conflicts = False
@@ -51,11 +76,7 @@ def check_diff_is_committable(repo_diff):
             continue
         for key, item in ds_diff["meta"].items():
             if isinstance(item.new_value, ListOfConflicts):
-                # TODO - make this output a bit more informative.
-                click.echo(
-                    f"Committing more than one {key!r} for {ds_path!r} is not supported",
-                    err=True,
-                )
+                item.new_value.print_error_message(key, ds_path)
                 has_conflicts = True
     if has_conflicts:
         raise InvalidOperation(
@@ -69,10 +90,7 @@ def check_sources_are_importable(sources):
     for source in sources:
         for key, item in source.meta_items().items():
             if isinstance(item, ListOfConflicts):
-                click.echo(
-                    f"Importing more than one {key!r} for {source.dest_path!r} is not supported",
-                    err=True,
-                )
+                item.print_error_message(key, source.dest_path, is_import_cmd=True)
                 has_conflicts = True
     if has_conflicts:
         raise InvalidOperation(

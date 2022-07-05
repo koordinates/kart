@@ -5,8 +5,8 @@ import shutil
 from kart.core import find_blobs_in_tree
 from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue
-from kart.exceptions import NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
+from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
 from kart.lfs_util import (
     get_hash_and_size_of_file,
     get_hash_from_pointer_file,
@@ -15,6 +15,7 @@ from kart.lfs_util import (
     dict_to_pointer_file_bytes,
 )
 from kart.point_cloud.metadata_util import (
+    RewriteMetadata,
     extract_pc_tile_metadata,
     rewrite_and_merge_metadata,
     format_tile_info_for_pointer_file,
@@ -157,7 +158,11 @@ class PointCloudV1(BaseDataset):
         )
 
     def diff_to_working_copy(
-        self, workdir_diff_cache, ds_filter=DatasetKeyFilter.MATCH_ALL
+        self,
+        workdir_diff_cache,
+        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        *,
+        convert_to_ds_format=False,
     ):
         """Returns a diff of all changes made to this dataset in the working copy."""
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
@@ -196,14 +201,45 @@ class PointCloudV1(BaseDataset):
 
         is_clean_slate = self.is_clean_slate(tile_diff)
         metadata_list = list(tilename_to_metadata.values())
+        no_new_metadata = not metadata_list
 
         current_metadata = self.tile_metadata
         if not is_clean_slate:
             metadata_list.insert(0, current_metadata)
 
-        merged_metadata = rewrite_and_merge_metadata(metadata_list)
-        meta_diff = DeltaDiff()
+        rewrite_metadata = None
+        optimization_constraint = current_metadata["format"].get("optimization")
+        if convert_to_ds_format:
+            rewrite_metadata = (
+                RewriteMetadata.AS_IF_CONVERTED_TO_COPC
+                if optimization_constraint == "copc"
+                else RewriteMetadata.DROP_FORMAT,
+            )
+        else:
+            rewrite_metadata = (
+                None
+                if optimization_constraint == "copc"
+                else RewriteMetadata.DROP_OPTIMIZATION
+            )
 
+        if no_new_metadata:
+            merged_metadata = current_metadata
+        else:
+            merged_metadata = rewrite_and_merge_metadata(
+                metadata_list, rewrite_metadata
+            )
+
+        # Make it invalid to try and commit and LAS files:
+        merged_format = merged_metadata["format"]
+        if (
+            not isinstance(merged_format, ListOfConflicts)
+            and merged_format.get("compression") == "las"
+        ):
+            merged_format = InvalidNewValue([merged_format])
+            merged_format.error_message = "Committing LAS tiles is not supported, unless you specify the --convert-to-dataset-format flag"
+            merged_metadata["format"] = merged_format
+
+        meta_diff = DeltaDiff()
         for key, ext in (("format", "json"), ("schema", "json"), ("crs", "wkt")):
             if current_metadata[key] != merged_metadata[key]:
                 item_name = f"{key}.{ext}"

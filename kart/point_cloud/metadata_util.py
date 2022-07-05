@@ -1,4 +1,4 @@
-from enum import Enum, auto
+from enum import IntEnum
 import json
 import logging
 import sys
@@ -15,6 +15,7 @@ from kart.exceptions import (
 from kart.output_util import format_json_for_output, format_wkt_for_output
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf,
+    get_record_length_from_pdrf,
     equivalent_copc_pdrf,
     pdal_schema_to_kart_schema,
 )
@@ -23,11 +24,20 @@ from kart.point_cloud.schema_util import (
 L = logging.getLogger(__name__)
 
 
-class RewriteMetadata(Enum):
+class RewriteMetadata(IntEnum):
     """Different ways to interpret metadata depending on the type of import."""
 
-    PRE_CONVERT_TO_COPC = auto()  # We're about to convert these files to COPC.
-    PRESERVE_FORMAT = auto()  # We're going to keep these files as they are.
+    # We're about to convert this file to COPC - update the metadata to be as if we'd already done this.
+    # This affects both the format and the schema - only certain PDRFs are allowed in COPC, which constrains the schema.
+    AS_IF_CONVERTED_TO_COPC = 0x1
+
+    # Drop all the optimization info from the format info - we don't need to verify it or store it.
+    # (ie, because we don't care about whether tiles are optimized, or, we're about to change the tile's optimization anyway.)
+    DROP_OPTIMIZATION = 0x2
+
+    # Drop all the format info - we don't need to verify it or store it
+    # (ie, because we're about to convert the tile to a different format anyway).
+    DROP_FORMAT = 0x4
 
 
 def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
@@ -43,41 +53,51 @@ def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
     result = {}
     for tile_metadata in tile_metadata_list:
         _merge_metadata_field(
-            result, "format", _rewrite_format(tile_metadata, rewrite_metadata)
+            result, "format", rewrite_format(tile_metadata, rewrite_metadata)
         )
         _merge_metadata_field(
-            result, "schema", _rewrite_schema(tile_metadata, rewrite_metadata)
+            result, "schema", rewrite_schema(tile_metadata, rewrite_metadata)
         )
         _merge_metadata_field(result, "crs", tile_metadata["crs"])
         # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
     return result
 
 
-def _rewrite_format(tile_metadata, rewrite_metadata=None):
-    format_ = tile_metadata["format"]
-    if not rewrite_metadata:
-        return format_
-    elif rewrite_metadata == RewriteMetadata.PRESERVE_FORMAT:
-        # For a preserve-format / non-COPC dataset, we don't care which optimization tiles have, if any.
-        # So we drop those fields so that we don't constrain them to be homogenous and don't write them to
-        # to the dataset's "format.json" file.
-        return {k: v for k, v in format_.items() if not k.startswith("optimization")}
-    elif rewrite_metadata == RewriteMetadata.PRE_CONVERT_TO_COPC:
-        # In this case, we don't care about any of these fields - they should all end up the same,
-        # post-conversion. We'll check them properly then.
+def rewrite_format(tile_metadata, rewrite_metadata=None):
+    rewrite_metadata = rewrite_metadata or 0
+
+    orig_format = tile_metadata["format"]
+    if rewrite_metadata & RewriteMetadata.DROP_FORMAT:
         return {}
+    elif rewrite_metadata & RewriteMetadata.DROP_OPTIMIZATION:
+        return {
+            k: v for k, v in orig_format.items() if not k.startswith("optimization")
+        }
+    elif rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COPC:
+        orig_pdrf = orig_format["pointDataRecordFormat"]
+        new_pdrf = equivalent_copc_pdrf(orig_pdrf)
+        new_record_length = get_record_length_from_pdrf()
+        return {
+            "compression": "laz",
+            "lasVersion": "1.4",
+            "optimization": "copc",
+            "optimizationVersion": "1.0",
+            "pointDataRecordFormat": new_pdrf,
+            "pointDataRecordLength": new_record_length,
+        }
+    else:
+        return orig_format
 
 
-def _rewrite_schema(tile_metadata, rewrite_metadata=None):
-    schema = tile_metadata["schema"]
-    if not rewrite_metadata or rewrite_metadata == RewriteMetadata.PRESERVE_FORMAT:
-        # We care about the schema - we constrain it to be homogenous, and we write it to "schema.json"
-        return schema
-    elif rewrite_metadata == RewriteMetadata.PRE_CONVERT_TO_COPC:
-        # We care that the schema *will* be homogenous once converted to COPC.
-        # This is not guaranteed, so we'll constrain it here.
-        original_pdrf = tile_metadata["format"]["pointDataRecordFormat"]
-        return get_schema_from_pdrf(equivalent_copc_pdrf(original_pdrf))
+def rewrite_schema(tile_metadata, rewrite_metadata=None):
+    rewrite_metadata = rewrite_metadata or 0
+
+    orig_schema = tile_metadata["schema"]
+    if rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COPC:
+        orig_pdrf = tile_metadata["format"]["pointDataRecordFormat"]
+        return get_schema_from_pdrf(equivalent_copc_pdrf(orig_pdrf))
+    else:
+        return orig_schema
 
 
 def _merge_metadata_field(output, key, value):

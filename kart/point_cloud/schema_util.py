@@ -23,9 +23,16 @@ PDRF8_SCHEMA = [
 ]
 
 PDRF_TO_SCHEMA = {
+    # Currently only hard-coding schemas for PDRFs 6, 7, and 8 into Kart - haven't needed the others.
     6: list(PDRF8_SCHEMA[0:15]),
     7: list(PDRF8_SCHEMA[0:18]),
     8: PDRF8_SCHEMA,
+}
+
+PDRF_TO_RECORD_LENGTH = {
+    6: 30,
+    7: 36,
+    8: 38,
 }
 
 
@@ -37,7 +44,15 @@ def get_schema_from_pdrf(pdrf):
     Eg, scan angles are stored in LAS files as either integers or fixed-point numbers,
     but are always loaded by PDAL as floating point numbers, so that's what we put in the schema.
     """
+    # This currently only supports PDRFs 6, 7, and 8.
     result = PDRF_TO_SCHEMA.get(pdrf)
+    if not result:
+        raise NotImplementedError
+    return result
+
+
+def get_record_length_from_pdrf(pdrf):
+    result = PDRF_TO_RECORD_LENGTH.get(pdrf)
     if not result:
         raise NotImplementedError
     return result
