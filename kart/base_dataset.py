@@ -10,7 +10,7 @@ import click
 from kart import crs_util
 from kart.core import find_blobs_with_paths_in_tree
 from kart.dataset_mixins import DatasetDiffMixin
-from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION
+from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION, PATCH_DOES_NOT_APPLY
 from kart.serialise_util import ensure_text, ensure_bytes, json_pack, json_unpack
 
 
@@ -415,6 +415,141 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
             definition = self.get_meta_item_definition(meta_item_path)
             result.setdefault(definition, []).append(meta_item_path)
         return result
+
+    def apply_meta_diff(
+        self, meta_diff, object_builder, *, resolve_missing_values_from_ds=None
+    ):
+        """
+        Apply a meta diff to this dataset in the most straight-forward way possible -
+        ie, every delta causes a change to a single item in the meta/ tree, no items
+        are special cased. Subclasses may override if certain meta items need special casing.
+
+        meta_diff - the diff to apply.
+        object_builder - wraps an existing tree, and allows for building a new tree on top.
+        resolve_missing_values_from_ds - if set, updates in the diff need not be fully specified,
+            they can be represented as inserts. The missing "old values" will be resolved by
+            loading them from this dataset. The update will be considered a conflict if the current
+            value of an item to be updated is different from the value as loaded from this dataset.
+        """
+        if not meta_diff:
+            return
+
+        no_conflicts = True
+
+        resolve_missing_values_from_tree = None
+        if resolve_missing_values_from_ds:
+            resolve_missing_values_from_tree = resolve_missing_values_from_ds.meta_tree
+
+        # Apply diff to hidden meta items folder: <dataset-path>/.<dataset-marker>/meta/<item-name>
+        with object_builder.chdir(f"{self.inner_path}/{self.META_PATH}"):
+            no_conflicts &= self._apply_meta_deltas_to_tree(
+                meta_diff.values(),
+                object_builder,
+                self.meta_tree if self.inner_tree is not None else None,
+                resolve_missing_values_from_tree=resolve_missing_values_from_tree,
+            )
+
+        if not no_conflicts:
+            raise InvalidOperation(
+                "Patch does not apply",
+                exit_code=PATCH_DOES_NOT_APPLY,
+            )
+
+    def _apply_meta_deltas_to_tree(
+        self,
+        deltas,
+        object_builder,
+        existing_tree,
+        *,
+        resolve_missing_values_from_tree=None,
+    ):
+        # Applying diffs works even if there is no tree yet created for the dataset,
+        # as is the case when the dataset is first being created right now.
+        if existing_tree is None:
+            # This lets us test if something is in existing_tree without crashing.
+            existing_tree = ()
+
+        no_conflicts = True
+        for delta in deltas:
+            no_conflicts &= self._apply_meta_delta_to_tree(
+                delta,
+                object_builder,
+                existing_tree,
+                resolve_missing_values_from_tree=resolve_missing_values_from_tree,
+            )
+
+        return no_conflicts
+
+    def _apply_meta_delta_to_tree(
+        self,
+        delta,
+        object_builder,
+        existing_tree,
+        *,
+        resolve_missing_values_from_tree=None,
+    ):
+        """
+        Applies the given delta to the given tree"""
+        # Applying diffs works even if there is no tree yet created for the dataset,
+        # as is the case when the dataset is first being created right now.
+        if existing_tree is None:
+            # This lets us test if something is in existing_tree without crashing.
+            existing_tree = ()
+
+        name = delta.key
+        old_value = delta.old_value
+        new_value = delta.new_value
+
+        # Conflict detection
+        if delta.type == "delete" and name not in existing_tree:
+            click.echo(
+                f"{self.path}: Trying to delete nonexistent meta item: {name}",
+                err=True,
+            )
+            return False
+        if delta.type == "insert" and name in existing_tree:
+            current_data = (existing_tree / name).data
+            if current_data:
+                if resolve_missing_values_from_tree:
+                    old_data = (resolve_missing_values_from_tree / name).data
+                    if old_data != current_data:
+                        click.echo(
+                            f"{self.path}: Meta item was modified since patch: {name}",
+                            err=True,
+                        )
+                        return False
+
+                else:
+                    click.echo(
+                        f"{self.path}: Trying to create meta item that already exists: {name}",
+                        err=True,
+                    )
+                    return False
+
+        if delta.type == "update" and name not in existing_tree:
+            click.echo(
+                f"{self.path}: Trying to update nonexistent meta item: {name}",
+                err=True,
+            )
+            return False
+        if delta.type == "update" and self.get_meta_item(name) != old_value:
+            click.echo(
+                f"{self.path}: Trying to update out-of-date meta item: {name}",
+                err=True,
+            )
+            return False
+
+        # Actual implementation once we've figured out there's no conflict:
+        if new_value is not None:
+            if name.endswith(".json"):
+                new_value = json_pack(new_value)
+            else:
+                new_value = ensure_bytes(new_value)
+            object_builder.insert(name, new_value)
+        else:
+            object_builder.remove(name)
+
+        return True
 
     def ensure_full_path(self, path):
         """Given a path relative to this dataset, returns its full path from the repo root."""

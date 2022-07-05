@@ -310,9 +310,7 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
             "      1 deletes",
         ]
 
-        r = cli_runner.invoke(["diff"])
-        assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines() == [
+        EXPECTED_TILE_DIFF = [
             '--- auckland:tile:auckland_1_1.copc.laz',
             '+++ auckland:tile:auckland_1_1.copc.laz',
             '-                              crs84Extent = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15',
@@ -342,44 +340,20 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
             '+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
             '+                                     size = 2319',
         ]
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == EXPECTED_TILE_DIFF
 
         r = cli_runner.invoke(["commit", "-m", "Edit point cloud tiles"])
         assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(["show"])
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines()[4:] == [
-            "    Edit point cloud tiles",
-            "",
-            '--- auckland:tile:auckland_1_1.copc.laz',
-            '+++ auckland:tile:auckland_1_1.copc.laz',
-            '-                              crs84Extent = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15',
-            '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
-            '-                             nativeExtent = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15',
-            '+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
-            '-                               pointCount = 1558',
-            '+                               pointCount = 4231',
-            '-                                      oid = sha256:1130618cd78bd1d144dbc467f278405d043fb10b6f19efb2c0cce23a9e24323e',
-            '+                                      oid = sha256:f4bf2dfd3734520a94dea6dc987e892fd2c5b4f4647bb51cb5b8f233e43ada7b',
-            '-                                     size = 24490',
-            '+                                     size = 69545',
-            '--- auckland:tile:auckland_3_3.copc.laz',
-            '-                                     name = auckland_3_3.copc.laz',
-            '-                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
-            '-                                   format = laz-1.4/copc-1.0',
-            '-                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8',
-            '-                               pointCount = 29',
-            '-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
-            '-                                     size = 2319',
-            '+++ auckland:tile:auckland_4_4.copc.laz',
-            '+                                     name = auckland_4_4.copc.laz',
-            '+                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
-            '+                                   format = laz-1.4/copc-1.0',
-            '+                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8',
-            '+                               pointCount = 29',
-            '+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
-            '+                                     size = 2319',
-        ]
+        assert (
+            r.stdout.splitlines()[4:]
+            == ["    Edit point cloud tiles", ""] + EXPECTED_TILE_DIFF
+        )
 
         r = cli_runner.invoke(["show", "-ojson"])
         assert r.exit_code == 0, r.stderr
@@ -918,9 +892,7 @@ def test_working_copy_meta_edit(
                 "      16 deletes",
             ]
 
-            r = cli_runner.invoke(["diff"])
-            assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines()[:169] == [
+            EXPECTED_META_DIFF = [
                 '--- auckland:meta:crs.wkt',
                 '+++ auckland:meta:crs.wkt',
                 '- COMPD_CS["NZGD2000 / New Zealand Transverse Mercator 2000 + VERT_CS",',
@@ -1092,9 +1064,15 @@ def test_working_copy_meta_edit(
                 '  ]',
             ]
 
-            r = cli_runner.invoke(["commit", "-m", "meta-update"])
-            assert r.exit_code == NOT_YET_IMPLEMENTED
+            r = cli_runner.invoke(["diff"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[:169] == EXPECTED_META_DIFF
+
+            r = cli_runner.invoke(["commit", "-m", "Edit meta items"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["show"])
             assert (
-                "Sorry, committing meta diffs for point cloud datasets is not yet supported"
-                in r.stderr
+                r.stdout.splitlines()[4:175]
+                == ["    Edit meta items", ""] + EXPECTED_META_DIFF
             )
