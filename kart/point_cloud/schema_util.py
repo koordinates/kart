@@ -1,6 +1,22 @@
+from kart.exceptions import NotYetImplemented
+
 # Utility functions for dealing with Point Cloud schemas.
 
-PDRF8_SCHEMA = [
+# Documentation on the actual schema as encoded in the LAS tile is available here:
+# https://www.asprs.org/wp-content/uploads/2019/07/LAS_1_4_r15.pdf
+
+# However, we are more concerned with the schema as it is loaded by PDAL, which can
+# change names or types for consistency with other PDRFs, or for readability or convenience.
+
+# The easiest way to get this data is just to use PDAL to extract it. For example, to see
+# how PDAL loads a tile using PDRF 0, run the following:
+#
+# > pdal translate example.laz 0.laz --writers.las.format="0"
+# > kart --post-mortem
+# (kart) ipdb> from kart.point_cloud.metadata_util import extract_pc_tile_metadata
+# (kart) ipdb> extract_pc_tile_metadata("0.laz")
+
+PDRF0_SCHEMA = [
     {"name": "X", "dataType": "float", "size": 64},
     {"name": "Y", "dataType": "float", "size": 64},
     {"name": "Z", "dataType": "float", "size": 64},
@@ -13,23 +29,39 @@ PDRF8_SCHEMA = [
     {"name": "ScanAngleRank", "dataType": "float", "size": 32},
     {"name": "UserData", "dataType": "integer", "size": 8},
     {"name": "PointSourceId", "dataType": "integer", "size": 16},
-    {"name": "GpsTime", "dataType": "float", "size": 64},
-    {"name": "ScanChannel", "dataType": "integer", "size": 8},
-    {"name": "ClassFlags", "dataType": "integer", "size": 8},
+]
+
+GPS_TIME = {"name": "GpsTime", "dataType": "float", "size": 64}
+RED_GREEN_BLUE = [
     {"name": "Red", "dataType": "integer", "size": 16},
     {"name": "Green", "dataType": "integer", "size": 16},
     {"name": "Blue", "dataType": "integer", "size": 16},
-    {"name": "NIR", "dataType": "integer", "size": 16},
 ]
 
+PDRF6_SCHEMA = PDRF0_SCHEMA + [
+    GPS_TIME,
+    {"name": "ScanChannel", "dataType": "integer", "size": 8},
+    {"name": "ClassFlags", "dataType": "integer", "size": 8},
+]
+
+INFRARED = {"name": "Infrared", "dataType": "integer", "size": 16}
+
+
 PDRF_TO_SCHEMA = {
-    # Currently only hard-coding schemas for PDRFs 6, 7, and 8 into Kart - haven't needed the others.
-    6: list(PDRF8_SCHEMA[0:15]),
-    7: list(PDRF8_SCHEMA[0:18]),
-    8: PDRF8_SCHEMA,
+    0: PDRF0_SCHEMA + [],
+    1: PDRF0_SCHEMA + [GPS_TIME],
+    2: PDRF0_SCHEMA + RED_GREEN_BLUE,
+    3: PDRF0_SCHEMA + [GPS_TIME] + RED_GREEN_BLUE,
+    6: PDRF6_SCHEMA + [],
+    7: PDRF6_SCHEMA + RED_GREEN_BLUE,
+    8: PDRF6_SCHEMA + RED_GREEN_BLUE + [INFRARED],
 }
 
 PDRF_TO_RECORD_LENGTH = {
+    0: 20,
+    1: 28,
+    2: 26,
+    3: 34,
     6: 30,
     7: 36,
     8: 38,
@@ -44,17 +76,21 @@ def get_schema_from_pdrf(pdrf):
     Eg, scan angles are stored in LAS files as either integers or fixed-point numbers,
     but are always loaded by PDAL as floating point numbers, so that's what we put in the schema.
     """
-    # This currently only supports PDRFs 6, 7, and 8.
     result = PDRF_TO_SCHEMA.get(pdrf)
     if not result:
-        raise NotImplementedError
+        # PDAL doesn't support these either:
+        raise NotYetImplemented(
+            "Sorry, Kart does not support point formats with waveform data (4, 5, 9 and 10)"
+        )
     return result
 
 
 def get_record_length_from_pdrf(pdrf):
     result = PDRF_TO_RECORD_LENGTH.get(pdrf)
     if not result:
-        raise NotImplementedError
+        raise NotYetImplemented(
+            "Sorry, Kart does not support point formats with waveform data (4, 5, 9 and 10)"
+        )
     return result
 
 
