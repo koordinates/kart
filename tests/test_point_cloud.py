@@ -5,10 +5,7 @@ import shutil
 import subprocess
 import pytest
 
-from kart.exceptions import (
-    WORKING_COPY_OR_IMPORT_CONFLICT,
-    NOT_YET_IMPLEMENTED,
-)
+from kart.exceptions import INVALID_FILE_FORMAT, WORKING_COPY_OR_IMPORT_CONFLICT
 from kart.repo import KartRepo
 
 DUMMY_REPO = "git@example.com/example.git"
@@ -130,7 +127,7 @@ def test_import_single_las(
 
 
 @pytest.mark.slow
-def test_import_several_las(
+def test_import_several_laz(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
     # Using postgres here because it has the best type preservation
@@ -202,7 +199,7 @@ def test_import_several_las(
                     ).is_file()
 
 
-def test_import_no_convert(
+def test_import_single_laz_no_convert(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
@@ -248,6 +245,27 @@ def test_import_no_convert(
                 "+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
                 "+                                     size = 51489",
             ]
+
+
+def test_import_single_las_no_convert(
+    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
+):
+    with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    *glob(f"{autzen}/autzen.las"),
+                    "--dataset-path=autzen",
+                    "--preserve-format",
+                ]
+            )
+            assert r.exit_code == INVALID_FILE_FORMAT
+            assert "LAS datasets are not supported" in r.stderr
 
 
 def test_import_mismatched_las(
@@ -445,7 +463,7 @@ def test_working_copy_meta_edit(
 ):
     monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
 
-    with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
+    with data_archive_readonly("point-cloud/laz-autzen.tgz") as autzen:
         with data_archive("point-cloud/auckland.tgz") as repo_path:
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0, r.stderr
@@ -454,7 +472,7 @@ def test_working_copy_meta_edit(
             tiles_path = repo_path / "auckland"
             assert tiles_path.is_dir()
 
-            shutil.copy(autzen / "autzen.las", tiles_path / "autzen.las")
+            shutil.copy(autzen / "autzen.laz", tiles_path / "autzen.laz")
 
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
@@ -590,7 +608,7 @@ def test_working_copy_meta_edit(
                 '+ }',
                 '+ ======== ',
                 '+ {',
-                '+   "compression": "las",',
+                '+   "compression": "laz",',
                 '+   "lasVersion": "1.2",',
                 '+   "optimization": null,',
                 '+   "optimizationVersion": null,',
@@ -854,14 +872,14 @@ def test_working_copy_meta_edit(
                 '+   }',
                 '+ ]',
                 '+ >>>>>>> ',
-                '+++ auckland:tile:autzen.las',
-                '+                                     name = autzen.las',
+                '+++ auckland:tile:autzen.laz',
+                '+                                     name = autzen.laz',
                 '+                              crs84Extent = -123.075389,-123.0625145,44.04998981,44.06229306,407.35,536.84',
-                '+                                   format = las-1.2',
+                '+                                   format = laz-1.2',
                 '+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84',
                 '+                               pointCount = 106',
-                '+                                      oid = sha256:068a349959a45957184606a0442f8dd69aef24543e11963bc63835301df532f5',
-                '+                                     size = 4962',
+                '+                                      oid = sha256:751ec764325610dae8f37d7f4273e3b404e5acb64421676fd72e7e31468c6720',
+                '+                                     size = 2359',
             ]
 
             r = cli_runner.invoke(["commit", "-m", "conflicts"])
@@ -961,7 +979,7 @@ def test_working_copy_meta_edit(
                 '-   "pointDataRecordLength": 36',
                 '- }',
                 '+ {',
-                '+   "compression": "las",',
+                '+   "compression": "laz",',
                 '+   "lasVersion": "1.2",',
                 '+   "optimization": null,',
                 '+   "optimizationVersion": null,',
@@ -1076,3 +1094,33 @@ def test_working_copy_meta_edit(
                 r.stdout.splitlines()[4:175]
                 == ["    Edit meta items", ""] + EXPECTED_META_DIFF
             )
+
+
+def test_working_copy_commit_las(
+    cli_runner, data_archive, data_archive_readonly, monkeypatch, requires_pdal
+):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+
+    with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
+        with data_archive("point-cloud/auckland.tgz") as repo_path:
+            tiles_path = repo_path / "auckland"
+            assert tiles_path.is_dir()
+
+            shutil.copy(autzen / "autzen.las", tiles_path / "autzen.las")
+
+            r = cli_runner.invoke(["commit", "-m", "Add single LAS file"])
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+            assert (
+                "Committing more than one 'format.json' for 'auckland' is not supported"
+                in r.stderr
+            )
+
+            # If all the old tiles are deleted, there will no longer be a conflict, but we still can't commit LAS files.
+            for tile in tiles_path.glob("auckland_*.copc.laz"):
+                tile.unlink()
+
+            r = cli_runner.invoke(
+                ["commit", "-m", "Replace entire dataset with single LAS file"]
+            )
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+            assert "Committing LAS tiles is not supported" in r.stderr

@@ -98,11 +98,19 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
                 exit_code=INVALID_FILE_FORMAT,
             )
 
-    rewrite_metadata = (
-        RewriteMetadata.PRE_CONVERT_TO_COPC
-        if convert_to_copc
-        else RewriteMetadata.PRESERVE_FORMAT
-    )
+    if convert_to_copc:
+        # As we check the sources for validity, we care about what the schema will be when we convert to COPC.
+        # We don't need to check the format since if a set of tiles are all COPC and all have the same schema,
+        # then they all will have the same format. Also, we would rather show the user that, post-conversion, the
+        # tile's schema's won't match - quite a concrete idea even for those new to the LAZ format - rather than
+        # trying to explain that post-conversion, the tile's Point Data Record Format numbers won't match.
+        rewrite_metadata = (
+            RewriteMetadata.AS_IF_CONVERTED_TO_COPC | RewriteMetadata.DROP_FORMAT
+        )
+    else:
+        # For --preserve-format we allow both COPC and non-COPC tiles, so we don't need to check or store this information.
+        rewrite_metadata = RewriteMetadata.DROP_OPTIMIZATION
+
     merged_metadata = rewrite_and_merge_metadata(
         source_to_metadata.values(), rewrite_metadata
     )
@@ -165,7 +173,9 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
                 proc.stdin, blob_path, dict_to_pointer_file_bytes(pointer_dict)
             )
 
-        rewrite_metadata = None if convert_to_copc else RewriteMetadata.PRESERVE_FORMAT
+        rewrite_metadata = (
+            None if convert_to_copc else RewriteMetadata.DROP_OPTIMIZATION
+        )
         merged_metadata = rewrite_and_merge_metadata(
             source_to_metadata.values(), rewrite_metadata
         )
