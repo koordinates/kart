@@ -1,4 +1,5 @@
 import os
+import platform
 from pathlib import Path
 import subprocess
 
@@ -19,7 +20,10 @@ def test_completion_install_no_shell(cli_runner):
 
 
 def test_completion_install_bash(cli_runner):
-    bash_completion_path: Path = Path.home() / ".bashrc"
+    bash_completion_path = Path.home() / ".bashrc"
+    bash_profile = Path.home() / ".bash_profile"
+    if platform.system() == "Darwin" and bash_profile.exists():
+        bash_completion_path = bash_profile
     text = ""
     if bash_completion_path.is_file():
         text = bash_completion_path.read_text()
