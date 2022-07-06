@@ -40,7 +40,11 @@ class DatasetDiffMixin:
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     def diff_to_working_copy(
-        self, workdir_diff_cache, ds_filter=DatasetKeyFilter.MATCH_ALL
+        self,
+        workdir_diff_cache,
+        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        *,
+        convert_to_dataset_format=False,
     ):
         """
         Generates a diff from self to the working-copy.

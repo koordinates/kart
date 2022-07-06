@@ -101,6 +101,15 @@ class CommitDiffWriter(BaseDiffWriter):
     ),
 )
 @click.option(
+    "--convert-to-dataset-format",
+    is_flag=True,
+    default=False,
+    help=(
+        "Converts any new files in-place, where needed, to ensure they match the existing dataset's format, immediately "
+        "before they are committed."
+    ),
+)
+@click.option(
     "--output-format",
     "-o",
     type=click.Choice(["text", "json"]),
@@ -110,7 +119,15 @@ class CommitDiffWriter(BaseDiffWriter):
     "filters",
     nargs=-1,
 )
-def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters):
+def commit(
+    ctx,
+    message,
+    allow_empty,
+    allow_pk_conflicts,
+    convert_to_dataset_format,
+    output_format,
+    filters,
+):
     """
     Record a snapshot of all of the changes to the repository.
 
@@ -124,6 +141,7 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
     check_git_user(repo)
 
     commit_diff_writer = CommitDiffWriter(repo, "HEAD", filters)
+    commit_diff_writer.convert_to_dataset_format(convert_to_dataset_format)
     wc_diff = commit_diff_writer.get_repo_diff()
 
     if not wc_diff and not allow_empty:

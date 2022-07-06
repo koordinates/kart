@@ -5,6 +5,7 @@ import shutil
 from kart.core import find_blobs_in_tree
 from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue
+from kart.exceptions import NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
 from kart.lfs_util import (
@@ -19,6 +20,8 @@ from kart.point_cloud.metadata_util import (
     extract_pc_tile_metadata,
     rewrite_and_merge_metadata,
     format_tile_info_for_pointer_file,
+    get_format_summary,
+    set_file_extension,
 )
 from kart.serialise_util import hexhash
 from kart.working_copy import PartType
@@ -162,10 +165,17 @@ class PointCloudV1(BaseDataset):
         workdir_diff_cache,
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         *,
-        convert_to_ds_format=False,
+        convert_to_dataset_format=False,
     ):
         """Returns a diff of all changes made to this dataset in the working copy."""
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
+
+        current_metadata = self.tile_metadata
+        dataset_format_to_apply = None
+        if convert_to_dataset_format:
+            dataset_format_to_apply = get_format_summary(current_metadata["format"])
+
+        tilename_to_metadata = {}
 
         wc_tiles_path_pattern = re.escape(f"{self.path}/")
         wc_tile_ext_pattern = r"\.[Ll][Aa][SsZz]"
@@ -176,13 +186,18 @@ class PointCloudV1(BaseDataset):
         def wc_to_ds_path_transform(wc_path):
             return self.tilename_to_blob_path(wc_path, relative=True)
 
-        tilename_to_metadata = {}
-
         def tile_summary_from_wc_path(wc_path):
             wc_path = self._workdir_path(wc_path)
             tile_metadata = extract_pc_tile_metadata(wc_path)
             tilename_to_metadata[wc_path.name] = tile_metadata
-            return self.get_tile_summary_from_pc_tile_metadata(wc_path, tile_metadata)
+            tile_summary = self.get_tile_summary_from_pc_tile_metadata(
+                wc_path, tile_metadata
+            )
+            if dataset_format_to_apply:
+                self.convert_tile_summary_if_needed(
+                    dataset_format_to_apply, tile_summary
+                )
+            return tile_summary
 
         tile_diff_deltas = self.generate_wc_diff_from_workdir_index(
             workdir_diff_cache,
@@ -203,21 +218,20 @@ class PointCloudV1(BaseDataset):
         metadata_list = list(tilename_to_metadata.values())
         no_new_metadata = not metadata_list
 
-        current_metadata = self.tile_metadata
         if not is_clean_slate:
             metadata_list.insert(0, current_metadata)
 
-        rewrite_metadata = None
+        rewrite_metadata = 0
         optimization_constraint = current_metadata["format"].get("optimization")
-        if convert_to_ds_format:
+        if convert_to_dataset_format:
             rewrite_metadata = (
                 RewriteMetadata.AS_IF_CONVERTED_TO_COPC
                 if optimization_constraint == "copc"
-                else RewriteMetadata.DROP_FORMAT,
+                else RewriteMetadata.DROP_FORMAT
             )
         else:
             rewrite_metadata = (
-                None
+                0
                 if optimization_constraint == "copc"
                 else RewriteMetadata.DROP_OPTIMIZATION
             )
@@ -228,6 +242,8 @@ class PointCloudV1(BaseDataset):
             merged_metadata = rewrite_and_merge_metadata(
                 metadata_list, rewrite_metadata
             )
+            if rewrite_metadata & RewriteMetadata.DROP_FORMAT:
+                merged_metadata["format"] = current_metadata["format"]
 
         # Make it invalid to try and commit and LAS files:
         merged_format = merged_metadata["format"]
@@ -253,6 +269,26 @@ class PointCloudV1(BaseDataset):
         ds_diff["tile"] = tile_diff
 
         return ds_diff
+
+    def convert_tile_summary_if_needed(self, ds_format, tile_summary):
+        """
+        Converts a tile-summary - that is, updates the tile-summary to how it would be if the tile is converted
+        to the given dataset format. Since the tile itself is not converted, the converted tile's size or OID is
+        not yet known. So, the size is left unchanged, and the OID is set to "(TBD)".
+        """
+
+        tile_format = tile_summary["format"]
+        if isinstance(ds_format, dict):
+            ds_format = get_format_summary(ds_format)
+        if tile_format == ds_format or tile_format.startswith(f"{ds_format}/"):
+            # Tile is already in a compatible format - no need to
+            return
+
+        tile_summary["name"] = set_file_extension(
+            tile_summary["name"], tile_format=ds_format
+        )
+        tile_summary["format"] = ds_format
+        tile_summary["oid"] = "(TBD)"
 
     def is_clean_slate(self, tile_diff):
         num_existing_tiles_kept = self.tile_count
@@ -300,10 +336,16 @@ class PointCloudV1(BaseDataset):
                     assert path_in_wc.is_file()
 
                     oid = delta.new_value["oid"]
+                    if oid == "(TBD)":
+                        raise NotYetImplemented(
+                            "Sorry, committing with --convert-to-dataset-format is not yet implemented"
+                        )
+
                     actual_object_path = get_local_path_from_lfs_hash(self.repo, oid)
                     actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
                     shutil.copy(path_in_wc, actual_object_path)
 
+                    del delta.new_value["name"]
                     object_builder.insert(
                         self.tilename_to_blob_path(tilename, relative=True),
                         dict_to_pointer_file_bytes(delta.new_value),

@@ -1,6 +1,7 @@
 from enum import IntEnum
 import json
 import logging
+import re
 import sys
 
 import click
@@ -76,14 +77,13 @@ def rewrite_format(tile_metadata, rewrite_metadata=None):
     elif rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COPC:
         orig_pdrf = orig_format["pointDataRecordFormat"]
         new_pdrf = equivalent_copc_pdrf(orig_pdrf)
-        new_record_length = get_record_length_from_pdrf()
         return {
             "compression": "laz",
             "lasVersion": "1.4",
             "optimization": "copc",
             "optimizationVersion": "1.0",
             "pointDataRecordFormat": new_pdrf,
-            "pointDataRecordLength": new_record_length,
+            "pointDataRecordLength": get_record_length_from_pdrf(new_pdrf),
         }
     else:
         return orig_format
@@ -240,11 +240,6 @@ def extract_pc_tile_metadata(
         "pointDataRecordFormat": info["dataformat_id"],
         "pointDataRecordLength": info["point_length"],
     }
-    format_summary = f"{format_info['compression']}-{format_info['lasVersion']}"
-    if format_info["optimization"]:
-        format_summary += (
-            f"/{format_info['optimization']}-{format_info['optimizationVersion']}"
-        )
 
     # Keep tile info keys in alphabetical order.
     tile_info = {
@@ -252,7 +247,7 @@ def extract_pc_tile_metadata(
         "crs84Extent": _calc_crs84_extent(
             native_extent, horizontal_crs or compound_crs
         ),
-        "format": format_summary,
+        "format": get_format_summary(format_info),
         "nativeExtent": native_extent,
         "pointCount": info["count"],
     }
@@ -268,6 +263,18 @@ def extract_pc_tile_metadata(
         )
 
     return result
+
+
+def get_format_summary(format_info):
+    """
+    Given format info as stored in format.json, return a short string summary such as: laz-1.4/copc-1.0
+    """
+    format_summary = f"{format_info['compression']}-{format_info['lasVersion']}"
+    if format_info["optimization"]:
+        format_summary += (
+            f"/{format_info['optimization']}-{format_info['optimizationVersion']}"
+        )
+    return format_summary
 
 
 def _calc_crs84_extent(src_extent, src_crs):
@@ -324,3 +331,32 @@ def format_tile_info_for_pointer_file(tile_info):
     if result["crs84Extent"] is None:
         del result["crs84Extent"]
     return result
+
+
+def _remove_las_extension(filename):
+    """Given a tile filename, removes the suffix .las or .laz or .copc.las or .copc.laz"""
+    match = re.fullmatch(r"(.+?)(\.copc)*\.la[sz]", filename, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return filename
+
+
+def set_file_extension(filename, ext=None, tile_format=None):
+    """Changes a tile's file extension to the given extension, or to the extension appropriate for its format."""
+    if not ext:
+        assert tile_format is not None
+        if isinstance(tile_format, dict):
+            # Format info as stored in format.json
+            ext = f".{tile_format['compression']}"
+            if tile_format["optimization"] == "copc":
+                ext = ".copc" + ext
+        else:
+            # Format summary string.
+            ext = f".{tile_format[0:3]}"
+            if "copc" in tile_format:
+                ext = ".copc" + ext
+
+    elif not ext.startswith("."):
+        ext = f".{ext}"
+
+    return _remove_las_extension(filename) + ext
