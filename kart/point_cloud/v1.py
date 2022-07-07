@@ -5,10 +5,10 @@ import shutil
 from kart.core import find_blobs_in_tree
 from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue
-from kart.exceptions import NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
 from kart.lfs_util import (
+    copy_file_to_local_lfs_cache,
     get_hash_and_size_of_file,
     get_hash_from_pointer_file,
     get_local_path_from_lfs_hash,
@@ -22,7 +22,9 @@ from kart.point_cloud.metadata_util import (
     format_tile_info_for_pointer_file,
     get_format_summary,
     set_file_extension,
+    remove_las_extension,
 )
+from kart.point_cloud.pdal_convert import convert_tile_to_format
 from kart.serialise_util import hexhash
 from kart.working_copy import PartType
 
@@ -49,6 +51,8 @@ class PointCloudV1(BaseDataset):
         BaseDataset.SCHEMA_JSON,
         BaseDataset.CRS_WKT,
     )
+
+    PLACEHOLDER_OID = "(TBD)"
 
     @property
     def tile_tree(self):
@@ -288,7 +292,7 @@ class PointCloudV1(BaseDataset):
             tile_summary["name"], tile_format=ds_format
         )
         tile_summary["format"] = ds_format
-        tile_summary["oid"] = "(TBD)"
+        tile_summary["oid"] = self.PLACEHOLDER_OID
 
     def is_clean_slate(self, tile_diff):
         num_existing_tiles_kept = self.tile_count
@@ -330,25 +334,36 @@ class PointCloudV1(BaseDataset):
 
         with object_builder.chdir(self.inner_path):
             for delta in tile_diff.values():
+
                 if delta.type in ("insert", "update"):
-                    tilename = delta.new_key
-                    path_in_wc = self.repo.workdir_file(f"{self.path}/{tilename}")
-                    assert path_in_wc.is_file()
+                    # TODO - need more work on normalising / matching names with different extensions
+                    tilename = delta.new_value.pop("name")
+                    path_in_wc = self.find_tile_in_wc(tilename)
 
                     oid = delta.new_value["oid"]
-                    if oid == "(TBD)":
-                        raise NotYetImplemented(
-                            "Sorry, committing with --convert-to-dataset-format is not yet implemented"
+                    if oid == self.PLACEHOLDER_OID:
+                        # Converting and then committing a new tile
+                        del delta.new_value["oid"]
+                        del delta.new_value["size"]
+
+                        conversion_func = functools.partial(
+                            convert_tile_to_format,
+                            target_format=delta.new_value["format"],
                         )
+                        pointer_dict = copy_file_to_local_lfs_cache(
+                            self.repo, path_in_wc, conversion_func
+                        )
+                        pointer_dict.update(delta.new_value)
+                    else:
+                        # Committing in a new tile, preserving its format
+                        path_in_lfs_cache = get_local_path_from_lfs_hash(self.repo, oid)
+                        path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
+                        shutil.copy(path_in_wc, path_in_lfs_cache)
+                        pointer_dict = delta.new_value
 
-                    actual_object_path = get_local_path_from_lfs_hash(self.repo, oid)
-                    actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
-                    shutil.copy(path_in_wc, actual_object_path)
-
-                    del delta.new_value["name"]
                     object_builder.insert(
                         self.tilename_to_blob_path(tilename, relative=True),
-                        dict_to_pointer_file_bytes(delta.new_value),
+                        dict_to_pointer_file_bytes(pointer_dict),
                     )
 
                 else:  # delete:
@@ -356,6 +371,18 @@ class PointCloudV1(BaseDataset):
                     object_builder.remove(
                         self.tilename_to_blob_path(tilename, relative=True)
                     )
+
+    def find_tile_in_wc(self, tilename):
+        """
+        Finds a tile by name in the working directory.
+        Searches for the tile using multiple extensions, ie .las or .laz or .copc.laz
+        """
+        tilename = remove_las_extension(tilename)
+        wc_folder = self.repo.workdir_file(self.path)
+        for file in wc_folder.glob(tilename + ".*"):
+            if remove_las_extension(file.name) == tilename:
+                return file
+        raise RuntimeError(f"Couldn't find {tilename} in workdir")
 
     @property
     def tile_metadata(self):
