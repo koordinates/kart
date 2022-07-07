@@ -5,8 +5,10 @@ import click
 from . import diff_estimation
 from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
+from .exceptions import NotFound
 from .output_util import dump_json_output
 from .repo import KartRepoState
+from .structs import CommitWithReference
 
 
 def feature_count_diff(
@@ -140,10 +142,12 @@ def diff(
 
     - if supplied with the form: commit-A...commit-B - diffs between commit-A and commit-B.
 
+    - supplying two seperate refs: commit-A commit-B - also diffs between commit-A and commit-B
+
     - if supplied with the form: commit-A..commit-B - diffs between (the common ancestor of
     commit-A and commit-B) and (commit-B).
 
-    To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
+    To list only particular changes, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
     output_type, fmt = parse_output_format(output_format, json_style)
 
@@ -158,9 +162,20 @@ def diff(
             only_feature_count,
         )
 
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+
+    # Handle the `commit-A commit-B` format:
+    if commit_spec and ".." not in commit_spec and filters:
+        try:
+            if CommitWithReference.resolve(repo, filters[0]):
+                filters = list(filters)
+                extra_commit_spec = filters.pop(0)
+                commit_spec = f"{commit_spec}...{extra_commit_spec}"
+        except NotFound:
+            pass
+
     from .base_diff_writer import BaseDiffWriter
 
-    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_type)
     diff_writer = diff_writer_class(
         repo,

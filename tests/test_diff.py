@@ -1092,12 +1092,14 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
         f"{head1_sha}...{head_sha}",
         f"{head1_sha}...",
         "HEAD^1...HEAD",
+        ["HEAD^1", "HEAD"],
     )
 
     R_SPECS = (
         f"{head_sha}...{head1_sha}",
         f"...{head1_sha}",
         "HEAD...HEAD^1",
+        ["HEAD", "HEAD^1"],
     )
 
     CHANGE_IDS = {
@@ -1111,7 +1113,9 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
         for spec in F_SPECS:
             print(f"fwd: {spec}")
-            r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", spec])
+            if isinstance(spec, str):
+                spec = [spec]
+            r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", *spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
             assert len(odata[H.POINTS.LAYER]["feature"]) == 5
@@ -1134,7 +1138,9 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
 
         for spec in R_SPECS:
             print(f"rev: {spec}")
-            r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", spec])
+            if isinstance(spec, str):
+                spec = [spec]
+            r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", *spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
             assert len(odata[H.POINTS.LAYER]["feature"]) == 5
