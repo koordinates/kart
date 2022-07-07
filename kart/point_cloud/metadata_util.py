@@ -156,9 +156,7 @@ def _unwrap_metadata(metadata):
     return metadata
 
 
-def _format_array(array):
-    if array is None:
-        return None
+def _format_list_as_str(array):
     return json.dumps(array, separators=(",", ":"))[1:-1]
 
 
@@ -317,19 +315,32 @@ def _calc_crs84_extent(src_extent, src_crs):
     return b["minx"], b["maxx"], b["miny"], b["maxy"], b["minz"], b["maxz"]
 
 
-def format_tile_info_for_pointer_file(tile_info):
+def format_tile_for_pointer_file(tile_info, pointer_info=None):
     """
     Given the tile-info metadata, converts it to a format appropriate for the LFS pointer file.
     """
+
+    if pointer_info is None:
+        pointer_info = tile_info
+
+    result = {}
+
+    def add_key(key, source):
+        value = source.get(key)
+        if hasattr(value, "__iter__") and not isinstance(value, str):
+            result[key] = _format_list_as_str(value)
+        elif value:
+            result[key] = value
+
     # Keep tile info keys in alphabetical order.
-    result = {
-        "crs84Extent": _format_array(tile_info.get("crs84Extent")),
-        "format": tile_info["format"],
-        "nativeExtent": _format_array(tile_info["nativeExtent"]),
-        "pointCount": tile_info["pointCount"],
-    }
-    if result["crs84Extent"] is None:
-        del result["crs84Extent"]
+    add_key("version", pointer_info)
+    add_key("crs84Extent", tile_info)
+    add_key("format", tile_info)
+    add_key("nativeExtent", tile_info)
+    add_key("pointCount", tile_info)
+    add_key("oid", pointer_info)
+    add_key("size", pointer_info)
+
     return result
 
 

@@ -31,7 +31,7 @@ from kart.point_cloud.metadata_util import (
     extract_pc_tile_metadata,
     rewrite_and_merge_metadata,
     check_for_non_homogenous_metadata,
-    format_tile_info_for_pointer_file,
+    format_tile_for_pointer_file,
     set_file_extension,
 )
 from kart.point_cloud.pdal_convert import convert_tile_to_copc
@@ -163,9 +163,10 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
                 import_ext = ".copc.laz"
 
             pointer_dict = copy_file_to_local_lfs_cache(repo, source, conversion_func)
-            pointer_dict.update(
-                format_tile_info_for_pointer_file(source_to_metadata[source]["tile"])
+            pointer_dict = format_tile_for_pointer_file(
+                source_to_metadata[source]["tile"], pointer_dict
             )
+
             tilename = set_file_extension(os.path.basename(source), import_ext)
             tile_prefix = hexhash(tilename)[0:2]
             blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"

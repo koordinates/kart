@@ -1183,12 +1183,14 @@ def test_working_copy_commit_and_convert_to_copc(
             assert r.stdout.splitlines() == [
                 '+++ auckland:tile:new.laz',
                 '+                                     name = new.copc.laz',
+                '+                               sourceName = new.laz',
                 '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
                 '+                                   format = laz-1.4/copc-1.0',
+                '+                             sourceFormat = laz-1.2',
                 '+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
                 '+                               pointCount = 4231',
-                '+                                      oid = (TBD)',
-                '+                                     size = 51489',
+                '+                                sourceOid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c',
+                '+                               sourceSize = 51489',
             ]
 
             r = cli_runner.invoke(["commit", "-m", "Commit new LAZ tile"])

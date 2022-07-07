@@ -19,7 +19,7 @@ from kart.point_cloud.metadata_util import (
     RewriteMetadata,
     extract_pc_tile_metadata,
     rewrite_and_merge_metadata,
-    format_tile_info_for_pointer_file,
+    format_tile_for_pointer_file,
     get_format_summary,
     set_file_extension,
     remove_las_extension,
@@ -51,8 +51,6 @@ class PointCloudV1(BaseDataset):
         BaseDataset.SCHEMA_JSON,
         BaseDataset.CRS_WKT,
     )
-
-    PLACEHOLDER_OID = "(TBD)"
 
     @property
     def tile_tree(self):
@@ -130,7 +128,7 @@ class PointCloudV1(BaseDataset):
     def get_tile_summary_from_pc_tile_metadata(self, wc_path, tile_metadata):
         wc_path = self._workdir_path(wc_path)
 
-        tile_info = format_tile_info_for_pointer_file(tile_metadata["tile"])
+        tile_info = format_tile_for_pointer_file(tile_metadata["tile"])
         oid, size = get_hash_and_size_of_file(wc_path)
         return {"name": wc_path.name, **tile_info, "oid": f"sha256:{oid}", "size": size}
 
@@ -197,8 +195,10 @@ class PointCloudV1(BaseDataset):
             tile_summary = self.get_tile_summary_from_pc_tile_metadata(
                 wc_path, tile_metadata
             )
-            if dataset_format_to_apply:
-                self.convert_tile_summary_if_needed(
+            if dataset_format_to_apply and not self.is_tile_compatible(
+                dataset_format_to_apply, tile_summary
+            ):
+                tile_summary = self.pre_conversion_tile_summary(
                     dataset_format_to_apply, tile_summary
                 )
             return tile_summary
@@ -274,25 +274,35 @@ class PointCloudV1(BaseDataset):
 
         return ds_diff
 
-    def convert_tile_summary_if_needed(self, ds_format, tile_summary):
-        """
-        Converts a tile-summary - that is, updates the tile-summary to how it would be if the tile is converted
-        to the given dataset format. Since the tile itself is not converted, the converted tile's size or OID is
-        not yet known. So, the size is left unchanged, and the OID is set to "(TBD)".
-        """
-
+    def is_tile_compatible(self, ds_format, tile_summary):
         tile_format = tile_summary["format"]
         if isinstance(ds_format, dict):
             ds_format = get_format_summary(ds_format)
-        if tile_format == ds_format or tile_format.startswith(f"{ds_format}/"):
-            # Tile is already in a compatible format - no need to
-            return
+        return tile_format == ds_format or tile_format.startswith(f"{ds_format}/")
 
-        tile_summary["name"] = set_file_extension(
-            tile_summary["name"], tile_format=ds_format
-        )
-        tile_summary["format"] = ds_format
-        tile_summary["oid"] = self.PLACEHOLDER_OID
+    def pre_conversion_tile_summary(self, ds_format, tile_summary):
+        """
+        Converts a tile-summary - that is, updates the tile-summary to be a mix of the tiles current information
+        (prefixed with "source") and its future information - what it will be once converted - where that is known.
+        """
+        if isinstance(ds_format, dict):
+            ds_format = get_format_summary(ds_format)
+
+        envisioned_summary = {
+            "name": set_file_extension(tile_summary["name"], tile_format=ds_format),
+            "format": ds_format,
+            "oid": None,
+            "size": None,
+        }
+        result = {}
+        for key, value in tile_summary.items():
+            if envisioned_summary.get(key):
+                result[key] = envisioned_summary[key]
+            if key in envisioned_summary:
+                result["source" + key[0].upper() + key[1:]] = value
+            else:
+                result[key] = value
+        return result
 
     def is_clean_slate(self, tile_diff):
         num_existing_tiles_kept = self.tile_count
@@ -337,14 +347,11 @@ class PointCloudV1(BaseDataset):
 
                 if delta.type in ("insert", "update"):
                     # TODO - need more work on normalising / matching names with different extensions
-                    tilename = delta.new_value.pop("name")
-                    path_in_wc = self.find_tile_in_wc(tilename)
 
-                    oid = delta.new_value["oid"]
-                    if oid == self.PLACEHOLDER_OID:
+                    if delta.new_value.get("sourceFormat"):
                         # Converting and then committing a new tile
-                        del delta.new_value["oid"]
-                        del delta.new_value["size"]
+                        source_name = delta.new_value.get("sourceName")
+                        path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
 
                         conversion_func = functools.partial(
                             convert_tile_to_format,
@@ -353,14 +360,20 @@ class PointCloudV1(BaseDataset):
                         pointer_dict = copy_file_to_local_lfs_cache(
                             self.repo, path_in_wc, conversion_func
                         )
-                        pointer_dict.update(delta.new_value)
+                        pointer_dict = format_tile_for_pointer_file(
+                            delta.new_value, pointer_dict
+                        )
                     else:
                         # Committing in a new tile, preserving its format
+                        source_name = delta.new_value.get("name")
+                        path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
+                        oid = delta.new_value["oid"]
                         path_in_lfs_cache = get_local_path_from_lfs_hash(self.repo, oid)
                         path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
                         shutil.copy(path_in_wc, path_in_lfs_cache)
-                        pointer_dict = delta.new_value
+                        pointer_dict = format_tile_for_pointer_file(delta.new_value)
 
+                    tilename = delta.new_value["name"]
                     object_builder.insert(
                         self.tilename_to_blob_path(tilename, relative=True),
                         dict_to_pointer_file_bytes(pointer_dict),
