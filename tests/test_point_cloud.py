@@ -5,7 +5,11 @@ import shutil
 import subprocess
 import pytest
 
-from kart.exceptions import INVALID_FILE_FORMAT, WORKING_COPY_OR_IMPORT_CONFLICT
+from kart.exceptions import (
+    INVALID_FILE_FORMAT,
+    WORKING_COPY_OR_IMPORT_CONFLICT,
+    NOT_YET_IMPLEMENTED,
+)
 from kart.repo import KartRepo
 
 DUMMY_REPO = "git@example.com/example.git"
@@ -1124,3 +1128,62 @@ def test_working_copy_commit_las(
             )
             assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
             assert "Committing LAS tiles is not supported" in r.stderr
+
+
+def test_working_copy_commit_and_convert_to_copc(
+    cli_runner, data_archive, data_archive_readonly, monkeypatch, requires_pdal
+):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as data_dir:
+        with data_archive("point-cloud/auckland.tgz") as repo_path:
+            tiles_path = repo_path / "auckland"
+            assert tiles_path.is_dir()
+
+            shutil.copy(data_dir / "auckland_0_0.laz", tiles_path / "new.laz")
+
+            # The non-COPC LAZ file conflicts with the COPC dataset.
+            r = cli_runner.invoke(["diff"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[:29] == [
+                '--- auckland:meta:format.json',
+                '+++ auckland:meta:format.json',
+                '- {',
+                '-   "compression": "laz",',
+                '-   "lasVersion": "1.4",',
+                '-   "optimization": "copc",',
+                '-   "optimizationVersion": "1.0",',
+                '-   "pointDataRecordFormat": 7,',
+                '-   "pointDataRecordLength": 36',
+                '- }',
+                '+ <<<<<<< ',
+                '+ {',
+                '+   "compression": "laz",',
+                '+   "lasVersion": "1.4",',
+                '+   "optimization": "copc",',
+                '+   "optimizationVersion": "1.0",',
+                '+   "pointDataRecordFormat": 7,',
+                '+   "pointDataRecordLength": 36',
+                '+ }',
+                '+ ======== ',
+                '+ {',
+                '+   "compression": "laz",',
+                '+   "lasVersion": "1.2",',
+                '+   "optimization": null,',
+                '+   "optimizationVersion": null,',
+                '+   "pointDataRecordFormat": 3,',
+                '+   "pointDataRecordLength": 34',
+                '+ }',
+                '+ >>>>>>> ',
+            ]
+
+            r = cli_runner.invoke(["diff", "--convert-to-dataset-format"])
+            assert r.exit_code == 0, r.stderr
+            assert "auckland:meta:format.json" not in r.stdout
+
+            r = cli_runner.invoke(["commit", "-m", "Commit new LAZ tile"])
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+
+            r = cli_runner.invoke(
+                ["commit", "--convert-to-dataset-format", "-m", "Commit new LAZ tile"]
+            )
+            assert r.exit_code == NOT_YET_IMPLEMENTED

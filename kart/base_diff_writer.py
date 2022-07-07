@@ -111,6 +111,7 @@ class BaseDiffWriter:
         self.target_crs = target_crs
 
         self.commit = None
+        self.do_convert_to_dataset_format = False
 
     def include_target_commit_as_header(self):
         """
@@ -118,6 +119,9 @@ class BaseDiffWriter:
         with all the info for commit C.
         """
         self.commit = self.target_rs.commit
+
+    def convert_to_dataset_format(self, do_convert_to_dataset_format=True):
+        self.do_convert_to_dataset_format = do_convert_to_dataset_format
 
     @classmethod
     def _normalize_output_path(cls, output_path):
@@ -251,6 +255,7 @@ class BaseDiffWriter:
             include_wc_diff=self.include_wc_diff,
             workdir_diff_cache=self.workdir_diff_cache,
             repo_key_filter=self.repo_key_filter,
+            convert_to_dataset_format=self.do_convert_to_dataset_format,
         )
 
     def get_dataset_diff(self, ds_path):
@@ -272,6 +277,7 @@ class BaseDiffWriter:
             include_wc_diff=self.include_wc_diff,
             workdir_diff_cache=self.workdir_diff_cache,
             ds_filter=self.repo_key_filter[ds_path],
+            convert_to_dataset_format=self.do_convert_to_dataset_format,
         )
 
     def _unfiltered_ds_feature_deltas(self, ds_path, ds_diff):

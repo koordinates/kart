@@ -33,6 +33,7 @@ from kart.point_cloud.metadata_util import (
     rewrite_and_merge_metadata,
     check_for_non_homogenous_metadata,
     format_tile_info_for_pointer_file,
+    set_file_extension,
 )
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.tabular.version import (
@@ -165,8 +166,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
             pointer_dict.update(
                 format_tile_info_for_pointer_file(source_to_metadata[source]["tile"])
             )
-            # TODO - is this the right prefix and name?
-            tilename = _remove_las_ext(os.path.basename(source)) + import_ext
+            tilename = set_file_extension(os.path.basename(source), import_ext)
             tile_prefix = hexhash(tilename)[0:2]
             blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
             write_blob_to_stream(

@@ -117,6 +117,12 @@ def feature_count_diff(
         "the stream when it is ready. If the estimate is not ready before the process exits, it will not be added."
     ),
 )
+@click.option(
+    "--convert-to-dataset-format",
+    is_flag=True,
+    help="Ignores file format differences in any new files when generating the diff - assumes that the new files will "
+    "also committed using --convert-to-dataset-format, so the conversion step will remove the format differences.",
+)
 @click.argument("commit_spec", required=False, nargs=1)
 @click.argument("filters", nargs=-1)
 def diff(
@@ -130,6 +136,7 @@ def diff(
     commit_spec,
     filters,
     add_feature_count_estimate,
+    convert_to_dataset_format,
 ):
     """
     Show changes between two commits, or between a commit and the working copy.
@@ -186,6 +193,7 @@ def diff(
         target_crs=crs,
         diff_estimate_accuracy=add_feature_count_estimate,
     )
+    diff_writer.convert_to_dataset_format(convert_to_dataset_format)
     diff_writer.write_diff()
 
     if exit_code or output_type == "quiet":
