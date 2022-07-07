@@ -8,9 +8,9 @@ import pytest
 from kart.exceptions import (
     INVALID_FILE_FORMAT,
     WORKING_COPY_OR_IMPORT_CONFLICT,
-    NOT_YET_IMPLEMENTED,
 )
 from kart.repo import KartRepo
+from kart.point_cloud.metadata_util import extract_pc_tile_metadata
 
 DUMMY_REPO = "git@example.com/example.git"
 
@@ -1179,6 +1179,17 @@ def test_working_copy_commit_and_convert_to_copc(
             r = cli_runner.invoke(["diff", "--convert-to-dataset-format"])
             assert r.exit_code == 0, r.stderr
             assert "auckland:meta:format.json" not in r.stdout
+            # TODO - need more work on normalising / matching names with different extensions
+            assert r.stdout.splitlines() == [
+                '+++ auckland:tile:new.laz',
+                '+                                     name = new.copc.laz',
+                '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
+                '+                                   format = laz-1.4/copc-1.0',
+                '+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
+                '+                               pointCount = 4231',
+                '+                                      oid = (TBD)',
+                '+                                     size = 51489',
+            ]
 
             r = cli_runner.invoke(["commit", "-m", "Commit new LAZ tile"])
             assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
@@ -1186,4 +1197,42 @@ def test_working_copy_commit_and_convert_to_copc(
             r = cli_runner.invoke(
                 ["commit", "--convert-to-dataset-format", "-m", "Commit new LAZ tile"]
             )
-            assert r.exit_code == NOT_YET_IMPLEMENTED
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["show"])
+            assert r.exit_code == 0, r.stderr
+            output = r.stdout.splitlines()
+            assert output[4:-2] == [
+                '    Commit new LAZ tile',
+                '',
+                '+++ auckland:tile:new.copc.laz',
+                '+                                     name = new.copc.laz',
+                '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
+                '+                                   format = laz-1.4/copc-1.0',
+                '+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
+                '+                               pointCount = 4231',
+            ]
+            assert re.match(r"\+\s+oid = sha256:[0-9a-f]{64}", output[-2])
+            assert re.match(r"\+\s+size = [0-9]{5}", output[-1])
+
+            r = cli_runner.invoke(["status"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+
+            # TODO - need to properly reset the working copy post-commit so it has the converted file.
+            # This forces it to reset from the repo contents.
+            repo = KartRepo(repo_path)
+            shutil.rmtree(tiles_path)
+            repo.working_copy.workdir.index_path.unlink()
+            repo.working_copy.workdir.state_path.unlink()
+
+            r = cli_runner.invoke(["checkout"])
+            assert r.exit_code == 0, r.stderr
+
+            assert tiles_path.is_dir()
+            assert not (tiles_path / "new.laz").exists()
+            assert (tiles_path / "new.copc.laz").is_file()
+            assert (
+                extract_pc_tile_metadata(tiles_path / "new.copc.laz")["tile"]["format"]
+                == "laz-1.4/copc-1.0"
+            )

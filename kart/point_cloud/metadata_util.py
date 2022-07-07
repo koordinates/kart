@@ -333,7 +333,7 @@ def format_tile_info_for_pointer_file(tile_info):
     return result
 
 
-def _remove_las_extension(filename):
+def remove_las_extension(filename):
     """Given a tile filename, removes the suffix .las or .laz or .copc.las or .copc.laz"""
     match = re.fullmatch(r"(.+?)(\.copc)*\.la[sz]", filename, re.IGNORECASE)
     if match:
@@ -348,15 +348,32 @@ def set_file_extension(filename, ext=None, tile_format=None):
         if isinstance(tile_format, dict):
             # Format info as stored in format.json
             ext = f".{tile_format['compression']}"
-            if tile_format["optimization"] == "copc":
-                ext = ".copc" + ext
         else:
             # Format summary string.
             ext = f".{tile_format[0:3]}"
-            if "copc" in tile_format:
-                ext = ".copc" + ext
+
+        if is_copc(tile_format):
+            ext = ".copc" + ext
 
     elif not ext.startswith("."):
         ext = f".{ext}"
 
-    return _remove_las_extension(filename) + ext
+    return remove_las_extension(filename) + ext
+
+
+def is_copc(tile_format):
+    if isinstance(tile_format, dict):
+        return tile_format.get("optimization") == "copc"
+    elif isinstance(tile_format, str):
+        return "copc" in tile_format
+    raise ValueError("Bad tile format")
+
+
+def get_las_version(tile_format):
+    if isinstance(tile_format, dict):
+        return tile_format.get("lasVersion")
+    elif isinstance(tile_format, str):
+        match = re.match(r"la[sz]-([0-9\.]+)", tile_format, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    raise ValueError("Bad tile format")

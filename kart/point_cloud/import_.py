@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 from pathlib import Path
@@ -35,6 +34,7 @@ from kart.point_cloud.metadata_util import (
     format_tile_info_for_pointer_file,
     set_file_extension,
 )
+from kart.point_cloud.pdal_convert import convert_tile_to_copc
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,
@@ -141,7 +141,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
     def convert_tile_to_copc_and_reextract_metadata(source, dest):
         nonlocal source_to_metadata
 
-        _convert_tile_to_copc(source, dest)
+        convert_tile_to_copc(source, dest)
         source_to_metadata[source] = extract_pc_tile_metadata(dest, extract_schema=True)
 
     with git_fast_import(repo, *FastImportSettings().as_args(), "--quiet") as proc:
@@ -210,30 +210,3 @@ def _remove_las_ext(filename):
     if match:
         return match.group(1)
     return filename
-
-
-def _convert_tile_to_copc(source, dest):
-    """
-    Converts a LAS/LAZ file of some sort as source to a COPC.LAZ file at dest.
-    """
-    import pdal
-
-    config = [
-        {
-            "type": "readers.las",
-            "filename": str(source),
-        },
-        {
-            "type": "writers.copc",
-            "filename": str(dest),
-            "forward": "all",
-        },
-    ]
-    pipeline = pdal.Pipeline(json.dumps(config))
-    try:
-        pipeline.execute()
-    except RuntimeError as e:
-        raise InvalidOperation(
-            f"Error converting {source}\n{e}", exit_code=INVALID_FILE_FORMAT
-        )
-    assert dest.is_file()
