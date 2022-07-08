@@ -100,12 +100,12 @@ def test_import_single_las(
                 }
             }
 
-            r = cli_runner.invoke(["show", "HEAD", "autzen:tile:autzen.copc.laz"])
+            r = cli_runner.invoke(["show", "HEAD", "autzen:tile:autzen"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines()[4:] == [
                 "    Importing 1 LAZ tiles as autzen",
                 "",
-                "+++ autzen:tile:autzen.copc.laz",
+                "+++ autzen:tile:autzen",
                 "+                                     name = autzen.copc.laz",
                 "+                              crs84Extent = -123.075389,-123.0625145,44.04998981,44.06229306,407.35,536.84",
                 "+                                   format = laz-1.4/copc-1.0",
@@ -123,7 +123,7 @@ def test_import_single_las(
                 ["kart", "lfs", "push", "origin", "--all", "--dry-run"], encoding="utf8"
             )
             assert re.match(
-                r"push [0-9a-f]{64} => autzen/.point-cloud-dataset.v1/tile/e8/autzen.copc.laz",
+                r"push [0-9a-f]{64} => autzen/.point-cloud-dataset.v1/tile/60/autzen",
                 stdout.splitlines()[0],
             )
 
@@ -192,7 +192,7 @@ def test_import_several_laz(
             lines = stdout.splitlines()
             for i in range(16):
                 assert re.match(
-                    r"push [0-9a-f]{64} => auckland/.point-cloud-dataset.v1/tile/[0-9a-f]{2}/auckland_\d_\d.copc.laz",
+                    r"push [0-9a-f]{64} => auckland/.point-cloud-dataset.v1/tile/[0-9a-f]{2}/auckland_\d_\d",
                     lines[i],
                 )
 
@@ -235,12 +235,12 @@ def test_import_single_laz_no_convert(
                 }
             }
 
-            r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0.laz"])
+            r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines()[4:] == [
                 "    Importing 1 LAZ tiles as auckland",
                 "",
-                "+++ auckland:tile:auckland_0_0.laz",
+                "+++ auckland:tile:auckland_0_0",
                 "+                                     name = auckland_0_0.laz",
                 "+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83",
                 "+                                   format = laz-1.2",
@@ -333,19 +333,19 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
         ]
 
         EXPECTED_TILE_DIFF = [
-            '--- auckland:tile:auckland_1_1.copc.laz',
-            '+++ auckland:tile:auckland_1_1.copc.laz',
+            '--- auckland:tile:auckland_1_1',
+            '+++ auckland:tile:auckland_1_1',
             '-                              crs84Extent = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15',
             '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
             '-                             nativeExtent = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15',
             '+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
             '-                               pointCount = 1558',
             '+                               pointCount = 4231',
-            '-                                      oid = sha256:1130618cd78bd1d144dbc467f278405d043fb10b6f19efb2c0cce23a9e24323e',
-            '+                                      oid = sha256:f4bf2dfd3734520a94dea6dc987e892fd2c5b4f4647bb51cb5b8f233e43ada7b',
-            '-                                     size = 24490',
-            '+                                     size = 69545',
-            '--- auckland:tile:auckland_3_3.copc.laz',
+            '-                                      oid = sha256:c0304cd6dc1687eb3419ee9af9f5494245ee31b6560fc2059946e0784b48da54',
+            '+                                      oid = sha256:21564a23ebe762997d5b446d99249df2cf4560096c116ef87766981c64b981fc',
+            '-                                     size = 24491',
+            '+                                     size = 69553',
+            '--- auckland:tile:auckland_3_3',
             '-                                     name = auckland_3_3.copc.laz',
             '-                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
             '-                                   format = laz-1.4/copc-1.0',
@@ -353,7 +353,7 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
             '-                               pointCount = 29',
             '-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
             '-                                     size = 2319',
-            '+++ auckland:tile:auckland_4_4.copc.laz',
+            '+++ auckland:tile:auckland_4_4',
             '+                                     name = auckland_4_4.copc.laz',
             '+                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
             '+                                   format = laz-1.4/copc-1.0',
@@ -419,9 +419,7 @@ def test_working_copy_restore_reset(
         assert file_count(tiles_path) == 12
         edit_commit = repo.head_commit.hex
 
-        r = cli_runner.invoke(
-            ["restore", "-s", "HEAD^", "auckland:tile:auckland_0_0.copc.laz"]
-        )
+        r = cli_runner.invoke(["restore", "-s", "HEAD^", "auckland:tile:auckland_0_0"])
         assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(["status"])
@@ -442,8 +440,8 @@ def test_working_copy_restore_reset(
                 "restore",
                 "-s",
                 edit_commit,
-                "auckland:tile:auckland_0_1.copc.laz",
-                "auckland:tile:auckland_0_2.copc.laz",
+                "auckland:tile:auckland_0_1",
+                "auckland:tile:auckland_0_2",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -876,7 +874,7 @@ def test_working_copy_meta_edit(
                 '+   }',
                 '+ ]',
                 '+ >>>>>>> ',
-                '+++ auckland:tile:autzen.laz',
+                '+++ auckland:tile:autzen',
                 '+                                     name = autzen.laz',
                 '+                              crs84Extent = -123.075389,-123.0625145,44.04998981,44.06229306,407.35,536.84',
                 '+                                   format = laz-1.2',
@@ -1181,7 +1179,7 @@ def test_working_copy_commit_and_convert_to_copc(
             assert "auckland:meta:format.json" not in r.stdout
             # TODO - need more work on normalising / matching names with different extensions
             assert r.stdout.splitlines() == [
-                '+++ auckland:tile:new.laz',
+                '+++ auckland:tile:new',
                 '+                                     name = new.copc.laz',
                 '+                               sourceName = new.laz',
                 '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
@@ -1207,7 +1205,7 @@ def test_working_copy_commit_and_convert_to_copc(
             assert output[4:-2] == [
                 '    Commit new LAZ tile',
                 '',
-                '+++ auckland:tile:new.copc.laz',
+                '+++ auckland:tile:new',
                 '+                                     name = new.copc.laz',
                 '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
                 '+                                   format = laz-1.4/copc-1.0',

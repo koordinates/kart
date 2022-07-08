@@ -67,14 +67,26 @@ class PointCloudV1(BaseDataset):
         """The total number of features in this dataset."""
         return sum(1 for blob in self.tile_pointer_blobs())
 
-    def tilenames_with_lfs_hashes(self):
-        """Returns a generator that yields every tilename along with its LFS hash."""
+    def tilenames_with_lfs_hashes(self, fix_extensions=True):
+        """
+        Returns a generator that yields every tilename along with its LFS hash.
+        If fix_extensions is True, then the returned name will be modified to have the correct extension for the
+        type of tile the blob is pointing to (eg .laz or .copc.laz), regardless of the blob's extension (if any).
+        """
         for blob in self.tile_pointer_blobs():
-            yield blob.name, get_hash_from_pointer_file(blob)
+            if fix_extensions:
+                pointer_dict = pointer_file_bytes_to_dict(blob)
+                tile_format = pointer_dict["format"]
+                oid = pointer_dict["oid"].split(":", maxsplit=1)[1]
+                yield set_file_extension(blob.name, tile_format=tile_format), oid
+            else:
+                yield blob.name, get_hash_from_pointer_file(blob)
 
-    def tilenames_with_lfs_paths(self):
+    def tilenames_with_lfs_paths(self, fix_extensions=True):
         """Returns a generator that yields every tilename along with the path where the tile content is stored locally."""
-        for blob_name, lfs_hash in self.tilenames_with_lfs_hashes():
+        for blob_name, lfs_hash in self.tilenames_with_lfs_hashes(
+            fix_extensions=fix_extensions
+        ):
             yield blob_name, get_local_path_from_lfs_hash(self.repo, lfs_hash)
 
     def decode_path(self, path):
@@ -99,11 +111,14 @@ class PointCloudV1(BaseDataset):
 
     @classmethod
     def tilename_from_path(cls, tile_path):
-        return tile_path.rsplit("/", maxsplit=1)[-1]
+        return remove_las_extension(tile_path.rsplit("/", maxsplit=1)[-1])
 
     def get_tile_summary_from_pointer_blob(self, tile_pointer_blob):
         result = pointer_file_bytes_to_dict(
             tile_pointer_blob, {"name": tile_pointer_blob.name}
+        )
+        result["name"] = set_file_extension(
+            result["name"], tile_format=result["format"]
         )
         if "version" in result:
             del result["version"]
@@ -188,6 +203,13 @@ class PointCloudV1(BaseDataset):
         def wc_to_ds_path_transform(wc_path):
             return self.tilename_to_blob_path(wc_path, relative=True)
 
+        def tile_summary_from_ds_path(ds_path):
+            # This may not actually be a tile due to "try_promote_inserts_to_updates" below.
+            tile_pointer_blob = self.get_blob_at(ds_path, missing_ok=True)
+            if tile_pointer_blob is not None:
+                return self.get_tile_summary_from_pointer_blob(tile_pointer_blob)
+            return None
+
         def tile_summary_from_wc_path(wc_path):
             wc_path = self._workdir_path(wc_path)
             tile_metadata = extract_pc_tile_metadata(wc_path)
@@ -210,8 +232,9 @@ class PointCloudV1(BaseDataset):
             wc_to_ds_path_transform=wc_to_ds_path_transform,
             ds_key_decoder=self.tilename_from_path,
             wc_key_decoder=self.tilename_from_path,
-            ds_value_decoder=self.get_tile_summary_promise_from_path,
+            ds_value_decoder=tile_summary_from_ds_path,
             wc_value_decoder=tile_summary_from_wc_path,
+            try_promote_inserts_to_updates=True,
         )
         tile_diff = DeltaDiff(tile_diff_deltas)
 

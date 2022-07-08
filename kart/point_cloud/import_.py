@@ -1,7 +1,6 @@
 import logging
 import os
 from pathlib import Path
-import re
 
 import click
 
@@ -32,7 +31,7 @@ from kart.point_cloud.metadata_util import (
     rewrite_and_merge_metadata,
     check_for_non_homogenous_metadata,
     format_tile_for_pointer_file,
-    set_file_extension,
+    remove_las_extension,
 )
 from kart.point_cloud.pdal_convert import convert_tile_to_copc
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
@@ -155,19 +154,17 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
             source_metadata = source_to_metadata[source]
 
             tile_is_copc = source_metadata["format"]["optimization"] == "copc"
-            import_ext = ".copc.laz" if tile_is_copc else ".laz"
             conversion_func = None
 
             if convert_to_copc and not tile_is_copc:
                 conversion_func = convert_tile_to_copc_and_reextract_metadata
-                import_ext = ".copc.laz"
 
             pointer_dict = copy_file_to_local_lfs_cache(repo, source, conversion_func)
             pointer_dict = format_tile_for_pointer_file(
                 source_to_metadata[source]["tile"], pointer_dict
             )
 
-            tilename = set_file_extension(os.path.basename(source), import_ext)
+            tilename = remove_las_extension(os.path.basename(source))
             tile_prefix = hexhash(tilename)[0:2]
             blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
             write_blob_to_stream(
@@ -204,10 +201,3 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
         repo_key_filter=RepoKeyFilter.datasets([ds_path]),
         create_parts_if_missing=parts_to_create,
     )
-
-
-def _remove_las_ext(filename):
-    match = re.fullmatch(r"(.+?)(\.copc)*\.la[sz]", filename, re.IGNORECASE)
-    if match:
-        return match.group(1)
-    return filename

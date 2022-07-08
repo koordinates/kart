@@ -393,8 +393,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         if not tile_diff:
             return
         for tile_delta in tile_diff.values():
-            if tile_delta.type == "delete" or tile_delta.is_rename():
-                tilename = tile_delta.old_key
+            if tile_delta.type in ("update", "delete"):
+                tilename = tile_delta.old_value["name"]
                 tile_path = ds_tiles_dir / tilename
                 if tile_path.is_file():
                     tile_path.unlink()
@@ -402,7 +402,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     reset_index_files.append(f"{ds_path}/{tilename}")
 
             if tile_delta.type in ("update", "insert"):
-                tilename = tile_delta.new_key
+                tilename = tile_delta.new_value["name"]
                 lfs_path = get_local_path_from_lfs_hash(
                     self.repo, tile_delta.new_value["oid"]
                 )
@@ -519,7 +519,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         return index.diff_to_workdir(
             pygit2.GIT_DIFF_INCLUDE_UNTRACKED
             | pygit2.GIT_DIFF_RECURSE_UNTRACKED_DIRS
-            | pygit2.GIT_DIFF_UPDATE_INDEX
+            # TODO: this flag doesn't work properly in a Kart repo - investigate why.
+            # | pygit2.GIT_DIFF_UPDATE_INDEX
             # GIT_DIFF_UPDATE_INDEX just updates timestamps in the index to make the diff quicker next time
             # none of the paths or hashes change, and the end result stays the same.
         )

@@ -152,6 +152,7 @@ class DatasetDiffMixin:
         wc_key_decoder=lambda x: x,
         ds_value_decoder=lambda x: x,
         wc_value_decoder=lambda x: x,
+        try_promote_inserts_to_updates=False,
     ):
         """
         A pattern for datasets to use for diffing their contents against the working copy.
@@ -175,6 +176,10 @@ class DatasetDiffMixin:
         ds_value_decoder, wc_value_decoder - functions which take a path and load the contents of the item.
 
         If any transform is not set, that transform defaults to returning the value it was input.
+
+        try_promote_inserts_to_updates - if True, we optimistically try and load the old value for
+        what seems to be an insert, and if that works, we promote it to an update. This is useful in
+        the workdir if the user manages to create a new file that internally overwrites an existing item.
         """
 
         # Note that this operation returns changes that the user made to the working copy.
@@ -203,6 +208,7 @@ class DatasetDiffMixin:
             new_path_transform=lambda x: x,  # For new paths, we need WC paths, so no need to transform.
             new_key_transform=wc_key_decoder,
             new_value_transform=wc_value_decoder,
+            try_promote_inserts_to_updates=try_promote_inserts_to_updates,
         )
 
     # We treat UNTRACKED like an ADD since we don't have a staging area -
@@ -227,6 +233,7 @@ class DatasetDiffMixin:
         new_path_transform=lambda x: x,
         new_key_transform=lambda x: x,
         new_value_transform=lambda x: x,
+        try_promote_inserts_to_updates=False,
     ):
         """
         Given a list of deltas - inserts, updates, and deletes -
@@ -241,6 +248,10 @@ class DatasetDiffMixin:
             presumably first by loading the file contents at that path.
 
         If any transform is not set, that transform defaults to returning the value it was input.
+
+        try_promote_inserts_to_updates - if True, we optimistically try and load the old value for
+        what seems to be an insert, and if that works, we promote it to an update. This is useful in
+        the workdir if the user manages to create a new file that internally overwrites an existing item.
         """
         for d in deltas:
             self.L.debug(
@@ -289,5 +300,12 @@ class DatasetDiffMixin:
                 new_half_delta = new_key, new_value_transform(new_path)
             else:
                 new_half_delta = None
+
+            if try_promote_inserts_to_updates and old_half_delta is None:
+                old_path = old_path_transform(d.new_file.path)
+                old_key = old_key_transform(old_path)
+                old_value = old_value_transform(old_path)
+                if old_value:
+                    old_half_delta = old_key, old_value
 
             yield Delta(old_half_delta, new_half_delta)
