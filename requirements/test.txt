@@ -6,7 +6,7 @@
 #
 aspectlib==1.5.2
     # via pytest-benchmark
-atomicwrites==1.4.0
+atomicwrites==1.4.1
     # via -r requirements/test.in
 attrs==21.4.0
     # via
