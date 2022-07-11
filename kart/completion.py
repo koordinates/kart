@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import platform
 import subprocess
 from enum import Enum
 from pathlib import Path
@@ -100,6 +101,9 @@ def install_bash(*, prog_name: str, complete_var: str, shell: str) -> Path:
     # But installing in the locations from the docs doesn't seem to have effect
     completion_path = Path.home() / f".bash_completions/{prog_name}.sh"
     bashrc_path = Path.home() / ".bashrc"
+    bash_profile = Path.home() / ".bash_profile"
+    if platform.system() == "Darwin" and bash_profile.exists():
+        bashrc_path = bash_profile
     completion_init_lines = [f"source {completion_path}"]
     return install_helper(
         prog_name,
