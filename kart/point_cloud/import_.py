@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 
+from kart.cli_util import StringFromFile
 from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
@@ -58,6 +59,12 @@ L = logging.getLogger(__name__)
     "--dataset-path", "ds_path", help="The dataset's path once imported", required=True
 )
 @click.option(
+    "--message",
+    "-m",
+    type=StringFromFile(encoding="utf-8"),
+    help="Commit message. By default this is auto-generated.",
+)
+@click.option(
     "--checkout/--no-checkout",
     "do_checkout",
     is_flag=True,
@@ -65,7 +72,7 @@ L = logging.getLogger(__name__)
     help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
 )
 @click.argument("sources", metavar="SOURCES", nargs=-1, required=True)
-def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
+def point_cloud_import(ctx, convert_to_copc, ds_path, message, do_checkout, sources):
     """
     Experimental command for importing point cloud datasets. Work-in-progress.
     Will eventually be merged with the main `import` command.
@@ -126,11 +133,13 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
         if not repo.head_commit
         else []
     )
+    if message is None:
+        message = f"Importing {len(sources)} LAZ tiles as {ds_path}"
 
     header = generate_header(
         repo,
         None,
-        f"Importing {len(sources)} LAZ tiles as {ds_path}",
+        message,
         repo.head_branch,
         repo.head_commit,
     )
