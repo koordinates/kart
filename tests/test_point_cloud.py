@@ -252,6 +252,90 @@ def test_import_single_laz_no_convert(
             ]
 
 
+def test_import_replace_existing(
+    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
+):
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    *glob(f"{auckland}/auckland_0_0.laz"),
+                    "--message=Initial import",
+                    "--dataset-path=auckland",
+                    "--preserve-format",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
+            assert r.exit_code == 0, r.stderr
+            assert json.loads(r.stdout) == {
+                "auckland": {
+                    "format.json": {
+                        "compression": "laz",
+                        "lasVersion": "1.2",
+                        "pointDataRecordFormat": 3,
+                        "pointDataRecordLength": 34,
+                    }
+                }
+            }
+
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    *glob(f"{auckland}/auckland_0_0.laz"),
+                    "--message=Import again but convert to COPC this time",
+                    "--dataset-path=auckland",
+                    "--convert-to-copc",
+                    "--replace-existing",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
+            assert r.exit_code == 0, r.stderr
+            assert json.loads(r.stdout) == {
+                "auckland": {
+                    "format.json": {
+                        "compression": "laz",
+                        "lasVersion": "1.4",
+                        "optimization": "copc",
+                        "optimizationVersion": "1.0",
+                        "pointDataRecordFormat": 7,
+                        "pointDataRecordLength": 36,
+                    }
+                }
+            }
+
+            r = cli_runner.invoke(["show", "HEAD", "auckland:meta:format.json"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[4:] == [
+                "    Import again but convert to COPC this time",
+                "",
+                "--- auckland:meta:format.json",
+                "+++ auckland:meta:format.json",
+                "- {",
+                '-   "compression": "laz",',
+                '-   "lasVersion": "1.2",',
+                '-   "pointDataRecordFormat": 3,',
+                '-   "pointDataRecordLength": 34',
+                "- }",
+                "+ {",
+                '+   "compression": "laz",',
+                '+   "lasVersion": "1.4",',
+                '+   "optimization": "copc",',
+                '+   "optimizationVersion": "1.0",',
+                '+   "pointDataRecordFormat": 7,',
+                '+   "pointDataRecordLength": 36',
+                "+ }",
+            ]
+
+
 def test_import_single_las_no_convert(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
