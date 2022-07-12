@@ -174,6 +174,7 @@ def commit(
         quiet=do_json,
         mark_as_clean=commit_diff_writer.repo_key_filter,
         now_outside_spatial_filter=commit_diff_writer.now_outside_spatial_filter,
+        committed_diff=wc_diff,
     )
 
     jdict = commit_obj_to_json(new_commit, repo, wc_diff)

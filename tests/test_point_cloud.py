@@ -1178,7 +1178,6 @@ def test_working_copy_commit_and_convert_to_copc(
             r = cli_runner.invoke(["diff", "--convert-to-dataset-format"])
             assert r.exit_code == 0, r.stderr
             assert "auckland:meta:format.json" not in r.stdout
-            # TODO - need more work on normalising / matching names with different extensions
             assert r.stdout.splitlines() == [
                 "+++ auckland:tile:new",
                 "+                                     name = new.copc.laz",
@@ -1220,20 +1219,12 @@ def test_working_copy_commit_and_convert_to_copc(
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
 
-            # TODO - need to properly reset the working copy post-commit so it has the converted file.
-            # This forces it to reset from the repo contents.
-            repo = KartRepo(repo_path)
-            shutil.rmtree(tiles_path)
-            repo.working_copy.workdir.index_path.unlink()
-            repo.working_copy.workdir.state_path.unlink()
-
-            r = cli_runner.invoke(["checkout"])
-            assert r.exit_code == 0, r.stderr
-
             assert tiles_path.is_dir()
             assert not (tiles_path / "new.laz").exists()
             assert (tiles_path / "new.copc.laz").is_file()
-            assert (
-                extract_pc_tile_metadata(tiles_path / "new.copc.laz")["tile"]["format"]
-                == "laz-1.4/copc-1.0"
+
+            converted_tile_metadata = extract_pc_tile_metadata(
+                tiles_path / "new.copc.laz"
             )
+            assert converted_tile_metadata["tile"]["format"] == "laz-1.4/copc-1.0"
+            assert converted_tile_metadata["tile"]["pointCount"] == 4231

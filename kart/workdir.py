@@ -4,6 +4,7 @@ import logging
 from enum import Enum, auto
 import functools
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -22,6 +23,7 @@ from kart.exceptions import NotFound, NO_WORKING_COPY, translate_subprocess_exit
 from kart.lfs_util import get_local_path_from_lfs_hash
 from kart.key_filters import RepoKeyFilter
 from kart.point_cloud.v1 import PointCloudV1
+from kart.point_cloud.metadata_util import remove_las_extension
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.working_copy import WorkingCopyPart
@@ -462,7 +464,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         def matches_repo_key_filter(path):
             path = Path(path.replace("\\", "/"))
             ds_path = str(path.parents[0])
-            tile_name = path.name
+            tile_name = remove_las_extension(path.name)
             return repo_key_filter.recursive_get([ds_path, "tile", tile_name])
 
         # Use git update-index to reset these paths - we can't use git add directly since
@@ -499,15 +501,68 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
+    def _hard_reset_after_commit_for_converted_tiles(self, datasets, committed_diff):
+        """
+        Look for tiles that were automatically modified as part of the commit operation
+        - these will have extra properties like a "sourceName" that differs from "name"
+        or a "sourceFormat" that differs from "format". The source one is what the user
+        supplied, and the other is what was actually committed.
+        These need to be updated in the workdir so that the workdir reflects what was committed.
+        """
+        for ds_path in datasets.paths():
+            tile_diff = committed_diff.recursive_get([ds_path, "tile"])
+            if not tile_diff:
+                continue
+            for tile_delta in tile_diff.values():
+                new_value = tile_delta.new_value
+                if new_value is None:
+                    continue
+                if "sourceName" in new_value or "sourceFormat" in new_value:
+                    self._hard_reset_converted_tile(ds_path, tile_delta)
+
+    def _hard_reset_converted_tile(self, ds_path, tile_delta):
+        """
+        Update an individual tile in the workdir so that it reflects what was actually committed.
+        """
+        tilename = remove_las_extension(tile_delta.new_value["name"])
+
+        ds_tiles_dir = (self.path / ds_path).resolve()
+        # Sanity check to make sure we're not messing with files we shouldn't:
+        assert self.path in ds_tiles_dir.parents
+        assert self.repo.workdir_path in ds_tiles_dir.parents
+        assert ds_tiles_dir.is_dir()
+
+        tile_pattern = re.compile(
+            re.escape(tilename + ".") + r"([Cc][Oo][Pp][Cc]\.)?[Ll][Aa][SsZz]"
+        )
+        for child in ds_tiles_dir.glob(tilename + ".*"):
+            if tile_pattern.fullmatch(child.name) and child.is_file():
+                child.unlink()
+
+        tilename = tile_delta.new_value["name"]
+        lfs_path = get_local_path_from_lfs_hash(self.repo, tile_delta.new_value["oid"])
+        if not lfs_path.is_file():
+            click.echo(f"Couldn't find tile {tilename} locally - skipping...", err=True)
+        else:
+            shutil.copy(lfs_path, ds_tiles_dir / tilename)
+
     def soft_reset_after_commit(
-        self, commit_or_tree, *, mark_as_clean=None, now_outside_spatial_filter=None
+        self,
+        commit_or_tree,
+        *,
+        mark_as_clean=None,
+        now_outside_spatial_filter=None,
+        committed_diff=None,
     ):
-        # TODO - handle finer-grained soft-resets than entire datasets
         datasets = self.repo.datasets(
             commit_or_tree,
             repo_key_filter=mark_as_clean,
             filter_dataset_type="point-cloud",
         )
+
+        # Handle tiles that were, eg, converted to COPC during the commit - the non-COPC
+        # tiles in the workdir now need to be replaced with the COPC ones:
+        self._hard_reset_after_commit_for_converted_tiles(datasets, committed_diff)
 
         self._reset_workdir_index_for_datasets(datasets, repo_key_filter=mark_as_clean)
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))

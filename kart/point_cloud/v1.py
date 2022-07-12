@@ -401,6 +401,10 @@ class PointCloudV1(BaseDataset):
                         self.tilename_to_blob_path(tilename, relative=True),
                         dict_to_pointer_file_bytes(pointer_dict),
                     )
+                    # Update the diff to record what was stored - this is used to reset the workdir.
+                    delta.new_value.update(
+                        oid=pointer_dict["oid"], size=pointer_dict["size"]
+                    )
 
                 else:  # delete:
                     tilename = delta.old_key

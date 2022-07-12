@@ -1421,6 +1421,7 @@ class TableWorkingCopy(WorkingCopyPart):
         *,
         mark_as_clean=None,
         now_outside_spatial_filter=None,
+        committed_diff=None,
     ):
         """
         Marks the working copy as now being based on the given target tree or commit.
