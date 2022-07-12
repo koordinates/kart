@@ -71,8 +71,15 @@ L = logging.getLogger(__name__)
     default=True,
     help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
 )
+@click.option(
+    "--replace-existing",
+    is_flag=True,
+    help="Replace existing dataset(s) of the same name.",
+)
 @click.argument("sources", metavar="SOURCES", nargs=-1, required=True)
-def point_cloud_import(ctx, convert_to_copc, ds_path, message, do_checkout, sources):
+def point_cloud_import(
+    ctx, convert_to_copc, ds_path, message, do_checkout, replace_existing, sources
+):
     """
     Experimental command for importing point cloud datasets. Work-in-progress.
     Will eventually be merged with the main `import` command.
@@ -81,9 +88,11 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, message, do_checkout, sour
     """
     repo = ctx.obj.repo
 
-    # TODO - improve path validation to make sure datasets of any type don't collide with each other
-    # or with attachments.
-    validate_dataset_paths([ds_path])
+    if replace_existing:
+        validate_dataset_paths([ds_path])
+    else:
+        old_ds_paths = [ds.path for ds in repo.datasets()]
+        validate_dataset_paths([*old_ds_paths, ds_path])
 
     for source in sources:
         if not (Path() / source).is_file():
@@ -154,6 +163,9 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, message, do_checkout, sour
 
     with git_fast_import(repo, *FastImportSettings().as_args(), "--quiet") as proc:
         proc.stdin.write(header.encode("utf8"))
+
+        # Delete the existing dataset, before we re-import it.
+        proc.stdin.write(f"D {ds_path}\n".encode("utf8"))
 
         for i, blob_path in write_blobs_to_stream(proc.stdin, extra_blobs):
             pass
