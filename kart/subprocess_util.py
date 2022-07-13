@@ -7,12 +7,11 @@ from functools import partial
 from . import is_windows
 
 
-@asyncio.coroutine
-def read_stream_and_display(stream, display):
+async def read_stream_and_display(stream, display):
     """Read from stream line by line until EOF, display, and capture the lines."""
     output = []
     while True:
-        line = yield from read_universal_line(stream)
+        line = await read_universal_line(stream)
         if not line:
             break
         output.append(line)
@@ -20,11 +19,10 @@ def read_stream_and_display(stream, display):
     return b"".join(output)
 
 
-@asyncio.coroutine
-def read_and_display(cmd, **kwargs):
+async def read_and_display(cmd, **kwargs):
     """Capture cmd's stdout and stderr while displaying them as they arrive (line by line)."""
     # start process
-    process = yield from asyncio.create_subprocess_exec(
+    process = await asyncio.create_subprocess_exec(
         *cmd, stdout=PIPE, stderr=PIPE, **kwargs
     )
 
@@ -34,7 +32,7 @@ def read_and_display(cmd, **kwargs):
 
     # Read child's stdout/stderr concurrently (capture and display)
     try:
-        stdout, stderr = yield from asyncio.gather(
+        stdout, stderr = await asyncio.gather(
             read_stream_and_display(process.stdout, partial(display, sys.stdout)),
             read_stream_and_display(process.stderr, partial(display, sys.stderr)),
         )
@@ -43,7 +41,7 @@ def read_and_display(cmd, **kwargs):
         raise
     finally:
         # Wait for the process to exit
-        return_code = yield from process.wait()
+        return_code = await process.wait()
     return return_code, stdout, stderr
 
 
