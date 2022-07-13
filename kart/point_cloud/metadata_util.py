@@ -315,31 +315,39 @@ def _calc_crs84_extent(src_extent, src_crs):
     return b["minx"], b["maxx"], b["miny"], b["maxy"], b["minz"], b["maxz"]
 
 
-def format_tile_for_pointer_file(tile_info, pointer_info=None):
+# Keep pointer file keys in alphabetical order, except:
+# version goes first, and oid and size go last
+TILE_POINTER_FILE_KEYS = (
+    "version",
+    "crs84Extent",
+    "format",
+    "nativeExtent",
+    "pointCount",
+    "sourceOid",
+    "oid",
+    "size",
+)
+
+
+def format_tile_for_pointer_file(*tile_info_sources):
     """
     Given the tile-info metadata, converts it to a format appropriate for the LFS pointer file.
     """
 
-    if pointer_info is None:
-        pointer_info = tile_info
+    def get_value_for_key(key):
+        for source in tile_info_sources:
+            if key in source:
+                value = source.get(key)
+                if hasattr(value, "__iter__") and not isinstance(value, str):
+                    return _format_list_as_str(value)
+                else:
+                    return value
 
     result = {}
-
-    def add_key(key, source):
-        value = source.get(key)
-        if hasattr(value, "__iter__") and not isinstance(value, str):
-            result[key] = _format_list_as_str(value)
-        elif value:
+    for key in TILE_POINTER_FILE_KEYS:
+        value = get_value_for_key(key)
+        if value:
             result[key] = value
-
-    # Keep tile info keys in alphabetical order.
-    add_key("version", pointer_info)
-    add_key("crs84Extent", tile_info)
-    add_key("format", tile_info)
-    add_key("nativeExtent", tile_info)
-    add_key("pointCount", tile_info)
-    add_key("oid", pointer_info)
-    add_key("size", pointer_info)
 
     return result
 
