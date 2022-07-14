@@ -95,7 +95,7 @@ L = logging.getLogger(__name__)
     cls=MutexOption,
     exclusive_with=["--replace-existing"],
     multiple=True,
-    help=("Deletes the given tile. Implies --update-existing"),
+    help=("Deletes the given tile. Can be used multiple times."),
 )
 @click.argument("sources", metavar="SOURCES", nargs=-1, required=False)
 def point_cloud_import(
@@ -124,7 +124,16 @@ def point_cloud_import(
         raise click.MissingParameter(param=ctx.command.params[-1])
 
     if delete:
-        update_existing = True
+        # --delete kind of implies --update-existing (we're modifying an existing dataset)
+        # But a common way for this to do the wrong thing might be this:
+        #   kart ... --delete auckland/auckland_3_*.laz
+        # i.e. if --delete is used with a glob, then we don't want to treat the remaining paths as
+        # sources and import them. In that case, *not* setting update_existing here will fall through
+        # to cause an error below:
+        #  * either the dataset exists, and we fail with a dataset conflict
+        #  * or the dataset doesn't exist, and the --delete fails
+        if not sources:
+            update_existing = True
 
     if replace_existing or update_existing:
         validate_dataset_paths([ds_path])

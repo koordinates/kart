@@ -299,6 +299,29 @@ def test_import_delete_tiles_only(
         assert updates == 0
 
 
+def test_import_delete_tiles_and_import_sources_error(
+    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly
+):
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as src:
+        with data_archive("point-cloud/auckland.tgz"):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    "--dataset-path=auckland",
+                    # This doesn't do what you'd think; the glob expands to give the
+                    # first argument to the --delete option, and the other args would get imported.
+                    # So we don't allow this without an explicit --update-existing flag.
+                    "--delete",
+                    *glob(f"{src}/auckland_3_*.laz"),
+                ]
+            )
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT, r.stderr
+            assert (
+                "Dataset path 'auckland' conflicts with existing path 'auckland'"
+                in r.stderr
+            )
+
+
 def test_import_conflicting_dataset(
     tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
 ):
