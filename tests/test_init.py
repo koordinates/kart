@@ -11,6 +11,7 @@ from kart.exceptions import (
     INVALID_OPERATION,
     NO_IMPORT_SOURCE,
     NO_TABLE,
+    WORKING_COPY_OR_IMPORT_CONFLICT,
     InvalidOperation,
 )
 
@@ -631,7 +632,7 @@ def test_init_import(
     cli_runner,
     chdir,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
+    """Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository."""
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "repo"
@@ -762,7 +763,7 @@ def test_init_import_commit_headers(
 
 
 def test_init_import_name_clash(data_archive, cli_runner):
-    """ Import the GeoPackage into a Kart repository of the same name, and checkout a working copy of the same name. """
+    """Import the GeoPackage into a Kart repository of the same name, and checkout a working copy of the same name."""
     with data_archive("gpkg-editing") as data:
         r = cli_runner.invoke(["init", "--import", f"GPKG:editing.gpkg", "editing"])
         repo_path = data / "editing"
@@ -825,7 +826,7 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
 
 
 def test_init_empty(tmp_path, cli_runner, chdir):
-    """ Create an empty Kart repository. """
+    """Create an empty Kart repository."""
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
@@ -865,7 +866,7 @@ def test_init_empty(tmp_path, cli_runner, chdir):
 
 @pytest.mark.slow
 def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
+    """Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository."""
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
@@ -934,7 +935,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
 def test_init_import_home_resolve(
     data_archive, tmp_path, cli_runner, chdir, monkeypatch, git_user_config
 ):
-    """ Import from a ~-specified gpkg path """
+    """Import from a ~-specified gpkg path"""
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
@@ -970,7 +971,7 @@ def test_import_existing_wc(
     request,
     chdir,
 ):
-    """ Import a new dataset into a repo with an existing working copy. Dataset should get checked out """
+    """Import a new dataset into a repo with an existing working copy. Dataset should get checked out"""
     with data_working_copy("points") as (repo_path, wcdb):
         with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
             r = cli_runner.invoke(
@@ -1118,7 +1119,7 @@ def test_import_bad_dataset_path(data_archive, data_archive_readonly, cli_runner
                     f"{H.POLYGONS.LAYER}:NZ_PA_POINTS_TOPO_150K",
                 ]
             )
-            assert r.exit_code == 20, r.stderr
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT, r.stderr
 
 
 def test_import_backslash_in_dataset_path(

@@ -15,7 +15,7 @@ from memory_repo import MemoryRepo
 from kart import init, fast_import
 from kart.tabular.v3 import TableV3
 from kart.tabular.v3_paths import IntPathEncoder, MsgpackHashPathEncoder
-from kart.exceptions import INVALID_OPERATION
+from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.schema import Schema
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
@@ -129,7 +129,7 @@ def test_import(
     request,
     monkeypatch,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
+    """Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository."""
     param_ids = H.parameter_ids(request)
 
     from kart.working_copy import WorkingCopy
@@ -314,37 +314,37 @@ def test_import_from_shp(
         schema = without_ids(dataset.get_meta_item("schema.json"))
         if archive == "shp-points":
             geom_col = {
-                'name': 'geom',
-                'dataType': 'geometry',
-                'geometryType': 'POINT',
-                'geometryCRS': 'EPSG:4326',
+                "name": "geom",
+                "dataType": "geometry",
+                "geometryType": "POINT",
+                "geometryCRS": "EPSG:4326",
             }
             other_cols = [
-                {'name': 'fid', 'dataType': 'integer', 'size': 64},
-                {'name': 't50_fid', 'dataType': 'integer', 'size': 32},
-                {'name': 'name_ascii', 'dataType': 'text', 'length': 75},
-                {'name': 'macronated', 'dataType': 'text', 'length': 1},
-                {'name': 'name', 'dataType': 'text', 'length': 75},
+                {"name": "fid", "dataType": "integer", "size": 64},
+                {"name": "t50_fid", "dataType": "integer", "size": 32},
+                {"name": "name_ascii", "dataType": "text", "length": 75},
+                {"name": "macronated", "dataType": "text", "length": 1},
+                {"name": "name", "dataType": "text", "length": 75},
             ]
         else:
             geom_col = {
-                'name': 'geom',
-                'dataType': 'geometry',
-                'geometryType': 'MULTIPOLYGON',
-                'geometryCRS': 'EPSG:4167',
+                "name": "geom",
+                "dataType": "geometry",
+                "geometryType": "MULTIPOLYGON",
+                "geometryCRS": "EPSG:4167",
             }
             other_cols = [
-                {'name': 'id', 'dataType': 'integer', 'size': 64},
-                {'name': 'date_adjus', 'dataType': 'date'},
-                {'name': 'survey_ref', 'dataType': 'text', 'length': 50},
-                {'name': 'adjusted_n', 'dataType': 'integer', 'size': 32},
+                {"name": "id", "dataType": "integer", "size": 64},
+                {"name": "date_adjus", "dataType": "date"},
+                {"name": "survey_ref", "dataType": "text", "length": 50},
+                {"name": "adjusted_n", "dataType": "integer", "size": 32},
             ]
 
         auto_pk_col = {
-            'name': 'auto_pk',
-            'dataType': 'integer',
-            'primaryKeyIndex': 0,
-            'size': 64,
+            "name": "auto_pk",
+            "dataType": "integer",
+            "primaryKeyIndex": 0,
+            "size": 64,
         }
 
         if use_existing_col_as_pk:
@@ -826,11 +826,11 @@ def test_pk_encoder_int_pk():
     )
     # trees hit wraparound with large PKs, but don't break
     assert (
-        ds.encode_1pk_to_path(64 ** 5)
+        ds.encode_1pk_to_path(64**5)
         == "mytable/.table-dataset/feature/A/A/A/A/kc5AAAAA"
     )
     assert (
-        ds.encode_1pk_to_path(-(64 ** 5))
+        ds.encode_1pk_to_path(-(64**5))
         == "mytable/.table-dataset/feature/A/A/A/A/kdLAAAAA"
     )
 
@@ -848,7 +848,7 @@ def test_feature_find_decode_performance(
     benchmark,
     request,
 ):
-    """ Check single-feature decoding performance """
+    """Check single-feature decoding performance"""
     param_ids = H.parameter_ids(request)
     benchmark.group = (
         f"test_feature_find_decode_performance - {profile} - {param_ids[-1]}"
@@ -917,7 +917,7 @@ def test_import_multiple(data_archive, chdir, cli_runner, tmp_path):
                     r = cli_runner.invoke(
                         ["import", f"GPKG:{data / source_gpkg}", table]
                     )
-                    assert r.exit_code == INVALID_OPERATION
+                    assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
 
     # has two commits
     assert len([c for c in repo.walk(repo.head.target)]) == len(LAYERS)
@@ -972,7 +972,7 @@ def test_write_feature_performance(
     benchmark,
     request,
 ):
-    """ Per-feature import performance. """
+    """Per-feature import performance."""
     param_ids = H.parameter_ids(request)
 
     with data_archive(archive) as data:
