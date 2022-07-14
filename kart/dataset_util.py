@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, WORKING_COPY_OR_IMPORT_CONFLICT
 
 _RESERVED_WINDOWS_FILENAMES = frozenset(
     {
@@ -88,6 +88,7 @@ def validate_dataset_paths(paths: list[str]) -> None:
         if path_lower in existing_paths_lower:
             existing_path = existing_paths_lower[path_lower]
             raise InvalidOperation(
-                f"Dataset path {path!r} conflicts with existing path {existing_path!r}"
+                f"Dataset path {path!r} conflicts with existing path {existing_path!r}",
+                exit_code=WORKING_COPY_OR_IMPORT_CONFLICT,
             )
         existing_paths_lower[path_lower] = path

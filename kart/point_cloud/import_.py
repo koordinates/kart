@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from kart.cli_util import StringFromFile
+from kart.cli_util import StringFromFile, MutexOption
 from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
@@ -75,11 +75,40 @@ L = logging.getLogger(__name__)
 @click.option(
     "--replace-existing",
     is_flag=True,
-    help="Replace existing dataset(s) of the same name.",
+    cls=MutexOption,
+    exclusive_with=["--delete", "--update-existing"],
+    help="Replace existing dataset at the same path.",
 )
-@click.argument("sources", metavar="SOURCES", nargs=-1, required=True)
+@click.option(
+    "--update-existing",
+    is_flag=True,
+    cls=MutexOption,
+    exclusive_with=["--replace-existing"],
+    help=(
+        "Update existing dataset at the same path. "
+        "Tiles will be replaced by source tiles with the same name. "
+        "Tiles in the existing dataset which are not present in SOURCES will remain untouched."
+    ),
+)
+@click.option(
+    "--delete",
+    type=StringFromFile(encoding="utf-8"),
+    cls=MutexOption,
+    exclusive_with=["--replace-existing"],
+    multiple=True,
+    help=("Deletes the given tile. Can be used multiple times."),
+)
+@click.argument("sources", metavar="SOURCES", nargs=-1, required=False)
 def point_cloud_import(
-    ctx, convert_to_copc, ds_path, message, do_checkout, replace_existing, sources
+    ctx,
+    convert_to_copc,
+    ds_path,
+    message,
+    do_checkout,
+    replace_existing,
+    update_existing,
+    delete,
+    sources,
 ):
     """
     Experimental command for importing point cloud datasets. Work-in-progress.
@@ -89,11 +118,35 @@ def point_cloud_import(
     """
     repo = ctx.obj.repo
 
-    if replace_existing:
+    if not sources and not delete:
+        # sources aren't required if you use --delete;
+        # this allows you to use this command to solely delete tiles.
+        # otherwise, sources are required.
+        raise click.MissingParameter(param=ctx.command.params[-1])
+
+    if delete:
+        # --delete kind of implies --update-existing (we're modifying an existing dataset)
+        # But a common way for this to do the wrong thing might be this:
+        #   kart ... --delete auckland/auckland_3_*.laz
+        # i.e. if --delete is used with a glob, then we don't want to treat the remaining paths as
+        # sources and import them. In that case, *not* setting update_existing here will fall through
+        # to cause an error below:
+        #  * either the dataset exists, and we fail with a dataset conflict
+        #  * or the dataset doesn't exist, and the --delete fails
+        if not sources:
+            update_existing = True
+
+    if replace_existing or update_existing:
         validate_dataset_paths([ds_path])
     else:
         old_ds_paths = [ds.path for ds in repo.datasets()]
         validate_dataset_paths([*old_ds_paths, ds_path])
+
+    if (replace_existing or update_existing or delete) and repo.working_copy.workdir:
+        # Avoid conflicts by ensuring the WC is clean.
+        # NOTE: Technically we could allow anything to be dirty except the single dataset
+        # we're importing (or even a subset of that dataset). But this'll do for now
+        repo.working_copy.workdir.check_not_dirty()
 
     for source in sources:
         if not (Path() / source).is_file():
@@ -101,10 +154,11 @@ def point_cloud_import(
 
     source_to_metadata = {}
 
-    for source in sources:
-        click.echo(f"Checking {source}...          \r", nl=False)
-        source_to_metadata[source] = extract_pc_tile_metadata(source)
-    click.echo()
+    if sources:
+        for source in sources:
+            click.echo(f"Checking {source}...          \r", nl=False)
+            source_to_metadata[source] = extract_pc_tile_metadata(source)
+        click.echo()
 
     if not convert_to_copc:
         if any(
@@ -128,10 +182,11 @@ def point_cloud_import(
         # For --preserve-format we allow both COPC and non-COPC tiles, so we don't need to check or store this information.
         rewrite_metadata = RewriteMetadata.DROP_OPTIMIZATION
 
-    merged_metadata = rewrite_and_merge_metadata(
-        source_to_metadata.values(), rewrite_metadata
-    )
-    check_for_non_homogenous_metadata(merged_metadata, convert_to_copc)
+    if sources:
+        merged_metadata = rewrite_and_merge_metadata(
+            source_to_metadata.values(), rewrite_metadata
+        )
+        check_for_non_homogenous_metadata(merged_metadata, convert_to_copc)
 
     # Set up LFS hooks. This is also in `kart init`, but not every existing Kart repo will have these hooks.
     install_lfs_hooks(repo)
@@ -167,8 +222,44 @@ def point_cloud_import(
     with git_fast_import(repo, *FastImportSettings().as_args(), "--quiet") as proc:
         proc.stdin.write(header.encode("utf8"))
 
-        # Delete the existing dataset, before we re-import it.
-        proc.stdin.write(f"D {ds_path}\n".encode("utf8"))
+        all_metadatas = []
+        if update_existing:
+            try:
+                existing_dataset = repo.datasets()[ds_path]
+            except KeyError:
+                # Should it be an error to use --update-existing for a new dataset?
+                # Potentially not; it might be useful for callers to be agnostic
+                # about whether a dataset exists yet.
+                existing_dataset = None
+            else:
+                # Check that the metadata for the existing dataset matches the new tiles
+                all_metadatas.append(
+                    {
+                        "crs": existing_dataset.get_meta_item("crs.wkt"),
+                        "format": existing_dataset.get_meta_item("format.json"),
+                        "schema": existing_dataset.get_meta_item("schema.json"),
+                    }
+                )
+            if delete:
+                if existing_dataset is None:
+                    # Trying to delete specific paths from a nonexistent dataset?
+                    # This suggests the caller is confused.
+                    raise InvalidOperation(
+                        f"Dataset {ds_path} does not exist. Cannot delete paths from it."
+                    )
+                root_tree = repo.head_tree
+                for tile_name in delete:
+                    # Check that the blob exists; if not, error out
+                    blob_path = blob_path_from_source(ds_inner_path, tile_name)
+                    try:
+                        root_tree / blob_path
+                    except KeyError:
+                        raise NotFound(f"{tile_name} does not exist, can't delete it")
+
+                    proc.stdin.write(f"D {blob_path}\n".encode("utf8"))
+        else:
+            # Delete the entire existing dataset, before we re-import it.
+            proc.stdin.write(f"D {ds_path}\n".encode("utf8"))
 
         for i, blob_path in write_blobs_to_stream(proc.stdin, extra_blobs):
             pass
@@ -188,9 +279,7 @@ def point_cloud_import(
                 source_to_metadata[source]["tile"], pointer_dict
             )
 
-            tilename = remove_las_extension(os.path.basename(source))
-            tile_prefix = hexhash(tilename)[0:2]
-            blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
+            blob_path = blob_path_from_source(ds_inner_path, source)
             write_blob_to_stream(
                 proc.stdin, blob_path, dict_to_pointer_file_bytes(pointer_dict)
             )
@@ -198,9 +287,8 @@ def point_cloud_import(
         rewrite_metadata = (
             None if convert_to_copc else RewriteMetadata.DROP_OPTIMIZATION
         )
-        merged_metadata = rewrite_and_merge_metadata(
-            source_to_metadata.values(), rewrite_metadata
-        )
+        all_metadatas.extend(source_to_metadata.values())
+        merged_metadata = rewrite_and_merge_metadata(all_metadatas, rewrite_metadata)
         check_for_non_homogenous_metadata(merged_metadata)
 
         write_blob_to_stream(
@@ -225,3 +313,9 @@ def point_cloud_import(
         repo_key_filter=RepoKeyFilter.datasets([ds_path]),
         create_parts_if_missing=parts_to_create,
     )
+
+
+def blob_path_from_source(ds_inner_path, source):
+    tilename = remove_las_extension(os.path.basename(source))
+    tile_prefix = hexhash(tilename)[0:2]
+    return f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
