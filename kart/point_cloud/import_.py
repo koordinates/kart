@@ -1,8 +1,10 @@
 import logging
 import os
+import uuid
 from pathlib import Path
 
 import click
+import pygit2
 
 from kart.cli_util import StringFromFile, MutexOption
 from kart.crs_util import normalise_wkt
@@ -12,6 +14,7 @@ from kart.exceptions import (
     NotFound,
     NO_IMPORT_SOURCE,
     INVALID_FILE_FORMAT,
+    NO_DATA,
 )
 from kart.fast_import import (
     FastImportSettings,
@@ -98,6 +101,12 @@ L = logging.getLogger(__name__)
     multiple=True,
     help=("Deletes the given tile. Can be used multiple times."),
 )
+@click.option(
+    "--amend",
+    default=False,
+    is_flag=True,
+    help="Amend the previous commit instead of adding a new commit",
+)
 @click.argument("sources", metavar="SOURCES", nargs=-1, required=False)
 def point_cloud_import(
     ctx,
@@ -108,6 +117,7 @@ def point_cloud_import(
     replace_existing,
     update_existing,
     delete,
+    amend,
     sources,
 ):
     """
@@ -198,16 +208,6 @@ def point_cloud_import(
         if not repo.head_commit
         else []
     )
-    if message is None:
-        message = f"Importing {len(sources)} LAZ tiles as {ds_path}"
-
-    header = generate_header(
-        repo,
-        None,
-        message,
-        repo.head_branch,
-        repo.head_commit,
-    )
 
     ds_inner_path = f"{ds_path}/.point-cloud-dataset.v1"
 
@@ -218,6 +218,32 @@ def point_cloud_import(
         source_to_metadata[source] = extract_pc_tile_metadata(dest, extract_schema=True)
         source_hash = "sha256:" + get_hash_and_size_of_file(source)[0]
         source_to_metadata[source]["tile"]["sourceOid"] = source_hash
+
+    if amend:
+        if not repo.head_commit:
+            raise InvalidOperation(
+                "Cannot amend in an empty repository", exit_code=NO_DATA
+            )
+        if not message:
+            message = repo.head_commit.message
+        # fast-import doesn't really have a way to amend a commit.
+        # So we'll use a temporary branch for this fast-import,
+        # And create a new commit on top of the head commit, without advancing HEAD.
+        # Then we'll squash the two commits after the fast-import,
+        # and move the HEAD branch to the new commit
+        fast_import_on_branch = f"refs/kart-import/{uuid.uuid4()}"
+    else:
+        fast_import_on_branch = repo.head_branch
+        if message is None:
+            message = f"Importing {len(sources)} LAZ tiles as {ds_path}"
+
+    header = generate_header(
+        repo,
+        None,
+        message,
+        fast_import_on_branch,
+        repo.head_commit,
+    )
 
     with git_fast_import(repo, *FastImportSettings().as_args(), "--quiet") as proc:
         proc.stdin.write(header.encode("utf8"))
@@ -306,6 +332,23 @@ def point_cloud_import(
             f"{ds_inner_path}/meta/crs.wkt",
             ensure_bytes(normalise_wkt(merged_metadata["crs"])),
         )
+
+    if amend:
+        # Squash the commit we just created into its parent, replacing both commits on the head branch.
+        new_tree = repo.references[fast_import_on_branch].peel(pygit2.Tree)
+        new_commit = repo.create_commit(
+            # Don't move a branch tip. pygit2 doesn't allow us to use head_branch here
+            # (because we're not using its tip as the first parent)
+            # so we just create a detached commit and then move the branch tip afterwards.
+            None,
+            repo.head_commit.author,
+            repo.committer_signature(),
+            message,
+            new_tree.oid,
+            repo.head_commit.parent_ids,
+        )
+        repo.references[repo.head_branch].set_target(new_commit)
+        repo.references[fast_import_on_branch].delete()
 
     parts_to_create = [PartType.WORKDIR] if do_checkout else []
     # During imports we can keep old changes since they won't conflict with newly imported datasets.

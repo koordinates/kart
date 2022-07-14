@@ -238,8 +238,6 @@ def test_import_single_laz_no_convert(
 
 
 def test_import_replace_existing(
-    tmp_path,
-    chdir,
     cli_runner,
     data_archive,
     data_archive_readonly,
@@ -281,9 +279,7 @@ def test_import_replace_existing(
             assert updates == 1
 
 
-def test_import_delete_tiles_only(
-    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly
-):
+def test_import_delete_tiles_only(cli_runner, data_archive):
     with data_archive("point-cloud/auckland.tgz"):
         r = cli_runner.invoke(
             [
@@ -302,7 +298,7 @@ def test_import_delete_tiles_only(
 
 
 def test_import_delete_tiles_and_import_sources_error(
-    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly
+    cli_runner, data_archive, data_archive_readonly
 ):
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as src:
         with data_archive("point-cloud/auckland.tgz"):
@@ -325,7 +321,7 @@ def test_import_delete_tiles_and_import_sources_error(
 
 
 def test_import_conflicting_dataset(
-    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
+    cli_runner, data_archive, data_archive_readonly, requires_pdal
 ):
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as src:
         with data_archive("point-cloud/auckland.tgz"):
@@ -344,7 +340,7 @@ def test_import_conflicting_dataset(
 
 
 def test_import_update_existing_non_homogenous(
-    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
+    cli_runner, data_archive, data_archive_readonly, requires_pdal
 ):
     with data_archive_readonly("point-cloud/laz-autzen.tgz") as src:
         with data_archive("point-cloud/auckland.tgz"):
@@ -360,9 +356,7 @@ def test_import_update_existing_non_homogenous(
             assert "The input files have more than one file format" in r.stderr
 
 
-def test_import_update_existing_with_dirty_workingcopy(
-    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
-):
+def test_import_update_existing_with_dirty_workingcopy(cli_runner, data_archive):
     with data_archive("point-cloud/auckland.tgz") as repo_path:
         # make any workingcopy change
         (repo_path / "auckland" / "auckland_1_1.copc.laz").unlink()
@@ -378,9 +372,32 @@ def test_import_update_existing_with_dirty_workingcopy(
         assert "You have uncommitted changes in your working copy." in r.stderr
 
 
-def test_import_update_existing(
-    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
-):
+def test_import_amend(cli_runner, data_archive):
+    with data_archive("point-cloud/auckland.tgz"):
+        # Originally, 16 tiles were imported
+        inserts, updates, deletes = count_head_tile_changes(cli_runner, "auckland")
+        assert inserts == 16
+        assert updates == 0
+        assert deletes == 0
+
+        r = cli_runner.invoke(
+            [
+                "point-cloud-import",
+                "--dataset-path=auckland",
+                "--amend",
+                "--delete=auckland_0_0.laz",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Since we deleted one in the same commit, now only 15 tiles were imported
+        inserts, updates, deletes = count_head_tile_changes(cli_runner, "auckland")
+        assert inserts == 15
+        assert updates == 0
+        assert deletes == 0
+
+
+def test_import_update_existing(cli_runner, data_archive, requires_pdal):
     with data_archive("point-cloud/laz-auckland.tgz") as src:
         (src / "new_tile.laz").symlink_to(src / "auckland_0_0.laz")
         with data_archive("point-cloud/auckland.tgz"):
