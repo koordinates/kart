@@ -14,6 +14,17 @@ from .fixtures import requires_pdal, requires_git_lfs  # noqa
 DUMMY_REPO = "git@example.com/example.git"
 
 
+def count_head_tile_changes(cli_runner, dataset_path):
+    r = cli_runner.invoke(["show", "HEAD", "-ojson"])
+    assert r.exit_code == 0, r.stderr
+    output = json.loads(r.stdout)
+    tile_changes = output["kart.diff/v1+hexwkb"][dataset_path]["tile"]
+    inserts = len([t for t in tile_changes if "+" in t and "-" not in t])
+    updates = len([t for t in tile_changes if "+" in t and "-" in t])
+    deletes = len([t for t in tile_changes if "-" in t and "+" not in t])
+    return inserts, updates, deletes
+
+
 def test_import_single_las(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
@@ -187,7 +198,7 @@ def test_import_single_laz_no_convert(
             r = cli_runner.invoke(
                 [
                     "point-cloud-import",
-                    *glob(f"{auckland}/auckland_0_0.laz"),
+                    f"{auckland}/auckland_0_0.laz",
                     "--message=test_import_single_laz_no_convert",
                     "--dataset-path=auckland",
                     "--preserve-format",
@@ -225,25 +236,29 @@ def test_import_single_laz_no_convert(
 
 
 def test_import_replace_existing(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
+    tmp_path,
+    chdir,
+    cli_runner,
+    data_archive,
+    data_archive_readonly,
+    requires_pdal,
 ):
-    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
-        repo_path = tmp_path / "point-cloud-repo"
-        r = cli_runner.invoke(["init", repo_path])
-        assert r.exit_code == 0
-
-        with chdir(repo_path):
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as src:
+        with data_archive("point-cloud/auckland.tgz"):
             r = cli_runner.invoke(
                 [
                     "point-cloud-import",
-                    *glob(f"{auckland}/auckland_0_0.laz"),
-                    "--message=Initial import",
+                    f"{src}/auckland_0_0.laz",
+                    "--message=Import again but don't convert to COPC this time",
                     "--dataset-path=auckland",
                     "--preserve-format",
+                    "--replace-existing",
                 ]
             )
             assert r.exit_code == 0, r.stderr
 
+            # Originally this dataset was COPC, but now it's changed to LAZ 1.2
+            # (because we used --preserve-format)
             r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
             assert r.exit_code == 0, r.stderr
             assert json.loads(r.stdout) == {
@@ -257,55 +272,92 @@ def test_import_replace_existing(
                 }
             }
 
+            # All tiles were replaced with the single tile we imported.
+            inserts, updates, deletes = count_head_tile_changes(cli_runner, "auckland")
+            assert deletes == 15
+            assert inserts == 0
+            assert updates == 1
+
+
+def test_import_delete_tiles_only(
+    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly
+):
+    with data_archive("point-cloud/auckland.tgz"):
+        r = cli_runner.invoke(
+            [
+                "point-cloud-import",
+                "--dataset-path=auckland",
+                "--delete=auckland_0_0.laz",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # One tile was deleted, no other changes were made
+        inserts, updates, deletes = count_head_tile_changes(cli_runner, "auckland")
+        assert deletes == 1
+        assert inserts == 0
+        assert updates == 0
+
+
+def test_import_conflicting_dataset(
+    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
+):
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as src:
+        with data_archive("point-cloud/auckland.tgz"):
             r = cli_runner.invoke(
                 [
                     "point-cloud-import",
-                    *glob(f"{auckland}/auckland_0_0.laz"),
-                    "--message=Import again but convert to COPC this time",
                     "--dataset-path=auckland",
+                    f"{src}/autzen.laz",
+                ]
+            )
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+            assert (
+                r.stderr.strip()
+                == "Error: Dataset path 'auckland' conflicts with existing path 'auckland'"
+            )
+
+
+def test_import_update_existing_non_homogenous(
+    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
+):
+    with data_archive_readonly("point-cloud/laz-autzen.tgz") as src:
+        with data_archive("point-cloud/auckland.tgz"):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    "--dataset-path=auckland",
+                    "--update-existing",
+                    f"{src}/autzen.laz",
+                ]
+            )
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT, r.stderr
+            assert "The input files have more than one file format" in r.stderr
+
+
+def test_import_update_existing(
+    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
+):
+    with data_archive("point-cloud/laz-auckland.tgz") as src:
+        (src / "new_tile.laz").symlink_to(src / "auckland_0_0.laz")
+        with data_archive("point-cloud/auckland.tgz"):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    "--dataset-path=auckland",
+                    "--update-existing",
                     "--convert-to-copc",
-                    "--replace-existing",
+                    f"{src}/new_tile.laz",
+                    f"{src}/auckland_0_0.laz",
                 ]
             )
             assert r.exit_code == 0, r.stderr
 
-            r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
-            assert r.exit_code == 0, r.stderr
-            assert json.loads(r.stdout) == {
-                "auckland": {
-                    "format.json": {
-                        "compression": "laz",
-                        "lasVersion": "1.4",
-                        "optimization": "copc",
-                        "optimizationVersion": "1.0",
-                        "pointDataRecordFormat": 7,
-                        "pointDataRecordLength": 36,
-                    }
-                }
-            }
-
-            r = cli_runner.invoke(["show", "HEAD", "auckland:meta:format.json"])
-            assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines()[4:] == [
-                "    Import again but convert to COPC this time",
-                "",
-                "--- auckland:meta:format.json",
-                "+++ auckland:meta:format.json",
-                "- {",
-                '-   "compression": "laz",',
-                '-   "lasVersion": "1.2",',
-                '-   "pointDataRecordFormat": 3,',
-                '-   "pointDataRecordLength": 34',
-                "- }",
-                "+ {",
-                '+   "compression": "laz",',
-                '+   "lasVersion": "1.4",',
-                '+   "optimization": "copc",',
-                '+   "optimizationVersion": "1.0",',
-                '+   "pointDataRecordFormat": 7,',
-                '+   "pointDataRecordLength": 36',
-                "+ }",
-            ]
+            # One tile was added, one was updated, no other changes were made
+            inserts, updates, deletes = count_head_tile_changes(cli_runner, "auckland")
+            assert deletes == 0
+            assert inserts == 1
+            assert updates == 1
 
 
 def test_import_single_las_no_convert(
@@ -320,7 +372,7 @@ def test_import_single_las_no_convert(
             r = cli_runner.invoke(
                 [
                     "point-cloud-import",
-                    *glob(f"{autzen}/autzen.las"),
+                    f"{autzen}/autzen.las",
                     "--dataset-path=autzen",
                     "--preserve-format",
                 ]
