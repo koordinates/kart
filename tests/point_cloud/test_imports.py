@@ -7,6 +7,7 @@ import pytest
 from kart.exceptions import (
     INVALID_FILE_FORMAT,
     WORKING_COPY_OR_IMPORT_CONFLICT,
+    UNCOMMITTED_CHANGES,
 )
 from kart.repo import KartRepo
 from .fixtures import requires_pdal, requires_git_lfs  # noqa
@@ -356,6 +357,24 @@ def test_import_update_existing_non_homogenous(
             )
             assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT, r.stderr
             assert "The input files have more than one file format" in r.stderr
+
+
+def test_import_update_existing_with_dirty_workingcopy(
+    tmp_path, chdir, cli_runner, data_archive, data_archive_readonly, requires_pdal
+):
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        # make any workingcopy change
+        (repo_path / "auckland" / "auckland_1_1.copc.laz").unlink()
+        # then try any import which changes an existing dataset
+        r = cli_runner.invoke(
+            [
+                "point-cloud-import",
+                "--dataset-path=auckland",
+                "--delete=auckland_0_0.laz",
+            ]
+        )
+        assert r.exit_code == UNCOMMITTED_CHANGES, r.stderr
+        assert "You have uncommitted changes in your working copy." in r.stderr
 
 
 def test_import_update_existing(

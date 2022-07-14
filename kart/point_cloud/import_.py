@@ -141,16 +141,23 @@ def point_cloud_import(
         old_ds_paths = [ds.path for ds in repo.datasets()]
         validate_dataset_paths([*old_ds_paths, ds_path])
 
+    if (replace_existing or update_existing or delete) and repo.working_copy.workdir:
+        # Avoid conflicts by ensuring the WC is clean.
+        # NOTE: Technically we could allow anything to be dirty except the single dataset
+        # we're importing (or even a subset of that dataset). But this'll do for now
+        repo.working_copy.workdir.check_not_dirty()
+
     for source in sources:
         if not (Path() / source).is_file():
             raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
 
     source_to_metadata = {}
 
-    for source in sources:
-        click.echo(f"Checking {source}...          \r", nl=False)
-        source_to_metadata[source] = extract_pc_tile_metadata(source)
-    click.echo()
+    if sources:
+        for source in sources:
+            click.echo(f"Checking {source}...          \r", nl=False)
+            source_to_metadata[source] = extract_pc_tile_metadata(source)
+        click.echo()
 
     if not convert_to_copc:
         if any(
