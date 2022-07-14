@@ -25,6 +25,7 @@ from kart.lfs_util import (
     install_lfs_hooks,
     dict_to_pointer_file_bytes,
     copy_file_to_local_lfs_cache,
+    get_hash_and_size_of_file,
 )
 from kart.point_cloud.metadata_util import (
     RewriteMetadata,
@@ -160,6 +161,8 @@ def point_cloud_import(
 
         convert_tile_to_copc(source, dest)
         source_to_metadata[source] = extract_pc_tile_metadata(dest, extract_schema=True)
+        source_hash = "sha256:" + get_hash_and_size_of_file(source)[0]
+        source_to_metadata[source]["tile"]["sourceOid"] = source_hash
 
     with git_fast_import(repo, *FastImportSettings().as_args(), "--quiet") as proc:
         proc.stdin.write(header.encode("utf8"))

@@ -111,6 +111,7 @@ def test_import_single_las(
                 "+                                   format = laz-1.4/copc-1.0",
                 "+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84",
                 "+                               pointCount = 106",
+                "+                                sourceOid = sha256:068a349959a45957184606a0442f8dd69aef24543e11963bc63835301df532f5",
                 "+                                      oid = sha256:213ef4211ba375e2eec60aa61b6c230d1a3d1498b8fcc39150fd3040ee8f0512",
                 "+                                     size = 3607",
             ]
@@ -426,16 +427,18 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
             "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
             "-                               pointCount = 1558",
             "+                               pointCount = 4231",
-            "-                                      oid = sha256:c0304cd6dc1687eb3419ee9af9f5494245ee31b6560fc2059946e0784b48da54",
-            "+                                      oid = sha256:21564a23ebe762997d5b446d99249df2cf4560096c116ef87766981c64b981fc",
-            "-                                     size = 24491",
-            "+                                     size = 69553",
+            "-                                sourceOid = sha256:d89966fb10b30d6987955ae1b97c752ba875de89da1881e2b05820878d17eab9",
+            "-                                      oid = sha256:ad0aabe999c6ee97f86c2c56ebc35a66cc5f9a832676571d68355ac2809c6bc0",
+            "+                                      oid = sha256:446ea505f6db1755d693ba005391da6fdd34516cbc636fbe482c232632694e9a",
+            "-                                     size = 24500",
+            "+                                     size = 69603",
             "--- auckland:tile:auckland_3_3",
             "-                                     name = auckland_3_3.copc.laz",
             "-                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8",
             "-                                   format = laz-1.4/copc-1.0",
             "-                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
             "-                               pointCount = 29",
+            "-                                sourceOid = sha256:4190c9056b732fadd6e86500e93047a787d88812f7a4af21c7759d92d1d48954",
             "-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
             "-                                     size = 2319",
             "+++ auckland:tile:auckland_4_4",
@@ -1295,6 +1298,7 @@ def test_working_copy_commit_and_convert_to_copc(
                 "+                                   format = laz-1.4/copc-1.0",
                 "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
                 "+                               pointCount = 4231",
+                "+                                sourceOid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
             ]
             assert re.match(r"\+\s+oid = sha256:[0-9a-f]{64}", output[-2])
             assert re.match(r"\+\s+size = [0-9]{5}", output[-1])
