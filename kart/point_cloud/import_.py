@@ -244,7 +244,7 @@ def point_cloud_import(
                     try:
                         root_tree / blob_path
                     except KeyError:
-                        raise NotFound(tile_name)
+                        raise NotFound(f"{tile_name} does not exist, can't delete it")
 
                     proc.stdin.write(f"D {blob_path}\n".encode("utf8"))
         else:
