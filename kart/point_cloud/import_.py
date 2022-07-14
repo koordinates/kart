@@ -297,7 +297,6 @@ def point_cloud_import(
             ensure_bytes(normalise_wkt(merged_metadata["crs"])),
         )
 
-    # FIXME: This doesn't seem to work when using --update-existing
     parts_to_create = [PartType.WORKDIR] if do_checkout else []
     # During imports we can keep old changes since they won't conflict with newly imported datasets.
     repo.working_copy.reset_to_head(
