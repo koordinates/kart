@@ -124,6 +124,14 @@ class PointCloudV1(BaseDataset):
             del result["version"]
         return result
 
+    def get_tile_summary_promise_from_path(self, tile_path, missing_ok=False):
+        tile_pointer_blob = self.get_blob_at(tile_path, missing_ok=missing_ok)
+        if tile_pointer_blob is None:
+            return None
+        return functools.partial(
+            self.get_tile_summary_from_pointer_blob, tile_pointer_blob
+        )
+
     def _workdir_path(self, wc_path):
         if isinstance(wc_path, str):
             return self.repo.workdir_file(wc_path)
@@ -171,12 +179,6 @@ class PointCloudV1(BaseDataset):
             reverse=reverse,
         )
 
-    def get_tile_summary_promise_from_path(self, tile_path):
-        tile_pointer_blob = self.get_blob_at(tile_path)
-        return functools.partial(
-            self.get_tile_summary_from_pointer_blob, tile_pointer_blob
-        )
-
     def diff_to_working_copy(
         self,
         workdir_diff_cache,
@@ -200,43 +202,42 @@ class PointCloudV1(BaseDataset):
             rf"^{wc_tiles_path_pattern}[^/]+{wc_tile_ext_pattern}$"
         )
 
-        def wc_to_ds_path_transform(wc_path):
-            return self.tilename_to_blob_path(wc_path, relative=True)
+        tile_diff = DeltaDiff()
 
-        def tile_summary_from_ds_path(ds_path):
-            # This may not actually be a tile due to "try_promote_inserts_to_updates" below.
-            tile_pointer_blob = self.get_blob_at(ds_path, missing_ok=True)
-            if tile_pointer_blob is not None:
-                return self.get_tile_summary_from_pointer_blob(tile_pointer_blob)
-            return None
+        for tile_path in workdir_diff_cache.dirty_paths_for_dataset(self):
+            if not wc_tiles_pattern.fullmatch(tile_path):
+                continue
 
-        def tile_summary_from_wc_path(wc_path):
-            wc_path = self._workdir_path(wc_path)
-            tile_metadata = extract_pc_tile_metadata(wc_path)
-            tilename_to_metadata[wc_path.name] = tile_metadata
-            tile_summary = self.get_tile_summary_from_pc_tile_metadata(
-                wc_path, tile_metadata
+            tilename = self.tilename_from_path(tile_path)
+            if tilename not in tile_filter:
+                continue
+
+            old_tile_summary = self.get_tile_summary_promise_from_path(
+                self.tilename_to_blob_path(tilename, relative=True), missing_ok=True
             )
-            if dataset_format_to_apply and not self.is_tile_compatible(
-                dataset_format_to_apply, tile_summary
-            ):
-                tile_summary = self.pre_conversion_tile_summary(
-                    dataset_format_to_apply, tile_summary
-                )
-            return tile_summary
+            old_half_delta = (tilename, old_tile_summary) if old_tile_summary else None
 
-        tile_diff_deltas = self.generate_wc_diff_from_workdir_index(
-            workdir_diff_cache,
-            wc_path_filter_pattern=wc_tiles_pattern,
-            key_filter=tile_filter,
-            wc_to_ds_path_transform=wc_to_ds_path_transform,
-            ds_key_decoder=self.tilename_from_path,
-            wc_key_decoder=self.tilename_from_path,
-            ds_value_decoder=tile_summary_from_ds_path,
-            wc_value_decoder=tile_summary_from_wc_path,
-            try_promote_inserts_to_updates=True,
-        )
-        tile_diff = DeltaDiff(tile_diff_deltas)
+            wc_path = self._workdir_path(tile_path)
+            if not wc_path.is_file():
+                new_half_delta = None
+            else:
+                tile_metadata = extract_pc_tile_metadata(wc_path)
+                tilename_to_metadata[wc_path.name] = tile_metadata
+                new_tile_summary = self.get_tile_summary_from_pc_tile_metadata(
+                    wc_path, tile_metadata
+                )
+
+                if dataset_format_to_apply and not self.is_tile_compatible(
+                    dataset_format_to_apply, new_tile_summary
+                ):
+                    new_tile_summary = self.pre_conversion_tile_summary(
+                        dataset_format_to_apply, new_tile_summary
+                    )
+
+                new_half_delta = tilename, new_tile_summary
+
+            tile_delta = Delta(old_half_delta, new_half_delta)
+            tile_diff[tilename] = tile_delta
 
         if not tile_diff:
             return DatasetDiff()
@@ -411,18 +412,6 @@ class PointCloudV1(BaseDataset):
                     object_builder.remove(
                         self.tilename_to_blob_path(tilename, relative=True)
                     )
-
-    def find_tile_in_wc(self, tilename):
-        """
-        Finds a tile by name in the working directory.
-        Searches for the tile using multiple extensions, ie .las or .laz or .copc.laz
-        """
-        tilename = remove_las_extension(tilename)
-        wc_folder = self.repo.workdir_file(self.path)
-        for file in wc_folder.glob(tilename + ".*"):
-            if remove_las_extension(file.name) == tilename:
-                return file
-        raise RuntimeError(f"Couldn't find {tilename} in workdir")
 
     @property
     def tile_metadata(self):

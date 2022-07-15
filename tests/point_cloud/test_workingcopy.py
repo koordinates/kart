@@ -1,6 +1,8 @@
 import re
 import shutil
+import subprocess
 
+from kart.cli_util import tool_environment
 from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT
 from kart.repo import KartRepo
 from kart.point_cloud.metadata_util import extract_pc_tile_metadata
@@ -52,10 +54,10 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
             "-                               pointCount = 1558",
             "+                               pointCount = 4231",
             "-                                sourceOid = sha256:d89966fb10b30d6987955ae1b97c752ba875de89da1881e2b05820878d17eab9",
-            "-                                      oid = sha256:ad0aabe999c6ee97f86c2c56ebc35a66cc5f9a832676571d68355ac2809c6bc0",
-            "+                                      oid = sha256:446ea505f6db1755d693ba005391da6fdd34516cbc636fbe482c232632694e9a",
-            "-                                     size = 24500",
-            "+                                     size = 69603",
+            "-                                      oid = sha256:7e73072a2e4e902934910757233654346a1aaf26389dcb41cb637ddf054b90a5",
+            "+                                      oid = sha256:0b858d377d56377f619bf4b30990641f9619c7450ea5ec74f96aad9dc50cd9df",
+            "-                                     size = 24498",
+            "+                                     size = 69624",
             "--- auckland:tile:auckland_3_3",
             "-                                     name = auckland_3_3.copc.laz",
             "-                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8",
@@ -940,3 +942,57 @@ def test_working_copy_commit_and_convert_to_copc(
             )
             assert converted_tile_metadata["tile"]["format"] == "laz-1.4/copc-1.0"
             assert converted_tile_metadata["tile"]["pointCount"] == 4231
+
+
+def test_working_copy_mtime_updated(
+    cli_runner, data_archive, monkeypatch, requires_pdal
+):
+    # Tests the following:
+    # 1. Diffs work properly when files have mtimes (modified-timestamps)
+    # that make it look like the file has been modified, but in fact it has not.
+    # 2. Running a diff causes the mtimes to be updated for unmodified files,
+    # where the mtimes in the index no longer match the actual file. (This
+    # means the next diff can run quicker since we can use the mtime check instead
+    # of the comparing hashes, which involves hashing the file and takes longer).
+
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+
+        repo = KartRepo(repo_path)
+        env = tool_environment()
+        env["GIT_INDEX_FILE"] = repo.working_copy.workdir.index_path
+
+        def get_touched_files():
+            # git diff-files never compares OIDs - it just lists files which appear
+            # to be dirty based on a different mtime to the mtime in the index.
+            cmd = ["git", "diff-files"]
+            return (
+                subprocess.check_output(
+                    cmd, env=env, encoding="utf-8", cwd=repo.workdir_path
+                )
+                .strip()
+                .splitlines()
+            )
+
+        # At this point in our test, the index has all the correct mtimes.
+        # Nothing is touched or modified..
+        assert len(get_touched_files()) == 0
+
+        # So, we touch all the tiles.
+        for laz_file in repo.workdir_path.glob("auckland/*.laz"):
+            laz_file.touch()
+        # Now all 16 tiles are touched according to Git.
+        assert len(get_touched_files()) == 16
+
+        # Then we re-run kart status. In spite of all the files being touched,
+        # Kart correctly reports that no tiles have been modified.
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+
+        # As a side effect of generating the last diff, the new mtimes of the unmodified
+        # files were written back to the index, so that the next diff can run quicker.
+        assert len(get_touched_files()) == 0
