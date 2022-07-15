@@ -445,13 +445,15 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 "--",
                 *paths,
             ]
-            output = subprocess.check_output(
-                cmd, env=env, encoding="utf-8", cwd=self.path
-            ).strip()
+            output_lines = (
+                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                .strip()
+                .splitlines()
+            )
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
-        if not output:
+        if not output_lines:
             # Nothing to be done.
             return
 
@@ -469,7 +471,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         # Use git update-index to reset these paths - we can't use git add directly since
         # that is for staging files which involves also writing them to the ODB, which we don't want.
-        file_paths = [parse_path(line) for line in output.splitlines()]
+        file_paths = [parse_path(line) for line in output_lines]
         if not repo_key_filter.match_all:
             file_paths = [p for p in file_paths if matches_repo_key_filter(p)]
         self._reset_workdir_index_for_files(file_paths)
@@ -488,8 +490,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
         try:
-            # --info-only means don't write the file to the ODB - we only want to update the index.
-            cmd = ["git", "update-index", "--add", "--remove", "--info-only", "--stdin"]
+            cmd = ["git", "update-index", "--add", "--remove", "--stdin"]
             subprocess.run(
                 cmd,
                 check=True,
@@ -567,42 +568,54 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         self._reset_workdir_index_for_datasets(datasets, repo_key_filter=mark_as_clean)
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
 
-    def raw_diff_from_index(self):
-        """Uses the index self.index_path to generate a pygit2 Diff of what's changed in the workdir."""
-        index = pygit2.Index(str(self.index_path))
-        index._repo = self.repo
-        return index.diff_to_workdir(
-            pygit2.GIT_DIFF_INCLUDE_UNTRACKED
-            | pygit2.GIT_DIFF_RECURSE_UNTRACKED_DIRS
-            # TODO: this flag doesn't work properly in a Kart repo - investigate why.
-            # | pygit2.GIT_DIFF_UPDATE_INDEX
-            # GIT_DIFF_UPDATE_INDEX just updates timestamps in the index to make the diff quicker next time
-            # none of the paths or hashes change, and the end result stays the same.
-        )
+    def dirty_paths(self):
+        env = tool_environment()
+        env["GIT_INDEX_FILE"] = str(self.index_path)
 
-    def workdir_deltas_by_dataset_path(self, raw_diff_from_index=None):
+        try:
+            # This finds all files in the index that have been modified - and updates any mtimes in the index
+            # if the mtimes are stale but the files are actually unchanged (as in GIT_DIFF_UPDATE_INDEX).
+            cmd = ["git", "diff", "--name-only"]
+            output_lines = (
+                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                .strip()
+                .splitlines()
+            )
+            # This finds all untracked files that are not in the index.
+            cmd = ["git", "ls-files", "--others", "--exclude-standard"]
+            output_lines += (
+                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                .strip()
+                .splitlines()
+            )
+        except subprocess.CalledProcessError as e:
+            sys.exit(translate_subprocess_exit_code(e.returncode))
+
+        return [p.replace("\\", "/") for p in output_lines]
+
+    def dirty_paths_by_dataset_path(self, dirty_paths=None):
         """Returns all the deltas from self.raw_diff_from_index() but grouped by dataset path."""
-        if raw_diff_from_index is None:
-            raw_diff_from_index = self.raw_diff_from_index()
+        if dirty_paths is None:
+            dirty_paths = self.dirty_paths()
 
-        all_ds_paths = self.repo.datasets(self.get_tree_id()).paths()
+        all_ds_paths = list(self.repo.datasets(self.get_tree_id()).paths())
 
-        with_and_without_slash = [
-            (p.rstrip("/") + "/", p.rstrip("/")) for p in all_ds_paths
-        ]
+        def find_ds_path(file_path):
+            for ds_path in all_ds_paths:
+                if (
+                    len(file_path) > len(ds_path)
+                    and file_path.startswith(ds_path)
+                    and file_path[len(ds_path)] == "/"
+                ):
+                    return ds_path
+            return None
 
-        def find_ds_path(delta):
-            path = delta.old_file.path if delta.old_file else delta.new_file.path
-            for with_slash, without_slash in with_and_without_slash:
-                if path.startswith(with_slash):
-                    return without_slash
+        dirty_paths_by_dataset_path = {}
+        for p in dirty_paths:
+            ds_path = find_ds_path(p)
+            dirty_paths_by_dataset_path.setdefault(ds_path, []).append(p)
 
-        deltas_by_ds_path = {}
-        for delta in raw_diff_from_index.deltas:
-            ds_path = find_ds_path(delta)
-            deltas_by_ds_path.setdefault(ds_path, []).append(delta)
-
-        return deltas_by_ds_path
+        return dirty_paths_by_dataset_path
 
     def workdir_diff_cache(self):
         """
@@ -629,18 +642,18 @@ class WorkdirDiffCache:
         self.delegate = delegate
 
     @functools.lru_cache(maxsize=1)
-    def raw_diff_from_index(self):
-        return self.delegate.raw_diff_from_index()
+    def dirty_paths(self):
+        return self.delegate.dirty_paths()
 
     @functools.lru_cache(maxsize=1)
-    def workdir_deltas_by_dataset_path(self):
-        # Make sure the raw diff gets cached too:
-        raw_diff_from_index = self.raw_diff_from_index()
-        return self.delegate.workdir_deltas_by_dataset_path(raw_diff_from_index)
+    def dirty_paths_by_dataset_path(self):
+        # Make sure self.dirty_paths gets cached too:
+        dirty_paths = self.dirty_paths()
+        return self.delegate.dirty_paths_by_dataset_path(dirty_paths)
 
-    def workdir_deltas_for_dataset(self, dataset):
+    def dirty_paths_for_dataset(self, dataset):
         if isinstance(dataset, str):
             path = dataset
         else:
             path = dataset.path
-        return self.workdir_deltas_by_dataset_path().get(path)
+        return self.dirty_paths_by_dataset_path().get(path, ())
