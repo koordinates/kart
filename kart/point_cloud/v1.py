@@ -124,6 +124,16 @@ class PointCloudV1(BaseDataset):
             del result["version"]
         return result
 
+    def get_tile_summary(self, tilename, missing_ok=False):
+        tile_pointer_blob = self.get_blob_at(
+            self.tilename_to_blob_path(tilename, relative=True), missing_ok=True
+        )
+        return (
+            self.get_tile_summary_from_pointer_blob(tile_pointer_blob)
+            if tile_pointer_blob
+            else None
+        )
+
     def get_tile_summary_promise_from_path(self, tile_path, missing_ok=False):
         tile_pointer_blob = self.get_blob_at(tile_path, missing_ok=missing_ok)
         if tile_pointer_blob is None:

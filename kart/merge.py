@@ -233,10 +233,6 @@ def complete_merging_state(ctx):
         "message": merge_message,
     }
 
-    # FIXME - this blows away any WC changes the user has, but unfortunately,
-    # we don't have any way of preserving them right now.
-    repo.working_copy.reset_to_head()
-
     for filename in ALL_MERGE_FILES:
         repo.remove_gitdir_file(filename)
 
@@ -245,6 +241,10 @@ def complete_merging_state(ctx):
     # TODO - support json output
     click.echo(merge_status_to_text(merge_jdict, fresh=True))
     repo.gc("--auto")
+
+    # TODO - this blows away any uncommitted WC changes the user has, but unfortunately,
+    # we don't have any way of preserving them right now.
+    repo.working_copy.reset_to_head()
 
 
 @click.command()

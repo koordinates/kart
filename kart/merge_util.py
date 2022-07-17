@@ -525,12 +525,16 @@ class RichConflictVersion:
         return self.decoded_path[1]
 
     @property
+    def is_meta(self):
+        return self.dataset_part == "meta"
+
+    @property
     def is_feature(self):
         return self.dataset_part == "feature"
 
     @property
-    def is_meta(self):
-        return self.dataset_part == "meta"
+    def is_tile(self):
+        return self.dataset_part == "tile"
 
     @property
     def pk(self):
@@ -548,6 +552,11 @@ class RichConflictVersion:
         return self.decoded_path[2]
 
     @property
+    def tile_name(self):
+        assert self.is_tile
+        return self.decoded_path[2]
+
+    @property
     @functools.lru_cache(maxsize=1)
     def feature(self):
         assert self.is_feature
@@ -558,6 +567,12 @@ class RichConflictVersion:
     def meta_item(self):
         assert self.is_meta
         return self.dataset.get_meta_item(self.meta_path)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def tile_summary(self):
+        assert self.is_tile
+        return self.dataset.get_tile_summary(self.tile_name)
 
     def output(self, output_format, target_crs=None):
         """
@@ -570,19 +585,27 @@ class RichConflictVersion:
                 result = json.dumps(result)
             return result
 
-        if output_format == "text":
-            return feature_as_text(self.feature)
+        if self.is_tile:
+            result = self.tile_summary
+            if output_format == "text":
+                # TODO - transform extents to the target_crs.
+                result = feature_as_text(result)
+            return result
 
-        transform_func = (
-            feature_as_json if output_format == "json" else feature_as_geojson
-        )
-        geometry_transform = None
-        if target_crs is not None:
-            geometry_transform = self.dataset.get_geometry_transform(target_crs)
+        if self.is_feature:
+            if output_format == "text":
+                return feature_as_text(self.feature)
 
-        return transform_func(
-            self.feature, self.pk, geometry_transform=geometry_transform
-        )
+            transform_func = (
+                feature_as_json if output_format == "json" else feature_as_geojson
+            )
+            geometry_transform = None
+            if target_crs is not None:
+                geometry_transform = self.dataset.get_geometry_transform(target_crs)
+
+            return transform_func(
+                self.feature, self.pk, geometry_transform=geometry_transform
+            )
 
     def matches_filter(self, repo_filter):
         if repo_filter.match_all:
@@ -686,7 +709,7 @@ def rich_conflicts(raw_conflicts, merge_context):
 
 
 def ensure_conflicts_ready(rich_conflicts, repo):
-    from .promisor_utils import fetch_promised_blobs, object_is_promised
+    from .promisor_utils import fetch_promised_blobs
 
     rich_conflicts = list(rich_conflicts)
     if not rich_conflicts:
@@ -760,7 +783,7 @@ def merge_status_to_text(jdict, fresh):
             )
         else:
             if fresh:
-                no_conflicts_text = f"No conflicts!\nMerge commited as {commit}"
+                no_conflicts_text = f"No conflicts!\nMerge committed as {commit}"
             else:
                 no_conflicts_text = (
                     f"No conflicts!\nUse `kart merge --continue` to complete the merge"
