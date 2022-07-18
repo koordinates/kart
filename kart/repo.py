@@ -447,8 +447,8 @@ class KartRepo(pygit2.Repository):
 
     def write_lfs_filter_config(self):
         # TODO - try to bundle this config with the bundled Git, instead of once per repo.
-        # if not os.environ.get("X_KART_POINT_CLOUDS"):
-        #    return
+        if not os.environ.get("X_KART_POINT_CLOUDS"):
+            return
         self.config["filter.lfs.process"] = "git-lfs filter-process"
         self.config["filter.lfs.required"] = True
         self.config["filter.lfs.clean"] = "filter.lfs.clean"
