@@ -240,21 +240,18 @@ class TableWorkingCopy(WorkingCopyPart):
 
     @classmethod
     def write_config(cls, repo, location=None, bare=False):
-        repo_cfg = repo.config
-        bare_key = repo.BARE_CONFIG_KEY
         location_key = repo.WORKINGCOPY_LOCATION_KEY
 
         if bare:
-            repo_cfg[bare_key] = True
             repo.del_config(location_key)
-        else:
-            if location is None:
-                location = cls.default_location(repo)
-            else:
-                location = cls.normalise_location(location, repo)
+            return
 
-            repo_cfg[bare_key] = False
-            repo_cfg[location_key] = str(location)
+        if location is None:
+            location = cls.default_location(repo)
+        else:
+            location = cls.normalise_location(location, repo)
+
+        repo.config[location_key] = str(location)
 
     @classmethod
     def subclass_from_location(cls, wc_location):

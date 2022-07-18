@@ -2,6 +2,8 @@ import re
 import shutil
 import subprocess
 
+import pygit2
+
 from kart.cli_util import tool_environment
 from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT
 from kart.repo import KartRepo
@@ -54,10 +56,10 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
             "-                               pointCount = 1558",
             "+                               pointCount = 4231",
             "-                                sourceOid = sha256:d89966fb10b30d6987955ae1b97c752ba875de89da1881e2b05820878d17eab9",
-            "-                                      oid = sha256:7e73072a2e4e902934910757233654346a1aaf26389dcb41cb637ddf054b90a5",
-            "+                                      oid = sha256:0b858d377d56377f619bf4b30990641f9619c7450ea5ec74f96aad9dc50cd9df",
-            "-                                     size = 24498",
-            "+                                     size = 69624",
+            "-                                      oid = sha256:9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312",
+            "+                                      oid = sha256:1ad630a7b3acd8d678984831181688f82471a25ad6e93b2a2a5a253c9ffb1849",
+            "-                                     size = 24480",
+            "+                                     size = 69437",
             "--- auckland:tile:auckland_3_3",
             "-                                     name = auckland_3_3.copc.laz",
             "-                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8",
@@ -996,3 +998,7 @@ def test_working_copy_mtime_updated(
         # As a side effect of generating the last diff, the new mtimes of the unmodified
         # files were written back to the index, so that the next diff can run quicker.
         assert len(get_touched_files()) == 0
+
+        # Finally, check that the point cloud tiles themselves are not found in the ODB:
+        for laz_file in repo.workdir_path.glob("auckland/*.laz"):
+            assert pygit2.hashfile(laz_file) not in repo.odb

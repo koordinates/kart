@@ -429,6 +429,7 @@ class KartRepo(pygit2.Repository):
             table_dataset_version = self.table_dataset_version
         self.config[version_key] = str(table_dataset_version)
 
+        self.config[self.BARE_CONFIG_KEY] = bare
         # Bare-style Kart repos are always implemented as bare git repos:
         if self.is_bare_style:
             self.config["core.bare"] = True
@@ -440,6 +441,18 @@ class KartRepo(pygit2.Repository):
         TableWorkingCopy.write_config(self, wc_location, bare)
         if spatial_filter_spec:
             spatial_filter_spec.write_config(self)
+
+        if not self.get_config_str("filter.lfs.process"):
+            self.write_lfs_filter_config()
+
+    def write_lfs_filter_config(self):
+        # TODO - try to bundle this config with the bundled Git, instead of once per repo.
+        # if not os.environ.get("X_KART_POINT_CLOUDS"):
+        #    return
+        self.config["filter.lfs.process"] = "git-lfs filter-process"
+        self.config["filter.lfs.required"] = True
+        self.config["filter.lfs.clean"] = "filter.lfs.clean"
+        self.config["filter.lfs.smudge"] = "filter.lfs.smudge"
 
     def ensure_supported_version(self):
         ensure_supported_repo_wide_version(self.table_dataset_version)
