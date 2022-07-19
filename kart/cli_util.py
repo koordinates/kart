@@ -2,6 +2,7 @@ import functools
 import io
 import json
 import os
+import logging
 import platform
 import warnings
 from pathlib import Path
@@ -11,6 +12,20 @@ import jsonschema
 import pygit2
 from click.core import Argument
 from click.shell_completion import CompletionItem
+
+from kart.help import kart_help
+
+
+L = logging.getLogger("kart.cli_util")
+
+
+class KartCommand(click.Command):
+    def format_help(self, ctx, formatter):
+        try:
+            kart_help(ctx)
+        except Exception as e:
+            L.debug(f"Failed rendering help page: {e}")
+            return super().format_help(ctx, formatter)
 
 
 def _pygit2_configs():

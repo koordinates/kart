@@ -6,6 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.11.4 (UNRELEASED)
 
+- Add man-style pagers for Posix instead of click's default help page when calling `--help`. [#643](https://github.com/koordinates/kart/issues/643)
 - Support tab completion in powershell for kart. [#643](https://github.com/koordinates/kart/issues/643)
 - Add `--install-tab-completion` option for installing shell completion. [#643](https://github.com/koordinates/kart/issues/643)
 - Add tab completion for kart commands and user-specific data. [#643](https://github.com/koordinates/kart/issues/643)

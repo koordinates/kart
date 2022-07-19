@@ -1,5 +1,5 @@
 """
-A configuration file for RTD with Sphinx
+A configuration file for Sphinx
 """
 
 

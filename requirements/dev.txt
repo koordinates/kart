@@ -24,7 +24,7 @@ decorator==5.1.1
     #   ipython
 execnet==1.9.0
     # via pytest-xdist
-importlib-metadata==4.11.4
+importlib-metadata==4.12.0
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/docs.txt
@@ -62,7 +62,7 @@ pluggy==1.0.0
     # via
     #   -c requirements/test.txt
     #   pytest
-prompt-toolkit==3.0.29
+prompt-toolkit==3.0.30
     # via ipython
 ptyprocess==0.7.0
     # via pexpect
@@ -100,7 +100,7 @@ traitlets==5.3.0
     # via
     #   ipython
     #   matplotlib-inline
-typing-extensions==4.2.0
+typing-extensions==4.3.0
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/docs.txt
@@ -108,7 +108,7 @@ typing-extensions==4.2.0
     #   importlib-metadata
 wcwidth==0.2.5
     # via prompt-toolkit
-zipp==3.8.0
+zipp==3.8.1
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/docs.txt

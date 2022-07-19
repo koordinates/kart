@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 
 
-from .cli_util import StringFromFile, RemovalInKart013Warning
+from .cli_util import StringFromFile, RemovalInKart013Warning, KartCommand
 from .core import check_git_user
 from .dataset_util import validate_dataset_paths
 from .exceptions import InvalidOperation
@@ -16,7 +16,7 @@ from .tabular.import_source import TableImportSource
 from .working_copy import PartType
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.argument(
     "directory", type=click.Path(writable=True, file_okay=False), required=False

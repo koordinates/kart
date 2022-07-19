@@ -4,6 +4,7 @@ import importlib.util
 import inspect
 import logging
 import os
+import io
 import pathlib
 import re
 import subprocess
@@ -14,7 +15,15 @@ import click
 import pygit2
 
 from . import core, is_darwin, is_linux, is_windows  # noqa
-from .cli_util import add_help_subcommand, call_and_exit_flag, tool_environment
+from kart.help import get_renderer
+
+from . import core  # noqa
+from .cli_util import (
+    add_help_subcommand,
+    call_and_exit_flag,
+    tool_environment,
+    KartCommand,
+)
 from .context import Context
 from .exec import run_and_wait
 from kart.completion import Shells, install_callback
@@ -137,6 +146,8 @@ def print_version(ctx):
 
 
 class KartGroup(click.Group):
+    command_class = KartCommand
+
     def get_command(self, ctx, cmd_name):
         rv = super().get_command(ctx, cmd_name)
         if rv is not None:
@@ -173,6 +184,9 @@ class KartGroup(click.Group):
                 raise
         else:
             return super().invoke(ctx)
+
+    def format_help(self, ctx, formatter):
+        return self.command_class.format_help(self, ctx, formatter)
 
 
 @add_help_subcommand
