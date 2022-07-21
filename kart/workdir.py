@@ -22,10 +22,7 @@ from kart.exceptions import NotFound, NO_WORKING_COPY, translate_subprocess_exit
 from kart.lfs_util import get_local_path_from_lfs_hash
 from kart.key_filters import RepoKeyFilter
 from kart.point_cloud.v1 import PointCloudV1
-from kart.point_cloud.tilename_util import (
-    remove_tile_extension,
-    get_tile_path_pattern,
-)
+from kart.point_cloud.tilename_util import remove_tile_extension, get_tile_path_pattern
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.working_copy import WorkingCopyPart

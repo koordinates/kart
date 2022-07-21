@@ -616,7 +616,9 @@ class TableWorkingCopy(WorkingCopyPart):
                 if db_obj[pk_field] is None:
                     db_obj = None
 
-                repo_obj = self._get_feature_and_fetch_if_needed(dataset, track_pk)
+                repo_obj = self._get_dataset_feature_and_fetch_if_needed(
+                    dataset, track_pk
+                )
 
                 if repo_obj == db_obj:
                     # DB was changed and then changed back - eg INSERT then DELETE.
@@ -646,7 +648,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
         return feature_diff
 
-    def _get_feature_and_fetch_if_needed(self, dataset, feature_pk):
+    def _get_dataset_feature_and_fetch_if_needed(self, dataset, feature_pk):
         try:
             return dataset.get_feature(feature_pk)
         except KeyError as e:
@@ -675,6 +677,20 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         return True
 
+    def _get_dataset_schema(self, dataset, meta_diff):
+        """
+        Returns the new value of the schema from the meta diff, or the schema from the dataset if
+        there is no change to the schema in the meta diff.
+        """
+        if (
+            meta_diff
+            and "schema.json" in meta_diff
+            and meta_diff["schema.json"].new_value
+        ):
+            return Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+        else:
+            return dataset.schema
+
     def _execute_dirty_rows_query(
         self, sess, dataset, feature_filter=FeatureKeyFilter.MATCH_ALL, meta_diff=None
     ):
@@ -682,14 +698,7 @@ class TableWorkingCopy(WorkingCopyPart):
         Does a join on the tracking table and the table for the given dataset, and returns a result
         containing all the rows that have been inserted / updated / deleted.
         """
-        if (
-            meta_diff
-            and "schema.json" in meta_diff
-            and meta_diff["schema.json"].new_value
-        ):
-            schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
-        else:
-            schema = dataset.schema
+        schema = self._get_dataset_schema(dataset, meta_diff)
 
         kart_track = self.kart_tables.kart_track
         table = self._table_def_for_schema(schema, dataset.table_name)
@@ -732,6 +741,21 @@ class TableWorkingCopy(WorkingCopyPart):
                 .where(kart_track.c.table_name == dataset.table_name)
             )
             return (row[0] for row in r)
+
+    def get_feature(self, dataset, pk, allow_schema_diff=True):
+        """Gets the features for the given dataset."""
+        meta_diff = self.diff_dataset_to_working_copy_meta(dataset)
+        if not allow_schema_diff and meta_diff.recursive_get(["meta", "schema.json"]):
+            raise ValueError("Feature in WC doesn't conform to required schema")
+        schema = self._get_dataset_schema(dataset, meta_diff)
+
+        table = self._table_def_for_schema(dataset.schema, dataset.table_name)
+        pk_column = table.columns[dataset.schema.pk_columns[0].name]
+        with self.session() as sess:
+            r = sess.execute(sa.select(table).where(pk_column == pk))
+            for row in r:
+                return {col.name: row[col.name] for col in dataset.schema}
+            return None
 
     def _mark_as_clean(self, sess, repo_key_filter):
         """Delete the rows from the tracking table that match the given filter."""

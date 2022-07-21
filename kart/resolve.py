@@ -1,5 +1,7 @@
 import copy
 import json
+import os
+import shutil
 from pathlib import Path
 
 import click
@@ -27,7 +29,7 @@ def ungeojson_file(file_path, dataset):
     Given a file containing multiple geojson features belonging to dataset,
     returns the features as dicts containing gpkg geometries.
     """
-    features = json.load(Path(file_path).open())["features"]
+    features = json.load(file_path.open())["features"]
     return [ungeojson_feature(f, dataset) for f in features]
 
 
@@ -42,41 +44,148 @@ def write_feature_to_dataset_entry(feature, dataset, repo):
     return pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
 
 
-def load_geojson_resolve(file_path, dataset, repo):
-    """
-    Given a file that contains 0 or more geojson features, and a dataset,
-    returns pygit2.IndexEntrys containing those features when added to that dataset.
-    """
+def load_dataset(rich_conflict):
+    # TODO - this works perfectly as long as the dataset hasn't changed structure over the course of the confict.
+    # The correct behaviour is to load a dataset based not on a commit, but on the current merge index, and use this for
+    # serialising resolved features etc - and, to enforce that meta changes for a dataset are resolved before feature changes.
+    return rich_conflict.any_true_version.dataset
+
+
+def load_file_resolve(rich_conflict, file_path):
+    """Loads a feature from the given file in order to use it as a conflict resolution."""
+    single_path = not rich_conflict.has_multiple_paths
+    dataset_part = rich_conflict.decoded_path[1]
+    if not single_path or dataset_part not in ("feature", "tile"):
+        raise NotYetImplemented(
+            "Sorry, only feature or tile conflicts can currently be resolved using --with-file"
+        )
+
+    dataset_part = rich_conflict.decoded_path[1]
+    if dataset_part == "feature":
+        return _load_file_resolve_for_feature(rich_conflict, file_path)
+    elif dataset_part == "tile":
+        return _load_file_resolve_for_tile(rich_conflict, file_path)
+    else:
+        raise RuntimeError()
+
+
+def _load_file_resolve_for_feature(rich_conflict, file_path):
+    dataset = load_dataset(rich_conflict)
     return [
-        write_feature_to_dataset_entry(f, dataset, repo)
+        write_feature_to_dataset_entry(f, dataset, dataset.repo)
         for f in ungeojson_file(file_path, dataset)
     ]
 
 
-def ensure_geojson_resolve_supported(rich_conflict):
-    """
-    Ensures that the given conflict can be resolved by a resolution provided in a geojson file.
-    This is true so long as the conflict only involves a single table
-    - otherwise we won't know which table should contain the resolution -
-    and the conflict only involves features, since we can't load metadata from geojson.
-    """
-    single_table = "," not in rich_conflict.decoded_path[0]
-    only_features = rich_conflict.decoded_path[1] == "feature"
-    if not single_table or not only_features:
-        raise NotYetImplemented(
-            "Sorry, only feature conflicts can currently be resolved using --with-file"
+def _load_file_resolve_for_tile(rich_conflict, file_path):
+    from kart.lfs_util import get_local_path_from_lfs_hash, dict_to_pointer_file_bytes
+    from kart.point_cloud.metadata_util import format_tile_for_pointer_file
+
+    tilename = rich_conflict.decoded_path[2]
+    dataset = load_dataset(rich_conflict)
+    repo = dataset.repo
+    rel_tile_path = os.path.relpath(file_path.resolve(), repo.workdir_path.resolve())
+    tile_summary = dataset.get_tile_summary_from_filesystem_path(file_path)
+    if not dataset.is_tile_compatible(dataset.tile_metadata["format"], tile_summary):
+        # TODO: maybe support type-conversion during resolves like we do during commits.
+        raise InvalidOperation(
+            f"The tile at {rel_tile_path} does not match the dataset's format"
         )
 
+    path_in_lfs_cache = get_local_path_from_lfs_hash(repo, tile_summary["oid"])
+    path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
+    shutil.copy(file_path, path_in_lfs_cache)
+    pointer_dict = format_tile_for_pointer_file(tile_summary)
+    pointer_data = dict_to_pointer_file_bytes(pointer_dict)
+    blob_path = dataset.tilename_to_blob_path(tilename)
+    blob_id = repo.create_blob(pointer_data)
+    return [pygit2.IndexEntry(blob_path, blob_id, pygit2.GIT_FILEMODE_BLOB)]
 
-@click.command()
+
+def load_workingcopy_resolve(rich_conflict):
+    """Loads a feature from the working copy in order to use it as a conflict resolution."""
+    single_path = not rich_conflict.has_multiple_paths
+    dataset_part = rich_conflict.decoded_path[1]
+    if not single_path or dataset_part not in ("feature", "tile"):
+        raise NotYetImplemented(
+            "Sorry, only feature or tile conflicts can currently be resolved using --with=workingcopy"
+        )
+
+    dataset_part = rich_conflict.decoded_path[1]
+    if dataset_part == "feature":
+        return _load_workingcopy_resolve_for_feature(rich_conflict)
+    elif dataset_part == "tile":
+        return _load_workingcopy_resolve_for_tile(rich_conflict)
+    else:
+        raise RuntimeError()
+
+
+def _load_workingcopy_resolve_for_feature(rich_conflict):
+    dataset = load_dataset(rich_conflict)
+    repo = dataset.repo
+    table_wc = repo.working_copy.tabular
+    pk = rich_conflict.decoded_path[2]
+    feature = (
+        table_wc.get_feature(dataset, pk, allow_schema_diff=False) if table_wc else None
+    )
+    if feature is None:
+        raise NotFound(
+            f"No feature found at {rich_conflict.label} - to resolve a conflict by deleting the feature, use --with=delete"
+        )
+    feature_path, feature_data = dataset.encode_feature(feature)
+    blob_id = repo.create_blob(feature_data)
+    return [pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)]
+
+
+def _load_workingcopy_resolve_for_tile(rich_conflict):
+    from kart.point_cloud.tilename_util import get_tile_path_pattern
+
+    dataset = load_dataset(rich_conflict)
+    repo = dataset.repo
+    workdir = repo.working_copy.workdir
+    tilename = rich_conflict.decoded_path[2]
+    matching_files = []
+    if workdir:
+        # Get a glob that roughly matches the tiles we are looking for.
+        matching_files = list((workdir.path / dataset.path).glob(f"**/{tilename}.*"))
+        # Narrow it down more exactly using get_tile_path_pattern which allows for a few different extensions.
+        filename_pattern = get_tile_path_pattern(tilename)
+        matching_files = [
+            p for p in matching_files if filename_pattern.fullmatch(p.name)
+        ]
+
+    if not matching_files:
+        raise NotFound(
+            f"No tile found at {rich_conflict.label} - to resolve a conflict by deleting the tile, use --with=delete"
+        )
+    if len(matching_files) > 1:
+        click.echo(
+            "Found multiple files in the working copy that could be intended as the resolution:",
+            err=True,
+        )
+        for file in matching_files:
+            click.echo(
+                os.path.relpath(file.resolve(), repo.workdir_path.resolve()), err=True
+            )
+        raise InvalidOperation("Couldn't resolve conflict using working copy")
+    return _load_file_resolve_for_tile(rich_conflict, matching_files[0])
+
+
+CHOICE_ALIASES = {"working-copy": "workingcopy"}
+CONTEXT_SETTINGS = dict(token_normalize_func=lambda x: CHOICE_ALIASES.get(x, x))
+
+
+@click.command(context_settings=CONTEXT_SETTINGS)
 @click.pass_context
 @click.option(
     "--with",
     "with_version",
-    type=click.Choice(["ancestor", "ours", "theirs", "delete"]),
+    type=click.Choice(["ancestor", "ours", "theirs", "delete", "workingcopy"]),
     help=(
-        "Resolve the conflict with any of the existing versions - "
-        '"ancestor", "ours", or "theirs" - or with "delete" which resolves the conflict by deleting it.'
+        "Resolve the conflict with any of the following - \n"
+        ' - "ancestor", "ours", or "theirs" - the versions which already exist in these commits'
+        ' - "workingcopy" - the version currently found inside the working copy'
+        ' - "delete" - the conflict is resolved by simply removing it'
     ),
     cls=MutexOption,
     exclusive_with=["file_path"],
@@ -116,12 +225,9 @@ def resolve(ctx, with_version, file_path, conflict_label):
                 )
 
             if file_path:
-                ensure_geojson_resolve_supported(rich_conflict)
-                # Use any version of the dataset to serialise the feature.
-                # TODO: This will need more work when schema changes are supported.
-                dataset = rich_conflict.any_true_version.dataset
-                res = load_geojson_resolve(file_path, dataset, repo)
-
+                res = load_file_resolve(rich_conflict, Path(file_path))
+            elif with_version == "workingcopy":
+                res = load_workingcopy_resolve(rich_conflict)
             elif with_version == "delete":
                 res = []
             else:
@@ -135,9 +241,10 @@ def resolve(ctx, with_version, file_path, conflict_label):
 
             merge_index.add_resolve(key, res)
             merge_index.write_to_repo(repo)
-            click.echo(
-                f"Resolved 1 conflict. {len(merge_index.unresolved_conflicts)} conflicts to go."
-            )
+            unresolved_conflicts = len(merge_index.unresolved_conflicts)
+            click.echo(f"Resolved 1 conflict. {unresolved_conflicts} conflicts to go.")
+            if unresolved_conflicts == 0:
+                click.echo("Use `kart merge --continue` to complete the merge")
             ctx.exit(0)
 
     raise NotFound(f"No conflict found at {conflict_label}", exit_code=NO_CONFLICT)

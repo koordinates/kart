@@ -39,6 +39,7 @@ from kart.point_cloud.metadata_util import (
 )
 from kart.point_cloud.tilename_util import remove_tile_extension
 from kart.point_cloud.pdal_convert import convert_tile_to_copc
+from kart.point_cloud.tilename_util import remove_tile_extension
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,

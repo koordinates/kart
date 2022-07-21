@@ -2,8 +2,6 @@ import functools
 import os
 import re
 
-import click
-
 from kart.base_dataset import (
     BaseDataset,
     MetaItemDefinition,
