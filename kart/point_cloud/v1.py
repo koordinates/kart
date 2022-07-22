@@ -124,23 +124,42 @@ class PointCloudV1(BaseDataset):
             del result["version"]
         return result
 
-    def get_tile_summary(self, tilename, missing_ok=False):
-        tile_pointer_blob = self.get_blob_at(
-            self.tilename_to_blob_path(tilename, relative=True), missing_ok=True
-        )
-        return (
-            self.get_tile_summary_from_pointer_blob(tile_pointer_blob)
-            if tile_pointer_blob
-            else None
-        )
+    def get_tile_summary(
+        self, tilename=None, *, path=None, pointer_blob=None, missing_ok=False
+    ):
+        """
+        Gets the tile summary of the tile as committed in this dataset.
+        Either tilename or path must be supplied - whichever is not supplied will be inferred from the other.
+        If the pointer_blob is already known, this may be supplied too to avoid extra work.
+        """
+        if tilename is None and path is None:
+            raise ValueError("Either <tilename> or <path> must be supplied")
 
-    def get_tile_summary_promise_from_path(self, tile_path, missing_ok=False):
-        tile_pointer_blob = self.get_blob_at(tile_path, missing_ok=missing_ok)
-        if tile_pointer_blob is None:
+        if not path:
+            path = self.tilename_to_blob_path(tilename, relative=True)
+        if not pointer_blob:
+            pointer_blob = self.get_blob_at(path, missing_ok=missing_ok)
+        if not pointer_blob:
             return None
-        return functools.partial(
-            self.get_tile_summary_from_pointer_blob, tile_pointer_blob
-        )
+        return self.get_tile_summary_from_pointer_blob(pointer_blob)
+
+    def get_tile_summary_promise(
+        self, tilename=None, *, path=None, pointer_blob=None, missing_ok=False
+    ):
+        """Same as get_tile_summary, but returns a promise. The blob data is not be read until the promise is called."""
+        if tilename is None and path is None:
+            raise ValueError("Either <tilename> or <path> must be supplied")
+
+        if not path:
+            path = self.tilename_to_blob_path(tilename, relative=True)
+        if not pointer_blob:
+            pointer_blob = self.get_blob_at(path, missing_ok=missing_ok)
+        if not pointer_blob:
+            return None
+        return functools.partial(self.get_tile_summary_from_pointer_blob, pointer_blob)
+
+    def get_tile_summary_promise_from_blob_path(self, path, *, missing_ok=False):
+        return self.get_tile_summary_promise(path=path, missing_ok=missing_ok)
 
     def _workdir_path(self, wc_path):
         if isinstance(wc_path, str):
@@ -148,22 +167,21 @@ class PointCloudV1(BaseDataset):
         else:
             return wc_path
 
-    def get_tile_summary_from_wc_path(self, wc_path):
-        wc_path = self._workdir_path(wc_path)
+    def get_tile_summary_from_workdir_path(self, path, *, tile_metadata=None):
+        """Generates a tile summary for a path to a tile in the working copy."""
+        path = self._workdir_path(path)
+        return self.get_tile_summary_from_filesystem_path(path)
 
-        return self.get_tile_summary_from_pc_tile_metadata(
-            wc_path, extract_pc_tile_metadata(wc_path)
-        )
-
-    def get_tile_summary_promise_from_wc_path(self, wc_path):
-        return functools.partial(self.get_tile_summary_from_wc_path, wc_path)
-
-    def get_tile_summary_from_pc_tile_metadata(self, wc_path, tile_metadata):
-        wc_path = self._workdir_path(wc_path)
-
+    def get_tile_summary_from_filesystem_path(self, path, *, tile_metadata=None):
+        """
+        Generates a tile summary from a pathlib.Path for a file somewhere on the filesystem.
+        If the tile_metadata is already known, this may be supplied too to avoid extra work.
+        """
+        if not tile_metadata:
+            tile_metadata = extract_pc_tile_metadata(path)
         tile_info = format_tile_for_pointer_file(tile_metadata["tile"])
-        oid, size = get_hash_and_size_of_file(wc_path)
-        return {"name": wc_path.name, **tile_info, "oid": f"sha256:{oid}", "size": size}
+        oid, size = get_hash_and_size_of_file(path)
+        return {"name": path.name, **tile_info, "oid": f"sha256:{oid}", "size": size}
 
     def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):
         """
@@ -185,7 +203,7 @@ class PointCloudV1(BaseDataset):
             "tile",
             key_filter=tile_filter,
             key_decoder_method="tilename_from_path",
-            value_decoder_method="get_tile_summary_promise_from_path",
+            value_decoder_method="get_tile_summary_promise_from_blob_path",
             reverse=reverse,
         )
 
@@ -222,9 +240,7 @@ class PointCloudV1(BaseDataset):
             if tilename not in tile_filter:
                 continue
 
-            old_tile_summary = self.get_tile_summary_promise_from_path(
-                self.tilename_to_blob_path(tilename, relative=True), missing_ok=True
-            )
+            old_tile_summary = self.get_tile_summary_promise(tilename, missing_ok=True)
             old_half_delta = (tilename, old_tile_summary) if old_tile_summary else None
 
             wc_path = self._workdir_path(tile_path)
@@ -233,8 +249,8 @@ class PointCloudV1(BaseDataset):
             else:
                 tile_metadata = extract_pc_tile_metadata(wc_path)
                 tilename_to_metadata[wc_path.name] = tile_metadata
-                new_tile_summary = self.get_tile_summary_from_pc_tile_metadata(
-                    wc_path, tile_metadata
+                new_tile_summary = self.get_tile_summary_from_workdir_path(
+                    wc_path, tile_metadata=tile_metadata
                 )
 
                 if dataset_format_to_apply and not self.is_tile_compatible(
