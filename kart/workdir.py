@@ -4,7 +4,6 @@ import logging
 from enum import Enum, auto
 import functools
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -23,7 +22,10 @@ from kart.exceptions import NotFound, NO_WORKING_COPY, translate_subprocess_exit
 from kart.lfs_util import get_local_path_from_lfs_hash
 from kart.key_filters import RepoKeyFilter
 from kart.point_cloud.v1 import PointCloudV1
-from kart.point_cloud.metadata_util import remove_las_extension
+from kart.point_cloud.tilename_util import (
+    remove_tile_extension,
+    get_tile_path_pattern,
+)
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.working_copy import WorkingCopyPart
@@ -466,7 +468,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         def matches_repo_key_filter(path):
             path = Path(path.replace("\\", "/"))
             ds_path = str(path.parents[0])
-            tile_name = remove_las_extension(path.name)
+            tile_name = remove_tile_extension(path.name)
             return repo_key_filter.recursive_get([ds_path, "tile", tile_name])
 
         # Use git update-index to reset these paths - we can't use git add directly since
@@ -525,7 +527,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         """
         Update an individual tile in the workdir so that it reflects what was actually committed.
         """
-        tilename = remove_las_extension(tile_delta.new_value["name"])
+        tilename = remove_tile_extension(tile_delta.new_value["name"])
 
         ds_tiles_dir = (self.path / ds_path).resolve()
         # Sanity check to make sure we're not messing with files we shouldn't:
@@ -533,11 +535,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         assert self.repo.workdir_path in ds_tiles_dir.parents
         assert ds_tiles_dir.is_dir()
 
-        tile_pattern = re.compile(
-            re.escape(tilename + ".") + r"([Cc][Oo][Pp][Cc]\.)?[Ll][Aa][SsZz]"
-        )
+        name_pattern = get_tile_path_pattern(tilename)
         for child in ds_tiles_dir.glob(tilename + ".*"):
-            if tile_pattern.fullmatch(child.name) and child.is_file():
+            if name_pattern.fullmatch(child.name) and child.is_file():
                 child.unlink()
 
         tilename = tile_delta.new_value["name"]

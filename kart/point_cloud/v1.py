@@ -1,5 +1,4 @@
 import functools
-import re
 import shutil
 
 from kart.core import find_blobs_in_tree
@@ -21,10 +20,13 @@ from kart.point_cloud.metadata_util import (
     rewrite_and_merge_metadata,
     format_tile_for_pointer_file,
     get_format_summary,
-    set_file_extension,
-    remove_las_extension,
 )
 from kart.point_cloud.pdal_convert import convert_tile_to_format
+from kart.point_cloud.tilename_util import (
+    remove_tile_extension,
+    set_tile_extension,
+    get_tile_path_pattern,
+)
 from kart.serialise_util import hexhash
 from kart.working_copy import PartType
 
@@ -78,7 +80,7 @@ class PointCloudV1(BaseDataset):
                 pointer_dict = pointer_file_bytes_to_dict(blob)
                 tile_format = pointer_dict["format"]
                 oid = pointer_dict["oid"].split(":", maxsplit=1)[1]
-                yield set_file_extension(blob.name, tile_format=tile_format), oid
+                yield set_tile_extension(blob.name, tile_format=tile_format), oid
             else:
                 yield blob.name, get_hash_from_pointer_file(blob)
 
@@ -111,13 +113,13 @@ class PointCloudV1(BaseDataset):
 
     @classmethod
     def tilename_from_path(cls, tile_path):
-        return remove_las_extension(tile_path.rsplit("/", maxsplit=1)[-1])
+        return remove_tile_extension(tile_path.rsplit("/", maxsplit=1)[-1])
 
     def get_tile_summary_from_pointer_blob(self, tile_pointer_blob):
         result = pointer_file_bytes_to_dict(
             tile_pointer_blob, {"name": tile_pointer_blob.name}
         )
-        result["name"] = set_file_extension(
+        result["name"] = set_tile_extension(
             result["name"], tile_format=result["format"]
         )
         if "version" in result:
@@ -224,16 +226,12 @@ class PointCloudV1(BaseDataset):
 
         tilename_to_metadata = {}
 
-        wc_tiles_path_pattern = re.escape(f"{self.path}/")
-        wc_tile_ext_pattern = r"\.[Ll][Aa][SsZz]"
-        wc_tiles_pattern = re.compile(
-            rf"^{wc_tiles_path_pattern}[^/]+{wc_tile_ext_pattern}$"
-        )
+        wc_tiles_path_pattern = get_tile_path_pattern(parent_path=self.path)
 
         tile_diff = DeltaDiff()
 
         for tile_path in workdir_diff_cache.dirty_paths_for_dataset(self):
-            if not wc_tiles_pattern.fullmatch(tile_path):
+            if not wc_tiles_path_pattern.fullmatch(tile_path):
                 continue
 
             tilename = self.tilename_from_path(tile_path)
@@ -339,7 +337,7 @@ class PointCloudV1(BaseDataset):
             ds_format = get_format_summary(ds_format)
 
         envisioned_summary = {
-            "name": set_file_extension(tile_summary["name"], tile_format=ds_format),
+            "name": set_tile_extension(tile_summary["name"], tile_format=ds_format),
             "format": ds_format,
             "oid": None,
             "size": None,

@@ -36,8 +36,8 @@ from kart.point_cloud.metadata_util import (
     rewrite_and_merge_metadata,
     check_for_non_homogenous_metadata,
     format_tile_for_pointer_file,
-    remove_las_extension,
 )
+from kart.point_cloud.tilename_util import remove_tile_extension
 from kart.point_cloud.pdal_convert import convert_tile_to_copc
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.tabular.version import (
@@ -359,6 +359,6 @@ def point_cloud_import(
 
 
 def blob_path_from_source(ds_inner_path, source):
-    tilename = remove_las_extension(os.path.basename(source))
+    tilename = remove_tile_extension(os.path.basename(source))
     tile_prefix = hexhash(tilename)[0:2]
     return f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"

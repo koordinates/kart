@@ -352,34 +352,6 @@ def format_tile_for_pointer_file(*tile_info_sources):
     return result
 
 
-def remove_las_extension(filename):
-    """Given a tile filename, removes the suffix .las or .laz or .copc.las or .copc.laz"""
-    match = re.fullmatch(r"(.+?)(\.copc)*\.la[sz]", filename, re.IGNORECASE)
-    if match:
-        return match.group(1)
-    return filename
-
-
-def set_file_extension(filename, ext=None, tile_format=None):
-    """Changes a tile's file extension to the given extension, or to the extension appropriate for its format."""
-    if not ext:
-        assert tile_format is not None
-        if isinstance(tile_format, dict):
-            # Format info as stored in format.json
-            ext = f".{tile_format['compression']}"
-        else:
-            # Format summary string.
-            ext = f".{tile_format[0:3]}"
-
-        if is_copc(tile_format):
-            ext = ".copc" + ext
-
-    elif not ext.startswith("."):
-        ext = f".{ext}"
-
-    return remove_las_extension(filename) + ext
-
-
 def is_copc(tile_format):
     if isinstance(tile_format, dict):
         return tile_format.get("optimization") == "copc"
