@@ -7,11 +7,12 @@ import click
 
 from .exceptions import NotFound
 from .output_util import dump_json_output
+from kart.cli_util import KartCommand
 
 L = logging.getLogger("kart.query")
 
 
-@click.command("query", hidden=True)
+@click.command("query", hidden=True, cls=KartCommand)
 @click.pass_context
 @click.argument("path")
 @click.argument(

@@ -20,6 +20,7 @@ from .exceptions import (
 from .geometry import hex_wkb_to_gpkg_geom
 from .schema import Schema
 from .timestamps import iso8601_tz_to_timedelta, iso8601_utc_to_datetime
+from kart.cli_util import KartCommand
 
 V1_NO_META_UPDATE = (
     "Sorry, patches that make meta changes are not supported until Datasets V2\n"
@@ -308,7 +309,7 @@ def apply_patch(
         repo.working_copy.reset(new_wc_target, track_changes_as_dirty=not do_commit)
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--commit/--no-commit",

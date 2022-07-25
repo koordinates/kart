@@ -3,12 +3,12 @@ import click
 from kart.completion_shared import ref_completer
 
 from . import diff_estimation
-from .cli_util import OutputFormatType, parse_output_format
+from .cli_util import OutputFormatType, parse_output_format, KartCommand
 from .crs_util import CoordinateReferenceString
 from .repo import KartRepoState
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--output-format",
@@ -120,7 +120,7 @@ def show(
         diff_writer.exit_with_code()
 
 
-@click.command(name="create-patch")
+@click.command(cls=KartCommand, name="create-patch")
 @click.pass_context
 @click.option(
     "--json-style",

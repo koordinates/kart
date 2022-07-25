@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 import pygit2
 
-from kart.cli_util import StringFromFile, MutexOption
+from kart.cli_util import StringFromFile, MutexOption, KartCommand
 from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
@@ -50,7 +50,7 @@ from kart.working_copy import PartType
 L = logging.getLogger(__name__)
 
 
-@click.command("point-cloud-import", hidden=True)
+@click.command("point-cloud-import", hidden=True, cls=KartCommand)
 @click.pass_context
 @click.option(
     "--convert-to-copc/--no-convert-to-copc",

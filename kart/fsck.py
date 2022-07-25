@@ -3,7 +3,7 @@ import subprocess
 
 import click
 
-from .cli_util import tool_environment
+from .cli_util import tool_environment, KartCommand
 from .exceptions import NO_WORKING_COPY, NotFound
 from .geometry import normalise_gpkg_geom
 from .sqlalchemy.gpkg import Db_GPKG
@@ -18,7 +18,7 @@ def _fsck_reset(repo, working_copy, dataset_paths):
     working_copy.write_full(commit, *datasets)
 
 
-@click.command(context_settings=dict(ignore_unknown_options=True))
+@click.command(cls=KartCommand, context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.option(
     "--reset-dataset",
@@ -28,7 +28,7 @@ def _fsck_reset(repo, working_copy, dataset_paths):
 )
 @click.argument("fsck_args", nargs=-1, type=click.UNPROCESSED)
 def fsck(ctx, reset_datasets, fsck_args):
-    """ Verifies the connectivity and validity of the objects in the database """
+    """Verifies the connectivity and validity of the objects in the database"""
     repo = ctx.obj.repo
 
     click.echo("Checking repository integrity...")

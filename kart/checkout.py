@@ -15,6 +15,7 @@ from .promisor_utils import get_partial_clone_envelope
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .structs import CommitWithReference
 from .working_copy import PartType
+from kart.cli_util import KartCommand
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`kart commit`) or"
@@ -22,7 +23,7 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
 )
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option("new_branch", "-b", help="Name for new branch")
 @click.option(
@@ -187,7 +188,7 @@ def checkout(
         )
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option("--create", "-c", help="Create a new branch")
 @click.option(
@@ -348,7 +349,7 @@ def _is_in_branches(branch_name, branches):
         return False
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--source",
@@ -387,7 +388,7 @@ def restore(ctx, source, filters):
     )
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--discard-changes",
@@ -429,7 +430,7 @@ def reset(ctx, discard_changes, refish):
     repo.working_copy.reset_to_head()
 
 
-@click.command("create-workingcopy")
+@click.command("create-workingcopy", cls=KartCommand)
 @click.pass_context
 @click.option(
     "--discard-changes",

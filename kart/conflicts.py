@@ -1,11 +1,11 @@
 import click
 from .conflicts_writer import BaseConflictsWriter
-from .cli_util import OutputFormatType, parse_output_format
+from .cli_util import OutputFormatType, parse_output_format, KartCommand
 from .crs_util import CoordinateReferenceString
 from .repo import KartRepoState
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--output-format",

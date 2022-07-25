@@ -10,7 +10,7 @@ import click
 
 from . import is_windows
 from .base_diff_writer import BaseDiffWriter
-from .cli_util import StringFromFile, tool_environment
+from .cli_util import StringFromFile, tool_environment, KartCommand
 from .core import check_git_user
 from .exceptions import (
     NO_CHANGES,
@@ -68,7 +68,7 @@ class CommitDiffWriter(BaseDiffWriter):
             )
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--message",

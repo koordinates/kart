@@ -8,6 +8,7 @@ from .apply import apply_patch
 from .cli_util import (
     OutputFormatType,
     StringFromFile,
+    KartCommand,
     add_help_subcommand,
     parse_output_format,
     value_optionally_from_binary_file,
@@ -207,7 +208,7 @@ def meta_set(ctx, message, dataset, items):
     )
 
 
-@click.command("commit-files", hidden=True)
+@click.command("commit-files", hidden=True, cls=KartCommand)
 @click.option(
     "--message",
     "-m",
