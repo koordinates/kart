@@ -5,11 +5,12 @@ import sys
 import platform
 import shlex
 import click
+import rst2txt
 from pathlib import Path
 
 from docutils.core import publish_string
 from docutils.writers import manpage
-from kart.docs import COMMANDS_FOLDER, ManPage, BaseDocWriter
+from kart.docs import COMMANDS_FOLDER, ManPage, BaseDocWriter, TextPage
 
 L = logging.getLogger("kart.help")
 
@@ -20,7 +21,7 @@ class ExecutableNotFoundError(Exception):
 
 
 def kart_help(ctx: click.Context):
-    doc = Path(COMMANDS_FOLDER) / f"{ctx.command_path}.rst"
+    doc = Path(COMMANDS_FOLDER) / f'{ctx.command_path.replace(" ", "_")}.rst'
     contents = ""
     if doc.exists():
         contents = doc.read_text()
@@ -146,3 +147,30 @@ class PosixHelpRenderer(PagingHelpRenderer):
                 for p in os.environ.get("PATH", "").split(os.pathsep)
             ]
         )
+
+
+class WindowsHelpRenderer(PagingHelpRenderer):
+    """Render help content on a Windows platform."""
+
+    PAGER = "more"
+
+<<<<<<< HEAD
+    def _convert_doc_content(self, ctx, contents):
+        text_output = publish_string(contents, writer=rst2txt.Writer()).decode("utf-8")
+        doc = TextPage(ctx, text_output)
+        writer = BaseDocWriter.get_doc_writer(doc)
+        text_page = writer.write()
+        return bytes(text_page, "utf-8")
+=======
+    def _convert_doc_content(self, ctx: click.Context) -> bytes:
+        from kart import prefix
+
+        text_page = Path(prefix) / "help" / f'{ctx.command_path.replace(" ", "-")}'
+        return text_page.read_bytes()
+>>>>>>> 4931651 (add pagers)
+
+    def _popen(self, *args, **kwargs):
+        # Also set the shell value to True.  To get any of the
+        # piping to a pager to work, we need to use shell=True.
+        kwargs["shell"] = True
+        return subprocess.Popen(*args, **kwargs)

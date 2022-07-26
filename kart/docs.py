@@ -38,7 +38,6 @@ class Doc:
     INDENT = ""
 
     def __init__(self, ctx: click.Context, doc: t.Optional[str] = None) -> None:
-        # man_page = ManPage(ctx.command_path)
         from kart.cli import get_version
 
         self.command = ctx.command_path
@@ -66,6 +65,12 @@ class ManPage(Doc):
     INDENT = ".TP"
 
 
+class TextPage(Doc):
+    TITLE = "^"
+    SECTION = "*"
+    INDENT = " " * 3
+
+
 class BaseDocWriter:
     def __init__(self, doc: t.Type[Doc]) -> None:
         self.doc = doc
@@ -75,9 +80,9 @@ class BaseDocWriter:
     def get_doc_writer(cls, doc: t.Type[Doc]) -> "t.Type[BaseDocWriter]":
         if type(doc) == ManPage:
             return ManPageWriter(doc)
-
-    def add(self, content: str):
-        raise NotImplementedError("BaseDocWriter cannot add content to output")
+        elif type(doc) == TextPage:
+            return TextPageWriter(doc)
+        return BaseDocWriter(doc)
 
     def write(self) -> str:
         """Generate string representation of 'Doc'
@@ -89,6 +94,13 @@ class BaseDocWriter:
             str:  A generated string representation of 'Doc'
         """
         raise NotImplementedError("BaseDocWriter cannot write docs")
+
+    def replace_blank_lines(self, s):
+        """Find any blank lines and replace them"""
+        if not s:
+            return s
+        lines = (self.doc.PARAGRAPH if l == "" else l for l in s.splitlines())
+        return "\n".join(lines)
 
 
 class ManPageWriter(BaseDocWriter):
@@ -171,8 +183,6 @@ class ManPageWriter(BaseDocWriter):
         )
         return man_page
 
-    def replace_blank_lines(self, s):
-        """Find any blank lines and replace them with .PP"""
 
 class TextPageWriter(BaseDocWriter):
     def get_title(self):

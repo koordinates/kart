@@ -19,7 +19,9 @@ click==8.1.3
 cryptography==37.0.4
     # via -r requirements/requirements.in
 docutils==0.17.1
-    # via -r requirements/requirements.in
+    # via
+    #   -r requirements/requirements.in
+    #   rst2txt
 greenlet==1.1.2
     # via sqlalchemy
 importlib-metadata==4.12.0
@@ -38,13 +40,17 @@ pycparser==2.21
 #pygit2==1.3.0
     # via -r requirements/requirements.in
 pygments==2.12.0
-    # via -r requirements/requirements.in
+    # via
+    #   -r requirements/requirements.in
+    #   rst2txt
 pymysql==1.0.2
     # via -r requirements/requirements.in
 pyodbc==4.0.32 ; platform_system != "Linux"
     # via -r requirements/requirements.in
 pyrsistent==0.18.1
     # via jsonschema
+rst2txt==1.1.0
+    # via -r requirements/requirements.in
 rtree==0.9.7
     # via -r requirements/requirements.in
 shellingham==1.4.0

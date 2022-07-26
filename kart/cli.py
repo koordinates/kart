@@ -23,6 +23,7 @@ from .cli_util import (
     call_and_exit_flag,
     tool_environment,
     KartCommand,
+    kart_help,
 )
 from .context import Context
 from .exec import run_and_wait
@@ -186,7 +187,10 @@ class KartGroup(click.Group):
             return super().invoke(ctx)
 
     def format_help(self, ctx, formatter):
-        return self.command_class.format_help(self, ctx, formatter)
+        try:
+            return kart_help(ctx)
+        except Exception as e:
+            return super().format_help(ctx, formatter)
 
 
 @add_help_subcommand

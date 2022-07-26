@@ -22,8 +22,11 @@ L = logging.getLogger("kart.cli_util")
 class KartCommand(click.Command):
     def format_help(self, ctx, formatter):
         try:
-            kart_help(ctx)
+            return kart_help(ctx)
         except Exception as e:
+            import pdb
+
+            pdb.set_trace()
             L.debug(f"Failed rendering help page: {e}")
             return super().format_help(ctx, formatter)
 
