@@ -5,6 +5,7 @@ import sys
 import platform
 import shlex
 import click
+import shutil
 import rst2txt
 from pathlib import Path
 
@@ -104,7 +105,7 @@ class PosixHelpRenderer(PagingHelpRenderer):
 
     def _convert_doc_content(self, ctx, contents):
         man_page = self._convert_doc_content_body(ctx, contents)
-        if not self._exists_on_path("groff"):
+        if not shutil.which("groff"):
             raise ExecutableNotFoundError("groff")
         cmdline = ["groff", "-m", "man", "-T", "ascii"]
         L.debug("Running command: %s", cmdline)
@@ -131,7 +132,7 @@ class PosixHelpRenderer(PagingHelpRenderer):
 
     def _send_output_to_pager(self, output):
         cmdline = self.get_pager_cmdline()
-        if not self._exists_on_path(cmdline[0]):
+        if not shutil.which(cmdline[0]):
             L.debug("Pager '%s' not found in PATH, printing raw help." % cmdline[0])
             self.output_stream.write(output.decode("utf-8") + "\n")
             self.output_stream.flush()
@@ -139,14 +140,6 @@ class PosixHelpRenderer(PagingHelpRenderer):
         L.debug("Running command: %s", cmdline)
         p = self._popen(cmdline, stdin=subprocess.PIPE)
         p.communicate(input=output)
-
-    def _exists_on_path(self, name):
-        return any(
-            [
-                os.path.exists(os.path.join(p, name))
-                for p in os.environ.get("PATH", "").split(os.pathsep)
-            ]
-        )
 
 
 class WindowsHelpRenderer(PagingHelpRenderer):
