@@ -1,3 +1,6 @@
+import pygit2
+
+
 class MemoryTree:
     """
     Test-only fake directory tree structure, behaves a lot like pygit2.Tree
@@ -14,6 +17,10 @@ class MemoryTree:
     @property
     def type_str(self):
         return "tree"
+
+    @property
+    def type(self):
+        return pygit2.GIT_OBJ_TREE
 
     def __contains__(self, path):
         path = path.strip("/")
@@ -49,6 +56,10 @@ class MemoryBlob(bytes):
     @property
     def type_str(self):
         return "blob"
+
+    @property
+    def type(self):
+        return pygit2.GIT_OBJ_BLOB
 
 
 class MemoryRepo:

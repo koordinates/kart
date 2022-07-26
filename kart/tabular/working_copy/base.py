@@ -1109,14 +1109,16 @@ class TableWorkingCopy(WorkingCopyPart):
             assert repo_key_filter.match_all and not track_changes_as_dirty
 
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
-        if commit_or_tree is not None:
-            target_commit = (
-                commit_or_tree if isinstance(commit_or_tree, pygit2.Commit) else None
-            )
-            target_tree = commit_or_tree.peel(pygit2.Tree)
-            target_tree_id = target_tree.id.hex
-        else:
-            target_tree_id = target_tree = target_commit = None
+        if commit_or_tree is None:
+            target_tree = target_commit = None
+        elif commit_or_tree.type == pygit2.GIT_OBJ_COMMIT:
+            target_commit = commit_or_tree
+            target_tree = commit_or_tree.tree
+        elif commit_or_tree.type == pygit2.GIT_OBJ_TREE:
+            target_commit = None
+            target_tree = commit_or_tree
+
+        target_tree_id = target_tree.hex if target_tree is not None else None
 
         # base_tree is the tree the working copy is based on.
         # If the working copy exactly matches base_tree, it is clean and has an empty tracking table.

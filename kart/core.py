@@ -6,9 +6,9 @@ from .exceptions import NO_USER, NotFound
 def find_blobs_in_tree(tree):
     """Recursively yields all possible blobs in the given directory tree."""
     for entry in tree:
-        if isinstance(entry, pygit2.Blob):
+        if entry.type == pygit2.GIT_OBJ_BLOB:
             yield entry
-        elif isinstance(entry, pygit2.Tree):
+        elif entry.type == pygit2.GIT_OBJ_TREE:
             yield from find_blobs_in_tree(entry)
 
 
@@ -16,9 +16,9 @@ def find_blobs_with_paths_in_tree(tree, path=""):
     """Recursively yields all possible (path, blob) tuples in the given directory tree."""
     for entry in tree:
         entry_path = f"{path}/{entry.name}" if path else entry.name
-        if isinstance(entry, pygit2.Blob):
+        if entry.type == pygit2.GIT_OBJ_BLOB:
             yield entry_path, entry
-        elif isinstance(entry, pygit2.Tree):
+        elif entry.type == pygit2.GIT_OBJ_TREE:
             yield from find_blobs_with_paths_in_tree(entry, path=entry_path)
 
 

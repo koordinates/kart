@@ -100,12 +100,12 @@ def dict_to_pointer_file_bytes(pointer_dict, only_standard_keys=True):
 def _encode_extra_values(extra_values):
     packed = msg_pack(extra_values)
     # Using only the chars: [A-Z][a-z][0-9] . -
-    return base64.b64encode(packed, altchars=b'.-').rstrip(b'=').decode('ascii')
+    return base64.b64encode(packed, altchars=b".-").rstrip(b"=").decode("ascii")
 
 
 def _decode_extra_values(encoded_extra_values):
     packed = base64.b64decode(
-        (encoded_extra_values + '==').encode('ascii'), altchars=b'.-'
+        (encoded_extra_values + "==").encode("ascii"), altchars=b".-"
     )
     return msg_unpack(packed)
 
@@ -120,7 +120,7 @@ def _dict_to_pointer_file_bytes_simple(pointer_dict):
 
 
 def pointer_file_bytes_to_dict(pointer_file_bytes, result=None):
-    if isinstance(pointer_file_bytes, pygit2.Blob):
+    if hasattr(pointer_file_bytes, "data"):
         pointer_file_bytes = pointer_file_bytes.data
     pointer_file_str = pointer_file_bytes.decode("utf8")
 

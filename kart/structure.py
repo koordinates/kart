@@ -78,20 +78,23 @@ class RepoStructure:
         if isinstance(refish, pygit2.Oid):
             refish = refish.hex
 
-        if isinstance(refish, (pygit2.Commit, pygit2.Tree)):
-            return (None, *RepoStructure._peel_obj(refish))
+        if getattr(refish, "type", None) in (
+            pygit2.GIT_OBJ_COMMIT,
+            pygit2.GIT_OBJ_TREE,
+        ):
+            return (None, *RepoStructure._peel_to_commit_and_tree(refish))
 
         try:
             obj, reference = repo.resolve_refish(refish)
             if isinstance(reference, pygit2.Reference):
                 reference = reference.name
-            return (reference, *RepoStructure._peel_obj(obj))
+            return (reference, *RepoStructure._peel_to_commit_and_tree(obj))
         except KeyError:
             pass
 
         try:
             obj = repo.revparse_single(refish)
-            return (None, *RepoStructure._peel_obj(obj))
+            return (None, *RepoStructure._peel_to_commit_and_tree(obj))
         except KeyError:
             pass
 
@@ -99,10 +102,7 @@ class RepoStructure:
 
     @staticmethod
     def resolve_commit(repo, refish):
-        """
-        Given a string that describes a commit, return the parent of that commit -
-        or, return the empty tree if that commit has no parent.
-        """
+        """Given a string that describes a commit, return that commit."""
         if refish is None or refish == "HEAD":
             return repo.head_commit
 
@@ -121,17 +121,16 @@ class RepoStructure:
         raise NotFound(f"{refish} is not a commit", exit_code=NO_COMMIT)
 
     @staticmethod
-    def _peel_obj(obj):
-        commit, tree = None, None
-        try:
-            commit = obj.peel(pygit2.Commit)
-        except pygit2.InvalidSpecError:
-            pass
-        try:
-            tree = obj.peel(pygit2.Tree)
-        except pygit2.InvalidSpecError:
-            pass
-        return commit, tree
+    def _peel_to_commit_and_tree(obj):
+        # Don't do isinstance checks or anything else that would make duck-typing difficult:
+        if obj.type == pygit2.GIT_OBJ_COMMIT:
+            return obj, obj.tree
+        elif obj.type == pygit2.GIT_OBJ_TREE:
+            return None, obj
+        else:
+            raise ValueError(
+                f"Can't build RepoStructure from {obj!r} - not a commit or a tree"
+            )
 
     def __init__(self, repo, refish="HEAD"):
         self.L = logging.getLogger(self.__class__.__qualname__)
