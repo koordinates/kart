@@ -193,13 +193,13 @@ class KartRepo(pygit2.Repository):
 
         self.gitdir_path = Path(self.path).resolve()
 
-        if self.is_tidy_style:
-            self.workdir_path = self.gitdir_path.parent.resolve()
-        else:
+        if self.is_bare:
             self.workdir_path = self.gitdir_path
+        else:
+            self.workdir_path = self.gitdir_path.parent.resolve()
 
         if validate:
-            self.validate_bare_or_tidy_style()
+            self.validate_gitdir_name()
 
         self.working_copy = WorkingCopy(self)
 
@@ -429,10 +429,7 @@ class KartRepo(pygit2.Repository):
             table_dataset_version = self.table_dataset_version
         self.config[version_key] = str(table_dataset_version)
 
-        self.config[self.BARE_CONFIG_KEY] = bare
-        # Bare-style Kart repos are always implemented as bare git repos:
-        if self.is_bare_style:
-            self.config["core.bare"] = True
+        self.config["core.bare"] = bare
         # Force writing to reflogs:
         self.config["core.logAllRefUpdates"] = "always"
         # Write working copy config:
@@ -481,17 +478,15 @@ class KartRepo(pygit2.Repository):
 
     def write_readme(self):
         readme_filename = f"{self.branding.upper()}_README.txt"
-        readme_text = self.get_readme_text(self.is_bare_style, self.branding)
+        readme_text = self.get_readme_text(self.is_bare, self.branding)
         try:
             self.workdir_file(readme_filename).write_text(readme_text)
         except Exception as e:
             L.warn(e)
 
     @classmethod
-    def get_readme_text(cls, is_bare_style, branding):
-        text = (
-            cls.KART_BARE_STYLE_README if is_bare_style else cls.KART_TIDY_STYLE_README
-        )
+    def get_readme_text(cls, is_bare, branding):
+        text = cls.KART_BARE_README if is_bare else cls.KART_NORMAL_README
         text = "\n".join(text)
         if branding == "sno":
             text = (
@@ -512,8 +507,8 @@ class KartRepo(pygit2.Repository):
         So, if creation fails, the result will be something that doesn't work at all, not something that half
         works but is also half corrupted.
         """
-        if self.is_bare_style:
-            # Bare-style repos are always activated - since all the files are right there in the root directory,
+        if self.is_bare:
+            # Bare repos are always activated - since all the files are right there in the root directory,
             # we can't reveal them by writing the .git file. So, no action is required here.
             return
 
@@ -548,20 +543,10 @@ class KartRepo(pygit2.Repository):
     def is_kart_branded(self):
         return self.branding == "kart"
 
-    @property
-    def is_bare_style(self):
-        """Bare-style Kart repos are bare git repos. They are not "tidy": all of the git internals are visible."""
-        return self.gitdir_path.stem not in self.KART_DIR_NAMES
-
-    @property
-    def is_tidy_style(self):
-        """Tidy-style Kart repos are "tidy": they hide the git internals in a ".kart" directory."""
-        return self.gitdir_path.stem in self.KART_DIR_NAMES
-
-    def validate_bare_or_tidy_style(self):
-        if self.is_bare_style and not super().is_bare:
+    def validate_gitdir_name(self):
+        if not self.is_bare and self.gitdir_path.stem not in self.KART_DIR_NAMES:
             raise NotFound(
-                "Selected repo isn't a bare-style or tidy-style Kart repo. Perhaps a git repo?",
+                "Selected repo doesn't follow Kart convention of keeping internals in a '.kart' folder. Perhaps a git repo?",
                 exit_code=NO_REPOSITORY,
             )
 
@@ -572,18 +557,6 @@ class KartRepo(pygit2.Repository):
     @property
     def WORKINGCOPY_LOCATION_KEY(self):
         return KartConfigKeys.BRANDED_WORKINGCOPY_LOCATION_KEYS[self.branding]
-
-    @property
-    def BARE_CONFIG_KEY(self):
-        """
-        Return the config key we can check to see if the repo is actually bare,
-        given that all bare-style Kart repos have core.bare = True regardless of whether they have a working copy.
-        """
-        return (
-            KartConfigKeys.SNO_WORKINGCOPY_BARE
-            if self.is_bare_style
-            else KartConfigKeys.CORE_BARE
-        )
 
     @property
     @lru_cache(maxsize=1)
@@ -604,17 +577,6 @@ class KartRepo(pygit2.Repository):
 
     def get_config_str(self, key, default=None):
         return self.config[key] if key in self.config else default
-
-    @property
-    def is_bare(self):
-        """
-        True if this Kart repo is genuinely bare - it has no Kart working copy.
-        The repo may or may not also be a bare git repository - this is an implementation detail.
-        That information can be found super().is_bare
-        """
-        repo_cfg = self.config
-        bare_key = self.BARE_CONFIG_KEY
-        return repo_cfg.get_bool(bare_key) if bare_key in repo_cfg else False
 
     @property
     def is_partial_clone(self):
@@ -878,7 +840,7 @@ class KartRepo(pygit2.Repository):
         "",
     ]
 
-    KART_TIDY_STYLE_README = [
+    KART_NORMAL_README = [
         "This directory is a Kart repository.",
         "",
         "It may look empty, but every version of every datasets that this repository",
@@ -886,10 +848,10 @@ class KartRepo(pygit2.Repository):
         "To check if a directory is a Kart repository and see what is stored, run:",
     ] + KART_COMMON_README
 
-    KART_BARE_STYLE_README = [
-        "This directory is a Kart repository.",
+    KART_BARE_README = [
+        "This directory is a bare Kart repository.",
         "",
-        "In this repository, the internals are visible - in files and in subdirectories",
+        "In this bare repository, the internals are visible - in files and in subdirectories",
         'like "HEAD", "objects" and "refs". These are best left untouched. Instead, use',
         "Kart commands to interact with the repository. To check if a directory is a Kart",
         "repository and see what is stored, run:",
