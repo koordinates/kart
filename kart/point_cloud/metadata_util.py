@@ -2,7 +2,9 @@ from enum import IntEnum
 import json
 import logging
 import re
+from subprocess import CalledProcessError
 import sys
+import tempfile
 
 import click
 
@@ -14,6 +16,7 @@ from kart.exceptions import (
     WORKING_COPY_OR_IMPORT_CONFLICT,
 )
 from kart.output_util import format_json_for_output, format_wkt_for_output
+from kart.point_cloud import pdal_execute_pipeline
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf,
     get_record_length_from_pdrf,
@@ -148,14 +151,6 @@ def _check_for_non_homogenous_meta_item(
         )
 
 
-def _unwrap_metadata(metadata):
-    if isinstance(metadata, str):
-        metadata = json.loads(metadata)
-    if "metadata" in metadata:
-        metadata = metadata["metadata"]
-    return metadata
-
-
 def _format_list_as_str(array):
     return json.dumps(array, separators=(",", ":"))[1:-1]
 
@@ -203,9 +198,7 @@ def extract_pc_tile_metadata(
     describe *all* of the tiles in that dataset. The "tile" field is where we keep all information
     that can be different for every tile in the dataset, which is why it must be stored in pointer files.
     """
-    import pdal
-
-    config = [
+    pipeline = [
         {
             "type": "readers.las",
             "filename": str(pc_tile_path),
@@ -213,17 +206,15 @@ def extract_pc_tile_metadata(
         }
     ]
     if extract_schema:
-        config.append({"type": "filters.info"})
+        pipeline.append({"type": "filters.info"})
 
-    pipeline = pdal.Pipeline(json.dumps(config))
     try:
-        pipeline.execute()
-    except RuntimeError:
+        metadata = pdal_execute_pipeline(pipeline)
+    except CalledProcessError:
         raise InvalidOperation(
             f"Error reading {pc_tile_path}", exit_code=INVALID_FILE_FORMAT
         )
 
-    metadata = _unwrap_metadata(pipeline.metadata)
     info = metadata["readers.las"]
 
     native_extent = get_native_extent(info)
@@ -279,38 +270,38 @@ def _calc_crs84_extent(src_extent, src_crs):
     """
     Given a 3D extent with a particular CRS, return a CRS84 extent that surrounds that extent.
     """
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8") as f_src_points:
+        # Treat the src_extent as if it is a point cloud with only two points:
+        # (minx, miny, minz) and (maxx, maxy, maxz).
+        # This "point cloud" has the same extent as the source extent, but is otherwise not descriptive
+        # of the point cloud that src_extent was extracted from (whatever that might be).
+        f_src_points.write(f"{src_extent[0]},{src_extent[2]},{src_extent[4]}\n")
+        f_src_points.write(f"{src_extent[1]},{src_extent[3]},{src_extent[5]}")
+        f_src_points.flush()
 
-    import pdal
-    import numpy as np
+        pipeline = [
+            {
+                "type": "readers.text",
+                "filename": f_src_points.name,
+                "header": "X,Y,Z",
+                "override_srs": src_crs,
+            },
+            # PDAL filter.stats calculates the native bbox of the input points, and also converts
+            # the native bbox into a CRS84 bbox that surrounds the native bbox. The CRS84 bbox only
+            # depends on the native bbox, not the input points directly, which is good since our
+            # input points define a useful native bbox but are otherwise not descriptive of the
+            # actual point cloud that the native bbox was extracted from.
+            {
+                "type": "filters.stats",
+            },
+        ]
 
-    # Treat the src_extent as if it is a point cloud with only two points:
-    # (minx, miny, minz) and (maxx, maxy, maxz).
-    # This "point cloud" has the same extent as the source extent, but is otherwise not descriptive
-    # of the point cloud that src_extent was extracted from (whatever that might be).
-    src_points = np.array(
-        [src_extent[0::2], src_extent[1::2]],
-        dtype=[
-            ("X", np.dtype(float)),
-            ("Y", np.dtype(float)),
-            ("Z", np.dtype(float)),
-        ],
-    )
+        try:
+            metadata = pdal_execute_pipeline(pipeline)
+        except CalledProcessError:
+            L.warning("Couldn't convert tile CRS to EPGS:4326", exc_info=True)
+            return None
 
-    pipeline = (
-        # This reprojection just associates src_crs with src_points - doesn't do any reprojection.
-        pdal.Filter.reprojection(in_srs=src_crs, out_srs=src_crs).pipeline(src_points)
-        # PDAL filter.stats calculates the native bbox of the input points, and also converts the native bbox into a
-        # CRS84 bbox that surrounds the native bbox. The CRS84 bbox only depends on the native bbox, not the input
-        # points directly, which is good since our input points define a useful native bbox but are otherwise not
-        # descriptive of the actual point cloud that the native bbox was extracted from.
-        | pdal.Filter.stats()
-    )
-    try:
-        pipeline.execute()
-    except RuntimeError:
-        L.warning("Couldn't convert tile CRS to EPGS:4326")
-        return None
-    metadata = _unwrap_metadata(pipeline.metadata)
     b = metadata["filters.stats"]["bbox"]["EPSG:4326"]["bbox"]
     return b["minx"], b["maxx"], b["miny"], b["maxy"], b["minz"], b["maxz"]
 
