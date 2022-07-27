@@ -1496,7 +1496,7 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
             assert r.stdout.splitlines() == [
                 f"commit {H.POINTS.HEAD_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Thu Jun 20 15:28:33 2019 +0100",
+                f"Date:   {H.POINTS.DATE_TIME}",
                 "",
                 "    Improve naming on Coromandel East coast",
                 "",
@@ -1698,11 +1698,10 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
 
         if output_format == "text":
             lines = r.stdout.splitlines()
-
             assert lines[0:6] == [
                 f"commit {H.POLYGONS.HEAD_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Mon Jul 22 12:05:39 2019 +0100",
+                f"Date:   {H.POLYGONS.DATE_TIME}",
                 "",
                 "    Import from nz-waca-adjustments.gpkg",
                 "",
