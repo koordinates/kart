@@ -743,14 +743,17 @@ class TableWorkingCopy(WorkingCopyPart):
             return (row[0] for row in r)
 
     def get_feature(self, dataset, pk, allow_schema_diff=True):
-        """Gets the features for the given dataset."""
+        """
+        Returns the feature that has the given primary key value.
+        If the primary key value does not exist in the dataset, returns None.
+        """
         meta_diff = self.diff_dataset_to_working_copy_meta(dataset)
-        if not allow_schema_diff and meta_diff.recursive_get(["meta", "schema.json"]):
+        if (not allow_schema_diff) and meta_diff.recursive_get(["meta", "schema.json"]):
             raise ValueError("Feature in WC doesn't conform to required schema")
         schema = self._get_dataset_schema(dataset, meta_diff)
+        table = self._table_def_for_schema(schema, dataset.table_name)
+        pk_column = table.columns[schema.pk_columns[0].name]
 
-        table = self._table_def_for_schema(dataset.schema, dataset.table_name)
-        pk_column = table.columns[dataset.schema.pk_columns[0].name]
         with self.session() as sess:
             r = sess.execute(sa.select(table).where(pk_column == pk))
             for row in r:

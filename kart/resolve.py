@@ -171,11 +171,7 @@ def _load_workingcopy_resolve_for_tile(rich_conflict):
     return _load_file_resolve_for_tile(rich_conflict, matching_files[0])
 
 
-CHOICE_ALIASES = {"working-copy": "workingcopy"}
-CONTEXT_SETTINGS = dict(token_normalize_func=lambda x: CHOICE_ALIASES.get(x, x))
-
-
-@click.command(context_settings=CONTEXT_SETTINGS)
+@click.command()
 @click.pass_context
 @click.option(
     "--with",
