@@ -183,6 +183,9 @@ def abort_merging_state(ctx):
         )
         raise InvalidOperation(message)
 
+    # In case the user has modified the working copy during the merging state.
+    repo.working_copy.reset_to_head()
+
 
 def complete_merging_state(ctx):
     """
@@ -311,14 +314,10 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     no_op = jdict.get("noOp", False) or jdict.get("dryRun", False)
     conflicts = jdict.get("conflicts", None)
 
-    if not no_op and not conflicts:
-        # Update working copy.
-        # TODO - maybe lock the working copy during a merge?
-        repo.working_copy.reset_to_head(quiet=do_json)
-
     if do_json:
         dump_json_output({"kart.merge/v1": jdict}, sys.stdout)
     else:
         click.echo(merge_status_to_text(jdict, fresh=True))
     if not no_op and not conflicts:
         repo.gc("--auto")
+        repo.working_copy.reset_to_head(quiet=do_json)

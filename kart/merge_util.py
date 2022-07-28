@@ -651,6 +651,7 @@ class RichConflict:
     @functools.lru_cache(maxsize=1)
     def has_multiple_paths(self):
         """True if the conflict involves renames and has more than one path."""
+        # Note: this never returns True in practise since we don't do rename detection during merges.
         paths = set(v.path for v in self.true_versions)
         return len(paths) > 1
 
@@ -677,6 +678,7 @@ class RichConflict:
         ("datasetA", "feature", "ancestor=5,ours=6,theirs=7")
         """
         if self.has_multiple_paths:
+            # Note: this never happens in practise since we don't do rename detection during merges.
             return self._multiversion_decoded_path()
         else:
             return self.any_true_version.decoded_path

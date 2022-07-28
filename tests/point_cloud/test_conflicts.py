@@ -1,11 +1,13 @@
 import re
+import shutil
 
 from .fixtures import requires_pdal  # noqa
 from kart.lfs_util import get_hash_and_size_of_file
+from kart.repo import KartRepo
 
 
 def test_merge_and_resolve_conflicts(
-    cli_runner, data_archive, monkeypatch, requires_pdal, capfd
+    cli_runner, data_archive, monkeypatch, requires_pdal
 ):
     monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
 
@@ -63,7 +65,10 @@ def test_merge_and_resolve_conflicts(
             ["resolve", "auckland:tile:auckland_0_0", "--with=theirs"]
         )
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines() == ["Resolved 1 conflict. 0 conflicts to go."]
+        assert r.stdout.splitlines() == [
+            "Resolved 1 conflict. 0 conflicts to go.",
+            "Use `kart merge --continue` to complete the merge",
+        ]
 
         r = cli_runner.invoke(
             [
@@ -86,3 +91,131 @@ def test_merge_and_resolve_conflicts(
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
         ) == ("9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312", 24480)
+
+
+def test_resolve_conflict_with_workingcopy(
+    cli_runner, data_archive, monkeypatch, requires_pdal
+):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+
+    with data_archive("point-cloud/conflicts.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["conflicts", "-ss"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "auckland:",
+            "    auckland:tile: 1 conflicts",
+            "",
+        ]
+
+        shutil.copy(
+            repo.workdir_path / "auckland" / "auckland_3_3.copc.laz",
+            repo.workdir_path / "auckland" / "auckland_0_0.copc.laz",
+        )
+        r = cli_runner.invoke(
+            ["resolve", "auckland:tile:auckland_0_0", "--with=workingcopy"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Resolved 1 conflict. 0 conflicts to go.",
+            "Use `kart merge --continue` to complete the merge",
+        ]
+
+        r = cli_runner.invoke(
+            [
+                "merge",
+                "--continue",
+                "-m",
+                'Merge with "theirs_branch"',
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[4:] == [
+            '    Merge with "theirs_branch"',
+            "",
+            "--- auckland:tile:auckland_0_0",
+            "+++ auckland:tile:auckland_0_0",
+            "-                              crs84Extent = 174.7602522,174.7716555,-36.83288446,-36.82371241,-1.54,10.59",
+            "+                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8",
+            "-                             nativeExtent = 1756987.83,1757986.74,5922219.95,5923219.43,-1.54,10.59",
+            "+                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
+            "-                               pointCount = 1599",
+            "+                               pointCount = 29",
+            "-                                      oid = sha256:858757799b09743b4b58627d2cfabd7d2c0359d658c060b195c8ac932c279ef3",
+            "+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
+            "-                                     size = 22671",
+            "+                                     size = 2319",
+        ]
+
+        assert get_hash_and_size_of_file(
+            repo_path / "auckland" / "auckland_0_0.copc.laz"
+        ) == ("64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3", 2319)
+
+
+def test_resolve_conflict_with_file(
+    cli_runner, data_archive, monkeypatch, requires_pdal, tmpdir
+):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+
+    with data_archive("point-cloud/conflicts.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        shutil.copy(
+            repo.workdir_path / "auckland" / "auckland_1_3.copc.laz",
+            tmpdir / "resolution.copc.laz",
+        )
+        r = cli_runner.invoke(
+            [
+                "resolve",
+                "auckland:tile:auckland_0_0",
+                f"--with-file={tmpdir / 'resolution.copc.laz'}",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Resolved 1 conflict. 0 conflicts to go.",
+            "Use `kart merge --continue` to complete the merge",
+        ]
+
+        r = cli_runner.invoke(
+            [
+                "merge",
+                "--continue",
+                "-m",
+                'Merge with "theirs_branch"',
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[4:] == [
+            '    Merge with "theirs_branch"',
+            "",
+            "--- auckland:tile:auckland_0_0",
+            "+++ auckland:tile:auckland_0_0",
+            "-                              crs84Extent = 174.7602522,174.7716555,-36.83288446,-36.82371241,-1.54,10.59",
+            "+                              crs84Extent = 174.7492633,174.7591631,-36.82403064,-36.82380411,-1.28,30.4",
+            "-                             nativeExtent = 1756987.83,1757986.74,5922219.95,5923219.43,-1.54,10.59",
+            "+                             nativeExtent = 1756007.55,1756890.68,5923220.57,5923229.5,-1.28,30.4",
+            "-                               pointCount = 1599",
+            "+                               pointCount = 17",
+            "-                                      oid = sha256:858757799b09743b4b58627d2cfabd7d2c0359d658c060b195c8ac932c279ef3",
+            "+                                      oid = sha256:bf4210be91ea2013ff13961a885cc9b16cb631a5b54cc89276010d1e4adf74e2",
+            "-                                     size = 22671",
+            "+                                     size = 2138",
+        ]
+
+        assert get_hash_and_size_of_file(
+            repo_path / "auckland" / "auckland_0_0.copc.laz"
+        ) == ("bf4210be91ea2013ff13961a885cc9b16cb631a5b54cc89276010d1e4adf74e2", 2138)

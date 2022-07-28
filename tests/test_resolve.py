@@ -182,3 +182,65 @@ def test_resolve_with_file(data_archive, cli_runner):
         modified_theirs_json = get_json_feature(theirs, l, 98001)
         modified_theirs_json["id"] = 98002
         assert get_json_feature(merged, l, 98002) == modified_theirs_json
+
+
+def test_resolve_with_workingcopy(data_working_copy, cli_runner):
+    with data_working_copy("conflicts/polygons.tgz") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+
+        r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout)["kart.merge/v1"]["conflicts"]
+
+        r = cli_runner.invoke(["conflicts", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+
+        conflicts = json.loads(r.stdout)["kart.conflicts/v1"]
+        add_add_conflict = conflicts[H.POLYGONS.LAYER]["feature"]["98001"]
+        ours = add_add_conflict["ours"]
+        theirs = add_add_conflict["theirs"]
+        assert "ancestor" not in add_add_conflict
+
+        assert ours["survey_reference"] == "insert_ours"
+        assert theirs["survey_reference"] == "insert_theirs"
+
+        dataset = repo.datasets()[H.POLYGONS.LAYER]
+        assert (
+            feature_as_json(
+                repo.working_copy.tabular.get_feature(dataset, 98001), 98001
+            )
+            == ours
+        )
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                f"UPDATE nz_waca_adjustments SET survey_reference='merged' WHERE id=98001;"
+            )
+
+        merged = ours.copy()
+        merged["survey_reference"] = "merged"
+        assert (
+            feature_as_json(
+                repo.working_copy.tabular.get_feature(dataset, 98001), 98001
+            )
+            == merged
+        )
+
+        r = cli_runner.invoke(
+            ["resolve", "nz_waca_adjustments:feature:98001", "--with=workingcopy"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == ["Resolved 1 conflict. 3 conflicts to go."]
+        delete_remaining_conflicts(cli_runner)
+
+        r = cli_runner.invoke(["merge", "--continue", "-m", "Merge with theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(
+            ["show", "HEAD", "-o", "json", "--", "nz_waca_adjustments:feature:98001"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
+        delta = diff["nz_waca_adjustments"]["feature"][0]
+        assert delta["-"] == ours
+        assert delta["+"] == merged
