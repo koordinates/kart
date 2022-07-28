@@ -49,7 +49,8 @@ class TextDiffWriter(BaseDiffWriter):
         click.secho(f"commit {self.commit.hex}", fg="yellow", **self.pecho)
         click.secho(f"Author: {author.name} <{author.email}>", **self.pecho)
         click.secho(
-            f'Date:   {author_time_in_author_timezone.strftime("%c %z")}', **self.pecho
+            f'Date:   {author_time_in_author_timezone.strftime("%c %z")}',
+            **self.pecho,
         )
         click.secho(**self.pecho)
         for line in self.commit.message.splitlines():

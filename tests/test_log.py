@@ -17,13 +17,13 @@ def test_log(output_format, data_archive_readonly, cli_runner):
             assert r.stdout.splitlines() == [
                 f"commit {H.POINTS.HEAD_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Thu Jun 20 15:28:33 2019 +0100",
+                f"Date:   {H.POINTS.DATE_TIME}",
                 "",
                 "    Improve naming on Coromandel East coast",
                 "",
                 f"commit {H.POINTS.HEAD1_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Tue Jun 11 12:03:58 2019 +0100",
+                f"Date:   {H.POINTS.DATE_TIME1}",
                 "",
                 "    Import from nz-pa-points-topo-150k.gpkg",
             ]
@@ -121,7 +121,7 @@ def test_log_shallow_clone(
             assert r.stdout.splitlines() == [
                 f"commit {H.POINTS.HEAD_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Thu Jun 20 15:28:33 2019 +0100",
+                f"Date:   {H.POINTS.DATE_TIME}",
                 "",
                 "    Improve naming on Coromandel East coast",
             ]
