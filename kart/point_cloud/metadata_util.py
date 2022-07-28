@@ -7,6 +7,7 @@ import sys
 import tempfile
 
 import click
+from osgeo import osr
 
 from kart.crs_util import normalise_wkt
 from kart.list_of_conflicts import ListOfConflicts
@@ -270,40 +271,28 @@ def _calc_crs84_extent(src_extent, src_crs):
     """
     Given a 3D extent with a particular CRS, return a CRS84 extent that surrounds that extent.
     """
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8") as f_src_points:
-        # Treat the src_extent as if it is a point cloud with only two points:
-        # (minx, miny, minz) and (maxx, maxy, maxz).
-        # This "point cloud" has the same extent as the source extent, but is otherwise not descriptive
-        # of the point cloud that src_extent was extracted from (whatever that might be).
-        f_src_points.write(f"{src_extent[0]},{src_extent[2]},{src_extent[4]}\n")
-        f_src_points.write(f"{src_extent[1]},{src_extent[3]},{src_extent[5]}")
-        f_src_points.flush()
+    src_srs = osr.SpatialReference()
+    src_srs.ImportFromWkt(src_crs)
+    src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 
-        pipeline = [
-            {
-                "type": "readers.text",
-                "filename": f_src_points.name,
-                "header": "X,Y,Z",
-                "override_srs": src_crs,
-            },
-            # PDAL filter.stats calculates the native bbox of the input points, and also converts
-            # the native bbox into a CRS84 bbox that surrounds the native bbox. The CRS84 bbox only
-            # depends on the native bbox, not the input points directly, which is good since our
-            # input points define a useful native bbox but are otherwise not descriptive of the
-            # actual point cloud that the native bbox was extracted from.
-            {
-                "type": "filters.stats",
-            },
+    dest_srs = osr.SpatialReference()
+    dest_srs.SetWellKnownGeogCS("CRS84")
+
+    transform = osr.CoordinateTransformation(src_srs, dest_srs)
+    (ax, ay, az), (bx, by, bz) = transform.TransformPoints(
+        [
+            src_extent[0::2],
+            src_extent[1::2],
         ]
-
-        try:
-            metadata = pdal_execute_pipeline(pipeline)
-        except CalledProcessError:
-            L.warning("Couldn't convert tile CRS to EPGS:4326", exc_info=True)
-            return None
-
-    b = metadata["filters.stats"]["bbox"]["EPSG:4326"]["bbox"]
-    return b["minx"], b["maxx"], b["miny"], b["maxy"], b["minz"], b["maxz"]
+    )
+    return (
+        min(ax, bx),
+        max(ax, bx),
+        min(ay, by),
+        max(ay, by),
+        min(az, bz),
+        max(az, bz),
+    )
 
 
 # Keep pointer file keys in alphabetical order, except:
