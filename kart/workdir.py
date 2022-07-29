@@ -211,7 +211,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def _is_head(self, commit_or_tree):
         return commit_or_tree.peel(pygit2.Tree) == self.repo.head_tree
 
-    def fetch_lfs_blobs(self, commit_or_tree):
+    def fetch_lfs_blobs(self, commit_or_tree, quiet=False):
         if commit_or_tree is None:
             return  # Nothing to do.
 
@@ -225,9 +225,15 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if remote_name:
                 extra_args = [remote_name, commit_or_tree.id.hex]
 
-        click.echo("LFS: ", nl=False)
-        self.repo.invoke_git("lfs", "fetch", *extra_args)
-        click.echo()  # LFS fetch sometimes leaves the cursor at the start of a line that already has text - scroll past that.
+        if quiet:
+            extra_kwargs = {"stdout": subprocess.DEVNULL}
+        else:
+            click.echo("LFS: ", nl=False)
+            extra_kwargs = {}
+        self.repo.invoke_git("lfs", "fetch", *extra_args, **extra_kwargs)
+
+        if not quiet:
+            click.echo()  # LFS fetch sometimes leaves the cursor at the start of a line that already has text - scroll past that.
 
     def reset(
         self,
@@ -236,6 +242,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+        quiet=False,
     ):
         """
         Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
@@ -254,7 +261,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         """
 
         # We fetch the LFS tiles immediately before writing them to the working copy - unlike ODB objects that are already fetched.
-        self.fetch_lfs_blobs(commit_or_tree)
+        self.fetch_lfs_blobs(commit_or_tree, quiet=quiet)
 
         if rewrite_full:
             # These aren't supported when we're doing a full rewrite.

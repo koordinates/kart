@@ -61,6 +61,19 @@ def test_merge_and_resolve_conflicts(
             "",
         ]
 
+        # Check the conflict versions were written to the working copy for the user to compare:
+        assert get_hash_and_size_of_file(
+            repo_path / "auckland" / "auckland_0_0.ancestor.copc.laz"
+        ) == ("1ad630a7b3acd8d678984831181688f82471a25ad6e93b2a2a5a253c9ffb1849", 69437)
+        assert get_hash_and_size_of_file(
+            repo_path / "auckland" / "auckland_0_0.ours.copc.laz"
+        ) == ("858757799b09743b4b58627d2cfabd7d2c0359d658c060b195c8ac932c279ef3", 22671)
+        assert get_hash_and_size_of_file(
+            repo_path / "auckland" / "auckland_0_0.theirs.copc.laz"
+        ) == ("9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312", 24480)
+
+        # TODO - clean up these files as conflicts are resolved.
+
         r = cli_runner.invoke(
             ["resolve", "auckland:tile:auckland_0_0", "--with=theirs"]
         )

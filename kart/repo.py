@@ -629,10 +629,12 @@ class KartRepo(pygit2.Repository):
         if key in config:
             del config[key]
 
-    def invoke_git(self, *args):
+    def invoke_git(self, *args, **kwargs):
         try:
             args = ["git", *args]
-            subprocess.check_call(args, env=tool_environment(), cwd=self.workdir_path)
+            subprocess.check_call(
+                args, env=tool_environment(), cwd=self.workdir_path, **kwargs
+            )
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 

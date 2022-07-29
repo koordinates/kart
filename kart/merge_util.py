@@ -1,6 +1,7 @@
 import functools
 import json
 import re
+import shutil
 from collections import namedtuple
 
 import click
@@ -303,13 +304,17 @@ class MergeIndex:
         """Serialise this MergeIndex to the MERGE_INDEX file in the given repo."""
         self.write(repo.gitdir_file(MERGE_INDEX))
 
-    def write_resolved_tree(self, repo):
+    def write_resolved_tree(self, repo, conflict_resolver=None):
         """
         Write all the merged entries and the resolved conflicts to a tree in the given repo.
         Resolved conflicts will be written the same as merged entries in the resulting tree.
-        Only works when all conflicts are resolved.
+        If a conflict-resolver is supplied, then not all conflicts need to be resolved -
+        those that are unresolved will be resolved automatically using the supplied resolver.
         """
-        assert not self.unresolved_conflicts
+        unresolved_conflicts = self.unresolved_conflicts
+        if conflict_resolver is None:
+            assert not unresolved_conflicts
+
         index = pygit2.Index()
 
         # Entries that were merged automatically by libgit2, often trivially:
@@ -319,6 +324,12 @@ class MergeIndex:
         # libgit2 leaves entries in the main part of the index, even if they are conflicts.
         # We make sure this index only contains merged entries and resolved conflicts.
         index.remove_all(list(self._conflicts_paths()))
+
+        # Force-resolve any unresolved conflicts using the conflict-resolver:
+        if conflict_resolver and unresolved_conflicts:
+            for c in unresolved_conflicts.values():
+                for e in conflict_resolver(c):
+                    index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
 
         # Entries that have been explicitly selected to resolve conflicts:
         for e in self._resolves_entries():
@@ -819,3 +830,105 @@ def merge_status_to_text(jdict, fresh):
         return "\n".join(
             [repo_state_text, merging_text, conflicts_text, conflicts_help_text]
         )
+
+
+class WorkingCopyMerger:
+    """
+    This class helps us to write a merge index working copy so that it stays - where possible - up to date
+    with the current state of the merge.
+    This lets the user see the final state of those objects that were merged cleanly, and makes it
+    simpler for them to put resolutions into the working copy for objects that were not merged cleanly
+    (see `kart resolve --with=workingcopy`).
+    """
+
+    def __init__(self, repo, merge_context):
+        self.repo = repo
+        self.merge_context = merge_context
+
+    def update_working_copy(self, merge_index):
+        """
+        Given a MergeIndex that represents the merged-state *so far* - unresolved conflicts may still exist - we
+        do our best to write it to the working copy anyway, so that the user can see those parts that merged cleanly,
+        and those conflicts that we can write to the WC, and so that they can use the WC as a starting point for
+        specifying resolves.
+        """
+        # First pass - forcibly resolve conflicts in the merge-index, write to a tree, then write that to the WC:
+        tree_id = merge_index.write_resolved_tree(self.repo, self.conflict_resolver)
+        self.repo.working_copy.reset(self.repo[tree_id], quiet=True)
+        # Second pass - where possible, handle conflicts that can be written in a more complicated way without resolving them:
+        self.write_conflicts_to_working_copy(merge_index)
+
+    def conflict_resolver(self, conflict):
+        """
+        First pass - we forcibly but somewhat arbitrarily resolve any outstanding conflicts in the merge-index,
+        write the result to tree, and use that tree to update the working copy.
+        """
+        rich_conflict = RichConflict(conflict, self.merge_context)
+        # For feature and meta conflicts we can really only fit one possibility in the working copy.
+        # We go with the "ours" versions, until the user specifies something else.
+        dataset_part = rich_conflict.decoded_path[1]
+        if not rich_conflict.has_multiple_paths and dataset_part in ("meta", "feature"):
+            ours = rich_conflict.versions.ours
+            if ours:
+                yield ours.entry
+        # Tile conflicts are effectively resolved as "deleted" here since we don't yield any resolve for them.
+        # They are handled below in "write_conflicts_to_working_copy"
+
+    def write_conflicts_to_working_copy(self, merge_index):
+        """
+        Second pass - those conflicts that can be written to the working copy in a more complicated way (ie
+        without resolving them one way or another) are handled here.
+        """
+        # So far we only write conflicts to the workdir - writing other types conflicts to the working copy
+        # (to the extent possible) is handled in the first pass by the conflict resolver.
+        if not self.repo.working_copy.workdir:
+            return
+
+        for conflict in merge_index.unresolved_conflicts.values():
+            rich_conflict = RichConflict(conflict, self.merge_context)
+            dataset_path, dataset_part, item_path = rich_conflict.decoded_path
+
+            if not rich_conflict.has_multiple_paths and dataset_part == "tile":
+                # Tile conflict found - write all versions we can find to the workdir, with different names.
+                tilename = item_path
+                from kart.lfs_util import (
+                    pointer_file_bytes_to_dict,
+                    get_local_path_from_lfs_hash,
+                )
+                from kart.point_cloud.tilename_util import set_tile_extension
+
+                self._ensure_lfs_tiles_fetched()
+                for version in rich_conflict.true_versions:
+                    version_name = version.version_name
+                    pointer_blob = self.repo[version.id]
+                    pointer_dict = pointer_file_bytes_to_dict(pointer_blob)
+                    lfs_path = get_local_path_from_lfs_hash(
+                        self.repo, pointer_dict["oid"]
+                    )
+                    if not lfs_path.is_file():
+                        click.echo(
+                            f"Couldn't find tile {version_name} {tilename} locally - skipping...",
+                            err=True,
+                        )
+                        continue
+                    filename = set_tile_extension(
+                        f"{tilename}.{version_name}", tile_format=pointer_dict["format"]
+                    )
+                    shutil.copy(
+                        lfs_path,
+                        self.repo.working_copy.workdir.path / dataset_path / filename,
+                    )
+
+    def _ensure_lfs_tiles_fetched(self):
+        if not self.repo.working_copy.workdir:
+            return
+
+        if getattr(self, "_lfs_tiles_fetched", False):
+            return
+
+        commit_ids = set(v.commit_id for v in self.merge_context.versions if v)
+        for commit_id in commit_ids:
+            self.repo.working_copy.workdir.fetch_lfs_blobs(
+                self.repo[commit_id], quiet=True
+            )
+        self._lfs_tiles_fetched = True

@@ -311,6 +311,7 @@ class WorkingCopy:
                 repo_key_filter=repo_key_filter,
                 track_changes_as_dirty=track_changes_as_dirty,
                 rewrite_full=rewrite_full,
+                quiet=quiet,
             )
 
     def soft_reset_after_commit(
@@ -407,6 +408,7 @@ class WorkingCopyPart:
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+        quiet=False,
     ):
         raise NotImplementedError()
 
