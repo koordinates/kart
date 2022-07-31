@@ -44,13 +44,15 @@ class KartRepoFiles:
     HEAD = "HEAD"
     INDEX = "index"
     COMMIT_EDITMSG = "COMMIT_EDITMSG"
-    ORIG_HEAD = "ORIG_HEAD"
-    MERGE_HEAD = "MERGE_HEAD"
-    MERGE_MSG = "MERGE_MSG"
+    ORIG_HEAD = "ORIG_HEAD"  # The head to reset to in case of an --abort eg `kart merge --abort`.
+    MERGE_HEAD = "MERGE_HEAD"  # The head we are merging HEAD with.
+    MERGE_MSG = "MERGE_MSG"  # The draft of a commit message to use for the merge.
 
     # Kart-specific files:
-    MERGE_INDEX = "MERGE_INDEX"
-    MERGE_BRANCH = "MERGE_BRANCH"
+    MERGE_BRANCH = "MERGE_BRANCH"  # The branch name that we merged with, if any.
+    # An index file containing the current state of the merge, including cleanly merged items, conflicts, and resolutions.
+    MERGED_INDEX = "MERGED_INDEX"
+    # A sqlite table that maps each feature SHA to its EPSG:4326 envelope. Used for spatial filtered clones.
     FEATURE_ENVELOPES = "feature_envelopes.db"
 
 
@@ -591,10 +593,10 @@ class KartRepo(pygit2.Repository):
     @property
     def state(self):
         merge_head = self.gitdir_file(KartRepoFiles.MERGE_HEAD).exists()
-        merge_index = self.gitdir_file(KartRepoFiles.MERGE_INDEX).exists()
-        if merge_head and not merge_index:
+        merged_index = self.gitdir_file(KartRepoFiles.MERGED_INDEX).exists()
+        if merge_head and not merged_index:
             raise NotFound(
-                'Kart repo is in "merging" state, but required file MERGE_INDEX is missing.\n'
+                'Kart repo is in "merging" state, but required file MERGED_INDEX is missing.\n'
                 "Try `kart merge --abort` to return to a good state."
             )
         return KartRepoState.MERGING if merge_head else KartRepoState.NORMAL

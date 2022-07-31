@@ -3,7 +3,7 @@ import pytest
 
 from kart.exceptions import SUCCESS, INVALID_OPERATION, NO_CONFLICT
 from kart.merge_util import (
-    MergeIndex,
+    MergedIndex,
     CommitWithReference,
     MERGE_HEAD,
     MERGE_BRANCH,
@@ -338,8 +338,8 @@ def test_merge_conflicts(
                 == 'Merge branch "theirs_branch" into ours_branch\n'
             )
 
-            merge_index = MergeIndex.read_from_repo(repo)
-            assert len(merge_index.conflicts) == 4
+            merged_index = MergedIndex.read_from_repo(repo)
+            assert len(merged_index.conflicts) == 4
             cli_runner.invoke(["merge", "--abort"])
 
         for filename in ALL_MERGE_FILES:

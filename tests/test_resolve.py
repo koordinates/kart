@@ -3,7 +3,7 @@ import pytest
 
 from kart.exceptions import INVALID_OPERATION
 from kart.tabular.feature_output import feature_as_json
-from kart.merge_util import MergeIndex
+from kart.merge_util import MergedIndex
 from kart.repo import KartRepoState, KartRepo
 
 
@@ -71,23 +71,23 @@ def test_resolve_with_version(data_archive, cli_runner):
             conflict_ids = get_conflict_ids(cli_runner)
             assert len(conflict_ids) == num_conflicts - 1
 
-            resolved_keys = MergeIndex.read_from_repo(repo).resolves.keys()
+            resolved_keys = MergedIndex.read_from_repo(repo).resolves.keys()
             ck_order += [k for k in resolved_keys if k not in ck_order]
 
         assert len(conflict_ids) == 0
 
-        merge_index = MergeIndex.read_from_repo(repo)
-        assert len(merge_index.entries) == 237
-        assert len(merge_index.conflicts) == 4
-        assert len(merge_index.resolves) == 4
+        merged_index = MergedIndex.read_from_repo(repo)
+        assert len(merged_index.entries) == 237
+        assert len(merged_index.conflicts) == 4
+        assert len(merged_index.resolves) == 4
 
         ck0, ck1, ck2, ck3 = ck_order
         # Conflict ck0 is resolved to ancestor, but the ancestor is None.
-        assert merge_index.resolves[ck0] == []
-        assert merge_index.conflicts[ck0].ancestor is None
-        assert merge_index.resolves[ck1] == [merge_index.conflicts[ck1].ours]
-        assert merge_index.resolves[ck2] == [merge_index.conflicts[ck2].theirs]
-        assert merge_index.resolves[ck3] == []
+        assert merged_index.resolves[ck0] == []
+        assert merged_index.conflicts[ck0].ancestor is None
+        assert merged_index.resolves[ck1] == [merged_index.conflicts[ck1].ours]
+        assert merged_index.resolves[ck2] == [merged_index.conflicts[ck2].theirs]
+        assert merged_index.resolves[ck3] == []
 
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r.stderr
@@ -154,13 +154,13 @@ def test_resolve_with_file(data_archive, cli_runner):
         )
         assert r.exit_code == 0, r.stderr
 
-        merge_index = MergeIndex.read_from_repo(repo)
-        assert len(merge_index.entries) == 237
-        assert len(merge_index.conflicts) == 4
-        assert len(merge_index.resolves) == 1
+        merged_index = MergedIndex.read_from_repo(repo)
+        assert len(merged_index.entries) == 237
+        assert len(merged_index.conflicts) == 4
+        assert len(merged_index.resolves) == 1
 
-        ck = next(iter(merge_index.resolves.keys()))
-        assert len(merge_index.resolves[ck]) == 2  # Resolved with 2 features
+        ck = next(iter(merged_index.resolves.keys()))
+        assert len(merged_index.resolves[ck]) == 2  # Resolved with 2 features
 
         delete_remaining_conflicts(cli_runner)
 

@@ -12,7 +12,7 @@ from kart.completion_shared import conflict_completer
 from .cli_util import MutexOption
 from .exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
 from .geometry import geojson_to_gpkg_geom
-from .merge_util import MergeContext, MergeIndex, RichConflict
+from .merge_util import MergeContext, MergedIndex, RichConflict
 from .repo import KartRepoState
 
 
@@ -204,7 +204,7 @@ def resolve(ctx, with_version, file_path, conflict_label):
     if not (with_version or file_path):
         raise click.UsageError("Choose a resolution using --with or --with-file")
 
-    merge_index = MergeIndex.read_from_repo(repo)
+    merged_index = MergedIndex.read_from_repo(repo)
     merge_context = MergeContext.read_from_repo(repo)
 
     if conflict_label.endswith(":"):
@@ -212,10 +212,10 @@ def resolve(ctx, with_version, file_path, conflict_label):
         # a user could easily have an extra ":" on the end by accident.
         conflict_label = conflict_label[:-1]
 
-    for key, conflict3 in merge_index.conflicts.items():
+    for key, conflict3 in merged_index.conflicts.items():
         rich_conflict = RichConflict(conflict3, merge_context)
         if rich_conflict.label == conflict_label:
-            if key in merge_index.resolves:
+            if key in merged_index.resolves:
                 raise InvalidOperation(
                     f"Conflict at {conflict_label} is already resolved"
                 )
@@ -235,9 +235,9 @@ def resolve(ctx, with_version, file_path, conflict_label):
                     )
                     res = []
 
-            merge_index.add_resolve(key, res)
-            merge_index.write_to_repo(repo)
-            unresolved_conflicts = len(merge_index.unresolved_conflicts)
+            merged_index.add_resolve(key, res)
+            merged_index.write_to_repo(repo)
+            unresolved_conflicts = len(merged_index.unresolved_conflicts)
             click.echo(f"Resolved 1 conflict. {unresolved_conflicts} conflicts to go.")
             if unresolved_conflicts == 0:
                 click.echo("Use `kart merge --continue` to complete the merge")

@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from kart.merge_util import MergeIndex
+from kart.merge_util import MergedIndex
 from kart.repo import KartRepo
 from kart.structs import CommitWithReference
 
@@ -9,7 +9,7 @@ H = pytest.helpers.helpers()
 CONFLICTS_OUTPUT_FORMATS = ["text", "geojson", "json", "quiet"]
 
 
-def test_merge_index_roundtrip(data_archive, cli_runner):
+def test_merged_index_roundtrip(data_archive, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
     with data_archive("conflicts/polygons.tgz") as repo_path:
         repo = KartRepo(repo_path)
@@ -23,15 +23,15 @@ def test_merge_index_roundtrip(data_archive, cli_runner):
         index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
         assert index.conflicts
 
-        # Create a MergeIndex object, and roundtrip it into a tree and back.
-        orig = MergeIndex.from_pygit2_index(index)
+        # Create a MergedIndex object, and roundtrip it into a tree and back.
+        orig = MergedIndex.from_pygit2_index(index)
         assert len(orig.entries) == 237
         assert len(orig.conflicts) == 4
         assert len(orig.resolves) == 0
         assert len(orig.unresolved_conflicts) == 4
 
         orig.write("test.conflict.index")
-        r1 = MergeIndex.read("test.conflict.index")
+        r1 = MergedIndex.read("test.conflict.index")
         assert r1 is not orig
         assert r1 == orig
 
@@ -51,7 +51,7 @@ def test_merge_index_roundtrip(data_archive, cli_runner):
 
         # Roundtrip again
         r1.write("test.conflict.index")
-        r2 = MergeIndex.read("test.conflict.index")
+        r2 = MergedIndex.read("test.conflict.index")
         assert r2 == r1
 
 

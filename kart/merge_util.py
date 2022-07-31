@@ -16,11 +16,11 @@ from kart.point_cloud.tilename_util import set_tile_extension
 
 
 MERGE_HEAD = KartRepoFiles.MERGE_HEAD
-MERGE_INDEX = KartRepoFiles.MERGE_INDEX
+MERGED_INDEX = KartRepoFiles.MERGED_INDEX
 MERGE_BRANCH = KartRepoFiles.MERGE_BRANCH
 MERGE_MSG = KartRepoFiles.MERGE_MSG
 
-ALL_MERGE_FILES = (MERGE_HEAD, MERGE_INDEX, MERGE_BRANCH, MERGE_MSG)
+ALL_MERGE_FILES = (MERGE_HEAD, MERGED_INDEX, MERGE_BRANCH, MERGE_MSG)
 
 
 def write_merged_index_flags(repo):
@@ -81,7 +81,7 @@ class AncestorOursTheirs(namedtuple("AncestorOursTheirs", _ANCESTOR_OURS_THEIRS_
 AncestorOursTheirs.EMPTY = AncestorOursTheirs(None, None, None)
 
 
-class MergeIndex:
+class MergedIndex:
     """
     Like a pygit2.Index, but every conflict has a short key independent of its path,
     and the entire index including conflicts can be serialised to an index file.
@@ -97,7 +97,7 @@ class MergeIndex:
     # TODO - fix pygit2.IndexEntry.
     Entry = namedtuple("Entry", ("path", "id", "mode"))
 
-    # Note that MergeIndex only contains Entries, which are simple structs -
+    # Note that MergedIndex only contains Entries, which are simple structs -
     # not RichConflicts, which refer to the entire RepoStructure to give extra functionality.
 
     def __init__(self, entries, conflicts, resolves):
@@ -108,7 +108,7 @@ class MergeIndex:
     @classmethod
     def from_pygit2_index(cls, index):
         """
-        Converts a pygit2.Index to a MergeIndex, preserving both entries and conflicts.
+        Converts a pygit2.Index to a MergedIndex, preserving both entries and conflicts.
         Conflicts are assigned arbitrary unique keys based on the iteration order.
         """
         entries = {e.path: cls._ensure_entry(e) for e in index}
@@ -116,10 +116,10 @@ class MergeIndex:
             str(k): cls._ensure_conflict(c) for k, c in enumerate(index.conflicts)
         }
         resolves = {}
-        return MergeIndex(entries, conflicts, resolves)
+        return MergedIndex(entries, conflicts, resolves)
 
     def __eq__(self, other):
-        if not isinstance(other, MergeIndex):
+        if not isinstance(other, MergedIndex):
             return False
         return (
             self.entries == other.entries
@@ -137,7 +137,7 @@ class MergeIndex:
             default=lambda o: str(o),
             indent=2,
         )
-        return f"<MergeIndex {contents}>"
+        return f"<MergedIndex {contents}>"
 
     def add(self, index_entry):
         index_entry = self._ensure_entry(index_entry)
@@ -259,7 +259,7 @@ class MergeIndex:
 
     @classmethod
     def read(cls, path):
-        """Deserialise a MergeIndex from the given path."""
+        """Deserialise a MergedIndex from the given path."""
         index = pygit2.Index(str(path))
         if index.conflicts:
             raise RuntimeError("pygit2.Index conflicts should be empty")
@@ -279,16 +279,16 @@ class MergeIndex:
             else:
                 entries[e.path] = cls._ensure_entry(e)
 
-        return MergeIndex(entries, conflicts, resolves)
+        return MergedIndex(entries, conflicts, resolves)
 
     @classmethod
     def read_from_repo(cls, repo):
-        """Deserialise a MergeIndex from the MERGE_INDEX file in the given repo."""
-        return cls.read(repo.gitdir_file(MERGE_INDEX))
+        """Deserialise a MergedIndex from the MERGED_INDEX file in the given repo."""
+        return cls.read(repo.gitdir_file(MERGED_INDEX))
 
     def write(self, path):
         """
-        Serialise this MergeIndex to the given path.
+        Serialise this MergedIndex to the given path.
         Regular entries, conflicts, and resolves are each serialised separately,
         so that they can be roundtripped accurately.
         """
@@ -304,8 +304,8 @@ class MergeIndex:
         index.write()
 
     def write_to_repo(self, repo):
-        """Serialise this MergeIndex to the MERGE_INDEX file in the given repo."""
-        self.write(repo.gitdir_file(MERGE_INDEX))
+        """Serialise this MergedIndex to the MERGED_INDEX file in the given repo."""
+        self.write(repo.gitdir_file(MERGED_INDEX))
 
     def write_resolved_tree(self, repo, resolve_conflict_fn=None):
         """
@@ -436,7 +436,7 @@ class MergeContext:
 
     @classmethod
     def read_from_repo(cls, repo):
-        # HEAD is assumed to be our side of the merge. MERGE_HEAD (and MERGE_INDEX)
+        # HEAD is assumed to be our side of the merge. MERGE_HEAD (and MERGED_INDEX)
         # are not version controlled, but are simply files in the repo. For these
         # reasons, the user should not be able to change branch mid merge.
 
@@ -848,9 +848,9 @@ class WorkingCopyMerger:
         self.repo = repo
         self.merge_context = merge_context
 
-    def update_working_copy(self, merge_index):
+    def update_working_copy(self, merged_index):
         """
-        Given a MergeIndex that represents the merged-state *so far* - unresolved conflicts may still exist - we
+        Given a MergedIndex that represents the merged-state *so far* - unresolved conflicts may still exist - we
         do our best to write it to the working copy anyway, so that the user can see those parts that merged cleanly,
         and those conflicts that we can write to the WC, and so that they can use the WC as a starting point for
         specifying resolves.
@@ -858,10 +858,11 @@ class WorkingCopyMerger:
         # Fetch all LFS tiles from all sides of the conflict.
         self.ensure_lfs_tiles_fetched()
         # First pass - forcibly resolve conflicts in the merge-index, write to a tree, then write that to the WC:
-        tree_id = merge_index.write_resolved_tree(self.repo, self.resolve_conflict)
+        tree_id = merged_index.write_resolved_tree(self.repo, self.resolve_conflict)
+
         self.repo.working_copy.reset(self.repo[tree_id], quiet=True)
         # Second pass - where possible, handle conflicts that can be written in a more complicated way without resolving them:
-        self.write_conflicts_to_working_copy(merge_index)
+        self.write_conflicts_to_working_copy(merged_index)
 
     def ensure_lfs_tiles_fetched(self):
         workdir = self.repo.working_copy.workdir
@@ -889,7 +890,7 @@ class WorkingCopyMerger:
         # Tile conflicts are effectively resolved as "deleted" here since we don't yield any resolve for them.
         # They are handled below in "write_conflicts_to_working_copy"
 
-    def write_conflicts_to_working_copy(self, merge_index):
+    def write_conflicts_to_working_copy(self, merged_index):
         """
         Second pass - those conflicts that can be written to the working copy in a more complicated way (ie
         without resolving them one way or another) are handled here.
@@ -899,7 +900,7 @@ class WorkingCopyMerger:
         if not self.repo.working_copy.workdir:
             return
 
-        for conflict in merge_index.unresolved_conflicts.values():
+        for conflict in merged_index.unresolved_conflicts.values():
             rich_conflict = RichConflict(conflict, self.merge_context)
             dataset_path, dataset_part, item_path = rich_conflict.decoded_path
 

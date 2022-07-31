@@ -5,10 +5,7 @@ import click
 import pygit2
 
 from typing import Union, Type, List
-
-from .crs_util import CoordinateReferenceString
-from .merge_util import MergeContext, MergeIndex, RichConflict
-
+from pathlib import Path
 
 from .conflicts_util import (
     _CONFLICT_PLACEHOLDER,
@@ -16,11 +13,16 @@ from .conflicts_util import (
     summarise_conflicts,
     conflicts_json_as_text,
 )
-from .merge_util import MergeContext, MergeIndex, ensure_conflicts_ready, rich_conflicts
-from pathlib import Path
-from .output_util import dump_json_output, resolve_output_path
-from pathlib import Path
+from .crs_util import CoordinateReferenceString
 from .key_filters import RepoKeyFilter
+from .merge_util import (
+    MergeContext,
+    MergedIndex,
+    RichConflict,
+    rich_conflicts,
+    ensure_conflicts_ready,
+)
+from .output_util import dump_json_output, resolve_output_path
 from . import diff_util
 
 L = logging.getLogger("kart.conflicts_writer")
@@ -41,7 +43,7 @@ class BaseConflictsWriter:
         *,
         json_style: str = "pretty",
         target_crs: CoordinateReferenceString = None,
-        merge_index: MergeIndex = None,
+        merged_index: MergedIndex = None,
         merge_context: MergeContext = None,
     ):
         self.repo = repo
@@ -49,7 +51,7 @@ class BaseConflictsWriter:
         self.flat = flat
         self.summarise = summarise
         self.merge_context = merge_context
-        self.merge_index = merge_index
+        self.merged_index = merged_index
         self.repo_key_filter = RepoKeyFilter.build_from_user_patterns(user_key_filters)
         self.json_style = json_style
         self.output_path = self._check_output_path(
@@ -62,8 +64,8 @@ class BaseConflictsWriter:
             target_rs, target_rs, self.repo_key_filter
         )
 
-        if merge_index is None:
-            self.merge_index = MergeIndex.read_from_repo(repo)
+        if merged_index is None:
+            self.merged_index = MergedIndex.read_from_repo(repo)
         if merge_context is None:
             self.merge_context = MergeContext.read_from_repo(repo)
 
@@ -101,7 +103,7 @@ class BaseConflictsWriter:
     def get_conflicts(self) -> List[RichConflict]:
         """Returns a list of rich conflicts"""
         conflicts = rich_conflicts(
-            self.merge_index.unresolved_conflicts.values(),
+            self.merged_index.unresolved_conflicts.values(),
             self.merge_context,
         )
         return conflicts
@@ -128,7 +130,7 @@ class BaseConflictsWriter:
             sys.exit(0)
 
     def list_conflicts(self) -> dict:
-        """Lists all the conflicts in merge_index, categorised into nested dicts.
+        """Lists all the conflicts in merged_index, categorised into nested dicts.
 
         Example:
 
