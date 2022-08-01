@@ -115,7 +115,8 @@ class PointCloudV1(BaseDataset):
     def tilename_from_path(cls, tile_path):
         return remove_tile_extension(tile_path.rsplit("/", maxsplit=1)[-1])
 
-    def get_tile_summary_from_pointer_blob(self, tile_pointer_blob):
+    @classmethod
+    def get_tile_summary_from_pointer_blob(cls, tile_pointer_blob):
         result = pointer_file_bytes_to_dict(
             tile_pointer_blob, {"name": tile_pointer_blob.name}
         )

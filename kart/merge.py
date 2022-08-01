@@ -1,5 +1,4 @@
 import logging
-import os
 import sys
 
 import click
@@ -14,6 +13,7 @@ from .merge_util import (
     AncestorOursTheirs,
     MergeContext,
     MergeIndex,
+    WorkingCopyMerger,
     merge_status_to_text,
     write_merged_index_flags,
 )
@@ -146,7 +146,12 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
     return merge_jdict
 
 
-def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
+def move_repo_to_merging_state(
+    repo,
+    merge_index,
+    merge_context,
+    merge_message,
+):
     """
     Move the Kart repository into a "merging" state in which conflicts
     can be resolved one by one.
@@ -159,6 +164,11 @@ def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
     merge_index.write_to_repo(repo)
     merge_context.write_to_repo(repo)
     repo.write_gitdir_file(KartRepoFiles.MERGE_MSG, merge_message)
+
+    if repo.working_copy.exists():
+        working_copy_merger = WorkingCopyMerger(repo, merge_context)
+        working_copy_merger.update_working_copy(merge_index)
+
     assert repo.state == KartRepoState.MERGING
 
 

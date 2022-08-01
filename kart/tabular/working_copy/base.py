@@ -1115,6 +1115,7 @@ class TableWorkingCopy(WorkingCopyPart):
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+        quiet=False,
     ):
         """
         Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
