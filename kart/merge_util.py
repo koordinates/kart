@@ -7,10 +7,13 @@ from collections import namedtuple
 import click
 import pygit2
 
+from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
 from .tabular.feature_output import feature_as_geojson, feature_as_json, feature_as_text
 from .utils import ungenerator
+from kart.point_cloud.tilename_util import set_tile_extension
+
 
 MERGE_HEAD = KartRepoFiles.MERGE_HEAD
 MERGE_INDEX = KartRepoFiles.MERGE_INDEX
@@ -304,15 +307,15 @@ class MergeIndex:
         """Serialise this MergeIndex to the MERGE_INDEX file in the given repo."""
         self.write(repo.gitdir_file(MERGE_INDEX))
 
-    def write_resolved_tree(self, repo, conflict_resolver=None):
+    def write_resolved_tree(self, repo, resolve_conflict_fn=None):
         """
         Write all the merged entries and the resolved conflicts to a tree in the given repo.
         Resolved conflicts will be written the same as merged entries in the resulting tree.
-        If a conflict-resolver is supplied, then not all conflicts need to be resolved -
-        those that are unresolved will be resolved automatically using the supplied resolver.
+        If a resolve_conflict_fn is supplied, then not all conflicts need to be resolved -
+        those that are unresolved will be resolved automatically using the supplied function.
         """
         unresolved_conflicts = self.unresolved_conflicts
-        if conflict_resolver is None:
+        if resolve_conflict_fn is None:
             assert not unresolved_conflicts
 
         index = pygit2.Index()
@@ -326,9 +329,9 @@ class MergeIndex:
         index.remove_all(list(self._conflicts_paths()))
 
         # Force-resolve any unresolved conflicts using the conflict-resolver:
-        if conflict_resolver and unresolved_conflicts:
+        if resolve_conflict_fn and unresolved_conflicts:
             for c in unresolved_conflicts.values():
-                for e in conflict_resolver(c):
+                for e in resolve_conflict_fn(c):
                     index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
 
         # Entries that have been explicitly selected to resolve conflicts:
@@ -852,14 +855,26 @@ class WorkingCopyMerger:
         and those conflicts that we can write to the WC, and so that they can use the WC as a starting point for
         specifying resolves.
         """
+        # Fetch all LFS tiles from all sides of the conflict.
+        self.ensure_lfs_tiles_fetched()
         # First pass - forcibly resolve conflicts in the merge-index, write to a tree, then write that to the WC:
-        tree_id = merge_index.write_resolved_tree(self.repo, self.conflict_resolver)
+        tree_id = merge_index.write_resolved_tree(self.repo, self.resolve_conflict)
         self.repo.working_copy.reset(self.repo[tree_id], quiet=True)
         # Second pass - where possible, handle conflicts that can be written in a more complicated way without resolving them:
         self.write_conflicts_to_working_copy(merge_index)
 
-    def conflict_resolver(self, conflict):
+    def ensure_lfs_tiles_fetched(self):
+        workdir = self.repo.working_copy.workdir
+        if not workdir:
+            return
+
+        commit_ids = set(v.commit_id for v in self.merge_context.versions if v)
+        for commit_id in commit_ids:
+            workdir.fetch_lfs_blobs(self.repo[commit_id], quiet=True)
+
+    def resolve_conflict(self, conflict):
         """
+        Generator: yields the resolution(s), if any, to a conflict, as pygit2.IndexEntrys.
         First pass - we forcibly but somewhat arbitrarily resolve any outstanding conflicts in the merge-index,
         write the result to tree, and use that tree to update the working copy.
         """
@@ -891,13 +906,7 @@ class WorkingCopyMerger:
             if not rich_conflict.has_multiple_paths and dataset_part == "tile":
                 # Tile conflict found - write all versions we can find to the workdir, with different names.
                 tilename = item_path
-                from kart.lfs_util import (
-                    pointer_file_bytes_to_dict,
-                    get_local_path_from_lfs_hash,
-                )
-                from kart.point_cloud.tilename_util import set_tile_extension
 
-                self._ensure_lfs_tiles_fetched()
                 for version in rich_conflict.true_versions:
                     version_name = version.version_name
                     pointer_blob = self.repo[version.id]
@@ -918,17 +927,3 @@ class WorkingCopyMerger:
                         lfs_path,
                         self.repo.working_copy.workdir.path / dataset_path / filename,
                     )
-
-    def _ensure_lfs_tiles_fetched(self):
-        if not self.repo.working_copy.workdir:
-            return
-
-        if getattr(self, "_lfs_tiles_fetched", False):
-            return
-
-        commit_ids = set(v.commit_id for v in self.merge_context.versions if v)
-        for commit_id in commit_ids:
-            self.repo.working_copy.workdir.fetch_lfs_blobs(
-                self.repo[commit_id], quiet=True
-            )
-        self._lfs_tiles_fetched = True
