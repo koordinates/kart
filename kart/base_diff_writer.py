@@ -11,7 +11,9 @@ from .diff_structs import WORKING_COPY_EDIT
 from .exceptions import CrsError, InvalidOperation
 from .key_filters import RepoKeyFilter
 from .promisor_utils import FetchPromisedBlobsProcess, object_is_promised
+from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
+
 
 L = logging.getLogger("kart.diff_writer")
 
@@ -160,7 +162,14 @@ class BaseDiffWriter:
             # We diff base<>working_copy by diffing base<>target + target<>working_copy,
             # and target is set to HEAD.
             base_rs = repo.structure(commit_parts[0])
-            target_rs = repo.structure("HEAD")
+            if repo.state == KartRepoState.MERGING:
+                # During a merge, we transparently base the working copy off of the current merge-state
+                # as stored in MERGED_TREE, rather than HEAD, so that's what we need to use as the target
+                # of a working-copy diff (instead of HEAD).
+                target_rs = repo.structure("MERGED_TREE")
+            else:
+                target_rs = repo.structure("HEAD")
+
             repo.working_copy.assert_exists("Cannot generate working copy diff")
             repo.working_copy.assert_matches_tree(target_rs.tree)
             include_wc_diff = True

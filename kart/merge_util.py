@@ -16,11 +16,13 @@ from kart.point_cloud.tilename_util import set_tile_extension
 
 
 MERGE_HEAD = KartRepoFiles.MERGE_HEAD
-MERGED_INDEX = KartRepoFiles.MERGED_INDEX
 MERGE_BRANCH = KartRepoFiles.MERGE_BRANCH
 MERGE_MSG = KartRepoFiles.MERGE_MSG
 
-ALL_MERGE_FILES = (MERGE_HEAD, MERGED_INDEX, MERGE_BRANCH, MERGE_MSG)
+MERGED_INDEX = KartRepoFiles.MERGED_INDEX
+MERGED_TREE = KartRepoFiles.MERGED_TREE
+
+ALL_MERGE_FILES = (MERGE_HEAD, MERGE_BRANCH, MERGE_MSG, MERGED_INDEX, MERGED_TREE)
 
 
 def write_merged_index_flags(repo):
@@ -848,19 +850,28 @@ class WorkingCopyMerger:
         self.repo = repo
         self.merge_context = merge_context
 
-    def update_working_copy(self, merged_index):
+    def write_merged_tree(self, merged_index):
+        """
+        Given a MergedIndex that represents the merged-state *so far* - unresolved conflicts may still exist - we
+        do our best to write it as a tree. This is mostly used for updating the working-copy below, but it is also
+        used for serialising feature-resolves.
+        """
+        tree_id = merged_index.write_resolved_tree(self.repo, self.resolve_conflict)
+        self.repo.write_gitdir_file(KartRepoFiles.MERGED_TREE, str(tree_id))
+        return self.repo[tree_id]
+
+    def update_working_copy(self, merged_index, merged_tree):
         """
         Given a MergedIndex that represents the merged-state *so far* - unresolved conflicts may still exist - we
         do our best to write it to the working copy anyway, so that the user can see those parts that merged cleanly,
-        and those conflicts that we can write to the WC, and so that they can use the WC as a starting point for
+        and those conflicts that we can we write to the WC, and so that they can use the WC as a starting point for
         specifying resolves.
         """
         # Fetch all LFS tiles from all sides of the conflict.
         self.ensure_lfs_tiles_fetched()
-        # First pass - forcibly resolve conflicts in the merge-index, write to a tree, then write that to the WC:
-        tree_id = merged_index.write_resolved_tree(self.repo, self.resolve_conflict)
-
-        self.repo.working_copy.reset(self.repo[tree_id], quiet=True)
+        # First pass - write the merged-tree to the WC. Conflicts have been forcibly resolved to make it fit into a tree,
+        # so some information will be missing.
+        self.repo.working_copy.reset(merged_tree, quiet=True)
         # Second pass - where possible, handle conflicts that can be written in a more complicated way without resolving them:
         self.write_conflicts_to_working_copy(merged_index)
 

@@ -45,10 +45,15 @@ def write_feature_to_dataset_entry(feature, dataset, repo):
 
 
 def load_dataset(rich_conflict):
-    # TODO - this works perfectly as long as the dataset hasn't changed structure over the course of the confict.
-    # The correct behaviour is to load a dataset based not on a commit, but on the current merge index, and use this for
-    # serialising resolved features etc - and, to enforce that meta changes for a dataset are resolved before feature changes.
-    return rich_conflict.any_true_version.dataset
+    """
+    This loads the dataset as merged-so-far. We use this to serialise feature resolves, since
+    they will need to be serialised in a way that is consistent with however the dataset it merged -
+    ie, if we decide to accept their new schema, there's no point serialising features with our schema instead.
+    """
+    # TODO - we need to keep MERGED_TREE up to date with any schema.json resolves, and we need to force the user to
+    # resolve meta conflicts before they resolve feature conflicts.
+    sample_ds = rich_conflict.any_true_version.dataset
+    return sample_ds.repo.datasets("MERGED_TREE")[sample_ds.path]
 
 
 def load_file_resolve(rich_conflict, file_path):
