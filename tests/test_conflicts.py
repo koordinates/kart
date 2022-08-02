@@ -507,3 +507,22 @@ def test_conflicts_geojson_usage(data_archive, cli_runner, tmp_path):
             r.stderr.splitlines()[-1]
             == "Error: Invalid value for --output: Output path should be a directory for GeoJSON format."
         )
+
+
+def test_diff_during_merge(data_working_copy, cli_runner):
+    with data_working_copy("conflicts/points.tgz") as (repo_path, wc_path):
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        # This diffs from HEAD - which is "ours_branch" - to the current contents of the working copy.
+        # Feature fid=1 merged cleanly with their update, which was written to the WC so we can see it here:
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "--- nz_pa_points_topo_150k:feature:1",
+            "+++ nz_pa_points_topo_150k:feature:1",
+            "-                                     name = ␀",
+            "+                                     name = theirs_version",
+        ]
+        # Everything else is unchanged - either it merged as "ours_branch",
+        # or it had a conflict so it wasn't updated in the WC.

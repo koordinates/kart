@@ -85,11 +85,9 @@ class RepoStructure:
             return (None, *RepoStructure._peel_to_commit_and_tree(refish))
 
         try:
-            obj, reference = repo.resolve_refish(refish)
-            if isinstance(reference, pygit2.Reference):
-                reference = reference.name
-            return (reference, *RepoStructure._peel_to_commit_and_tree(obj))
-        except KeyError:
+            reference = repo.lookup_reference_dwim(refish)
+            return (reference.name, *RepoStructure._peel_to_commit_and_tree(reference))
+        except (KeyError, pygit2.InvalidSpecError):
             pass
 
         try:
@@ -122,15 +120,27 @@ class RepoStructure:
 
     @staticmethod
     def _peel_to_commit_and_tree(obj):
-        # Don't do isinstance checks or anything else that would make duck-typing difficult:
-        if obj.type == pygit2.GIT_OBJ_COMMIT:
+        # Starting with these simple checks makes duck-typing easier without having to implement peel.
+        if obj.type == pygit2.GIT_OBJ_COMMIT and hasattr(obj, "tree"):
             return obj, obj.tree
         elif obj.type == pygit2.GIT_OBJ_TREE:
             return None, obj
-        else:
-            raise ValueError(
-                f"Can't build RepoStructure from {obj!r} - not a commit or a tree"
-            )
+        commit = RepoStructure._safe_peel(obj, pygit2.Commit)
+        if commit is not None:
+            return commit, commit.tree
+        tree = RepoStructure._safe_peel(obj, pygit2.Tree)
+        if tree is not None:
+            return None, tree
+        raise ValueError(
+            f"Can't build RepoStructure from {obj!r} - can't peel to a commit or a tree"
+        )
+
+    @staticmethod
+    def _safe_peel(obj, target_type):
+        try:
+            return obj.peel(target_type)
+        except (pygit2.InvalidSpecError, AttributeError):
+            return None
 
     def __init__(self, repo, refish="HEAD"):
         self.L = logging.getLogger(self.__class__.__qualname__)

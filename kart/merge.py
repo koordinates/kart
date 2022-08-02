@@ -165,9 +165,12 @@ def move_repo_to_merging_state(
     merge_context.write_to_repo(repo)
     repo.write_gitdir_file(KartRepoFiles.MERGE_MSG, merge_message)
 
+    working_copy_merger = WorkingCopyMerger(repo, merge_context)
+    # The merged_tree is used mostly for updating the working copy, but is also used for
+    # serialising feature resolves, so we write it even if there's no WC.
+    merged_tree = working_copy_merger.write_merged_tree(merged_index)
     if repo.working_copy.exists():
-        working_copy_merger = WorkingCopyMerger(repo, merge_context)
-        working_copy_merger.update_working_copy(merged_index)
+        working_copy_merger.update_working_copy(merged_index, merged_tree)
 
     assert repo.state == KartRepoState.MERGING
 

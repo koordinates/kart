@@ -52,6 +52,8 @@ class KartRepoFiles:
     MERGE_BRANCH = "MERGE_BRANCH"  # The branch name that we merged with, if any.
     # An index file containing the current state of the merge, including cleanly merged items, conflicts, and resolutions.
     MERGED_INDEX = "MERGED_INDEX"
+    # A tree containing the current state of the merge - or near enough - it can't store unresolved conflicts:
+    MERGED_TREE = "MERGED_TREE"
     # A sqlite table that maps each feature SHA to its EPSG:4326 envelope. Used for spatial filtered clones.
     FEATURE_ENVELOPES = "feature_envelopes.db"
 
