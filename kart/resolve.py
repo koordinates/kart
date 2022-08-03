@@ -12,7 +12,7 @@ from kart.completion_shared import conflict_completer
 from .cli_util import MutexOption
 from .exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
 from .geometry import geojson_to_gpkg_geom
-from .merge_util import MergeContext, MergedIndex, RichConflict
+from .merge_util import MergeContext, MergedIndex, RichConflict, WorkingCopyMerger
 from .repo import KartRepoState
 
 
@@ -176,6 +176,63 @@ def _load_workingcopy_resolve_for_tile(rich_conflict):
     return _load_file_resolve_for_tile(rich_conflict, matching_files[0])
 
 
+def find_conflict_to_resolve(merged_index, merge_context, conflict_label):
+    """
+    Given a conflict label that the user wants to resolve - eg mydataset:feature:1 -
+    loads the unresolved conflict from the merge index.
+    Raises an error if there is no such conflict, or it is already resolved, or cannot yet be resolved.
+    """
+
+    result = None
+    label_parts = conflict_label.split(":")
+    ds_path = label_parts[0]
+    is_meta = len(label_parts) >= 2 and label_parts[1] == "meta"
+    for key, conflict3 in merged_index.conflicts.items():
+        rich_conflict = RichConflict(conflict3, merge_context)
+        if key in merged_index.resolves:
+            if rich_conflict.label == conflict_label:
+                raise InvalidOperation(
+                    f"Conflict at {conflict_label} is already resolved"
+                )
+            continue
+
+        if rich_conflict.label == conflict_label:
+            result = key, conflict3, rich_conflict
+        elif (
+            (not is_meta)
+            and rich_conflict.decoded_path[0] == ds_path
+            and rich_conflict.decoded_path[1] == "meta"
+        ):
+            raise InvalidOperation(
+                f"There are still unresolved meta-item conflicts for dataset {ds_path}. These need to be resolved first."
+            )
+
+    if result is None:
+        raise NotFound(f"No conflict found at {conflict_label}", exit_code=NO_CONFLICT)
+    return result
+
+
+def update_workingcopy_with_resolve(
+    repo, merged_index, merge_context, rich_conflict, res
+):
+    ds_part = rich_conflict.decoded_path[1]
+    if ds_part == "meta":
+        # If a meta conflict has been resolved, we update the merged_tree and then reset the WC to it.
+        working_copy_merger = WorkingCopyMerger(repo, merge_context)
+        # The merged_tree is used mostly for updating the working copy, but is also used for
+        # serialising feature resolves, so we write it even if there's no WC.
+        merged_tree = working_copy_merger.write_merged_tree(merged_index)
+        if repo.working_copy.exists():
+            working_copy_merger.update_working_copy(merged_index, merged_tree)
+
+    elif ds_part == "feature" and repo.working_copy.exists():
+        # TODO - write feature resolve to working copy
+        pass
+    elif ds_part == "tile" and repo.working_copy.exists():
+        # TODO - write tile resolve to working copy, clean up any conflict versions (ancestor, ours, theirs).
+        pass
+
+
 @click.command()
 @click.pass_context
 @click.option(
@@ -217,35 +274,32 @@ def resolve(ctx, with_version, file_path, conflict_label):
         # a user could easily have an extra ":" on the end by accident.
         conflict_label = conflict_label[:-1]
 
-    for key, conflict3 in merged_index.conflicts.items():
-        rich_conflict = RichConflict(conflict3, merge_context)
-        if rich_conflict.label == conflict_label:
-            if key in merged_index.resolves:
-                raise InvalidOperation(
-                    f"Conflict at {conflict_label} is already resolved"
-                )
+    key, conflict3, rich_conflict = find_conflict_to_resolve(
+        merged_index, merge_context, conflict_label
+    )
 
-            if file_path:
-                res = load_file_resolve(rich_conflict, Path(file_path))
-            elif with_version == "workingcopy":
-                res = load_workingcopy_resolve(rich_conflict)
-            elif with_version == "delete":
-                res = []
-            else:
-                assert with_version in ("ancestor", "ours", "theirs")
-                res = [getattr(conflict3, with_version)]
-                if res == [None]:
-                    click.echo(
-                        f'Version "{with_version}" does not exist - resolving conflict by deleting.'
-                    )
-                    res = []
+    if file_path:
+        res = load_file_resolve(rich_conflict, Path(file_path))
+    elif with_version == "workingcopy":
+        res = load_workingcopy_resolve(rich_conflict)
+    elif with_version == "delete":
+        res = []
+    else:
+        assert with_version in ("ancestor", "ours", "theirs")
+        res = [getattr(conflict3, with_version)]
+        if res == [None]:
+            click.echo(
+                f'Version "{with_version}" does not exist - resolving conflict by deleting.'
+            )
+            res = []
 
-            merged_index.add_resolve(key, res)
-            merged_index.write_to_repo(repo)
-            unresolved_conflicts = len(merged_index.unresolved_conflicts)
-            click.echo(f"Resolved 1 conflict. {unresolved_conflicts} conflicts to go.")
-            if unresolved_conflicts == 0:
-                click.echo("Use `kart merge --continue` to complete the merge")
-            ctx.exit(0)
+    merged_index.add_resolve(key, res)
+    merged_index.write_to_repo(repo)
+    update_workingcopy_with_resolve(
+        repo, merged_index, merge_context, rich_conflict, res
+    )
 
-    raise NotFound(f"No conflict found at {conflict_label}", exit_code=NO_CONFLICT)
+    unresolved_conflicts = len(merged_index.unresolved_conflicts)
+    click.echo(f"Resolved 1 conflict. {unresolved_conflicts} conflicts to go.")
+    if unresolved_conflicts == 0:
+        click.echo("Use `kart merge --continue` to complete the merge")

@@ -7,6 +7,7 @@ import click
 import pygit2
 
 import sqlalchemy as sa
+from kart.core import peel_to_commit_and_tree
 from kart.diff_structs import WORKING_COPY_EDIT, DatasetDiff, Delta, DeltaDiff, RepoDiff
 from kart.exceptions import (
     NO_WORKING_COPY,
@@ -879,7 +880,7 @@ class TableWorkingCopy(WorkingCopyPart):
             )
         return r.rowcount
 
-    def write_full(self, commit, *datasets):
+    def write_full(self, commit_or_tree, *datasets):
         """
         Writes a full layer into a working-copy table.
         Only writes features that match the repo's spatial filter.
@@ -887,6 +888,7 @@ class TableWorkingCopy(WorkingCopyPart):
         Use for new working-copy checkouts.
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
+        target_commit, target_tree = peel_to_commit_and_tree(commit_or_tree)
 
         self.repo.odb.refresh()
         with pause_refreshing(self.repo.odb), self.session() as sess:
@@ -933,7 +935,7 @@ class TableWorkingCopy(WorkingCopyPart):
                     self._initialise_sequence(sess, dataset)
 
                 self._create_triggers(sess, dataset)
-                self._update_last_write_time(sess, dataset, commit)
+                self._update_last_write_time(sess, dataset, target_commit)
 
                 t1 = time.monotonic()
                 L.info(
@@ -944,7 +946,7 @@ class TableWorkingCopy(WorkingCopyPart):
                     dataset.path,
                 )
 
-            self._update_state_table_tree(sess, commit.peel(pygit2.Tree).id.hex)
+            self._update_state_table_tree(sess, target_tree.hex)
             self._update_state_table_spatial_filter_hash(
                 sess, self.repo.spatial_filter.hexhash
             )
@@ -1138,13 +1140,9 @@ class TableWorkingCopy(WorkingCopyPart):
 
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
         if commit_or_tree is None:
-            target_tree = target_commit = None
-        elif commit_or_tree.type == pygit2.GIT_OBJ_COMMIT:
-            target_commit = commit_or_tree
-            target_tree = commit_or_tree.tree
-        elif commit_or_tree.type == pygit2.GIT_OBJ_TREE:
-            target_commit = None
-            target_tree = commit_or_tree
+            target_commit = target_tree = None
+        else:
+            target_commit, target_tree = peel_to_commit_and_tree(commit_or_tree)
 
         target_tree_id = target_tree.hex if target_tree is not None else None
 

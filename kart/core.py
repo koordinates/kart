@@ -3,6 +3,37 @@ import pygit2
 from .exceptions import NO_USER, NotFound
 
 
+def peel_to_commit_and_tree(commitish_or_treeish):
+    """
+    Given a commitish or treeish object, returns a tuple of (commit, tree).
+    If the given object is commitish, both commit and tree will be populated.
+    If the given object is treeish, then commit will be None.
+    """
+    obj = commitish_or_treeish
+
+    # These quick checks to see what .type is make it easy to implement commit-ish or tree-ish objects
+    # without implementing peel.
+    if obj.type == pygit2.GIT_OBJ_COMMIT and hasattr(obj, "tree"):
+        return obj, obj.tree
+    elif obj.type == pygit2.GIT_OBJ_TREE:
+        return None, obj
+
+    commit = _safe_peel(obj, pygit2.Commit)
+    if commit is not None:
+        return commit, commit.tree
+    tree = _safe_peel(obj, pygit2.Tree)
+    if tree is not None:
+        return None, tree
+    raise ValueError(f"Can't peel {obj!r} - to a commit or a tree")
+
+
+def _safe_peel(obj, target_type):
+    try:
+        return obj.peel(target_type)
+    except (pygit2.InvalidSpecError, AttributeError):
+        return None
+
+
 def find_blobs_in_tree(tree):
     """Recursively yields all possible blobs in the given directory tree."""
     for entry in tree:

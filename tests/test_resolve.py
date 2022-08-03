@@ -244,3 +244,125 @@ def test_resolve_with_workingcopy(data_working_copy, cli_runner):
         delta = diff["nz_waca_adjustments"]["feature"][0]
         assert delta["-"] == ours
         assert delta["+"] == merged
+
+
+def test_resolve_schema_conflict(data_working_copy, cli_runner):
+    with data_working_copy("polygons") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+        r = cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["checkout", "-b", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute("ALTER TABLE nz_waca_adjustments ADD COLUMN colour TEXT;")
+            sess.execute(H.POLYGONS.INSERT, [H.POLYGONS.RECORD])
+            sess.execute(
+                "UPDATE nz_waca_adjustments SET colour='pink' WHERE id=9999999;"
+            )
+
+        r = cli_runner.invoke(["commit", "-m", "their changes"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["checkout", "ancestor_branch"])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["checkout", "-b", "ours_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute("ALTER TABLE nz_waca_adjustments ADD COLUMN flavour TEXT;")
+            sess.execute(H.POLYGONS.INSERT, [H.POLYGONS.RECORD])
+            sess.execute(
+                "UPDATE nz_waca_adjustments SET flavour='vanilla' WHERE id=9999999;"
+            )
+
+        r = cli_runner.invoke(["commit", "-m", "our changes"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["conflicts", "-s"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "nz_waca_adjustments:",
+            "    nz_waca_adjustments:feature:",
+            "        nz_waca_adjustments:feature:9999999",
+            "    nz_waca_adjustments:meta:",
+            "        nz_waca_adjustments:meta:schema.json",
+            "",
+        ]
+
+        r = cli_runner.invoke(
+            ["resolve", "nz_waca_adjustments:feature:9999999", "--with=theirs"]
+        )
+        assert r.exit_code == INVALID_OPERATION
+        assert (
+            "There are still unresolved meta-item conflicts for dataset nz_waca_adjustments"
+            in r.stderr
+        )
+
+        r = cli_runner.invoke(
+            ["resolve", "nz_waca_adjustments:meta:schema.json", "--with=theirs"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        # The schema in the WC now differs from HEAD, since we accepted their version.
+        assert "nz_waca_adjustments:meta:schema.json" in r.stdout
+
+        FEATURE_RESOLVE = """
+        {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [[[[0.0,0.0],[0.0,0.001],[0.001,0.001],[0.001,0.0],[0.0,0.0]]]]
+              },
+              "properties": {
+                "id": 9999999,
+                "date_adjusted": "2019-07-05T13:04:00",
+                "survey_reference": "Null Island",
+                "adjusted_nodes": 123,
+                "colour": "white"
+              },
+              "id": "nz_waca_adjustments:feature:9999999"
+            }
+          ]
+        }
+        """
+        (repo_path / "feature_resolve.json").write_text(FEATURE_RESOLVE)
+
+        # Manually resolve a feature conflict
+        r = cli_runner.invoke(
+            [
+                "resolve",
+                "nz_waca_adjustments:feature:9999999",
+                "--with-file=feature_resolve.json",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(
+            ["merge", "--continue", "-m", "Merge with 'theirs_branch'"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Feature resolve is serialised properly using the resolved dataset schema.
+        r = cli_runner.invoke(
+            ["show", "HEAD", "--", "nz_waca_adjustments:feature:9999999"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[4:] == [
+            "    Merge with 'theirs_branch'",
+            "",
+            "--- nz_waca_adjustments:feature:9999999",
+            "+++ nz_waca_adjustments:feature:9999999",
+            "-                         survey_reference = Null Island™ 🗺",
+            "+                         survey_reference = Null Island",
+            "-                                  flavour = vanilla",
+            "+                                   colour = white",
+        ]
