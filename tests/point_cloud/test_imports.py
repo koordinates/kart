@@ -399,6 +399,8 @@ def test_import_amend(cli_runner, data_archive):
 
 def test_import_update_existing(cli_runner, data_archive, requires_pdal):
     with data_archive("point-cloud/laz-auckland.tgz") as src:
+        (src / "auckland_0_1.laz").unlink()
+        (src / "auckland_0_1.laz").symlink_to(src / "auckland_0_0.laz")
         (src / "new_tile.laz").symlink_to(src / "auckland_0_0.laz")
         with data_archive("point-cloud/auckland.tgz"):
             r = cli_runner.invoke(
@@ -407,17 +409,21 @@ def test_import_update_existing(cli_runner, data_archive, requires_pdal):
                     "--dataset-path=auckland",
                     "--update-existing",
                     "--convert-to-copc",
-                    f"{src}/new_tile.laz",
                     f"{src}/auckland_0_0.laz",
+                    f"{src}/auckland_0_1.laz",
+                    f"{src}/new_tile.laz",
+                    "--delete",
+                    f"{src}/auckland_0_2.laz",
                 ]
             )
             assert r.exit_code == 0, r.stderr
 
-            # One tile was added, one was updated, no other changes were made
+            # One tile was added, one was updated, and one was deleted.
+            # (One tile was updated but the new version was the same as the old, so it's not counted.)
             inserts, updates, deletes = count_head_tile_changes(cli_runner, "auckland")
-            assert deletes == 0
             assert inserts == 1
             assert updates == 1
+            assert deletes == 1
 
 
 def test_import_single_las_no_convert(

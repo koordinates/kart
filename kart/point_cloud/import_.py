@@ -1,5 +1,4 @@
 import logging
-import os
 import uuid
 from pathlib import Path
 
@@ -37,10 +36,9 @@ from kart.point_cloud.metadata_util import (
     check_for_non_homogenous_metadata,
     format_tile_for_pointer_file,
 )
-from kart.point_cloud.tilename_util import remove_tile_extension
 from kart.point_cloud.pdal_convert import convert_tile_to_copc
-from kart.point_cloud.tilename_util import remove_tile_extension
-from kart.serialise_util import hexhash, json_pack, ensure_bytes
+from kart.point_cloud.v1 import PointCloudV1
+from kart.serialise_util import json_pack, ensure_bytes
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     extra_blobs_for_version,
@@ -164,11 +162,13 @@ def point_cloud_import(
             raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
 
     source_to_metadata = {}
+    source_to_hash_and_size = {}
 
     if sources:
         for source in sources:
             click.echo(f"Checking {source}...          \r", nl=False)
             source_to_metadata[source] = extract_pc_tile_metadata(source)
+            source_to_hash_and_size[source] = get_hash_and_size_of_file(source)
         click.echo()
 
     if not convert_to_copc:
@@ -217,7 +217,7 @@ def point_cloud_import(
 
         convert_tile_to_copc(source, dest)
         source_to_metadata[source] = extract_pc_tile_metadata(dest, extract_schema=True)
-        source_hash = "sha256:" + get_hash_and_size_of_file(source)[0]
+        source_hash = "sha256:" + source_to_hash_and_size[source][0]
         source_to_metadata[source]["tile"]["sourceOid"] = source_hash
 
     if amend:
@@ -250,6 +250,7 @@ def point_cloud_import(
         proc.stdin.write(header.encode("utf8"))
 
         all_metadatas = []
+        existing_dataset = None
         if update_existing:
             try:
                 existing_dataset = repo.datasets()[ds_path]
@@ -277,7 +278,7 @@ def point_cloud_import(
                 root_tree = repo.head_tree
                 for tile_name in delete:
                     # Check that the blob exists; if not, error out
-                    blob_path = blob_path_from_source(ds_inner_path, tile_name)
+                    blob_path = existing_dataset.tilename_to_blob_path(tile_name)
                     try:
                         root_tree / blob_path
                     except KeyError:
@@ -294,6 +295,30 @@ def point_cloud_import(
         for source in sources:
             click.echo(f"Importing {source}...")
             source_metadata = source_to_metadata[source]
+            tilename = PointCloudV1.tilename_from_path(source)
+            rel_blob_path = PointCloudV1.tilename_to_blob_path(tilename, relative=True)
+            blob_path = f"{ds_inner_path}/{rel_blob_path}"
+
+            # Check if tile has already been imported previously:
+            if existing_dataset is not None:
+                existing_summary = existing_dataset.get_tile_summary(
+                    tilename, missing_ok=True
+                )
+                if existing_summary:
+                    source_oid = "sha256:" + source_to_hash_and_size[source][0]
+                    if (
+                        existing_summary["oid"] == source_oid
+                        or existing_summary.get("sourceOid") == source_oid
+                    ):
+                        # This tile has already been imported before. Reuse it rather than re-importing it.
+                        # (Especially don't use PDAL to reconvert it - that creates pointless diffs due to recompression).
+                        write_blob_to_stream(
+                            proc.stdin,
+                            blob_path,
+                            (existing_dataset.inner_tree / rel_blob_path).data,
+                        )
+                        del source_to_metadata[source]
+                        continue
 
             tile_is_copc = source_metadata["format"]["optimization"] == "copc"
             conversion_func = None
@@ -301,12 +326,16 @@ def point_cloud_import(
             if convert_to_copc and not tile_is_copc:
                 conversion_func = convert_tile_to_copc_and_reextract_metadata
 
-            pointer_dict = copy_file_to_local_lfs_cache(repo, source, conversion_func)
+            pointer_dict = copy_file_to_local_lfs_cache(
+                repo,
+                source,
+                conversion_func,
+                oid_and_size=source_to_hash_and_size[source],
+            )
             pointer_dict = format_tile_for_pointer_file(
                 source_to_metadata[source]["tile"], pointer_dict
             )
 
-            blob_path = blob_path_from_source(ds_inner_path, source)
             write_blob_to_stream(
                 proc.stdin, blob_path, dict_to_pointer_file_bytes(pointer_dict)
             )
@@ -357,9 +386,3 @@ def point_cloud_import(
         repo_key_filter=RepoKeyFilter.datasets([ds_path]),
         create_parts_if_missing=parts_to_create,
     )
-
-
-def blob_path_from_source(ds_inner_path, source):
-    tilename = remove_tile_extension(os.path.basename(source))
-    tile_prefix = hexhash(tilename)[0:2]
-    return f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"

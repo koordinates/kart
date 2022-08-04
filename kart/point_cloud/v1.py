@@ -1,8 +1,10 @@
 import functools
 import shutil
+import os
 
-from kart.core import find_blobs_in_tree
 from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
+from kart.core import find_blobs_in_tree
+from kart.decorators import allow_classmethod
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
@@ -97,11 +99,13 @@ class PointCloudV1(BaseDataset):
             return ("tile", self.tilename_from_path(rel_path))
         return super().decode_path(rel_path)
 
+    @allow_classmethod
     def tilename_to_blob_path(self, tilename, relative=False):
         """Given a tile's name, returns the path the tile's pointer should be written to."""
-        tilename = self.tilename_from_path(
-            tilename
-        )  # Just in case it's a whole path, not just a name.
+        assert relative or isinstance(self, PointCloudV1)
+
+        # Just in case it's a whole path, not just a name:
+        tilename = self.tilename_from_path(tilename)
         tile_prefix = hexhash(tilename)[0:2]
         rel_path = f"tile/{tile_prefix}/{tilename}"
         return rel_path if relative else self.ensure_full_path(rel_path)
@@ -113,7 +117,7 @@ class PointCloudV1(BaseDataset):
 
     @classmethod
     def tilename_from_path(cls, tile_path):
-        return remove_tile_extension(tile_path.rsplit("/", maxsplit=1)[-1])
+        return remove_tile_extension(os.path.basename(tile_path))
 
     @classmethod
     def get_tile_summary_from_pointer_blob(cls, tile_pointer_blob):
