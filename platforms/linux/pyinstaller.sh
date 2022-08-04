@@ -5,6 +5,10 @@ source /root/.bashrc
 
 set -xu
 
+export PY_VERSION=3.7
+export PY_SITEPACKAGES="lib/python$PY_VERSION/site-packages"
+export VIRTUAL_ENV=/venv
+
 export PATH=/opt/python/cp37-cp37m-shared/bin:${PATH}
 
 python3 --version
@@ -26,6 +30,9 @@ pip install --no-deps \
     /tmp/wheelhouse/*.whl
 
 pip install "pyinstaller==5.3.*"
+# disable the pyodbc hook. TODO: We can override it in PyInstaller 4.x
+echo "disable pyodbc hook"
+rm "$VIRTUAL_ENV/$PY_SITEPACKAGES/_pyinstaller_hooks_contrib/hooks/stdhooks/hook-pyodbc.py"
 
 python3 setup.py install
 
