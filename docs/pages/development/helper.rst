@@ -37,6 +37,10 @@ Helper mode is enabled by specifying setting and environment variable,
 ``KART_USE_HELPER``. 0, not set and any value with leading spaces are 
 all treated as false, any other value is true.
 
+The client executable is ``kart_cli_helper`` but at install is linked as 
+``kart`` so use is transparent. The main PyInstaller build executable is 
+``kart_cli`` on supported platforms.
+
 
 Operation
 '''''''''
