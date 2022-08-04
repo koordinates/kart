@@ -106,7 +106,7 @@ endif
 		'pip-tools==5.*' \
 		liccheck \
 		pipdeptree \
-		'pyinstaller==5.3' \
+		'pyinstaller==5.3.*' \
 		$(WHEELTOOL)
 
 	# disable the pyodbc hook. TODO: We can override it in PyInstaller 4.x

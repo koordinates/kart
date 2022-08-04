@@ -5,7 +5,7 @@ ENV PATH=/opt/python/cp37-cp37m/bin:${PATH}
 
 RUN --mount=type=cache,target=/root/.cache \
     pip install \
-        pyinstaller==3.6.*
+        pyinstaller==5.3.*
 
 WORKDIR /src
 ENV VIRTUAL_ENV=/venv
