@@ -11,6 +11,7 @@ import click
 from .socket_utils import recv_fds
 from .cli import load_commands_from_args, cli, is_windows, is_darwin, is_linux
 
+
 @click.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.option(
@@ -32,6 +33,14 @@ def helper(ctx, socket_filename, timeout, args):
     """Start the background helper process to speed up interaction"""
     if is_windows:
         click.echo("Helper mode not currently supported on Windows")
+        ctx.exit(1)
+
+    kart_helper_pid = os.environ.get("KART_HELPER_PID")
+    if kart_helper_pid:
+        click.echo(
+            "Helper mode not available when already running as helper"
+            f", existing helper PID {kart_helper_pid}"
+        )
         ctx.exit(1)
 
     load_commands_from_args(["--help"])
@@ -111,9 +120,9 @@ def helper(ctx, socket_filename, timeout, args):
                     click.echo("No payload or fds passed from kart_cli_helper")
                     sys.exit(-1)
 
-                kart_helper_log = os.environ.get('KART_HELPER_LOG')
+                kart_helper_log = os.environ.get("KART_HELPER_LOG")
                 if kart_helper_log:
-                    kart_helper_log = open(kart_helper_log, 'a')
+                    kart_helper_log = open(kart_helper_log, "a")
                 else:
                     kart_helper_log = io.StringIO()
 
@@ -126,10 +135,9 @@ def helper(ctx, socket_filename, timeout, args):
 
                 # set this processes stdin/stdout/stderr to the calling processes passed in fds
                 # TODO - have these passed as named pipes paths, will work on windows as well
-                
 
                 # 0,1,2 are the wrong places since they were closed before the helper was attached
-                
+
                 sys.stdin = os.fdopen(fds[0], "r")
                 sys.stdout = os.fdopen(fds[1], "w")
                 sys.stderr = os.fdopen(fds[2], "w")
@@ -142,17 +150,23 @@ def helper(ctx, socket_filename, timeout, args):
                     )
                 else:
                     sys.argv[1:] = calling_environment["argv"][1:]
-                    kart_helper_log.write(f"PID={calling_environment['pid']} CWD={os.getcwd()} CMD={' '.join(calling_environment['argv'])}\n")
+                    kart_helper_log.write(
+                        f"PID={calling_environment['pid']} CWD={os.getcwd()} CMD={' '.join(calling_environment['argv'])}\n"
+                    )
                     os.environ.clear()
                     os.environ.update(
-                        {**calling_environment["environ"], **required_environment, 'KART_HELPER_PID': str(os.getppid())}
+                        {
+                            **calling_environment["environ"],
+                            **required_environment,
+                            "KART_HELPER_PID": str(os.getppid()),
+                        }
                     )
 
                     import ctypes
                     import ctypes.util
 
                     libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
-                    # 
+                    #
                     if is_darwin:
                         SETVAL = 8
                     elif is_linux:
@@ -202,7 +216,7 @@ def helper(ctx, socket_filename, timeout, args):
                         os.kill(calling_environment["pid"], signal.SIGALRM)
                     except ProcessLookupError as e:
                         pass
-                
+
                 kart_helper_log.close()
                 sys.exit()
 
@@ -212,4 +226,3 @@ def helper(ctx, socket_filename, timeout, args):
             except FileNotFoundError:
                 """already unlinked???"""
             sys.exit()
-
