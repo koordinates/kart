@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from kart.merge_util import MergeIndex
+from kart.merge_util import MergedIndex
 from kart.repo import KartRepo
 from kart.structs import CommitWithReference
 
@@ -9,7 +9,7 @@ H = pytest.helpers.helpers()
 CONFLICTS_OUTPUT_FORMATS = ["text", "geojson", "json", "quiet"]
 
 
-def test_merge_index_roundtrip(data_archive, cli_runner):
+def test_merged_index_roundtrip(data_archive, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
     with data_archive("conflicts/polygons.tgz") as repo_path:
         repo = KartRepo(repo_path)
@@ -23,15 +23,15 @@ def test_merge_index_roundtrip(data_archive, cli_runner):
         index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
         assert index.conflicts
 
-        # Create a MergeIndex object, and roundtrip it into a tree and back.
-        orig = MergeIndex.from_pygit2_index(index)
+        # Create a MergedIndex object, and roundtrip it into a tree and back.
+        orig = MergedIndex.from_pygit2_index(index)
         assert len(orig.entries) == 237
         assert len(orig.conflicts) == 4
         assert len(orig.resolves) == 0
         assert len(orig.unresolved_conflicts) == 4
 
         orig.write("test.conflict.index")
-        r1 = MergeIndex.read("test.conflict.index")
+        r1 = MergedIndex.read("test.conflict.index")
         assert r1 is not orig
         assert r1 == orig
 
@@ -51,7 +51,7 @@ def test_merge_index_roundtrip(data_archive, cli_runner):
 
         # Roundtrip again
         r1.write("test.conflict.index")
-        r2 = MergeIndex.read("test.conflict.index")
+        r2 = MergedIndex.read("test.conflict.index")
         assert r2 == r1
 
 
@@ -507,3 +507,22 @@ def test_conflicts_geojson_usage(data_archive, cli_runner, tmp_path):
             r.stderr.splitlines()[-1]
             == "Error: Invalid value for --output: Output path should be a directory for GeoJSON format."
         )
+
+
+def test_diff_during_merge(data_working_copy, cli_runner):
+    with data_working_copy("conflicts/points.tgz") as (repo_path, wc_path):
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        # This diffs from HEAD - which is "ours_branch" - to the current contents of the working copy.
+        # Feature fid=1 merged cleanly with their update, which was written to the WC so we can see it here:
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "--- nz_pa_points_topo_150k:feature:1",
+            "+++ nz_pa_points_topo_150k:feature:1",
+            "-                                     name = ␀",
+            "+                                     name = theirs_version",
+        ]
+        # Everything else is unchanged - either it merged as "ours_branch",
+        # or it had a conflict so it wasn't updated in the WC.

@@ -77,6 +77,7 @@ py-license-check: py-deps $(py-install-tools) requirements/licenses.ini
 
 py-install-main = $(VIRTUAL_ENV)/.requirements.installed
 py-install-dev = $(VIRTUAL_ENV)/.dev.installed
+py-install-docs = $(VIRTUAL_ENV)/.docs.installed
 py-install-test = $(VIRTUAL_ENV)/.test.installed
 py-install-tools = $(VIRTUAL_ENV)/.tools.installed
 
@@ -84,7 +85,8 @@ $(PY_REQS) $(py-install-main): export SPATIALINDEX_C_LIBRARY:=$(abspath $(VIRTUA
 
 $(py-install-main): requirements.txt $(vendor-install)
 $(py-install-test): requirements/test.txt $(py-install-main)
-$(py-install-dev): requirements/dev.txt $(py-install-main) $(py-install-test)
+$(py-install-docs): requirements/docs.txt $(py-install-main)
+$(py-install-dev): requirements/dev.txt $(py-install-main) $(py-install-test) $(py-install-docs)
 
 $(VIRTUAL_ENV)/.%.installed: | $(VIRTUAL_ENV)
 	pip install --no-deps -r $<

@@ -156,6 +156,7 @@ def git_fast_import(repo, *args):
         stdin=subprocess.PIPE,
         env=tool_environment(),
         bufsize=128 * 1024,
+        stderr=subprocess.DEVNULL,
     )
     try:
         yield p

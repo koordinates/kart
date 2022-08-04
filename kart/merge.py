@@ -1,5 +1,4 @@
 import logging
-import os
 import sys
 
 import click
@@ -13,7 +12,8 @@ from .merge_util import (
     ALL_MERGE_FILES,
     AncestorOursTheirs,
     MergeContext,
-    MergeIndex,
+    MergedIndex,
+    WorkingCopyMerger,
     merge_status_to_text,
     write_merged_index_flags,
 )
@@ -102,17 +102,17 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
     index = repo.merge_trees(**tree3.as_dict(), flags={"find_renames": False})
 
     if index.conflicts:
-        merge_index = MergeIndex.from_pygit2_index(index)
+        merged_index = MergedIndex.from_pygit2_index(index)
         conflicts_writer_class = BaseConflictsWriter.get_conflicts_writer_class("json")
         conflicts_writer = conflicts_writer_class(
-            repo, summarise=2, merge_index=merge_index, merge_context=merge_context
+            repo, summarise=2, merged_index=merged_index, merge_context=merge_context
         )
         merge_jdict["conflicts"] = conflicts_writer.list_conflicts()
         merge_jdict["state"] = "merging"
         if not dry_run:
             move_repo_to_merging_state(
                 repo,
-                merge_index,
+                merged_index,
                 merge_context,
                 merge_message,
             )
@@ -146,19 +146,32 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
     return merge_jdict
 
 
-def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
+def move_repo_to_merging_state(
+    repo,
+    merged_index,
+    merge_context,
+    merge_message,
+):
     """
     Move the Kart repository into a "merging" state in which conflicts
     can be resolved one by one.
     repo - the KartRepo
-    merge_index - the MergeIndex containing the conflicts found.
+    merged_index - the MergedIndex containing the conflicts found.
     merge_context - the MergeContext object for the merge.
     merge_message - the commit message for when the merge is completed.
     """
     assert repo.state != KartRepoState.MERGING
-    merge_index.write_to_repo(repo)
+    merged_index.write_to_repo(repo)
     merge_context.write_to_repo(repo)
     repo.write_gitdir_file(KartRepoFiles.MERGE_MSG, merge_message)
+
+    working_copy_merger = WorkingCopyMerger(repo, merge_context)
+    # The merged_tree is used mostly for updating the working copy, but is also used for
+    # serialising feature resolves, so we write it even if there's no WC.
+    merged_tree = working_copy_merger.write_merged_tree(merged_index)
+    if repo.working_copy.exists():
+        working_copy_merger.update_working_copy(merged_index, merged_tree)
+
     assert repo.state == KartRepoState.MERGING
 
 
@@ -183,6 +196,9 @@ def abort_merging_state(ctx):
         )
         raise InvalidOperation(message)
 
+    # In case the user has modified the working copy during the merging state.
+    repo.working_copy.reset_to_head()
+
 
 def complete_merging_state(ctx):
     """
@@ -194,8 +210,8 @@ def complete_merging_state(ctx):
         allowed_states=KartRepoState.MERGING,
         command_extra="--continue",
     )
-    merge_index = MergeIndex.read_from_repo(repo)
-    if merge_index.unresolved_conflicts:
+    merged_index = MergedIndex.read_from_repo(repo)
+    if merged_index.unresolved_conflicts:
         raise InvalidOperation(
             "Merge cannot be completed until all conflicts are resolved - see `kart conflicts`."
         )
@@ -204,7 +220,7 @@ def complete_merging_state(ctx):
     commit_ids = merge_context.versions.map(lambda v: v.commit_id)
 
     with write_to_packfile(repo):
-        merge_tree_id = merge_index.write_resolved_tree(repo)
+        merge_tree_id = merged_index.write_resolved_tree(repo)
         L.debug(f"Merge tree: {merge_tree_id}")
 
         merge_message = ctx.params.get("message")
@@ -233,10 +249,6 @@ def complete_merging_state(ctx):
         "message": merge_message,
     }
 
-    # FIXME - this blows away any WC changes the user has, but unfortunately,
-    # we don't have any way of preserving them right now.
-    repo.working_copy.reset_to_head()
-
     for filename in ALL_MERGE_FILES:
         repo.remove_gitdir_file(filename)
 
@@ -245,6 +257,10 @@ def complete_merging_state(ctx):
     # TODO - support json output
     click.echo(merge_status_to_text(merge_jdict, fresh=True))
     repo.gc("--auto")
+
+    # TODO - this blows away any uncommitted WC changes the user has, but unfortunately,
+    # we don't have any way of preserving them right now.
+    repo.working_copy.reset_to_head()
 
 
 @click.command()
@@ -311,14 +327,10 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     no_op = jdict.get("noOp", False) or jdict.get("dryRun", False)
     conflicts = jdict.get("conflicts", None)
 
-    if not no_op and not conflicts:
-        # Update working copy.
-        # TODO - maybe lock the working copy during a merge?
-        repo.working_copy.reset_to_head(quiet=do_json)
-
     if do_json:
         dump_json_output({"kart.merge/v1": jdict}, sys.stdout)
     else:
         click.echo(merge_status_to_text(jdict, fresh=True))
     if not no_op and not conflicts:
         repo.gc("--auto")
+        repo.working_copy.reset_to_head(quiet=do_json)

@@ -1,9 +1,13 @@
 from enum import IntEnum
 import json
 import logging
+import re
+from subprocess import CalledProcessError
 import sys
+import tempfile
 
 import click
+from osgeo import osr
 
 from kart.crs_util import normalise_wkt
 from kart.list_of_conflicts import ListOfConflicts
@@ -13,6 +17,7 @@ from kart.exceptions import (
     WORKING_COPY_OR_IMPORT_CONFLICT,
 )
 from kart.output_util import format_json_for_output, format_wkt_for_output
+from kart.point_cloud import pdal_execute_pipeline
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf,
     get_record_length_from_pdrf,
@@ -76,14 +81,13 @@ def rewrite_format(tile_metadata, rewrite_metadata=None):
     elif rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COPC:
         orig_pdrf = orig_format["pointDataRecordFormat"]
         new_pdrf = equivalent_copc_pdrf(orig_pdrf)
-        new_record_length = get_record_length_from_pdrf()
         return {
             "compression": "laz",
             "lasVersion": "1.4",
             "optimization": "copc",
             "optimizationVersion": "1.0",
             "pointDataRecordFormat": new_pdrf,
-            "pointDataRecordLength": new_record_length,
+            "pointDataRecordLength": get_record_length_from_pdrf(new_pdrf),
         }
     else:
         return orig_format
@@ -148,17 +152,7 @@ def _check_for_non_homogenous_meta_item(
         )
 
 
-def _unwrap_metadata(metadata):
-    if isinstance(metadata, str):
-        metadata = json.loads(metadata)
-    if "metadata" in metadata:
-        metadata = metadata["metadata"]
-    return metadata
-
-
-def _format_array(array):
-    if array is None:
-        return None
+def _format_list_as_str(array):
     return json.dumps(array, separators=(",", ":"))[1:-1]
 
 
@@ -205,9 +199,7 @@ def extract_pc_tile_metadata(
     describe *all* of the tiles in that dataset. The "tile" field is where we keep all information
     that can be different for every tile in the dataset, which is why it must be stored in pointer files.
     """
-    import pdal
-
-    config = [
+    pipeline = [
         {
             "type": "readers.las",
             "filename": str(pc_tile_path),
@@ -215,17 +207,15 @@ def extract_pc_tile_metadata(
         }
     ]
     if extract_schema:
-        config.append({"type": "filters.info"})
+        pipeline.append({"type": "filters.info"})
 
-    pipeline = pdal.Pipeline(json.dumps(config))
     try:
-        pipeline.execute()
-    except RuntimeError:
+        metadata = pdal_execute_pipeline(pipeline)
+    except CalledProcessError:
         raise InvalidOperation(
             f"Error reading {pc_tile_path}", exit_code=INVALID_FILE_FORMAT
         )
 
-    metadata = _unwrap_metadata(pipeline.metadata)
     info = metadata["readers.las"]
 
     native_extent = get_native_extent(info)
@@ -240,11 +230,6 @@ def extract_pc_tile_metadata(
         "pointDataRecordFormat": info["dataformat_id"],
         "pointDataRecordLength": info["point_length"],
     }
-    format_summary = f"{format_info['compression']}-{format_info['lasVersion']}"
-    if format_info["optimization"]:
-        format_summary += (
-            f"/{format_info['optimization']}-{format_info['optimizationVersion']}"
-        )
 
     # Keep tile info keys in alphabetical order.
     tile_info = {
@@ -252,7 +237,7 @@ def extract_pc_tile_metadata(
         "crs84Extent": _calc_crs84_extent(
             native_extent, horizontal_crs or compound_crs
         ),
-        "format": format_summary,
+        "format": get_format_summary(format_info),
         "nativeExtent": native_extent,
         "pointCount": info["count"],
     }
@@ -270,57 +255,96 @@ def extract_pc_tile_metadata(
     return result
 
 
+def get_format_summary(format_info):
+    """
+    Given format info as stored in format.json, return a short string summary such as: laz-1.4/copc-1.0
+    """
+    format_summary = f"{format_info['compression']}-{format_info['lasVersion']}"
+    if format_info["optimization"]:
+        format_summary += (
+            f"/{format_info['optimization']}-{format_info['optimizationVersion']}"
+        )
+    return format_summary
+
+
 def _calc_crs84_extent(src_extent, src_crs):
     """
     Given a 3D extent with a particular CRS, return a CRS84 extent that surrounds that extent.
     """
+    src_srs = osr.SpatialReference()
+    src_srs.ImportFromWkt(src_crs)
+    src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 
-    import pdal
-    import numpy as np
+    dest_srs = osr.SpatialReference()
+    dest_srs.SetWellKnownGeogCS("CRS84")
 
-    # Treat the src_extent as if it is a point cloud with only two points:
-    # (minx, miny, minz) and (maxx, maxy, maxz).
-    # This "point cloud" has the same extent as the source extent, but is otherwise not descriptive
-    # of the point cloud that src_extent was extracted from (whatever that might be).
-    src_points = np.array(
-        [src_extent[0::2], src_extent[1::2]],
-        dtype=[
-            ("X", np.dtype(float)),
-            ("Y", np.dtype(float)),
-            ("Z", np.dtype(float)),
-        ],
+    transform = osr.CoordinateTransformation(src_srs, dest_srs)
+    (ax, ay, az), (bx, by, bz) = transform.TransformPoints(
+        [
+            src_extent[0::2],
+            src_extent[1::2],
+        ]
+    )
+    return (
+        min(ax, bx),
+        max(ax, bx),
+        min(ay, by),
+        max(ay, by),
+        min(az, bz),
+        max(az, bz),
     )
 
-    pipeline = (
-        # This reprojection just associates src_crs with src_points - doesn't do any reprojection.
-        pdal.Filter.reprojection(in_srs=src_crs, out_srs=src_crs).pipeline(src_points)
-        # PDAL filter.stats calculates the native bbox of the input points, and also converts the native bbox into a
-        # CRS84 bbox that surrounds the native bbox. The CRS84 bbox only depends on the native bbox, not the input
-        # points directly, which is good since our input points define a useful native bbox but are otherwise not
-        # descriptive of the actual point cloud that the native bbox was extracted from.
-        | pdal.Filter.stats()
-    )
-    try:
-        pipeline.execute()
-    except RuntimeError:
-        L.warning("Couldn't convert tile CRS to EPGS:4326")
-        return None
-    metadata = _unwrap_metadata(pipeline.metadata)
-    b = metadata["filters.stats"]["bbox"]["EPSG:4326"]["bbox"]
-    return b["minx"], b["maxx"], b["miny"], b["maxy"], b["minz"], b["maxz"]
+
+# Keep pointer file keys in alphabetical order, except:
+# version goes first, and oid and size go last
+TILE_POINTER_FILE_KEYS = (
+    "version",
+    "crs84Extent",
+    "format",
+    "nativeExtent",
+    "pointCount",
+    "sourceOid",
+    "oid",
+    "size",
+)
 
 
-def format_tile_info_for_pointer_file(tile_info):
+def format_tile_for_pointer_file(*tile_info_sources):
     """
     Given the tile-info metadata, converts it to a format appropriate for the LFS pointer file.
     """
-    # Keep tile info keys in alphabetical order.
-    result = {
-        "crs84Extent": _format_array(tile_info.get("crs84Extent")),
-        "format": tile_info["format"],
-        "nativeExtent": _format_array(tile_info["nativeExtent"]),
-        "pointCount": tile_info["pointCount"],
-    }
-    if result["crs84Extent"] is None:
-        del result["crs84Extent"]
+
+    def get_value_for_key(key):
+        for source in tile_info_sources:
+            if key in source:
+                value = source.get(key)
+                if hasattr(value, "__iter__") and not isinstance(value, str):
+                    return _format_list_as_str(value)
+                else:
+                    return value
+
+    result = {}
+    for key in TILE_POINTER_FILE_KEYS:
+        value = get_value_for_key(key)
+        if value:
+            result[key] = value
+
     return result
+
+
+def is_copc(tile_format):
+    if isinstance(tile_format, dict):
+        return tile_format.get("optimization") == "copc"
+    elif isinstance(tile_format, str):
+        return "copc" in tile_format
+    raise ValueError("Bad tile format")
+
+
+def get_las_version(tile_format):
+    if isinstance(tile_format, dict):
+        return tile_format.get("lasVersion")
+    elif isinstance(tile_format, str):
+        match = re.match(r"la[sz]-([0-9\.]+)", tile_format, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    raise ValueError("Bad tile format")

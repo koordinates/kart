@@ -1,0 +1,50 @@
+import re
+
+from .metadata_util import is_copc
+
+
+def remove_tile_extension(filename):
+    """Given a tile filename, removes the suffix .las or .laz or .copc.las or .copc.laz"""
+    match = re.fullmatch(r"(.+?)(?:\.copc)?\.la[sz]", filename, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return filename
+
+
+def set_tile_extension(filename, ext=None, tile_format=None):
+    """Changes a tile's file extension to the given extension, or to the extension appropriate for its format."""
+    if not ext:
+        assert tile_format is not None
+        if isinstance(tile_format, dict):
+            # Format info as stored in format.json
+            ext = f".{tile_format['compression']}"
+        else:
+            # Format summary string.
+            ext = f".{tile_format[0:3]}"
+
+        if is_copc(tile_format):
+            ext = ".copc" + ext
+
+    elif not ext.startswith("."):
+        ext = f".{ext}"
+
+    return remove_tile_extension(filename) + ext
+
+
+def get_tile_path_pattern(tilename=None, *, parent_path=None):
+    """
+    Given a tilename eg "mytile" and a parent_path eg "myfolder",
+    returns a regex that accepts "myfolder/mytile.laz", "myfolder/mytile.LAZ", "myfolder/mytile.copc.laz", "myfolder/mytile.las", etc.
+    Note that path separators need to be normalised to "/" before this is called (as they are in a Git diff).
+
+    If tilename is not specified, the regex will match any non-empty tilename that contains no path separators, and this will
+    be the first group in the result.
+    If parent_path is not specified, the resulting regex will match only tiles that have no parent-path prefix ie simply "mytile.laz"
+    """
+
+    parent_pattern = (
+        re.escape(parent_path.rstrip("/") + "/") if parent_path is not None else ""
+    )
+    tile_pattern = re.escape(tilename) if tilename is not None else r"([^/]+)"
+    ext_pattern = r"(?:\.[Cc][Oo][Pp][Cc])?\.[Ll][Aa][SsZz]"
+    return re.compile(parent_pattern + tile_pattern + ext_pattern)

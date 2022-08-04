@@ -1,296 +1,14 @@
-from glob import glob
-import json
 import re
 import shutil
 import subprocess
-import pytest
 
-from kart.exceptions import INVALID_FILE_FORMAT, WORKING_COPY_OR_IMPORT_CONFLICT
+import pygit2
+
+from kart.cli_util import tool_environment
+from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT
 from kart.repo import KartRepo
-
-DUMMY_REPO = "git@example.com/example.git"
-
-# using a fixture instead of a skipif decorator means we get one aggregated skip
-# message rather than one per test
-@pytest.fixture(scope="session")
-def requires_pdal():
-    has_pdal = False
-    try:
-        import pdal
-
-        assert pdal.Pipeline
-        has_pdal = True
-    except ModuleNotFoundError:
-        pass
-
-    pytest.helpers.feature_assert_or_skip(
-        "pdal package installed", "KART_EXPECT_PDAL", has_pdal, ci_require=False
-    )
-
-
-@pytest.fixture(scope="session")
-def requires_git_lfs():
-    r = subprocess.run(["git", "lfs", "--version"])
-    has_git_lfs = r.returncode == 0
-
-    pytest.helpers.feature_assert_or_skip(
-        "Git LFS installed", "KART_EXPECT_GIT_LFS", has_git_lfs, ci_require=False
-    )
-
-
-def test_import_single_las(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
-):
-    with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
-        repo_path = tmp_path / "point-cloud-repo"
-        r = cli_runner.invoke(["init", repo_path])
-        assert r.exit_code == 0, r.stderr
-
-        repo = KartRepo(repo_path)
-        with chdir(repo_path):
-            r = cli_runner.invoke(
-                ["point-cloud-import", f"{autzen}/autzen.las", "--dataset-path=autzen"]
-            )
-            assert r.exit_code == 0, r.stderr
-
-            r = cli_runner.invoke(["data", "ls"])
-            assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines() == ["autzen"]
-
-            r = cli_runner.invoke(["meta", "get", "autzen", "format.json", "-ojson"])
-            assert r.exit_code == 0, r.stderr
-            assert json.loads(r.stdout) == {
-                "autzen": {
-                    "format.json": {
-                        "compression": "laz",
-                        "lasVersion": "1.4",
-                        "optimization": "copc",
-                        "optimizationVersion": "1.0",
-                        "pointDataRecordFormat": 6,
-                        "pointDataRecordLength": 30,
-                    }
-                }
-            }
-
-            r = cli_runner.invoke(["meta", "get", "autzen", "schema.json", "-ojson"])
-            assert r.exit_code == 0, r.stderr
-            assert json.loads(r.stdout) == {
-                "autzen": {
-                    "schema.json": [
-                        {"name": "X", "dataType": "float", "size": 64},
-                        {"name": "Y", "dataType": "float", "size": 64},
-                        {"name": "Z", "dataType": "float", "size": 64},
-                        {"name": "Intensity", "dataType": "integer", "size": 16},
-                        {"name": "ReturnNumber", "dataType": "integer", "size": 8},
-                        {"name": "NumberOfReturns", "dataType": "integer", "size": 8},
-                        {"name": "ScanDirectionFlag", "dataType": "integer", "size": 8},
-                        {"name": "EdgeOfFlightLine", "dataType": "integer", "size": 8},
-                        {"name": "Classification", "dataType": "integer", "size": 8},
-                        {"name": "ScanAngleRank", "dataType": "float", "size": 32},
-                        {"name": "UserData", "dataType": "integer", "size": 8},
-                        {"name": "PointSourceId", "dataType": "integer", "size": 16},
-                        {"name": "GpsTime", "dataType": "float", "size": 64},
-                        {"name": "ScanChannel", "dataType": "integer", "size": 8},
-                        {"name": "ClassFlags", "dataType": "integer", "size": 8},
-                    ]
-                }
-            }
-
-            r = cli_runner.invoke(["show", "HEAD", "autzen:tile:autzen.copc.laz"])
-            assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines()[4:] == [
-                "    Importing 1 LAZ tiles as autzen",
-                "",
-                "+++ autzen:tile:autzen.copc.laz",
-                "+                                     name = autzen.copc.laz",
-                "+                              crs84Extent = -123.075389,-123.0625145,44.04998981,44.06229306,407.35,536.84",
-                "+                                   format = laz-1.4/copc-1.0",
-                "+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84",
-                "+                               pointCount = 106",
-                "+                                      oid = sha256:213ef4211ba375e2eec60aa61b6c230d1a3d1498b8fcc39150fd3040ee8f0512",
-                "+                                     size = 3607",
-            ]
-
-            r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
-            assert r.exit_code == 0, r.stderr
-            repo.config[f"lfs.{DUMMY_REPO}/info/lfs.locksverify"] = False
-
-            stdout = subprocess.check_output(
-                ["kart", "lfs", "push", "origin", "--all", "--dry-run"], encoding="utf8"
-            )
-            assert re.match(
-                r"push [0-9a-f]{64} => autzen/.point-cloud-dataset.v1/tile/e8/autzen.copc.laz",
-                stdout.splitlines()[0],
-            )
-
-            assert (repo_path / "autzen" / "autzen.copc.laz").is_file()
-
-
-@pytest.mark.slow
-def test_import_several_laz(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
-):
-    # Using postgres here because it has the best type preservation
-    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
-        repo_path = tmp_path / "point-cloud-repo"
-        r = cli_runner.invoke(["init", repo_path])
-        assert r.exit_code == 0
-
-        repo = KartRepo(repo_path)
-        with chdir(repo_path):
-            r = cli_runner.invoke(
-                [
-                    "point-cloud-import",
-                    *glob(f"{auckland}/auckland_*.laz"),
-                    "--dataset-path=auckland",
-                ]
-            )
-            assert r.exit_code == 0, r.stderr
-
-            r = cli_runner.invoke(["data", "ls"])
-            assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines() == ["auckland"]
-
-            r = cli_runner.invoke(["meta", "get", "auckland", "schema.json", "-ojson"])
-            assert r.exit_code == 0, r.stderr
-            assert json.loads(r.stdout) == {
-                "auckland": {
-                    "schema.json": [
-                        {"name": "X", "dataType": "float", "size": 64},
-                        {"name": "Y", "dataType": "float", "size": 64},
-                        {"name": "Z", "dataType": "float", "size": 64},
-                        {"name": "Intensity", "dataType": "integer", "size": 16},
-                        {"name": "ReturnNumber", "dataType": "integer", "size": 8},
-                        {"name": "NumberOfReturns", "dataType": "integer", "size": 8},
-                        {"name": "ScanDirectionFlag", "dataType": "integer", "size": 8},
-                        {"name": "EdgeOfFlightLine", "dataType": "integer", "size": 8},
-                        {"name": "Classification", "dataType": "integer", "size": 8},
-                        {"name": "ScanAngleRank", "dataType": "float", "size": 32},
-                        {"name": "UserData", "dataType": "integer", "size": 8},
-                        {"name": "PointSourceId", "dataType": "integer", "size": 16},
-                        {"name": "GpsTime", "dataType": "float", "size": 64},
-                        {"name": "ScanChannel", "dataType": "integer", "size": 8},
-                        {"name": "ClassFlags", "dataType": "integer", "size": 8},
-                        {"name": "Red", "dataType": "integer", "size": 16},
-                        {"name": "Green", "dataType": "integer", "size": 16},
-                        {"name": "Blue", "dataType": "integer", "size": 16},
-                    ]
-                }
-            }
-
-            r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
-            assert r.exit_code == 0, r.stderr
-            repo.config[f"lfs.{DUMMY_REPO}/info/lfs.locksverify"] = False
-
-            stdout = subprocess.check_output(
-                ["kart", "lfs", "push", "origin", "--all", "--dry-run"], encoding="utf8"
-            )
-            lines = stdout.splitlines()
-            for i in range(16):
-                assert re.match(
-                    r"push [0-9a-f]{64} => auckland/.point-cloud-dataset.v1/tile/[0-9a-f]{2}/auckland_\d_\d.copc.laz",
-                    lines[i],
-                )
-
-            for x in range(4):
-                for y in range(4):
-                    assert (
-                        repo_path / "auckland" / f"auckland_{x}_{y}.copc.laz"
-                    ).is_file()
-
-
-def test_import_single_laz_no_convert(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
-):
-    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
-        repo_path = tmp_path / "point-cloud-repo"
-        r = cli_runner.invoke(["init", repo_path])
-        assert r.exit_code == 0
-
-        with chdir(repo_path):
-            r = cli_runner.invoke(
-                [
-                    "point-cloud-import",
-                    *glob(f"{auckland}/auckland_0_0.laz"),
-                    "--dataset-path=auckland",
-                    "--preserve-format",
-                ]
-            )
-            assert r.exit_code == 0, r.stderr
-
-            r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
-            assert r.exit_code == 0, r.stderr
-            assert json.loads(r.stdout) == {
-                "auckland": {
-                    "format.json": {
-                        "compression": "laz",
-                        "lasVersion": "1.2",
-                        "pointDataRecordFormat": 3,
-                        "pointDataRecordLength": 34,
-                    }
-                }
-            }
-
-            r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0.laz"])
-            assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines()[4:] == [
-                "    Importing 1 LAZ tiles as auckland",
-                "",
-                "+++ auckland:tile:auckland_0_0.laz",
-                "+                                     name = auckland_0_0.laz",
-                "+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83",
-                "+                                   format = laz-1.2",
-                "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
-                "+                               pointCount = 4231",
-                "+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
-                "+                                     size = 51489",
-            ]
-
-
-def test_import_single_las_no_convert(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
-):
-    with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
-        repo_path = tmp_path / "point-cloud-repo"
-        r = cli_runner.invoke(["init", repo_path])
-        assert r.exit_code == 0
-
-        with chdir(repo_path):
-            r = cli_runner.invoke(
-                [
-                    "point-cloud-import",
-                    *glob(f"{autzen}/autzen.las"),
-                    "--dataset-path=autzen",
-                    "--preserve-format",
-                ]
-            )
-            assert r.exit_code == INVALID_FILE_FORMAT
-            assert "LAS datasets are not supported" in r.stderr
-
-
-def test_import_mismatched_las(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
-):
-    # Using postgres here because it has the best type preservation
-    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
-        with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
-            repo_path = tmp_path / "point-cloud-repo"
-            r = cli_runner.invoke(["init", repo_path])
-            assert r.exit_code == 0, r.stderr
-            with chdir(repo_path):
-                r = cli_runner.invoke(
-                    [
-                        "point-cloud-import",
-                        *glob(f"{auckland}/auckland_*.laz"),
-                        f"{autzen}/autzen.las",
-                        "--dataset-path=mixed",
-                    ]
-                )
-                assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
-                assert "Non-homogenous" in r.stderr
-                # This is disallowed even though we are converting to COPC, since these tiles would have different
-                # schemas even once converted to COPC.
-                assert "schema" in r.stderr
+from kart.point_cloud.metadata_util import extract_pc_tile_metadata
+from .fixtures import requires_pdal  # noqa
 
 
 def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal):
@@ -329,34 +47,36 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
         ]
 
         EXPECTED_TILE_DIFF = [
-            '--- auckland:tile:auckland_1_1.copc.laz',
-            '+++ auckland:tile:auckland_1_1.copc.laz',
-            '-                              crs84Extent = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15',
-            '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
-            '-                             nativeExtent = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15',
-            '+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
-            '-                               pointCount = 1558',
-            '+                               pointCount = 4231',
-            '-                                      oid = sha256:1130618cd78bd1d144dbc467f278405d043fb10b6f19efb2c0cce23a9e24323e',
-            '+                                      oid = sha256:f4bf2dfd3734520a94dea6dc987e892fd2c5b4f4647bb51cb5b8f233e43ada7b',
-            '-                                     size = 24490',
-            '+                                     size = 69545',
-            '--- auckland:tile:auckland_3_3.copc.laz',
-            '-                                     name = auckland_3_3.copc.laz',
-            '-                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
-            '-                                   format = laz-1.4/copc-1.0',
-            '-                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8',
-            '-                               pointCount = 29',
-            '-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
-            '-                                     size = 2319',
-            '+++ auckland:tile:auckland_4_4.copc.laz',
-            '+                                     name = auckland_4_4.copc.laz',
-            '+                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
-            '+                                   format = laz-1.4/copc-1.0',
-            '+                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8',
-            '+                               pointCount = 29',
-            '+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
-            '+                                     size = 2319',
+            "--- auckland:tile:auckland_1_1",
+            "+++ auckland:tile:auckland_1_1",
+            "-                              crs84Extent = 174.7494679662727,174.76045085377945,-36.84205418524233,-36.83288872459146,-1.48,35.15",
+            "+                              crs84Extent = 174.73844833207193,174.74945404214898,-36.85123712200056,-36.84206322341377,-1.66,99.83",
+            "-                             nativeExtent = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15",
+            "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
+            "-                               pointCount = 1558",
+            "+                               pointCount = 4231",
+            "-                                sourceOid = sha256:d89966fb10b30d6987955ae1b97c752ba875de89da1881e2b05820878d17eab9",
+            "-                                      oid = sha256:add2d011a19b39c0c8d70ed2313ad4955b1e0faf9a24394ab1a103930580a267",
+            "+                                      oid = sha256:a1862450841dede2759af665825403e458dfa551c095d9a65ea6e6765aeae0f7",
+            "-                                     size = 24552",
+            "+                                     size = 69590",
+            "--- auckland:tile:auckland_3_3",
+            "-                                     name = auckland_3_3.copc.laz",
+            "-                              crs84Extent = 174.77264383982666,174.78196531690548,-36.82369124731785,-36.82346552753396,-1.28,9.8",
+            "-                                   format = laz-1.4/copc-1.0",
+            "-                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
+            "-                               pointCount = 29",
+            "-                                sourceOid = sha256:4190c9056b732fadd6e86500e93047a787d88812f7a4af21c7759d92d1d48954",
+            "-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
+            "-                                     size = 2319",
+            "+++ auckland:tile:auckland_4_4",
+            "+                                     name = auckland_4_4.copc.laz",
+            "+                              crs84Extent = 174.77264383982666,174.78196531690548,-36.82369124731785,-36.82346552753396,-1.28,9.8",
+            "+                                   format = laz-1.4/copc-1.0",
+            "+                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
+            "+                               pointCount = 29",
+            "+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
+            "+                                     size = 2319",
         ]
 
         r = cli_runner.invoke(["diff"])
@@ -415,9 +135,7 @@ def test_working_copy_restore_reset(
         assert file_count(tiles_path) == 12
         edit_commit = repo.head_commit.hex
 
-        r = cli_runner.invoke(
-            ["restore", "-s", "HEAD^", "auckland:tile:auckland_0_0.copc.laz"]
-        )
+        r = cli_runner.invoke(["restore", "-s", "HEAD^", "auckland:tile:auckland_0_0"])
         assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(["status"])
@@ -438,8 +156,8 @@ def test_working_copy_restore_reset(
                 "restore",
                 "-s",
                 edit_commit,
-                "auckland:tile:auckland_0_1.copc.laz",
-                "auckland:tile:auckland_0_2.copc.laz",
+                "auckland:tile:auckland_0_1",
+                "auckland:tile:auckland_0_2",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -496,8 +214,8 @@ def test_working_copy_meta_edit(
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines() == [
-                '--- auckland:meta:crs.wkt',
-                '+++ auckland:meta:crs.wkt',
+                "--- auckland:meta:crs.wkt",
+                "+++ auckland:meta:crs.wkt",
                 '- COMPD_CS["NZGD2000 / New Zealand Transverse Mercator 2000 + VERT_CS",',
                 '-     PROJCS["NZGD2000 / New Zealand Transverse Mercator 2000",',
                 '-         GEOGCS["NZGD2000",',
@@ -528,8 +246,8 @@ def test_working_copy_meta_edit(
                 '-             AUTHORITY["EPSG", "9001"]],',
                 '-         AXIS["Gravity-related height", UP],',
                 '-         AUTHORITY["EPSG", "4440"]]]',
-                '- ',
-                '+ <<<<<<< ',
+                "- ",
+                "+ <<<<<<< ",
                 '+ COMPD_CS["NZGD2000 / New Zealand Transverse Mercator 2000 + VERT_CS",',
                 '+     PROJCS["NZGD2000 / New Zealand Transverse Mercator 2000",',
                 '+         GEOGCS["NZGD2000",',
@@ -560,8 +278,8 @@ def test_working_copy_meta_edit(
                 '+             AUTHORITY["EPSG", "9001"]],',
                 '+         AXIS["Gravity-related height", UP],',
                 '+         AUTHORITY["EPSG", "4440"]]]',
-                '+ ',
-                '+ ======== ',
+                "+ ",
+                "+ ======== ",
                 '+ PROJCS["NAD83(HARN) / Oregon GIC Lambert (ft)",',
                 '+     GEOGCS["NAD83(HARN)",',
                 '+         DATUM["NAD83_High_Accuracy_Reference_Network",',
@@ -585,301 +303,301 @@ def test_working_copy_meta_edit(
                 '+     AXIS["Easting", EAST],',
                 '+     AXIS["Northing", NORTH],',
                 '+     AUTHORITY["EPSG", "2994"]]',
-                '+ ',
-                '+ >>>>>>> ',
-                '--- auckland:meta:format.json',
-                '+++ auckland:meta:format.json',
-                '- {',
+                "+ ",
+                "+ >>>>>>> ",
+                "--- auckland:meta:format.json",
+                "+++ auckland:meta:format.json",
+                "- {",
                 '-   "compression": "laz",',
                 '-   "lasVersion": "1.4",',
                 '-   "optimization": "copc",',
                 '-   "optimizationVersion": "1.0",',
                 '-   "pointDataRecordFormat": 7,',
                 '-   "pointDataRecordLength": 36',
-                '- }',
-                '+ <<<<<<< ',
-                '+ {',
+                "- }",
+                "+ <<<<<<< ",
+                "+ {",
                 '+   "compression": "laz",',
                 '+   "lasVersion": "1.4",',
                 '+   "optimization": "copc",',
                 '+   "optimizationVersion": "1.0",',
                 '+   "pointDataRecordFormat": 7,',
                 '+   "pointDataRecordLength": 36',
-                '+ }',
-                '+ ======== ',
-                '+ {',
+                "+ }",
+                "+ ======== ",
+                "+ {",
                 '+   "compression": "laz",',
                 '+   "lasVersion": "1.2",',
                 '+   "optimization": null,',
                 '+   "optimizationVersion": null,',
                 '+   "pointDataRecordFormat": 1,',
                 '+   "pointDataRecordLength": 28',
-                '+ }',
-                '+ >>>>>>> ',
-                '--- auckland:meta:schema.json',
-                '+++ auckland:meta:schema.json',
-                '- [',
-                '-   {',
+                "+ }",
+                "+ >>>>>>> ",
+                "--- auckland:meta:schema.json",
+                "+++ auckland:meta:schema.json",
+                "- [",
+                "-   {",
                 '-     "name": "X",',
                 '-     "dataType": "float",',
                 '-     "size": 64',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Y",',
                 '-     "dataType": "float",',
                 '-     "size": 64',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Z",',
                 '-     "dataType": "float",',
                 '-     "size": 64',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Intensity",',
                 '-     "dataType": "integer",',
                 '-     "size": 16',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "ReturnNumber",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "NumberOfReturns",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "ScanDirectionFlag",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "EdgeOfFlightLine",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Classification",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "ScanAngleRank",',
                 '-     "dataType": "float",',
                 '-     "size": 32',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "UserData",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "PointSourceId",',
                 '-     "dataType": "integer",',
                 '-     "size": 16',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "GpsTime",',
                 '-     "dataType": "float",',
                 '-     "size": 64',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "ScanChannel",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "ClassFlags",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Red",',
                 '-     "dataType": "integer",',
                 '-     "size": 16',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Green",',
                 '-     "dataType": "integer",',
                 '-     "size": 16',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Blue",',
                 '-     "dataType": "integer",',
                 '-     "size": 16',
-                '-   }',
-                '- ]',
-                '+ <<<<<<< ',
-                '+ [',
-                '+   {',
+                "-   }",
+                "- ]",
+                "+ <<<<<<< ",
+                "+ [",
+                "+   {",
                 '+     "name": "X",',
                 '+     "dataType": "float",',
                 '+     "size": 64',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Y",',
                 '+     "dataType": "float",',
                 '+     "size": 64',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Z",',
                 '+     "dataType": "float",',
                 '+     "size": 64',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Intensity",',
                 '+     "dataType": "integer",',
                 '+     "size": 16',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "ReturnNumber",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "NumberOfReturns",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "ScanDirectionFlag",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "EdgeOfFlightLine",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Classification",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "ScanAngleRank",',
                 '+     "dataType": "float",',
                 '+     "size": 32',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "UserData",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "PointSourceId",',
                 '+     "dataType": "integer",',
                 '+     "size": 16',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "GpsTime",',
                 '+     "dataType": "float",',
                 '+     "size": 64',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "ScanChannel",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "ClassFlags",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Red",',
                 '+     "dataType": "integer",',
                 '+     "size": 16',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Green",',
                 '+     "dataType": "integer",',
                 '+     "size": 16',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Blue",',
                 '+     "dataType": "integer",',
                 '+     "size": 16',
-                '+   }',
-                '+ ]',
-                '+ ======== ',
-                '+ [',
-                '+   {',
+                "+   }",
+                "+ ]",
+                "+ ======== ",
+                "+ [",
+                "+   {",
                 '+     "name": "X",',
                 '+     "dataType": "float",',
                 '+     "size": 64',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Y",',
                 '+     "dataType": "float",',
                 '+     "size": 64',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Z",',
                 '+     "dataType": "float",',
                 '+     "size": 64',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Intensity",',
                 '+     "dataType": "integer",',
                 '+     "size": 16',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "ReturnNumber",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "NumberOfReturns",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "ScanDirectionFlag",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "EdgeOfFlightLine",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "Classification",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "ScanAngleRank",',
                 '+     "dataType": "float",',
                 '+     "size": 32',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "UserData",',
                 '+     "dataType": "integer",',
                 '+     "size": 8',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "PointSourceId",',
                 '+     "dataType": "integer",',
                 '+     "size": 16',
-                '+   },',
-                '+   {',
+                "+   },",
+                "+   {",
                 '+     "name": "GpsTime",',
                 '+     "dataType": "float",',
                 '+     "size": 64',
-                '+   }',
-                '+ ]',
-                '+ >>>>>>> ',
-                '+++ auckland:tile:autzen.laz',
-                '+                                     name = autzen.laz',
-                '+                              crs84Extent = -123.075389,-123.0625145,44.04998981,44.06229306,407.35,536.84',
-                '+                                   format = laz-1.2',
-                '+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84',
-                '+                               pointCount = 106',
-                '+                                      oid = sha256:751ec764325610dae8f37d7f4273e3b404e5acb64421676fd72e7e31468c6720',
-                '+                                     size = 2359',
+                "+   }",
+                "+ ]",
+                "+ >>>>>>> ",
+                "+++ auckland:tile:autzen",
+                "+                                     name = autzen.laz",
+                "+                              crs84Extent = -123.07486587848656,-123.06303511901734,44.049989810220765,44.062293063723445,407.35,536.84",
+                "+                                   format = laz-1.2",
+                "+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84",
+                "+                               pointCount = 106",
+                "+                                      oid = sha256:751ec764325610dae8f37d7f4273e3b404e5acb64421676fd72e7e31468c6720",
+                "+                                     size = 2359",
             ]
 
             r = cli_runner.invoke(["commit", "-m", "conflicts"])
@@ -911,8 +629,8 @@ def test_working_copy_meta_edit(
             ]
 
             EXPECTED_META_DIFF = [
-                '--- auckland:meta:crs.wkt',
-                '+++ auckland:meta:crs.wkt',
+                "--- auckland:meta:crs.wkt",
+                "+++ auckland:meta:crs.wkt",
                 '- COMPD_CS["NZGD2000 / New Zealand Transverse Mercator 2000 + VERT_CS",',
                 '-     PROJCS["NZGD2000 / New Zealand Transverse Mercator 2000",',
                 '-         GEOGCS["NZGD2000",',
@@ -943,7 +661,7 @@ def test_working_copy_meta_edit(
                 '-             AUTHORITY["EPSG", "9001"]],',
                 '-         AXIS["Gravity-related height", UP],',
                 '-         AUTHORITY["EPSG", "4440"]]]',
-                '- ',
+                "- ",
                 '+ PROJCS["NAD83(HARN) / Oregon GIC Lambert (ft)",',
                 '+     GEOGCS["NAD83(HARN)",',
                 '+         DATUM["NAD83_High_Accuracy_Reference_Network",',
@@ -967,119 +685,119 @@ def test_working_copy_meta_edit(
                 '+     AXIS["Easting", EAST],',
                 '+     AXIS["Northing", NORTH],',
                 '+     AUTHORITY["EPSG", "2994"]]',
-                '+ ',
-                '--- auckland:meta:format.json',
-                '+++ auckland:meta:format.json',
-                '- {',
+                "+ ",
+                "--- auckland:meta:format.json",
+                "+++ auckland:meta:format.json",
+                "- {",
                 '-   "compression": "laz",',
                 '-   "lasVersion": "1.4",',
                 '-   "optimization": "copc",',
                 '-   "optimizationVersion": "1.0",',
                 '-   "pointDataRecordFormat": 7,',
                 '-   "pointDataRecordLength": 36',
-                '- }',
-                '+ {',
+                "- }",
+                "+ {",
                 '+   "compression": "laz",',
                 '+   "lasVersion": "1.2",',
                 '+   "optimization": null,',
                 '+   "optimizationVersion": null,',
                 '+   "pointDataRecordFormat": 1,',
                 '+   "pointDataRecordLength": 28',
-                '+ }',
-                '--- auckland:meta:schema.json',
-                '+++ auckland:meta:schema.json',
-                '  [',
-                '    {',
+                "+ }",
+                "--- auckland:meta:schema.json",
+                "+++ auckland:meta:schema.json",
+                "  [",
+                "    {",
                 '      "name": "X",',
                 '      "dataType": "float",',
                 '      "size": 64',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "Y",',
                 '      "dataType": "float",',
                 '      "size": 64',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "Z",',
                 '      "dataType": "float",',
                 '      "size": 64',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "Intensity",',
                 '      "dataType": "integer",',
                 '      "size": 16',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "ReturnNumber",',
                 '      "dataType": "integer",',
                 '      "size": 8',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "NumberOfReturns",',
                 '      "dataType": "integer",',
                 '      "size": 8',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "ScanDirectionFlag",',
                 '      "dataType": "integer",',
                 '      "size": 8',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "EdgeOfFlightLine",',
                 '      "dataType": "integer",',
                 '      "size": 8',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "Classification",',
                 '      "dataType": "integer",',
                 '      "size": 8',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "ScanAngleRank",',
                 '      "dataType": "float",',
                 '      "size": 32',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "UserData",',
                 '      "dataType": "integer",',
                 '      "size": 8',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "PointSourceId",',
                 '      "dataType": "integer",',
                 '      "size": 16',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "name": "GpsTime",',
                 '      "dataType": "float",',
                 '      "size": 64',
-                '    },',
-                '-   {',
+                "    },",
+                "-   {",
                 '-     "name": "ScanChannel",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "ClassFlags",',
                 '-     "dataType": "integer",',
                 '-     "size": 8',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Red",',
                 '-     "dataType": "integer",',
                 '-     "size": 16',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Green",',
                 '-     "dataType": "integer",',
                 '-     "size": 16',
-                '-   },',
-                '-   {',
+                "-   },",
+                "-   {",
                 '-     "name": "Blue",',
                 '-     "dataType": "integer",',
                 '-     "size": 16',
-                '-   },',
-                '  ]',
+                "-   },",
+                "  ]",
             ]
 
             r = cli_runner.invoke(["diff"])
@@ -1124,3 +842,163 @@ def test_working_copy_commit_las(
             )
             assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
             assert "Committing LAS tiles is not supported" in r.stderr
+
+
+def test_working_copy_commit_and_convert_to_copc(
+    cli_runner, data_archive, data_archive_readonly, monkeypatch, requires_pdal
+):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as data_dir:
+        with data_archive("point-cloud/auckland.tgz") as repo_path:
+            tiles_path = repo_path / "auckland"
+            assert tiles_path.is_dir()
+
+            shutil.copy(data_dir / "auckland_0_0.laz", tiles_path / "new.laz")
+
+            # The non-COPC LAZ file conflicts with the COPC dataset.
+            r = cli_runner.invoke(["diff"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[:29] == [
+                "--- auckland:meta:format.json",
+                "+++ auckland:meta:format.json",
+                "- {",
+                '-   "compression": "laz",',
+                '-   "lasVersion": "1.4",',
+                '-   "optimization": "copc",',
+                '-   "optimizationVersion": "1.0",',
+                '-   "pointDataRecordFormat": 7,',
+                '-   "pointDataRecordLength": 36',
+                "- }",
+                "+ <<<<<<< ",
+                "+ {",
+                '+   "compression": "laz",',
+                '+   "lasVersion": "1.4",',
+                '+   "optimization": "copc",',
+                '+   "optimizationVersion": "1.0",',
+                '+   "pointDataRecordFormat": 7,',
+                '+   "pointDataRecordLength": 36',
+                "+ }",
+                "+ ======== ",
+                "+ {",
+                '+   "compression": "laz",',
+                '+   "lasVersion": "1.2",',
+                '+   "optimization": null,',
+                '+   "optimizationVersion": null,',
+                '+   "pointDataRecordFormat": 3,',
+                '+   "pointDataRecordLength": 34',
+                "+ }",
+                "+ >>>>>>> ",
+            ]
+
+            r = cli_runner.invoke(["diff", "--convert-to-dataset-format"])
+            assert r.exit_code == 0, r.stderr
+            assert "auckland:meta:format.json" not in r.stdout
+            assert r.stdout.splitlines() == [
+                "+++ auckland:tile:new",
+                "+                                     name = new.copc.laz",
+                "+                               sourceName = new.laz",
+                "+                              crs84Extent = 174.73844833207193,174.74945404214898,-36.85123712200056,-36.84206322341377,-1.66,99.83",
+                "+                                   format = laz-1.4/copc-1.0",
+                "+                             sourceFormat = laz-1.2",
+                "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
+                "+                               pointCount = 4231",
+                "+                                sourceOid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
+                "+                               sourceSize = 51489",
+            ]
+
+            r = cli_runner.invoke(["commit", "-m", "Commit new LAZ tile"])
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+
+            r = cli_runner.invoke(
+                ["commit", "--convert-to-dataset-format", "-m", "Commit new LAZ tile"]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["show"])
+            assert r.exit_code == 0, r.stderr
+            output = r.stdout.splitlines()
+            assert output[4:-2] == [
+                "    Commit new LAZ tile",
+                "",
+                "+++ auckland:tile:new",
+                "+                                     name = new.copc.laz",
+                "+                              crs84Extent = 174.73844833207193,174.74945404214898,-36.85123712200056,-36.84206322341377,-1.66,99.83",
+                "+                                   format = laz-1.4/copc-1.0",
+                "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
+                "+                               pointCount = 4231",
+                "+                                sourceOid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
+            ]
+            assert re.match(r"\+\s+oid = sha256:[0-9a-f]{64}", output[-2])
+            assert re.match(r"\+\s+size = [0-9]{5}", output[-1])
+
+            r = cli_runner.invoke(["status"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+
+            assert tiles_path.is_dir()
+            assert not (tiles_path / "new.laz").exists()
+            assert (tiles_path / "new.copc.laz").is_file()
+
+            converted_tile_metadata = extract_pc_tile_metadata(
+                tiles_path / "new.copc.laz"
+            )
+            assert converted_tile_metadata["tile"]["format"] == "laz-1.4/copc-1.0"
+            assert converted_tile_metadata["tile"]["pointCount"] == 4231
+
+
+def test_working_copy_mtime_updated(
+    cli_runner, data_archive, monkeypatch, requires_pdal
+):
+    # Tests the following:
+    # 1. Diffs work properly when files have mtimes (modified-timestamps)
+    # that make it look like the file has been modified, but in fact it has not.
+    # 2. Running a diff causes the mtimes to be updated for unmodified files,
+    # where the mtimes in the index no longer match the actual file. (This
+    # means the next diff can run quicker since we can use the mtime check instead
+    # of the comparing hashes, which involves hashing the file and takes longer).
+
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+
+        repo = KartRepo(repo_path)
+        env = tool_environment()
+        env["GIT_INDEX_FILE"] = repo.working_copy.workdir.index_path
+
+        def get_touched_files():
+            # git diff-files never compares OIDs - it just lists files which appear
+            # to be dirty based on a different mtime to the mtime in the index.
+            cmd = ["git", "diff-files"]
+            return (
+                subprocess.check_output(
+                    cmd, env=env, encoding="utf-8", cwd=repo.workdir_path
+                )
+                .strip()
+                .splitlines()
+            )
+
+        # At this point in our test, the index has all the correct mtimes.
+        # Nothing is touched or modified..
+        assert len(get_touched_files()) == 0
+
+        # So, we touch all the tiles.
+        for laz_file in repo.workdir_path.glob("auckland/*.laz"):
+            laz_file.touch()
+        # Now all 16 tiles are touched according to Git.
+        assert len(get_touched_files()) == 16
+
+        # Then we re-run kart status. In spite of all the files being touched,
+        # Kart correctly reports that no tiles have been modified.
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+
+        # As a side effect of generating the last diff, the new mtimes of the unmodified
+        # files were written back to the index, so that the next diff can run quicker.
+        assert len(get_touched_files()) == 0
+
+        # Finally, check that the point cloud tiles themselves are not found in the ODB:
+        for laz_file in repo.workdir_path.glob("auckland/*.laz"):
+            assert pygit2.hashfile(laz_file) not in repo.odb

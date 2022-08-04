@@ -40,7 +40,11 @@ class DatasetDiffMixin:
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     def diff_to_working_copy(
-        self, workdir_diff_cache, ds_filter=DatasetKeyFilter.MATCH_ALL
+        self,
+        workdir_diff_cache,
+        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        *,
+        convert_to_dataset_format=False,
     ):
         """
         Generates a diff from self to the working-copy.
@@ -137,73 +141,9 @@ class DatasetDiffMixin:
             new_value_transform=get_decoder(new, value_decoder_method),
         )
 
-    def generate_wc_diff_from_workdir_index(
-        self,
-        workdir_diff_cache,
-        key_filter=UserStringKeyFilter.MATCH_ALL,
-        *,
-        wc_path_filter_pattern=None,
-        wc_to_ds_path_transform=lambda x: x,
-        ds_key_decoder=lambda x: x,
-        wc_key_decoder=lambda x: x,
-        ds_value_decoder=lambda x: x,
-        wc_value_decoder=lambda x: x,
-    ):
-        """
-        A pattern for datasets to use for diffing their contents against the working copy.
-        1. Uses the workdir-index in workdir_diff_cache to get a list of changes made to the working copy,
-           as a pygit2.Diff object.
-        2. Go through all the resulting (insert, update, delete) deltas
-        3. For each path in the working copy, find the associated path in the dataset (dataset paths are always
-           slightly different to working copy paths - for instance working copy paths never have "/.some-dataset/"
-           in their path, but dataset paths do.
-        4. Run some transform on each path to decide what to call each item (eg decode primary key)
-        5. Run some transform on each path to load the content of each item (eg, read and decode feature)
-
-        Args:
-        workdir_diff_cache - a WorkdirDiffCache object, through which the raw diff is generated.
-        key_filter - deltas are only yielded if they involve at least one key that matches the key filter.
-        wc_path_filter_pattern - if unset, then all deltas that involve the dataset's path will be considered. If set, then
-            only those deltas involving paths that match the given pattern will be considered.
-        wc_to_ds_path_transform - a function for taking a working-copy path, and returning the path to the equivalent item
-            in the dataset. (The result should generally be a relative path, since that is easier for the dataset to use).
-        ds_key_decoder, wc_key_decoder - functions which take a path and return the name of the item.
-        ds_value_decoder, wc_value_decoder - functions which take a path and load the contents of the item.
-
-        If any transform is not set, that transform defaults to returning the value it was input.
-        """
-
-        # Note that this operation returns changes that the user made to the working copy.
-        # As such, all paths in it will be working-copy paths.
-        if not workdir_diff_cache:
-            return
-        deltas = workdir_diff_cache.workdir_deltas_for_dataset(self)
-        if not deltas:
-            return
-
-        if wc_path_filter_pattern:
-            p = wc_path_filter_pattern
-            deltas = (
-                d
-                for d in deltas
-                if (d.old_file and p.search(d.old_file.path))
-                or (d.new_file and p.search(d.new_file.path))
-            )
-
-        yield from self.transform_raw_deltas(
-            deltas,
-            key_filter,
-            old_path_transform=wc_to_ds_path_transform,  # For old paths, we need dataset paths - need to transform.
-            old_key_transform=ds_key_decoder,
-            old_value_transform=ds_value_decoder,
-            new_path_transform=lambda x: x,  # For new paths, we need WC paths, so no need to transform.
-            new_key_transform=wc_key_decoder,
-            new_value_transform=wc_value_decoder,
-        )
-
     # We treat UNTRACKED like an ADD since we don't have a staging area -
     # if the user has untracked files, we have to assume they want to add them.
-    # So far this is only relevant to point cloud datasets.
+    # (This is not actually needed right now since we are not using this for working copy diffs).
     _INSERT_TYPES = (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_UNTRACKED)
     _UPDATE_TYPES = (pygit2.GIT_DELTA_MODIFIED,)
     _DELETE_TYPES = (pygit2.GIT_DELTA_DELETED,)

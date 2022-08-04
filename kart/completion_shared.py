@@ -1,6 +1,6 @@
 import itertools
 
-from kart.merge_util import MergeContext, MergeIndex, RichConflict
+from kart.merge_util import MergeContext, MergedIndex, RichConflict
 from kart.repo import KartRepoState
 from kart.context import Context
 
@@ -34,12 +34,12 @@ def conflict_completer(ctx=None, param=None, incomplete=""):
     if not repo:
         return []
 
-    merge_index = MergeIndex.read_from_repo(repo)
+    merged_index = MergedIndex.read_from_repo(repo)
     merge_context = MergeContext.read_from_repo(repo)
     rich_conflicts = []
     ds_conflicts = set()
 
-    for _, conflict in merge_index.conflicts.items():
+    for _, conflict in merged_index.conflicts.items():
         rich_conflict = RichConflict(conflict, merge_context)
         if rich_conflict.label.startswith(incomplete):
             rich_conflicts.append(rich_conflict.label)

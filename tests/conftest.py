@@ -13,6 +13,7 @@ import tarfile
 import time
 import uuid
 from urllib.parse import urlsplit, urlunsplit
+from datetime import datetime
 from pathlib import Path
 import pytest
 
@@ -95,7 +96,7 @@ def monkeypatch_session(request):
 
 @pytest.fixture
 def gen_uuid(request):
-    """ Deterministic "random" UUID generator seeded from the test ID """
+    """Deterministic "random" UUID generator seeded from the test ID"""
     seed = int(hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest(), 16)
     _uuid_gen = random.Random(seed)
 
@@ -155,7 +156,7 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
 
 @contextlib.contextmanager
 def chdir_(path):
-    """ Context manager to change the current working directory """
+    """Context manager to change the current working directory"""
     prev_cwd = os.getcwd()
     try:
         os.chdir(path)
@@ -442,7 +443,7 @@ class KartCliRunner(CliRunner):
 
 @pytest.fixture
 def cli_runner(request):
-    """ A wrapper round Click's test CliRunner to improve usefulness """
+    """A wrapper round Click's test CliRunner to improve usefulness"""
     return KartCliRunner(
         # kart.cli._execvp() looks for this env var to prevent fork/exec in tests.
         env={"_KART_NO_EXEC": "1"},
@@ -546,6 +547,12 @@ class TestHelpers:
             "macronated": "N",
             "name": "Te Motu-a-kore",
         }
+        DATE_TIME = datetime.strptime(
+            "Thu Jun 20 15:28:33 2019 +0100", "%a %b %d %H:%M:%S %Y %z"
+        ).strftime("%c %z")
+        DATE_TIME1 = datetime.strptime(
+            "Tue Jun 11 12:03:58 2019 +0100", "%a %b %d %H:%M:%S %Y %z"
+        ).strftime("%c %z")
         HEAD_SHA = "1582725544d9122251acd4b3fc75b5c88ac3fd17"
         HEAD1_SHA = "6e2984a28150330a6c51019a70f9e8fcfe405e8c"
         HEAD_TREE_SHA = "42b63a2a7c1b5dfe9c21ff9884b59f198e421821"
@@ -575,6 +582,9 @@ class TestHelpers:
             "survey_reference": "Null Island™ 🗺",
             "adjusted_nodes": 123,
         }
+        DATE_TIME = datetime.strptime(
+            "Mon Jul 22 12:05:39 2019 +0100", "%a %b %d %H:%M:%S %Y %z"
+        ).strftime("%c %z")
         HEAD_SHA = "3f7166eebd11876a9b473a67ed2f66a200493b69"
         ROWCOUNT = 228
         TEXT_FIELD = "survey_reference"
@@ -653,7 +663,7 @@ class TestHelpers:
 
     @classmethod
     def clear_working_copy(cls, repo_path="."):
-        """ Delete any existing working copy & associated config """
+        """Delete any existing working copy & associated config"""
         repo = KartRepo(repo_path)
         table_wc = repo.working_copy.get_tabular(allow_invalid_state=True)
         if table_wc:
@@ -667,7 +677,7 @@ class TestHelpers:
 
     @classmethod
     def db_table_hash(cls, conn, table, pk=None):
-        """ Calculate a SHA1 hash of the contents of a SQLite table """
+        """Calculate a SHA1 hash of the contents of a SQLite table"""
         if pk is None:
             pk = "ROWID"
 
@@ -680,7 +690,7 @@ class TestHelpers:
 
     @classmethod
     def git_graph(cls, request, message, count=10, *paths):
-        """ Print a pretty graph of recent git revisions """
+        """Print a pretty graph of recent git revisions"""
         cmd = [
             "git",
             "log",
@@ -705,14 +715,14 @@ class TestHelpers:
 
     @classmethod
     def parameter_ids(cls, request):
-        """ Get an array of parameter IDs """
+        """Get an array of parameter IDs"""
         # nodeid = 'test_import_feature_performance[0.2.0-spec-counties-table]'
         param_ids = re.match(r".*\[(.+)\]$", request.node.nodeid).group(1).split("-")
         return tuple(param_ids)
 
     @classmethod
     def verify_gpkg_extent(cls, conn, table):
-        """ Check the aggregate layer extent from the table matches the values in gpkg_contents """
+        """Check the aggregate layer extent from the table matches the values in gpkg_contents"""
         r = conn.execute(
             """SELECT column_name FROM "gpkg_geometry_columns" WHERE table_name=:table_name;""",
             {"table_name": table},

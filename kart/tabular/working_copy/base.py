@@ -7,6 +7,7 @@ import click
 import pygit2
 
 import sqlalchemy as sa
+from kart.core import peel_to_commit_and_tree
 from kart.diff_structs import WORKING_COPY_EDIT, DatasetDiff, Delta, DeltaDiff, RepoDiff
 from kart.exceptions import (
     NO_WORKING_COPY,
@@ -240,21 +241,18 @@ class TableWorkingCopy(WorkingCopyPart):
 
     @classmethod
     def write_config(cls, repo, location=None, bare=False):
-        repo_cfg = repo.config
-        bare_key = repo.BARE_CONFIG_KEY
         location_key = repo.WORKINGCOPY_LOCATION_KEY
 
         if bare:
-            repo_cfg[bare_key] = True
             repo.del_config(location_key)
-        else:
-            if location is None:
-                location = cls.default_location(repo)
-            else:
-                location = cls.normalise_location(location, repo)
+            return
 
-            repo_cfg[bare_key] = False
-            repo_cfg[location_key] = str(location)
+        if location is None:
+            location = cls.default_location(repo)
+        else:
+            location = cls.normalise_location(location, repo)
+
+        repo.config[location_key] = str(location)
 
     @classmethod
     def subclass_from_location(cls, wc_location):
@@ -619,7 +617,9 @@ class TableWorkingCopy(WorkingCopyPart):
                 if db_obj[pk_field] is None:
                     db_obj = None
 
-                repo_obj = self._get_feature_and_fetch_if_needed(dataset, track_pk)
+                repo_obj = self._get_dataset_feature_and_fetch_if_needed(
+                    dataset, track_pk
+                )
 
                 if repo_obj == db_obj:
                     # DB was changed and then changed back - eg INSERT then DELETE.
@@ -649,7 +649,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
         return feature_diff
 
-    def _get_feature_and_fetch_if_needed(self, dataset, feature_pk):
+    def _get_dataset_feature_and_fetch_if_needed(self, dataset, feature_pk):
         try:
             return dataset.get_feature(feature_pk)
         except KeyError as e:
@@ -678,6 +678,20 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         return True
 
+    def _get_dataset_schema(self, dataset, meta_diff):
+        """
+        Returns the new value of the schema from the meta diff, or the schema from the dataset if
+        there is no change to the schema in the meta diff.
+        """
+        if (
+            meta_diff
+            and "schema.json" in meta_diff
+            and meta_diff["schema.json"].new_value
+        ):
+            return Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+        else:
+            return dataset.schema
+
     def _execute_dirty_rows_query(
         self, sess, dataset, feature_filter=FeatureKeyFilter.MATCH_ALL, meta_diff=None
     ):
@@ -685,14 +699,7 @@ class TableWorkingCopy(WorkingCopyPart):
         Does a join on the tracking table and the table for the given dataset, and returns a result
         containing all the rows that have been inserted / updated / deleted.
         """
-        if (
-            meta_diff
-            and "schema.json" in meta_diff
-            and meta_diff["schema.json"].new_value
-        ):
-            schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
-        else:
-            schema = dataset.schema
+        schema = self._get_dataset_schema(dataset, meta_diff)
 
         kart_track = self.kart_tables.kart_track
         table = self._table_def_for_schema(schema, dataset.table_name)
@@ -735,6 +742,24 @@ class TableWorkingCopy(WorkingCopyPart):
                 .where(kart_track.c.table_name == dataset.table_name)
             )
             return (row[0] for row in r)
+
+    def get_feature(self, dataset, pk, allow_schema_diff=True):
+        """
+        Returns the feature that has the given primary key value.
+        If the primary key value does not exist in the dataset, returns None.
+        """
+        meta_diff = self.diff_dataset_to_working_copy_meta(dataset)
+        if (not allow_schema_diff) and meta_diff.recursive_get(["meta", "schema.json"]):
+            raise ValueError("Feature in WC doesn't conform to required schema")
+        schema = self._get_dataset_schema(dataset, meta_diff)
+        table = self._table_def_for_schema(schema, dataset.table_name)
+        pk_column = table.columns[schema.pk_columns[0].name]
+
+        with self.session() as sess:
+            r = sess.execute(sa.select(table).where(pk_column == pk))
+            for row in r:
+                return {col.name: row[col.name] for col in dataset.schema}
+            return None
 
     def _mark_as_clean(self, sess, repo_key_filter):
         """Delete the rows from the tracking table that match the given filter."""
@@ -855,7 +880,7 @@ class TableWorkingCopy(WorkingCopyPart):
             )
         return r.rowcount
 
-    def write_full(self, commit, *datasets):
+    def write_full(self, commit_or_tree, *datasets):
         """
         Writes a full layer into a working-copy table.
         Only writes features that match the repo's spatial filter.
@@ -863,6 +888,7 @@ class TableWorkingCopy(WorkingCopyPart):
         Use for new working-copy checkouts.
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
+        target_commit, target_tree = peel_to_commit_and_tree(commit_or_tree)
 
         self.repo.odb.refresh()
         with pause_refreshing(self.repo.odb), self.session() as sess:
@@ -909,7 +935,7 @@ class TableWorkingCopy(WorkingCopyPart):
                     self._initialise_sequence(sess, dataset)
 
                 self._create_triggers(sess, dataset)
-                self._update_last_write_time(sess, dataset, commit)
+                self._update_last_write_time(sess, dataset, target_commit)
 
                 t1 = time.monotonic()
                 L.info(
@@ -920,7 +946,7 @@ class TableWorkingCopy(WorkingCopyPart):
                     dataset.path,
                 )
 
-            self._update_state_table_tree(sess, commit.peel(pygit2.Tree).id.hex)
+            self._update_state_table_tree(sess, target_tree.hex)
             self._update_state_table_spatial_filter_hash(
                 sess, self.repo.spatial_filter.hexhash
             )
@@ -1091,6 +1117,7 @@ class TableWorkingCopy(WorkingCopyPart):
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+        quiet=False,
     ):
         """
         Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
@@ -1112,14 +1139,12 @@ class TableWorkingCopy(WorkingCopyPart):
             assert repo_key_filter.match_all and not track_changes_as_dirty
 
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
-        if commit_or_tree is not None:
-            target_commit = (
-                commit_or_tree if isinstance(commit_or_tree, pygit2.Commit) else None
-            )
-            target_tree = commit_or_tree.peel(pygit2.Tree)
-            target_tree_id = target_tree.id.hex
+        if commit_or_tree is None:
+            target_commit = target_tree = None
         else:
-            target_tree_id = target_tree = target_commit = None
+            target_commit, target_tree = peel_to_commit_and_tree(commit_or_tree)
+
+        target_tree_id = target_tree.hex if target_tree is not None else None
 
         # base_tree is the tree the working copy is based on.
         # If the working copy exactly matches base_tree, it is clean and has an empty tracking table.
@@ -1421,6 +1446,7 @@ class TableWorkingCopy(WorkingCopyPart):
         *,
         mark_as_clean=None,
         now_outside_spatial_filter=None,
+        committed_diff=None,
     ):
         """
         Marks the working copy as now being based on the given target tree or commit.

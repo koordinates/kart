@@ -22,6 +22,7 @@ from kart.exceptions import NotFound, NO_WORKING_COPY, translate_subprocess_exit
 from kart.lfs_util import get_local_path_from_lfs_hash
 from kart.key_filters import RepoKeyFilter
 from kart.point_cloud.v1 import PointCloudV1
+from kart.point_cloud.tilename_util import remove_tile_extension, get_tile_path_pattern
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.working_copy import WorkingCopyPart
@@ -210,7 +211,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def _is_head(self, commit_or_tree):
         return commit_or_tree.peel(pygit2.Tree) == self.repo.head_tree
 
-    def fetch_lfs_blobs(self, commit_or_tree):
+    def fetch_lfs_blobs(self, commit_or_tree, quiet=False):
         if commit_or_tree is None:
             return  # Nothing to do.
 
@@ -224,9 +225,15 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if remote_name:
                 extra_args = [remote_name, commit_or_tree.id.hex]
 
-        click.echo("LFS: ", nl=False)
-        self.repo.invoke_git("lfs", "fetch", *extra_args)
-        click.echo()  # LFS fetch sometimes leaves the cursor at the start of a line that already has text - scroll past that.
+        if quiet:
+            extra_kwargs = {"stdout": subprocess.DEVNULL}
+        else:
+            click.echo("LFS: ", nl=False)
+            extra_kwargs = {}
+        self.repo.invoke_git("lfs", "fetch", *extra_args, **extra_kwargs)
+
+        if not quiet:
+            click.echo()  # LFS fetch sometimes leaves the cursor at the start of a line that already has text - scroll past that.
 
     def reset(
         self,
@@ -235,6 +242,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+        quiet=False,
     ):
         """
         Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
@@ -253,7 +261,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         """
 
         # We fetch the LFS tiles immediately before writing them to the working copy - unlike ODB objects that are already fetched.
-        self.fetch_lfs_blobs(commit_or_tree)
+        self.fetch_lfs_blobs(commit_or_tree, quiet=quiet)
 
         if rewrite_full:
             # These aren't supported when we're doing a full rewrite.
@@ -393,8 +401,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         if not tile_diff:
             return
         for tile_delta in tile_diff.values():
-            if tile_delta.type == "delete" or tile_delta.is_rename():
-                tilename = tile_delta.old_key
+            if tile_delta.type in ("update", "delete"):
+                tilename = tile_delta.old_value["name"]
                 tile_path = ds_tiles_dir / tilename
                 if tile_path.is_file():
                     tile_path.unlink()
@@ -402,7 +410,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     reset_index_files.append(f"{ds_path}/{tilename}")
 
             if tile_delta.type in ("update", "insert"):
-                tilename = tile_delta.new_key
+                tilename = tile_delta.new_value["name"]
                 lfs_path = get_local_path_from_lfs_hash(
                     self.repo, tile_delta.new_value["oid"]
                 )
@@ -443,13 +451,15 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 "--",
                 *paths,
             ]
-            output = subprocess.check_output(
-                cmd, env=env, encoding="utf-8", cwd=self.path
-            ).strip()
+            output_lines = (
+                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                .strip()
+                .splitlines()
+            )
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
-        if not output:
+        if not output_lines:
             # Nothing to be done.
             return
 
@@ -462,12 +472,12 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         def matches_repo_key_filter(path):
             path = Path(path.replace("\\", "/"))
             ds_path = str(path.parents[0])
-            tile_name = path.name
+            tile_name = remove_tile_extension(path.name)
             return repo_key_filter.recursive_get([ds_path, "tile", tile_name])
 
         # Use git update-index to reset these paths - we can't use git add directly since
         # that is for staging files which involves also writing them to the ODB, which we don't want.
-        file_paths = [parse_path(line) for line in output.splitlines()]
+        file_paths = [parse_path(line) for line in output_lines]
         if not repo_key_filter.match_all:
             file_paths = [p for p in file_paths if matches_repo_key_filter(p)]
         self._reset_workdir_index_for_files(file_paths)
@@ -486,8 +496,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
         try:
-            # --info-only means don't write the file to the ODB - we only want to update the index.
-            cmd = ["git", "update-index", "--add", "--remove", "--info-only", "--stdin"]
+            cmd = ["git", "update-index", "--add", "--remove", "--stdin"]
             subprocess.run(
                 cmd,
                 check=True,
@@ -499,54 +508,118 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
+    def _hard_reset_after_commit_for_converted_tiles(self, datasets, committed_diff):
+        """
+        Look for tiles that were automatically modified as part of the commit operation
+        - these will have extra properties like a "sourceName" that differs from "name"
+        or a "sourceFormat" that differs from "format". The source one is what the user
+        supplied, and the other is what was actually committed.
+        These need to be updated in the workdir so that the workdir reflects what was committed.
+        """
+        for ds_path in datasets.paths():
+            tile_diff = committed_diff.recursive_get([ds_path, "tile"])
+            if not tile_diff:
+                continue
+            for tile_delta in tile_diff.values():
+                new_value = tile_delta.new_value
+                if new_value is None:
+                    continue
+                if "sourceName" in new_value or "sourceFormat" in new_value:
+                    self._hard_reset_converted_tile(ds_path, tile_delta)
+
+    def _hard_reset_converted_tile(self, ds_path, tile_delta):
+        """
+        Update an individual tile in the workdir so that it reflects what was actually committed.
+        """
+        tilename = remove_tile_extension(tile_delta.new_value["name"])
+
+        ds_tiles_dir = (self.path / ds_path).resolve()
+        # Sanity check to make sure we're not messing with files we shouldn't:
+        assert self.path in ds_tiles_dir.parents
+        assert self.repo.workdir_path in ds_tiles_dir.parents
+        assert ds_tiles_dir.is_dir()
+
+        name_pattern = get_tile_path_pattern(tilename)
+        for child in ds_tiles_dir.glob(tilename + ".*"):
+            if name_pattern.fullmatch(child.name) and child.is_file():
+                child.unlink()
+
+        tilename = tile_delta.new_value["name"]
+        lfs_path = get_local_path_from_lfs_hash(self.repo, tile_delta.new_value["oid"])
+        if not lfs_path.is_file():
+            click.echo(f"Couldn't find tile {tilename} locally - skipping...", err=True)
+        else:
+            shutil.copy(lfs_path, ds_tiles_dir / tilename)
+
     def soft_reset_after_commit(
-        self, commit_or_tree, *, mark_as_clean=None, now_outside_spatial_filter=None
+        self,
+        commit_or_tree,
+        *,
+        mark_as_clean=None,
+        now_outside_spatial_filter=None,
+        committed_diff=None,
     ):
-        # TODO - handle finer-grained soft-resets than entire datasets
         datasets = self.repo.datasets(
             commit_or_tree,
             repo_key_filter=mark_as_clean,
             filter_dataset_type="point-cloud",
         )
 
+        # Handle tiles that were, eg, converted to COPC during the commit - the non-COPC
+        # tiles in the workdir now need to be replaced with the COPC ones:
+        self._hard_reset_after_commit_for_converted_tiles(datasets, committed_diff)
+
         self._reset_workdir_index_for_datasets(datasets, repo_key_filter=mark_as_clean)
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
 
-    def raw_diff_from_index(self):
-        """Uses the index self.index_path to generate a pygit2 Diff of what's changed in the workdir."""
-        index = pygit2.Index(str(self.index_path))
-        index._repo = self.repo
-        return index.diff_to_workdir(
-            pygit2.GIT_DIFF_INCLUDE_UNTRACKED
-            | pygit2.GIT_DIFF_RECURSE_UNTRACKED_DIRS
-            | pygit2.GIT_DIFF_UPDATE_INDEX
-            # GIT_DIFF_UPDATE_INDEX just updates timestamps in the index to make the diff quicker next time
-            # none of the paths or hashes change, and the end result stays the same.
-        )
+    def dirty_paths(self):
+        env = tool_environment()
+        env["GIT_INDEX_FILE"] = str(self.index_path)
 
-    def workdir_deltas_by_dataset_path(self, raw_diff_from_index=None):
+        try:
+            # This finds all files in the index that have been modified - and updates any mtimes in the index
+            # if the mtimes are stale but the files are actually unchanged (as in GIT_DIFF_UPDATE_INDEX).
+            cmd = ["git", "diff", "--name-only"]
+            output_lines = (
+                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                .strip()
+                .splitlines()
+            )
+            # This finds all untracked files that are not in the index.
+            cmd = ["git", "ls-files", "--others", "--exclude-standard"]
+            output_lines += (
+                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                .strip()
+                .splitlines()
+            )
+        except subprocess.CalledProcessError as e:
+            sys.exit(translate_subprocess_exit_code(e.returncode))
+
+        return [p.replace("\\", "/") for p in output_lines]
+
+    def dirty_paths_by_dataset_path(self, dirty_paths=None):
         """Returns all the deltas from self.raw_diff_from_index() but grouped by dataset path."""
-        if raw_diff_from_index is None:
-            raw_diff_from_index = self.raw_diff_from_index()
+        if dirty_paths is None:
+            dirty_paths = self.dirty_paths()
 
-        all_ds_paths = self.repo.datasets(self.get_tree_id()).paths()
+        all_ds_paths = list(self.repo.datasets(self.get_tree_id()).paths())
 
-        with_and_without_slash = [
-            (p.rstrip("/") + "/", p.rstrip("/")) for p in all_ds_paths
-        ]
+        def find_ds_path(file_path):
+            for ds_path in all_ds_paths:
+                if (
+                    len(file_path) > len(ds_path)
+                    and file_path.startswith(ds_path)
+                    and file_path[len(ds_path)] == "/"
+                ):
+                    return ds_path
+            return None
 
-        def find_ds_path(delta):
-            path = delta.old_file.path if delta.old_file else delta.new_file.path
-            for with_slash, without_slash in with_and_without_slash:
-                if path.startswith(with_slash):
-                    return without_slash
+        dirty_paths_by_dataset_path = {}
+        for p in dirty_paths:
+            ds_path = find_ds_path(p)
+            dirty_paths_by_dataset_path.setdefault(ds_path, []).append(p)
 
-        deltas_by_ds_path = {}
-        for delta in raw_diff_from_index.deltas:
-            ds_path = find_ds_path(delta)
-            deltas_by_ds_path.setdefault(ds_path, []).append(delta)
-
-        return deltas_by_ds_path
+        return dirty_paths_by_dataset_path
 
     def workdir_diff_cache(self):
         """
@@ -573,18 +646,18 @@ class WorkdirDiffCache:
         self.delegate = delegate
 
     @functools.lru_cache(maxsize=1)
-    def raw_diff_from_index(self):
-        return self.delegate.raw_diff_from_index()
+    def dirty_paths(self):
+        return self.delegate.dirty_paths()
 
     @functools.lru_cache(maxsize=1)
-    def workdir_deltas_by_dataset_path(self):
-        # Make sure the raw diff gets cached too:
-        raw_diff_from_index = self.raw_diff_from_index()
-        return self.delegate.workdir_deltas_by_dataset_path(raw_diff_from_index)
+    def dirty_paths_by_dataset_path(self):
+        # Make sure self.dirty_paths gets cached too:
+        dirty_paths = self.dirty_paths()
+        return self.delegate.dirty_paths_by_dataset_path(dirty_paths)
 
-    def workdir_deltas_for_dataset(self, dataset):
+    def dirty_paths_for_dataset(self, dataset):
         if isinstance(dataset, str):
             path = dataset
         else:
             path = dataset.path
-        return self.workdir_deltas_by_dataset_path().get(path)
+        return self.dirty_paths_by_dataset_path().get(path, ())

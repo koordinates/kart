@@ -40,6 +40,7 @@ def get_repo_diff(
     include_wc_diff=False,
     workdir_diff_cache=None,
     repo_key_filter=RepoKeyFilter.MATCH_ALL,
+    convert_to_dataset_format=False,
 ):
     """
     Generates a RepoDiff containing an entry for every dataset in the repo
@@ -67,6 +68,7 @@ def get_repo_diff(
             include_wc_diff=include_wc_diff,
             workdir_diff_cache=workdir_diff_cache,
             ds_filter=repo_key_filter[ds_path],
+            convert_to_dataset_format=convert_to_dataset_format,
         )
     # No need to recurse since self.get_dataset_diff already prunes the dataset diffs.
     repo_diff.prune(recurse=False)
@@ -81,6 +83,7 @@ def get_dataset_diff(
     include_wc_diff=False,
     workdir_diff_cache=None,
     ds_filter=DatasetKeyFilter.MATCH_ALL,
+    convert_to_dataset_format=False,
 ):
     """
     Generates the DatasetDiff for the dataset at path dataset_path.
@@ -120,7 +123,9 @@ def get_dataset_diff(
 
         if target_ds is not None:
             target_wc_diff = target_ds.diff_to_working_copy(
-                workdir_diff_cache, ds_filter=ds_filter
+                workdir_diff_cache,
+                ds_filter=ds_filter,
+                convert_to_dataset_format=convert_to_dataset_format,
             )
             L.debug(
                 "target<>working_copy diff (%s): %s",

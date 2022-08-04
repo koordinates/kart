@@ -12,15 +12,15 @@ from kart.repo import KartRepo
 H = pytest.helpers.helpers()
 
 POINTS_UPGRADE_RESULT = [
-    "commit 1582725544d9122251acd4b3fc75b5c88ac3fd17",
+    f"commit {H.POINTS.HEAD_SHA}",
     "Author: Robert Coup <robert@coup.net.nz>",
-    "Date:   Thu Jun 20 15:28:33 2019 +0100",
+    f"Date:   {H.POINTS.DATE_TIME}",
     "",
     "    Improve naming on Coromandel East coast",
     "",
-    "commit 6e2984a28150330a6c51019a70f9e8fcfe405e8c",
+    f"commit {H.POINTS.HEAD1_SHA}",
     "Author: Robert Coup <robert@coup.net.nz>",
-    "Date:   Tue Jun 11 12:03:58 2019 +0100",
+    f"Date:   {H.POINTS.DATE_TIME1}",
     "",
     "    Import from nz-pa-points-topo-150k.gpkg",
 ]

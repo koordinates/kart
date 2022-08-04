@@ -1,13 +1,15 @@
 import functools
-import re
 import shutil
+import os
 
-from kart.core import find_blobs_in_tree
 from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
+from kart.core import find_blobs_in_tree
+from kart.decorators import allow_classmethod
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
 from kart.lfs_util import (
+    copy_file_to_local_lfs_cache,
     get_hash_and_size_of_file,
     get_hash_from_pointer_file,
     get_local_path_from_lfs_hash,
@@ -18,7 +20,14 @@ from kart.point_cloud.metadata_util import (
     RewriteMetadata,
     extract_pc_tile_metadata,
     rewrite_and_merge_metadata,
-    format_tile_info_for_pointer_file,
+    format_tile_for_pointer_file,
+    get_format_summary,
+)
+from kart.point_cloud.pdal_convert import convert_tile_to_format
+from kart.point_cloud.tilename_util import (
+    remove_tile_extension,
+    set_tile_extension,
+    get_tile_path_pattern,
 )
 from kart.serialise_util import hexhash
 from kart.working_copy import PartType
@@ -62,14 +71,26 @@ class PointCloudV1(BaseDataset):
         """The total number of features in this dataset."""
         return sum(1 for blob in self.tile_pointer_blobs())
 
-    def tilenames_with_lfs_hashes(self):
-        """Returns a generator that yields every tilename along with its LFS hash."""
+    def tilenames_with_lfs_hashes(self, fix_extensions=True):
+        """
+        Returns a generator that yields every tilename along with its LFS hash.
+        If fix_extensions is True, then the returned name will be modified to have the correct extension for the
+        type of tile the blob is pointing to (eg .laz or .copc.laz), regardless of the blob's extension (if any).
+        """
         for blob in self.tile_pointer_blobs():
-            yield blob.name, get_hash_from_pointer_file(blob)
+            if fix_extensions:
+                pointer_dict = pointer_file_bytes_to_dict(blob)
+                tile_format = pointer_dict["format"]
+                oid = pointer_dict["oid"].split(":", maxsplit=1)[1]
+                yield set_tile_extension(blob.name, tile_format=tile_format), oid
+            else:
+                yield blob.name, get_hash_from_pointer_file(blob)
 
-    def tilenames_with_lfs_paths(self):
+    def tilenames_with_lfs_paths(self, fix_extensions=True):
         """Returns a generator that yields every tilename along with the path where the tile content is stored locally."""
-        for blob_name, lfs_hash in self.tilenames_with_lfs_hashes():
+        for blob_name, lfs_hash in self.tilenames_with_lfs_hashes(
+            fix_extensions=fix_extensions
+        ):
             yield blob_name, get_local_path_from_lfs_hash(self.repo, lfs_hash)
 
     def decode_path(self, path):
@@ -78,11 +99,13 @@ class PointCloudV1(BaseDataset):
             return ("tile", self.tilename_from_path(rel_path))
         return super().decode_path(rel_path)
 
+    @allow_classmethod
     def tilename_to_blob_path(self, tilename, relative=False):
         """Given a tile's name, returns the path the tile's pointer should be written to."""
-        tilename = self.tilename_from_path(
-            tilename
-        )  # Just in case it's a whole path, not just a name.
+        assert relative or isinstance(self, PointCloudV1)
+
+        # Just in case it's a whole path, not just a name:
+        tilename = self.tilename_from_path(tilename)
         tile_prefix = hexhash(tilename)[0:2]
         rel_path = f"tile/{tile_prefix}/{tilename}"
         return rel_path if relative else self.ensure_full_path(rel_path)
@@ -94,15 +117,56 @@ class PointCloudV1(BaseDataset):
 
     @classmethod
     def tilename_from_path(cls, tile_path):
-        return tile_path.rsplit("/", maxsplit=1)[-1]
+        return remove_tile_extension(os.path.basename(tile_path))
 
-    def get_tile_summary_from_pointer_blob(self, tile_pointer_blob):
+    @classmethod
+    def get_tile_summary_from_pointer_blob(cls, tile_pointer_blob):
         result = pointer_file_bytes_to_dict(
             tile_pointer_blob, {"name": tile_pointer_blob.name}
+        )
+        result["name"] = set_tile_extension(
+            result["name"], tile_format=result["format"]
         )
         if "version" in result:
             del result["version"]
         return result
+
+    def get_tile_summary(
+        self, tilename=None, *, path=None, pointer_blob=None, missing_ok=False
+    ):
+        """
+        Gets the tile summary of the tile as committed in this dataset.
+        Either tilename or path must be supplied - whichever is not supplied will be inferred from the other.
+        If the pointer_blob is already known, this may be supplied too to avoid extra work.
+        """
+        if tilename is None and path is None:
+            raise ValueError("Either <tilename> or <path> must be supplied")
+
+        if not path:
+            path = self.tilename_to_blob_path(tilename, relative=True)
+        if not pointer_blob:
+            pointer_blob = self.get_blob_at(path, missing_ok=missing_ok)
+        if not pointer_blob:
+            return None
+        return self.get_tile_summary_from_pointer_blob(pointer_blob)
+
+    def get_tile_summary_promise(
+        self, tilename=None, *, path=None, pointer_blob=None, missing_ok=False
+    ):
+        """Same as get_tile_summary, but returns a promise. The blob data is not be read until the promise is called."""
+        if tilename is None and path is None:
+            raise ValueError("Either <tilename> or <path> must be supplied")
+
+        if not path:
+            path = self.tilename_to_blob_path(tilename, relative=True)
+        if not pointer_blob:
+            pointer_blob = self.get_blob_at(path, missing_ok=missing_ok)
+        if not pointer_blob:
+            return None
+        return functools.partial(self.get_tile_summary_from_pointer_blob, pointer_blob)
+
+    def get_tile_summary_promise_from_blob_path(self, path, *, missing_ok=False):
+        return self.get_tile_summary_promise(path=path, missing_ok=missing_ok)
 
     def _workdir_path(self, wc_path):
         if isinstance(wc_path, str):
@@ -110,22 +174,21 @@ class PointCloudV1(BaseDataset):
         else:
             return wc_path
 
-    def get_tile_summary_from_wc_path(self, wc_path):
-        wc_path = self._workdir_path(wc_path)
+    def get_tile_summary_from_workdir_path(self, path, *, tile_metadata=None):
+        """Generates a tile summary for a path to a tile in the working copy."""
+        path = self._workdir_path(path)
+        return self.get_tile_summary_from_filesystem_path(path)
 
-        return self.get_tile_summary_from_pc_tile_metadata(
-            wc_path, extract_pc_tile_metadata(wc_path)
-        )
-
-    def get_tile_summary_promise_from_wc_path(self, wc_path):
-        return functools.partial(self.get_tile_summary_from_wc_path, wc_path)
-
-    def get_tile_summary_from_pc_tile_metadata(self, wc_path, tile_metadata):
-        wc_path = self._workdir_path(wc_path)
-
-        tile_info = format_tile_info_for_pointer_file(tile_metadata["tile"])
-        oid, size = get_hash_and_size_of_file(wc_path)
-        return {"name": wc_path.name, **tile_info, "oid": f"sha256:{oid}", "size": size}
+    def get_tile_summary_from_filesystem_path(self, path, *, tile_metadata=None):
+        """
+        Generates a tile summary from a pathlib.Path for a file somewhere on the filesystem.
+        If the tile_metadata is already known, this may be supplied too to avoid extra work.
+        """
+        if not tile_metadata:
+            tile_metadata = extract_pc_tile_metadata(path)
+        tile_info = format_tile_for_pointer_file(tile_metadata["tile"])
+        oid, size = get_hash_and_size_of_file(path)
+        return {"name": path.name, **tile_info, "oid": f"sha256:{oid}", "size": size}
 
     def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):
         """
@@ -147,14 +210,8 @@ class PointCloudV1(BaseDataset):
             "tile",
             key_filter=tile_filter,
             key_decoder_method="tilename_from_path",
-            value_decoder_method="get_tile_summary_promise_from_path",
+            value_decoder_method="get_tile_summary_promise_from_blob_path",
             reverse=reverse,
-        )
-
-    def get_tile_summary_promise_from_path(self, tile_path):
-        tile_pointer_blob = self.get_blob_at(tile_path)
-        return functools.partial(
-            self.get_tile_summary_from_pointer_blob, tile_pointer_blob
         )
 
     def diff_to_working_copy(
@@ -162,39 +219,54 @@ class PointCloudV1(BaseDataset):
         workdir_diff_cache,
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         *,
-        convert_to_ds_format=False,
+        convert_to_dataset_format=False,
     ):
         """Returns a diff of all changes made to this dataset in the working copy."""
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
 
-        wc_tiles_path_pattern = re.escape(f"{self.path}/")
-        wc_tile_ext_pattern = r"\.[Ll][Aa][SsZz]"
-        wc_tiles_pattern = re.compile(
-            rf"^{wc_tiles_path_pattern}[^/]+{wc_tile_ext_pattern}$"
-        )
-
-        def wc_to_ds_path_transform(wc_path):
-            return self.tilename_to_blob_path(wc_path, relative=True)
+        current_metadata = self.tile_metadata
+        dataset_format_to_apply = None
+        if convert_to_dataset_format:
+            dataset_format_to_apply = get_format_summary(current_metadata["format"])
 
         tilename_to_metadata = {}
 
-        def tile_summary_from_wc_path(wc_path):
-            wc_path = self._workdir_path(wc_path)
-            tile_metadata = extract_pc_tile_metadata(wc_path)
-            tilename_to_metadata[wc_path.name] = tile_metadata
-            return self.get_tile_summary_from_pc_tile_metadata(wc_path, tile_metadata)
+        wc_tiles_path_pattern = get_tile_path_pattern(parent_path=self.path)
 
-        tile_diff_deltas = self.generate_wc_diff_from_workdir_index(
-            workdir_diff_cache,
-            wc_path_filter_pattern=wc_tiles_pattern,
-            key_filter=tile_filter,
-            wc_to_ds_path_transform=wc_to_ds_path_transform,
-            ds_key_decoder=self.tilename_from_path,
-            wc_key_decoder=self.tilename_from_path,
-            ds_value_decoder=self.get_tile_summary_promise_from_path,
-            wc_value_decoder=tile_summary_from_wc_path,
-        )
-        tile_diff = DeltaDiff(tile_diff_deltas)
+        tile_diff = DeltaDiff()
+
+        for tile_path in workdir_diff_cache.dirty_paths_for_dataset(self):
+            if not wc_tiles_path_pattern.fullmatch(tile_path):
+                continue
+
+            tilename = self.tilename_from_path(tile_path)
+            if tilename not in tile_filter:
+                continue
+
+            old_tile_summary = self.get_tile_summary_promise(tilename, missing_ok=True)
+            old_half_delta = (tilename, old_tile_summary) if old_tile_summary else None
+
+            wc_path = self._workdir_path(tile_path)
+            if not wc_path.is_file():
+                new_half_delta = None
+            else:
+                tile_metadata = extract_pc_tile_metadata(wc_path)
+                tilename_to_metadata[wc_path.name] = tile_metadata
+                new_tile_summary = self.get_tile_summary_from_workdir_path(
+                    wc_path, tile_metadata=tile_metadata
+                )
+
+                if dataset_format_to_apply and not self.is_tile_compatible(
+                    dataset_format_to_apply, new_tile_summary
+                ):
+                    new_tile_summary = self.pre_conversion_tile_summary(
+                        dataset_format_to_apply, new_tile_summary
+                    )
+
+                new_half_delta = tilename, new_tile_summary
+
+            tile_delta = Delta(old_half_delta, new_half_delta)
+            tile_diff[tilename] = tile_delta
 
         if not tile_diff:
             return DatasetDiff()
@@ -203,21 +275,20 @@ class PointCloudV1(BaseDataset):
         metadata_list = list(tilename_to_metadata.values())
         no_new_metadata = not metadata_list
 
-        current_metadata = self.tile_metadata
         if not is_clean_slate:
             metadata_list.insert(0, current_metadata)
 
-        rewrite_metadata = None
+        rewrite_metadata = 0
         optimization_constraint = current_metadata["format"].get("optimization")
-        if convert_to_ds_format:
+        if convert_to_dataset_format:
             rewrite_metadata = (
                 RewriteMetadata.AS_IF_CONVERTED_TO_COPC
                 if optimization_constraint == "copc"
-                else RewriteMetadata.DROP_FORMAT,
+                else RewriteMetadata.DROP_FORMAT
             )
         else:
             rewrite_metadata = (
-                None
+                0
                 if optimization_constraint == "copc"
                 else RewriteMetadata.DROP_OPTIMIZATION
             )
@@ -228,6 +299,8 @@ class PointCloudV1(BaseDataset):
             merged_metadata = rewrite_and_merge_metadata(
                 metadata_list, rewrite_metadata
             )
+            if rewrite_metadata & RewriteMetadata.DROP_FORMAT:
+                merged_metadata["format"] = current_metadata["format"]
 
         # Make it invalid to try and commit and LAS files:
         merged_format = merged_metadata["format"]
@@ -253,6 +326,36 @@ class PointCloudV1(BaseDataset):
         ds_diff["tile"] = tile_diff
 
         return ds_diff
+
+    def is_tile_compatible(self, ds_format, tile_summary):
+        tile_format = tile_summary["format"]
+        if isinstance(ds_format, dict):
+            ds_format = get_format_summary(ds_format)
+        return tile_format == ds_format or tile_format.startswith(f"{ds_format}/")
+
+    def pre_conversion_tile_summary(self, ds_format, tile_summary):
+        """
+        Converts a tile-summary - that is, updates the tile-summary to be a mix of the tiles current information
+        (prefixed with "source") and its future information - what it will be once converted - where that is known.
+        """
+        if isinstance(ds_format, dict):
+            ds_format = get_format_summary(ds_format)
+
+        envisioned_summary = {
+            "name": set_tile_extension(tile_summary["name"], tile_format=ds_format),
+            "format": ds_format,
+            "oid": None,
+            "size": None,
+        }
+        result = {}
+        for key, value in tile_summary.items():
+            if envisioned_summary.get(key):
+                result[key] = envisioned_summary[key]
+            if key in envisioned_summary:
+                result["source" + key[0].upper() + key[1:]] = value
+            else:
+                result[key] = value
+        return result
 
     def is_clean_slate(self, tile_diff):
         num_existing_tiles_kept = self.tile_count
@@ -294,19 +397,43 @@ class PointCloudV1(BaseDataset):
 
         with object_builder.chdir(self.inner_path):
             for delta in tile_diff.values():
+
                 if delta.type in ("insert", "update"):
-                    tilename = delta.new_key
-                    path_in_wc = self.repo.workdir_file(f"{self.path}/{tilename}")
-                    assert path_in_wc.is_file()
+                    # TODO - need more work on normalising / matching names with different extensions
 
-                    oid = delta.new_value["oid"]
-                    actual_object_path = get_local_path_from_lfs_hash(self.repo, oid)
-                    actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
-                    shutil.copy(path_in_wc, actual_object_path)
+                    if delta.new_value.get("sourceFormat"):
+                        # Converting and then committing a new tile
+                        source_name = delta.new_value.get("sourceName")
+                        path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
 
+                        conversion_func = functools.partial(
+                            convert_tile_to_format,
+                            target_format=delta.new_value["format"],
+                        )
+                        pointer_dict = copy_file_to_local_lfs_cache(
+                            self.repo, path_in_wc, conversion_func
+                        )
+                        pointer_dict = format_tile_for_pointer_file(
+                            delta.new_value, pointer_dict
+                        )
+                    else:
+                        # Committing in a new tile, preserving its format
+                        source_name = delta.new_value.get("name")
+                        path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
+                        oid = delta.new_value["oid"]
+                        path_in_lfs_cache = get_local_path_from_lfs_hash(self.repo, oid)
+                        path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
+                        shutil.copy(path_in_wc, path_in_lfs_cache)
+                        pointer_dict = format_tile_for_pointer_file(delta.new_value)
+
+                    tilename = delta.new_value["name"]
                     object_builder.insert(
                         self.tilename_to_blob_path(tilename, relative=True),
-                        dict_to_pointer_file_bytes(delta.new_value),
+                        dict_to_pointer_file_bytes(pointer_dict),
+                    )
+                    # Update the diff to record what was stored - this is used to reset the workdir.
+                    delta.new_value.update(
+                        oid=pointer_dict["oid"], size=pointer_dict["size"]
                     )
 
                 else:  # delete:

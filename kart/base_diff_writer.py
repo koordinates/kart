@@ -11,7 +11,9 @@ from .diff_structs import WORKING_COPY_EDIT
 from .exceptions import CrsError, InvalidOperation
 from .key_filters import RepoKeyFilter
 from .promisor_utils import FetchPromisedBlobsProcess, object_is_promised
+from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
+
 
 L = logging.getLogger("kart.diff_writer")
 
@@ -111,6 +113,7 @@ class BaseDiffWriter:
         self.target_crs = target_crs
 
         self.commit = None
+        self.do_convert_to_dataset_format = False
 
     def include_target_commit_as_header(self):
         """
@@ -118,6 +121,9 @@ class BaseDiffWriter:
         with all the info for commit C.
         """
         self.commit = self.target_rs.commit
+
+    def convert_to_dataset_format(self, do_convert_to_dataset_format=True):
+        self.do_convert_to_dataset_format = do_convert_to_dataset_format
 
     @classmethod
     def _normalize_output_path(cls, output_path):
@@ -156,7 +162,14 @@ class BaseDiffWriter:
             # We diff base<>working_copy by diffing base<>target + target<>working_copy,
             # and target is set to HEAD.
             base_rs = repo.structure(commit_parts[0])
-            target_rs = repo.structure("HEAD")
+            if repo.state == KartRepoState.MERGING:
+                # During a merge, we transparently base the working copy off of the current merge-state
+                # as stored in MERGED_TREE, rather than HEAD, so that's what we need to use as the target
+                # of a working-copy diff (instead of HEAD).
+                target_rs = repo.structure("MERGED_TREE")
+            else:
+                target_rs = repo.structure("HEAD")
+
             repo.working_copy.assert_exists("Cannot generate working copy diff")
             repo.working_copy.assert_matches_tree(target_rs.tree)
             include_wc_diff = True
@@ -251,6 +264,7 @@ class BaseDiffWriter:
             include_wc_diff=self.include_wc_diff,
             workdir_diff_cache=self.workdir_diff_cache,
             repo_key_filter=self.repo_key_filter,
+            convert_to_dataset_format=self.do_convert_to_dataset_format,
         )
 
     def get_dataset_diff(self, ds_path):
@@ -272,6 +286,7 @@ class BaseDiffWriter:
             include_wc_diff=self.include_wc_diff,
             workdir_diff_cache=self.workdir_diff_cache,
             ds_filter=self.repo_key_filter[ds_path],
+            convert_to_dataset_format=self.do_convert_to_dataset_format,
         )
 
     def _unfiltered_ds_feature_deltas(self, ds_path, ds_diff):

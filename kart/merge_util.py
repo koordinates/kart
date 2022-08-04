@@ -1,22 +1,28 @@
 import functools
 import json
 import re
+import shutil
 from collections import namedtuple
 
 import click
 import pygit2
 
+from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
 from .tabular.feature_output import feature_as_geojson, feature_as_json, feature_as_text
 from .utils import ungenerator
+from kart.point_cloud.tilename_util import set_tile_extension
+
 
 MERGE_HEAD = KartRepoFiles.MERGE_HEAD
-MERGE_INDEX = KartRepoFiles.MERGE_INDEX
 MERGE_BRANCH = KartRepoFiles.MERGE_BRANCH
 MERGE_MSG = KartRepoFiles.MERGE_MSG
 
-ALL_MERGE_FILES = (MERGE_HEAD, MERGE_INDEX, MERGE_BRANCH, MERGE_MSG)
+MERGED_INDEX = KartRepoFiles.MERGED_INDEX
+MERGED_TREE = KartRepoFiles.MERGED_TREE
+
+ALL_MERGE_FILES = (MERGE_HEAD, MERGE_BRANCH, MERGE_MSG, MERGED_INDEX, MERGED_TREE)
 
 
 def write_merged_index_flags(repo):
@@ -77,7 +83,7 @@ class AncestorOursTheirs(namedtuple("AncestorOursTheirs", _ANCESTOR_OURS_THEIRS_
 AncestorOursTheirs.EMPTY = AncestorOursTheirs(None, None, None)
 
 
-class MergeIndex:
+class MergedIndex:
     """
     Like a pygit2.Index, but every conflict has a short key independent of its path,
     and the entire index including conflicts can be serialised to an index file.
@@ -93,7 +99,7 @@ class MergeIndex:
     # TODO - fix pygit2.IndexEntry.
     Entry = namedtuple("Entry", ("path", "id", "mode"))
 
-    # Note that MergeIndex only contains Entries, which are simple structs -
+    # Note that MergedIndex only contains Entries, which are simple structs -
     # not RichConflicts, which refer to the entire RepoStructure to give extra functionality.
 
     def __init__(self, entries, conflicts, resolves):
@@ -104,7 +110,7 @@ class MergeIndex:
     @classmethod
     def from_pygit2_index(cls, index):
         """
-        Converts a pygit2.Index to a MergeIndex, preserving both entries and conflicts.
+        Converts a pygit2.Index to a MergedIndex, preserving both entries and conflicts.
         Conflicts are assigned arbitrary unique keys based on the iteration order.
         """
         entries = {e.path: cls._ensure_entry(e) for e in index}
@@ -112,10 +118,10 @@ class MergeIndex:
             str(k): cls._ensure_conflict(c) for k, c in enumerate(index.conflicts)
         }
         resolves = {}
-        return MergeIndex(entries, conflicts, resolves)
+        return MergedIndex(entries, conflicts, resolves)
 
     def __eq__(self, other):
-        if not isinstance(other, MergeIndex):
+        if not isinstance(other, MergedIndex):
             return False
         return (
             self.entries == other.entries
@@ -133,7 +139,7 @@ class MergeIndex:
             default=lambda o: str(o),
             indent=2,
         )
-        return f"<MergeIndex {contents}>"
+        return f"<MergedIndex {contents}>"
 
     def add(self, index_entry):
         index_entry = self._ensure_entry(index_entry)
@@ -255,7 +261,7 @@ class MergeIndex:
 
     @classmethod
     def read(cls, path):
-        """Deserialise a MergeIndex from the given path."""
+        """Deserialise a MergedIndex from the given path."""
         index = pygit2.Index(str(path))
         if index.conflicts:
             raise RuntimeError("pygit2.Index conflicts should be empty")
@@ -275,16 +281,16 @@ class MergeIndex:
             else:
                 entries[e.path] = cls._ensure_entry(e)
 
-        return MergeIndex(entries, conflicts, resolves)
+        return MergedIndex(entries, conflicts, resolves)
 
     @classmethod
     def read_from_repo(cls, repo):
-        """Deserialise a MergeIndex from the MERGE_INDEX file in the given repo."""
-        return cls.read(repo.gitdir_file(MERGE_INDEX))
+        """Deserialise a MergedIndex from the MERGED_INDEX file in the given repo."""
+        return cls.read(repo.gitdir_file(MERGED_INDEX))
 
     def write(self, path):
         """
-        Serialise this MergeIndex to the given path.
+        Serialise this MergedIndex to the given path.
         Regular entries, conflicts, and resolves are each serialised separately,
         so that they can be roundtripped accurately.
         """
@@ -300,16 +306,20 @@ class MergeIndex:
         index.write()
 
     def write_to_repo(self, repo):
-        """Serialise this MergeIndex to the MERGE_INDEX file in the given repo."""
-        self.write(repo.gitdir_file(MERGE_INDEX))
+        """Serialise this MergedIndex to the MERGED_INDEX file in the given repo."""
+        self.write(repo.gitdir_file(MERGED_INDEX))
 
-    def write_resolved_tree(self, repo):
+    def write_resolved_tree(self, repo, resolve_conflict_fn=None):
         """
         Write all the merged entries and the resolved conflicts to a tree in the given repo.
         Resolved conflicts will be written the same as merged entries in the resulting tree.
-        Only works when all conflicts are resolved.
+        If a resolve_conflict_fn is supplied, then not all conflicts need to be resolved -
+        those that are unresolved will be resolved automatically using the supplied function.
         """
-        assert not self.unresolved_conflicts
+        unresolved_conflicts = self.unresolved_conflicts
+        if resolve_conflict_fn is None:
+            assert not unresolved_conflicts
+
         index = pygit2.Index()
 
         # Entries that were merged automatically by libgit2, often trivially:
@@ -319,6 +329,12 @@ class MergeIndex:
         # libgit2 leaves entries in the main part of the index, even if they are conflicts.
         # We make sure this index only contains merged entries and resolved conflicts.
         index.remove_all(list(self._conflicts_paths()))
+
+        # Force-resolve any unresolved conflicts using the conflict-resolver:
+        if resolve_conflict_fn and unresolved_conflicts:
+            for c in unresolved_conflicts.values():
+                for e in resolve_conflict_fn(c):
+                    index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
 
         # Entries that have been explicitly selected to resolve conflicts:
         for e in self._resolves_entries():
@@ -422,7 +438,7 @@ class MergeContext:
 
     @classmethod
     def read_from_repo(cls, repo):
-        # HEAD is assumed to be our side of the merge. MERGE_HEAD (and MERGE_INDEX)
+        # HEAD is assumed to be our side of the merge. MERGE_HEAD (and MERGED_INDEX)
         # are not version controlled, but are simply files in the repo. For these
         # reasons, the user should not be able to change branch mid merge.
 
@@ -525,12 +541,16 @@ class RichConflictVersion:
         return self.decoded_path[1]
 
     @property
+    def is_meta(self):
+        return self.dataset_part == "meta"
+
+    @property
     def is_feature(self):
         return self.dataset_part == "feature"
 
     @property
-    def is_meta(self):
-        return self.dataset_part == "meta"
+    def is_tile(self):
+        return self.dataset_part == "tile"
 
     @property
     def pk(self):
@@ -548,6 +568,11 @@ class RichConflictVersion:
         return self.decoded_path[2]
 
     @property
+    def tile_name(self):
+        assert self.is_tile
+        return self.decoded_path[2]
+
+    @property
     @functools.lru_cache(maxsize=1)
     def feature(self):
         assert self.is_feature
@@ -558,6 +583,12 @@ class RichConflictVersion:
     def meta_item(self):
         assert self.is_meta
         return self.dataset.get_meta_item(self.meta_path)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def tile_summary(self):
+        assert self.is_tile
+        return self.dataset.get_tile_summary(self.tile_name)
 
     def output(self, output_format, target_crs=None):
         """
@@ -570,19 +601,27 @@ class RichConflictVersion:
                 result = json.dumps(result)
             return result
 
-        if output_format == "text":
-            return feature_as_text(self.feature)
+        if self.is_tile:
+            result = self.tile_summary
+            if output_format == "text":
+                # TODO - transform extents to the target_crs.
+                result = feature_as_text(result)
+            return result
 
-        transform_func = (
-            feature_as_json if output_format == "json" else feature_as_geojson
-        )
-        geometry_transform = None
-        if target_crs is not None:
-            geometry_transform = self.dataset.get_geometry_transform(target_crs)
+        if self.is_feature:
+            if output_format == "text":
+                return feature_as_text(self.feature)
 
-        return transform_func(
-            self.feature, self.pk, geometry_transform=geometry_transform
-        )
+            transform_func = (
+                feature_as_json if output_format == "json" else feature_as_geojson
+            )
+            geometry_transform = None
+            if target_crs is not None:
+                geometry_transform = self.dataset.get_geometry_transform(target_crs)
+
+            return transform_func(
+                self.feature, self.pk, geometry_transform=geometry_transform
+            )
 
     def matches_filter(self, repo_filter):
         if repo_filter.match_all:
@@ -628,6 +667,7 @@ class RichConflict:
     @functools.lru_cache(maxsize=1)
     def has_multiple_paths(self):
         """True if the conflict involves renames and has more than one path."""
+        # Note: this never returns True in practise since we don't do rename detection during merges.
         paths = set(v.path for v in self.true_versions)
         return len(paths) > 1
 
@@ -654,6 +694,7 @@ class RichConflict:
         ("datasetA", "feature", "ancestor=5,ours=6,theirs=7")
         """
         if self.has_multiple_paths:
+            # Note: this never happens in practise since we don't do rename detection during merges.
             return self._multiversion_decoded_path()
         else:
             return self.any_true_version.decoded_path
@@ -686,7 +727,7 @@ def rich_conflicts(raw_conflicts, merge_context):
 
 
 def ensure_conflicts_ready(rich_conflicts, repo):
-    from .promisor_utils import fetch_promised_blobs, object_is_promised
+    from .promisor_utils import fetch_promised_blobs
 
     rich_conflicts = list(rich_conflicts)
     if not rich_conflicts:
@@ -760,7 +801,7 @@ def merge_status_to_text(jdict, fresh):
             )
         else:
             if fresh:
-                no_conflicts_text = f"No conflicts!\nMerge commited as {commit}"
+                no_conflicts_text = f"No conflicts!\nMerge committed as {commit}"
             else:
                 no_conflicts_text = (
                     f"No conflicts!\nUse `kart merge --continue` to complete the merge"
@@ -794,3 +835,107 @@ def merge_status_to_text(jdict, fresh):
         return "\n".join(
             [repo_state_text, merging_text, conflicts_text, conflicts_help_text]
         )
+
+
+class WorkingCopyMerger:
+    """
+    This class helps us to write a merge index working copy so that it stays - where possible - up to date
+    with the current state of the merge.
+    This lets the user see the final state of those objects that were merged cleanly, and makes it
+    simpler for them to put resolutions into the working copy for objects that were not merged cleanly
+    (see `kart resolve --with=workingcopy`).
+    """
+
+    def __init__(self, repo, merge_context):
+        self.repo = repo
+        self.merge_context = merge_context
+
+    def write_merged_tree(self, merged_index):
+        """
+        Given a MergedIndex that represents the merged-state *so far* - unresolved conflicts may still exist - we
+        do our best to write it as a tree. This is mostly used for updating the working-copy below, but it is also
+        used for serialising feature-resolves.
+        """
+        tree_id = merged_index.write_resolved_tree(self.repo, self.resolve_conflict)
+        self.repo.write_gitdir_file(KartRepoFiles.MERGED_TREE, str(tree_id))
+        return self.repo[tree_id]
+
+    def update_working_copy(self, merged_index, merged_tree):
+        """
+        Given a MergedIndex that represents the merged-state *so far* - unresolved conflicts may still exist - we
+        do our best to write it to the working copy anyway, so that the user can see those parts that merged cleanly,
+        and those conflicts that we can we write to the WC, and so that they can use the WC as a starting point for
+        specifying resolves.
+        """
+        # Fetch all LFS tiles from all sides of the conflict.
+        self.ensure_lfs_tiles_fetched()
+        # First pass - write the merged-tree to the WC. Conflicts have been forcibly resolved to make it fit into a tree,
+        # so some information will be missing.
+        self.repo.working_copy.reset(merged_tree, quiet=True)
+        # Second pass - where possible, handle conflicts that can be written in a more complicated way without resolving them:
+        self.write_conflicts_to_working_copy(merged_index)
+
+    def ensure_lfs_tiles_fetched(self):
+        workdir = self.repo.working_copy.workdir
+        if not workdir:
+            return
+
+        commit_ids = set(v.commit_id for v in self.merge_context.versions if v)
+        for commit_id in commit_ids:
+            workdir.fetch_lfs_blobs(self.repo[commit_id], quiet=True)
+
+    def resolve_conflict(self, conflict):
+        """
+        Generator: yields the resolution(s), if any, to a conflict, as pygit2.IndexEntrys.
+        First pass - we forcibly but somewhat arbitrarily resolve any outstanding conflicts in the merge-index,
+        write the result to tree, and use that tree to update the working copy.
+        """
+        rich_conflict = RichConflict(conflict, self.merge_context)
+        # For feature and meta conflicts we can really only fit one possibility in the working copy.
+        # We go with the "ours" versions, until the user specifies something else.
+        dataset_part = rich_conflict.decoded_path[1]
+        if not rich_conflict.has_multiple_paths and dataset_part in ("meta", "feature"):
+            ours = rich_conflict.versions.ours
+            if ours:
+                yield ours.entry
+        # Tile conflicts are effectively resolved as "deleted" here since we don't yield any resolve for them.
+        # They are handled below in "write_conflicts_to_working_copy"
+
+    def write_conflicts_to_working_copy(self, merged_index):
+        """
+        Second pass - those conflicts that can be written to the working copy in a more complicated way (ie
+        without resolving them one way or another) are handled here.
+        """
+        # So far we only write conflicts to the workdir - writing other types conflicts to the working copy
+        # (to the extent possible) is handled in the first pass by the conflict resolver.
+        if not self.repo.working_copy.workdir:
+            return
+
+        for conflict in merged_index.unresolved_conflicts.values():
+            rich_conflict = RichConflict(conflict, self.merge_context)
+            dataset_path, dataset_part, item_path = rich_conflict.decoded_path
+
+            if not rich_conflict.has_multiple_paths and dataset_part == "tile":
+                # Tile conflict found - write all versions we can find to the workdir, with different names.
+                tilename = item_path
+
+                for version in rich_conflict.true_versions:
+                    version_name = version.version_name
+                    pointer_blob = self.repo[version.id]
+                    pointer_dict = pointer_file_bytes_to_dict(pointer_blob)
+                    lfs_path = get_local_path_from_lfs_hash(
+                        self.repo, pointer_dict["oid"]
+                    )
+                    if not lfs_path.is_file():
+                        click.echo(
+                            f"Couldn't find tile {version_name} {tilename} locally - skipping...",
+                            err=True,
+                        )
+                        continue
+                    filename = set_tile_extension(
+                        f"{tilename}.{version_name}", tile_format=pointer_dict["format"]
+                    )
+                    shutil.copy(
+                        lfs_path,
+                        self.repo.working_copy.workdir.path / dataset_path / filename,
+                    )
