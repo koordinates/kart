@@ -231,12 +231,12 @@ ci-test:
 
 .PHONY: clean
 clean:
-	$(RM) $(PREFIX)/bin/kart $(PREFIX)/bin/sno $(PREFIX)/bin/kart_cli_helper
+	$(RM) $(PREFIX)/bin/kart $(PREFIX)/bin/sno
 	$(RM) -r $(VIRTUAL_ENV)
 
 .PHONY: cleaner
 cleaner: clean
-	$(RM) cli_helper/main.c.o
+	$(RM) cli_helper/kart.c.o cli_helper/cJSON.c.o cli_helper/kart_cli_helper
 	-$(MAKE) -C vendor clean clean-configure
 	-$(MAKE) -C platforms clean
 
