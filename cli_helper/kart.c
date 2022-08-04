@@ -17,6 +17,8 @@
 #include <unistd.h>
 #include <sys/sem.h>
 #include <errno.h>
+#include <time.h>
+int nanosleep(const struct timespec *req, struct timespec *rem);
 
 #include "cJSON.h"
 
@@ -81,8 +83,7 @@ int main(int argc, char **argv, char **environ)
         }
 
         int fp = open(getcwd(NULL, 0), O_RDONLY);
-        const int NUM_FD = 4;
-        int fds[NUM_FD] = {fileno(stdin), fileno(stdout), fileno(stderr), fp};
+        int fds[4] = {fileno(stdin), fileno(stdout), fileno(stderr), fp};
 
         char *socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.socket") + 2);
         sprintf(socket_filename, "%s/%s", getenv("HOME"), ".kart.socket");
@@ -132,9 +133,10 @@ int main(int argc, char **argv, char **environ)
             }
 
             int rtc, max_retry = 50;
+            struct timespec sleep_for = {0, 250 * 1000 * 1000};
             while ((rtc = connect(socket_fd, (struct sockaddr *)&addr, sizeof addr)) != 0 && --max_retry >= 0)
             {
-                usleep(250000);
+                nanosleep(&sleep_for, NULL);
             }
             if (rtc < 0)
             {
