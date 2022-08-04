@@ -12,7 +12,8 @@ cp -r dist/kart ${WORKDIR}/opt
 find ${WORKDIR} -maxdepth 1 -type f -not -name kart_cli -exec chmod -x {} \;
 
 # symlink executable
-ln -sf /opt/kart/kart_cli ${WORKDIR}/usr/bin/kart
+ln -sf /opt/kart/kart_cli_helper ${WORKDIR}/usr/bin/kart
+ln -sf /opt/kart/kart_cli ${WORKDIR}/usr/bin/kart_cli
 ln -sf kart ${WORKDIR}/usr/bin/sno  # Previous name
 
 

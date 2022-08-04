@@ -79,3 +79,6 @@ docs/_build/
 
 *.p12
 kart/_env.py
+
+cli_helper/*.c.o
+cli_helper/kart_cli_helper

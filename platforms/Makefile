@@ -101,7 +101,7 @@ pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 		kart.spec
 
 # fix for https://github.com/pyinstaller/pyinstaller/issues/5442
-	sed -i '' -e 's#<string>MacOS/kart_cli</string>#<string>kart_cli</string>#' macos/dist/Kart.app/Contents/Info.plist
+	sed -i '' -e 's#<string>MacOS/kart_helper</string>#<string>kart_helper</string>#' macos/dist/Kart.app/Contents/Info.plist
 
 	-$(RM) -r $(SRC)/vendor/dist/env/
 

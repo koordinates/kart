@@ -95,8 +95,14 @@ if is_darwin:
 pyi_analysis = Analysis(
     ['platforms/kart_cli.py'],
     pathex=[],
+    # only set kart_cli_helper as a binary for Linux or MacOS, need to
+    # do here as modifying after the Analysis instance is created fails
     binaries=[
-        ('vendor/dist/env/lib/*', '.'),
+        binary for binary in 
+        (
+            ('vendor/dist/env/lib/*', '.'),
+            ('cli_helper/kart_cli_helper', '.')
+        ) if is_linux or is_darwin or is_win and binary[0] != "cli_helper/kart_cli_helper"
     ],
     datas=[
         ('kart/VERSION', 'kart'),
