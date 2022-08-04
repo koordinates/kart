@@ -13,10 +13,6 @@ pyinstaller := $(abspath ../venv/bin/pyinstaller)
 
 export PATH := $(abspath ../venv/bin):$(PATH)
 
-PY_VERSION ?= 3.7
-# Python binaries like python, pip in the venv will take precedence.
-VIRTUAL_ENV ?= ../venv
-PY_SITEPACKAGES = lib/python$(PY_VERSION)/site-packages
 
 pyapp-Linux = linux/dist/kart/kart_cli
 pyapp-Darwin = macos/dist/Kart.app
@@ -99,9 +95,6 @@ pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 		--workpath platforms/macos/build/ \
 		--distpath platforms/macos/dist/ \
 		kart.spec
-
-# fix for https://github.com/pyinstaller/pyinstaller/issues/5442
-	sed -i '' -e 's#<string>MacOS/kart_helper</string>#<string>kart_helper</string>#' macos/dist/Kart.app/Contents/Info.plist
 
 	-$(RM) -r $(SRC)/vendor/dist/env/
 

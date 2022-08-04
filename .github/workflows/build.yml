@@ -63,8 +63,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
 
       #
       # python distribution
@@ -294,8 +292,6 @@ jobs:
           toolset: 14.0
 
       - uses: actions/checkout@v2
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
 
       #
       # python distribution
@@ -513,8 +509,6 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@v2
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
 
       #
       # python distribution
@@ -811,8 +805,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
 
       #
       # setup
@@ -930,8 +922,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
 
       #
       # setup
@@ -1045,8 +1035,6 @@ jobs:
       )
     steps:
       - uses: actions/checkout@v2
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
 
       #
       # python distribution

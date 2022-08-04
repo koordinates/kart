@@ -1,4 +1,0 @@
-[submodule "pyinstaller"]
-	path = pyinstaller
-	url = https://github.com/koordinates/pyinstaller.git
-	branch = v5.1-kart

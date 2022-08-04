@@ -1,4 +1,3 @@
-#include "kart.h"
 
 #define _XOPEN_SOURCE 1
 
