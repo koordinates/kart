@@ -83,7 +83,6 @@ def helper(ctx, socket_filename, timeout, args):
 
         sock.bind(str(socket_filename))
     except OSError as e:
-        print(dir(e))
         click.echo(f"Unable to bind to socket [{socket_filename}] [{e.strerror}]")
         ctx.exit(1)
 
@@ -113,9 +112,6 @@ def helper(ctx, socket_filename, timeout, args):
             client, info = sock.accept()
             if os.fork() == 0:
                 payload, fds = recv_fds(client, 8164, 4)
-                # print("kart helper: handlng request...", payload)
-                # TODO - what logging support should we have for the helper, to stdout doesn't work
-                #  well as it will be starting in the background and output will show, log file?
                 if not payload or len(fds) != 4:
                     click.echo("No payload or fds passed from kart_cli_helper")
                     sys.exit(-1)
