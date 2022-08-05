@@ -17,6 +17,10 @@
 #include <sys/sem.h>
 #include <errno.h>
 #include <time.h>
+#include <limits.h>
+#include <fcntl.h>
+#include <libgen.h>
+
 int nanosleep(const struct timespec *req, struct timespec *rem);
 
 #include "cJSON.h"
@@ -33,7 +37,18 @@ void exit_on_alarm(int sig)
 
 int main(int argc, char **argv, char **environ)
 {
+    // find the appropriate kart_cli to run based on whether argv[0]
+    // is absolute, relative or bare, meaning on the path
     char *cmd = "kart_cli";
+    char cmd_path[PATH_MAX];
+    char buf[PATH_MAX];
+    if (argv[0][0] == '/' || strchr(argv[0], '/')) {
+        realpath(argv[0], buf);
+        sprintf(cmd_path, "%s/%s", dirname(&buf[0]), cmd);
+    } else {
+        strcpy(cmd_path, cmd);
+    }
+
     char *use_helper = getenv("KART_USE_HELPER");
 
     if (use_helper != NULL && *use_helper != '\0' && *use_helper != ' ' && *use_helper != '0')
@@ -106,21 +121,20 @@ int main(int argc, char **argv, char **environ)
                 if (fork() == 0)
                 {
                     setsid();
-                    close(0);
-                    close(1);
-                    close(2);
+                    
                     // start helper in background and wait
-                   
-
-                    char *helper_argv[] = {cmd, "helper", "--socket", socket_filename, NULL};
+                    char *helper_argv[] = {&cmd_path[0], "helper", "--socket", socket_filename, NULL};
 
                     int status;
                     environ = helper_environ;
-                    status = execvp(cmd, helper_argv);
+                    for (int fd = 0; fd < 3; fd++){
+                        fcntl(fd, F_SETFD, FD_CLOEXEC);
+                    }
+                    status = execvp(&cmd_path[0], helper_argv);
 
                     if (status < 0)
                     {
-                        printf("Error running kart helper: %s", strerror(status));
+                        printf("Error running kart helper, %s: %s", cmd_path, strerror(status));
                         exit(1);
                     }
                 }
