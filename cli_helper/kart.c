@@ -42,7 +42,7 @@ int main(int argc, char **argv, char **environ)
     char *cmd = "kart_cli";
     char cmd_path[PATH_MAX];
     char buf[PATH_MAX];
-    if (argv[0][0] == '/' || strchr(argv[0], '/')) {
+    if (strchr(argv[0], '/')) {
         realpath(argv[0], buf);
         sprintf(cmd_path, "%s/%s", dirname(&buf[0]), cmd);
     } else {
@@ -130,7 +130,7 @@ int main(int argc, char **argv, char **environ)
                     for (int fd = 0; fd < 3; fd++){
                         fcntl(fd, F_SETFD, FD_CLOEXEC);
                     }
-                    status = execvp(&cmd_path[0], helper_argv);
+                    status = execvp(helper_argv[0], helper_argv);
 
                     if (status < 0)
                     {
