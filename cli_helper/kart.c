@@ -210,6 +210,6 @@ int main(int argc, char **argv, char **environ)
     else
     {
         // run the full application as normal
-        execvp(cmd, argv);
+        execvp(&cmd_path[0], argv);
     }
 }
