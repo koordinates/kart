@@ -225,9 +225,17 @@ def update_workingcopy_with_resolve(
         if repo.working_copy.exists():
             working_copy_merger.update_working_copy(merged_index, merged_tree)
 
-    elif ds_part == "feature" and repo.working_copy.exists():
-        # TODO - write feature resolve to working copy
-        pass
+    elif ds_part == "feature":
+        # TODO - first delete any conflicting features
+        wc = repo.working_copy.tabular
+        if wc is None:
+            return
+        dataset = load_dataset(rich_conflict)
+        features = [dataset.get_feature(path=r.path, data=repo[r.id]) for r in res]
+        with wc.session() as sess:
+            wc.delete_features(sess, rich_conflict.as_key_filter())
+            if features:
+                sess.execute(wc.insert_or_replace_into_dataset_cmd(dataset), features)
     elif ds_part == "tile" and repo.working_copy.exists():
         # TODO - write tile resolve to working copy, clean up any conflict versions (ancestor, ours, theirs).
         pass

@@ -158,11 +158,11 @@ class TableWorkingCopy(WorkingCopyPart):
             schema, db_schema=self.db_schema, table_name=table_name
         )
 
-    def _insert_into_dataset(self, dataset):
+    def insert_into_dataset_cmd(self, dataset):
         """Returns a SQL command for inserting features into the table for that dataset."""
         return self._table_def_for_dataset(dataset).insert()
 
-    def _insert_or_replace_into_dataset(self, dataset):
+    def insert_or_replace_into_dataset_cmd(self, dataset):
         """
         Returns a SQL command for inserting/replacing features that may or may not already exist in the table
         for that dataset.
@@ -880,6 +880,18 @@ class TableWorkingCopy(WorkingCopyPart):
             )
         return r.rowcount
 
+    @contextlib.contextmanager
+    def _suspend_triggers(self, sess, dataset):
+        """Context manager that temporarily disables the triggers that track dirty rows for the given dataset."""
+        raise NotImplementedError()
+
+    def _track_changes_as_dirty(self, sess, dataset, track_changes_as_dirty):
+        """Context manager that temporarily disables the triggers that track dirty rows - iff track_changes_as_dirty is False."""
+        if not track_changes_as_dirty:
+            return self._suspend_triggers(sess, dataset)
+        else:
+            return contextlib.nullcontext()
+
     def write_full(self, commit_or_tree, *datasets):
         """
         Writes a full layer into a working-copy table.
@@ -914,7 +926,7 @@ class TableWorkingCopy(WorkingCopyPart):
                     self._create_spatial_index_pre(sess, dataset)
 
                 L.info("Creating features...")
-                sql = self._insert_into_dataset(dataset)
+                sql = self.insert_into_dataset_cmd(dataset)
                 t0 = time.monotonic()
 
                 CHUNK_SIZE = 10000
@@ -1012,7 +1024,7 @@ class TableWorkingCopy(WorkingCopyPart):
         if not pk_list:
             return 0
 
-        sql = self._insert_or_replace_into_dataset(dataset)
+        sql = self.insert_or_replace_into_dataset_cmd(dataset)
         feat_count = 0
         CHUNK_SIZE = 10000
         for row_dicts in chunk(
@@ -1028,7 +1040,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
         return feat_count
 
-    def _delete_features(self, sess, repo_key_filter, track_changes_as_dirty=False):
+    def delete_features(self, sess, repo_key_filter, track_changes_as_dirty=True):
         """Deletes the features that match the given repo_key_filter."""
         if not repo_key_filter:
             return
@@ -1038,7 +1050,9 @@ class TableWorkingCopy(WorkingCopyPart):
 
         if repo_key_filter.match_all:
             for base_ds in base_datasets:
-                with self._suspend_triggers(sess, base_ds):
+                with self._track_changes_as_dirty(
+                    sess, base_ds, track_changes_as_dirty
+                ):
                     self._delete_features_from_dataset(
                         sess,
                         base_ds,
@@ -1051,7 +1065,7 @@ class TableWorkingCopy(WorkingCopyPart):
             if not base_ds:
                 continue
             feature_filter = dataset_filter.get("feature", dataset_filter.child_type())
-            with self._suspend_triggers(sess, base_ds):
+            with self._track_changes_as_dirty(sess, base_ds, track_changes_as_dirty):
                 self._delete_features_from_dataset(sess, base_ds, feature_filter)
 
     def _delete_features_from_dataset(self, sess, dataset, features_to_delete):
@@ -1323,14 +1337,7 @@ class TableWorkingCopy(WorkingCopyPart):
         pks = list(feature_diff.keys())
         L.debug("Applying feature diff: about %s changes", len(pks))
 
-        if not track_changes_as_dirty:
-            # We don't want to track these changes as working copy edits - they will be part of the new WC base.
-            ctx = self._suspend_triggers(sess, target_ds)
-        else:
-            # We want to track these changes as working copy edits so they can be committed later.
-            ctx = contextlib.nullcontext()
-
-        with ctx:
+        with self._track_changes_as_dirty(sess, target_ds, track_changes_as_dirty):
             self._delete_features_from_dataset(sess, target_ds, pks)
             self._write_features_from_dataset(sess, target_ds, pks, ignore_missing=True)
 
@@ -1457,7 +1464,7 @@ class TableWorkingCopy(WorkingCopyPart):
         with self.session() as sess:
             self._update_state_table_tree(sess, tree_id)
             self._mark_as_clean(sess, mark_as_clean)
-            self._delete_features(
+            self.delete_features(
                 sess, now_outside_spatial_filter, track_changes_as_dirty=False
             )
 

@@ -835,7 +835,7 @@ def _edit_points(conn, dataset=None, working_copy=None):
         insert_cmd = _insert_command(H.POINTS.LAYER, H.POINTS.RECORD.keys())
     else:
         layer = f"{working_copy.DB_SCHEMA}.{H.POINTS.LAYER}"
-        insert_cmd = working_copy._insert_into_dataset(dataset)
+        insert_cmd = working_copy.insert_into_dataset_cmd(dataset)
 
     # Note - different DB backends support and interpret rowcount differently.
     # Sometimes rowcount is not supported for inserts, so it just returns -1.
@@ -864,7 +864,7 @@ def _edit_polygons(conn, dataset=None, working_copy=None):
         insert_cmd = _insert_command(H.POLYGONS.LAYER, H.POLYGONS.RECORD.keys())
     else:
         layer = f"{working_copy.DB_SCHEMA}.{H.POLYGONS.LAYER}"
-        insert_cmd = working_copy._insert_into_dataset(dataset)
+        insert_cmd = working_copy.insert_into_dataset_cmd(dataset)
 
     # See note on rowcount at _edit_points
     r = conn.execute(insert_cmd, H.POLYGONS.RECORD)
@@ -894,7 +894,7 @@ def _edit_table(conn, dataset=None, working_copy=None):
         insert_cmd = _insert_command(H.TABLE.LAYER, H.TABLE.RECORD.keys())
     else:
         layer = f"{working_copy.DB_SCHEMA}.{H.TABLE.LAYER}"
-        insert_cmd = working_copy._insert_into_dataset(dataset)
+        insert_cmd = working_copy.insert_into_dataset_cmd(dataset)
 
     r = conn.execute(insert_cmd, H.TABLE.RECORD)
     # rowcount is not actually supported for inserts, but works in certain DB types - otherwise is -1.
