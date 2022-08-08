@@ -61,6 +61,14 @@ def test_merge_and_resolve_conflicts(
             "",
         ]
 
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        lines = r.stdout.splitlines()
+        assert "--- auckland:tile:auckland_0_0" in lines
+        assert "+++ auckland:tile:auckland_0_0.ancestor" in lines
+        assert "+++ auckland:tile:auckland_0_0.ours" in lines
+        assert "+++ auckland:tile:auckland_0_0.theirs" in lines
+
         # Check the conflict versions were written to the working copy for the user to compare:
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.ancestor.copc.laz"
@@ -72,7 +80,7 @@ def test_merge_and_resolve_conflicts(
             repo_path / "auckland" / "auckland_0_0.theirs.copc.laz"
         ) == ("9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312", 24480)
 
-        # TODO - clean up these files as conflicts are resolved.
+        assert not (repo_path / "auckland" / "auckland_0_0.copc.laz").exists()
 
         r = cli_runner.invoke(
             ["resolve", "auckland:tile:auckland_0_0", "--with=theirs"]
@@ -82,6 +90,25 @@ def test_merge_and_resolve_conflicts(
             "Resolved 1 conflict. 0 conflicts to go.",
             "Use `kart merge --continue` to complete the merge",
         ]
+
+        # Check the conflict versions were cleaned up and auckland_0_0 in the workdir is now version "theirs".
+        assert not (repo_path / "auckland" / "auckland_0_0.ancestor.copc.laz").exists()
+        assert not (repo_path / "auckland" / "auckland_0_0.ours.copc.laz").exists()
+        assert not (repo_path / "auckland" / "auckland_0_0.theirs.copc.laz").exists()
+
+        assert get_hash_and_size_of_file(
+            repo_path / "auckland" / "auckland_0_0.copc.laz"
+        ) == ("9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312", 24480)
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        lines = r.stdout.splitlines()
+        assert "--- auckland:tile:auckland_0_0" in lines
+        assert "+++ auckland:tile:auckland_0_0" in lines
+
+        assert "+++ auckland:tile:auckland_0_0.ancestor" not in lines
+        assert "+++ auckland:tile:auckland_0_0.ours" not in lines
+        assert "+++ auckland:tile:auckland_0_0.theirs" not in lines
 
         r = cli_runner.invoke(
             [

@@ -385,6 +385,52 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         self._reset_workdir_index_for_datasets(datasets)
 
+    def delete_tiles(
+        self,
+        repo_key_filter,
+        *,
+        track_changes_as_dirty=True,
+        including_conflict_versions=False,
+    ):
+        """
+        Delete the tiles that match the repo_key_filter.
+        If including_conflict_versions is True, then variants of the tile name that include conflict version infixes
+        - .ancestor. or .ours. or .theirs. - will also be deleted.
+        """
+        if repo_key_filter.match_all:
+            raise NotImplementedError(
+                "delete_tiles currently only supports deleting specific tiles, not match_all"
+            )
+
+        for ds_path, ds_filter in repo_key_filter.items():
+            tile_filter = ds_filter.get("tile")
+            if not tile_filter:
+                continue
+            ds_tiles_dir = (self.path / ds_path).resolve()
+            if not ds_tiles_dir.is_dir():
+                continue
+            # Sanity check to make sure we're not messing with files we shouldn't:
+            assert self.path in ds_tiles_dir.parents
+            assert self.repo.workdir_path in ds_tiles_dir.parents
+            if tile_filter.match_all:
+                raise NotImplementedError(
+                    "delete_tiles currently only supports deleting specific tiles, not match_all"
+                )
+
+            reset_index_files = []
+            for tilename in tile_filter:
+                name_pattern = get_tile_path_pattern(
+                    tilename, include_conflict_versions=including_conflict_versions
+                )
+                for child in ds_tiles_dir.glob(tilename + ".*"):
+                    if name_pattern.fullmatch(child.name) and child.is_file():
+                        child.unlink()
+                        if not track_changes_as_dirty:
+                            reset_index_files.append(f"{ds_path}/{child.name}")
+
+            if not track_changes_as_dirty:
+                self._reset_workdir_index_for_files(reset_index_files)
+
     def _update_dataset_in_workdir(
         self, ds_path, diff_to_apply, ds_filter, track_changes_as_dirty
     ):

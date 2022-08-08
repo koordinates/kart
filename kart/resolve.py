@@ -11,8 +11,10 @@ from kart.completion_shared import conflict_completer
 
 from .cli_util import MutexOption
 from .exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
+from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
 from .geometry import geojson_to_gpkg_geom
 from .merge_util import MergeContext, MergedIndex, RichConflict, WorkingCopyMerger
+from .point_cloud.tilename_util import set_tile_extension
 from .repo import KartRepoState
 
 
@@ -226,7 +228,6 @@ def update_workingcopy_with_resolve(
             working_copy_merger.update_working_copy(merged_index, merged_tree)
 
     elif ds_part == "feature":
-        # TODO - first delete any conflicting features
         wc = repo.working_copy.tabular
         if wc is None:
             return
@@ -236,9 +237,24 @@ def update_workingcopy_with_resolve(
             wc.delete_features(sess, rich_conflict.as_key_filter())
             if features:
                 sess.execute(wc.insert_or_replace_into_dataset_cmd(dataset), features)
-    elif ds_part == "tile" and repo.working_copy.exists():
-        # TODO - write tile resolve to working copy, clean up any conflict versions (ancestor, ours, theirs).
-        pass
+
+    elif ds_part == "tile":
+        workdir = repo.working_copy.workdir
+        if workdir is None:
+            return
+        dataset = load_dataset(rich_conflict)
+        workdir.delete_tiles(
+            rich_conflict.as_key_filter(), including_conflict_versions=True
+        )
+        for r in res:
+            tilename = dataset.tilename_from_path(r.path)
+            pointer_dict = pointer_file_bytes_to_dict(repo[r.id])
+            lfs_path = get_local_path_from_lfs_hash(repo, pointer_dict["oid"])
+            filename = set_tile_extension(tilename, tile_format=pointer_dict["format"])
+            workdir_path = workdir.path / dataset.path / filename
+            if workdir_path.is_file():
+                workdir_path.unlink()
+            shutil.copy(lfs_path, workdir_path)
 
 
 @click.command()

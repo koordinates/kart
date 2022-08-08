@@ -31,7 +31,9 @@ def set_tile_extension(filename, ext=None, tile_format=None):
     return remove_tile_extension(filename) + ext
 
 
-def get_tile_path_pattern(tilename=None, *, parent_path=None):
+def get_tile_path_pattern(
+    tilename=None, *, parent_path=None, include_conflict_versions=False
+):
     """
     Given a tilename eg "mytile" and a parent_path eg "myfolder",
     returns a regex that accepts "myfolder/mytile.laz", "myfolder/mytile.LAZ", "myfolder/mytile.copc.laz", "myfolder/mytile.las", etc.
@@ -40,11 +42,16 @@ def get_tile_path_pattern(tilename=None, *, parent_path=None):
     If tilename is not specified, the regex will match any non-empty tilename that contains no path separators, and this will
     be the first group in the result.
     If parent_path is not specified, the resulting regex will match only tiles that have no parent-path prefix ie simply "mytile.laz"
+    If include_conflict_versions is True, then an "ancestor" / "ours" / "theirs" infix will also be matched if needed -
+    that is, "mytile.laz", "mytile.ancestor.laz", "mytile.ours.laz" and "mytile.theirs.laz" are all matched (and so on).
     """
 
     parent_pattern = (
         re.escape(parent_path.rstrip("/") + "/") if parent_path is not None else ""
     )
     tile_pattern = re.escape(tilename) if tilename is not None else r"([^/]+)"
+    version_pattern = (
+        r"(?:\.ancestor|\.ours|\.theirs)?" if include_conflict_versions else ""
+    )
     ext_pattern = r"(?:\.[Cc][Oo][Pp][Cc])?\.[Ll][Aa][SsZz]"
-    return re.compile(parent_pattern + tile_pattern + ext_pattern)
+    return re.compile(parent_pattern + tile_pattern + version_pattern + ext_pattern)
