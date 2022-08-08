@@ -46,5 +46,18 @@ pyinstaller \
     --distpath platforms/linux/dist/ \
     kart.spec
 
+# # fix up .so files which should be symlinks
+VENDOR_LIB=/src/vendor/dist/env/lib/
+(cd platforms/linux/dist/kart/ \
+    && for library in `ls *.so*`; do 
+    if [ -e $VENDOR_LIB/$library ] ; then 
+        if [ -L $VENDOR_LIB/$library ]; then 
+            ln -sf `readlink $VENDOR_LIB/$library` $library
+        else 
+            strip $library; 
+        fi; 
+    fi; 
+done)
+
 { echo ">> Post-bundle Smoke Test ..."; } 2> /dev/null
 platforms/linux/dist/kart/kart_cli --version
