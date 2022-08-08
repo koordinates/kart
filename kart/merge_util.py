@@ -8,6 +8,7 @@ import click
 import pygit2
 
 from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
+from .key_filters import RepoKeyFilter
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
 from .tabular.feature_output import feature_as_geojson, feature_as_json, feature_as_text
@@ -698,6 +699,12 @@ class RichConflict:
             return self._multiversion_decoded_path()
         else:
             return self.any_true_version.decoded_path
+
+    def as_key_filter(self):
+        result = RepoKeyFilter()
+        for version in self.true_versions:
+            result.recursive_set(version.decoded_path, True)
+        return result
 
     @property
     @functools.lru_cache(maxsize=1)
