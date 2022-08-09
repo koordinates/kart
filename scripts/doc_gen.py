@@ -9,13 +9,72 @@ licensed under the Kart license (GPL).
 """
 
 import os
-import sys
+import platform
+from pathlib import Path
 import time
 import typing as t
+from pkg_resources import iter_entry_points
 
 import click
+import rst2txt
+from docutils.core import publish_string
+from docutils.writers import manpage
 
-COMMANDS_FOLDER = os.path.join(os.path.dirname(sys.prefix), "docs", "pages", "commands")
+COMMANDS_FOLDER = Path.home() / os.path.join(
+    "Documents", "gh", "kart", "docs", "pages", "commands"
+)
+
+
+def generate_help_pages(
+    name: str,
+    cli: click.Command,
+    parent_ctx: click.Context = None,
+    version: str = None,
+    target_dir: str = None,
+):
+    ctx = click.Context(cli, info_name=name, parent=parent_ctx)
+    doc_path = Path(COMMANDS_FOLDER) / f'{ctx.command_path.replace(" ", "-")}.rst'
+    contents = ""
+    if doc_path.exists():
+        contents = doc_path.read_text()
+
+    doc = get_parsed_doc(ctx, contents)
+    writer = BaseDocWriter.get_doc_writer(doc)
+    writer.write(target_dir)
+
+    commands = getattr(cli, "commands", {})
+    for name, command in commands.items():
+        if command.hidden:
+            continue
+        generate_help_pages(
+            name, command, parent_ctx=ctx, version=version, target_dir=target_dir
+        )
+
+
+def get_parsed_doc(ctx: click.Context, contents: str) -> "t.Type[Doc]":
+    """Parses the click help text and rst docs"""
+    if platform.system() == "Windows":
+        converted_contents = rst_to_text(contents)
+        doc = TextPage(ctx, converted_contents)
+    else:
+        converted_contents = rst_to_man(contents)
+        doc = ManPage(ctx, converted_contents)
+    return doc
+
+
+def rst_to_man(contents):
+    # we add a header to the man page and remove it later
+    # to avoid parsing the rst2man "metadata" in ManPage
+    header = "KART\n====\n"
+    man_contents = publish_string(header + contents, writer=manpage.Writer()).decode(
+        "utf-8"
+    )[718:]
+    return man_contents
+
+
+def rst_to_text(contents):
+    text_output = publish_string(contents, writer=rst2txt.Writer()).decode("utf-8")
+    return text_output
 
 
 def get_short_help_str(command, limit=45):
@@ -84,14 +143,11 @@ class BaseDocWriter:
             return TextPageWriter(doc)
         return BaseDocWriter(doc)
 
-    def write(self) -> str:
+    def write(self) -> None:
         """Generate string representation of 'Doc'
 
         Raises:
             NotImplementedError: BaseDocWriter cannot write a doc
-
-        Returns:
-            str:  A generated string representation of 'Doc'
         """
         raise NotImplementedError("BaseDocWriter cannot write docs")
 
@@ -159,7 +215,7 @@ class ManPageWriter(BaseDocWriter):
             )
         return section + "\n" + "\n".join(section_body)
 
-    def write(self):
+    def write(self, target_dir: str = None):
         title = self.get_title()
         name = self.get_name()
         synopsis = self.get_synopsis()
@@ -181,7 +237,11 @@ class ManPageWriter(BaseDocWriter):
                 ],
             )
         )
-        return man_page
+
+        help_page = Path(f'{self.doc.command.replace(" ", "-")}.1')
+        if target_dir:
+            help_page = Path(target_dir) / help_page
+        help_page.write_text(man_page)
 
 
 class TextPageWriter(BaseDocWriter):
@@ -241,7 +301,7 @@ class TextPageWriter(BaseDocWriter):
         footer = f"{self.doc.version}   {self.doc.date}   {self.doc.command}"
         return footer + "\n"
 
-    def write(self):
+    def write(self, target_dir: str = None):
         title = self.get_title()
         name = self.get_name()
         synopsis = self.get_synopsis()
@@ -265,4 +325,40 @@ class TextPageWriter(BaseDocWriter):
                 ],
             )
         )
-        return text_page
+        help_page = Path(f'{self.doc.command.replace(" ", "-")}')
+        if target_dir:
+            help_page = Path(target_dir) / help_page
+        help_page.write_text(text_page)
+
+
+if __name__ == "__main__":
+
+    name = "kart"
+    target = Path.home() / os.path.join(
+        "Documents", "gh", "kart", "build", "venv", "help_page"
+    )
+    console_scripts = [ep for ep in iter_entry_points("console_scripts", name=name)]
+    entry_point = console_scripts[0]
+    target.mkdir(parents=True, exist_ok=True)
+    import importlib
+
+    mod = importlib.import_module(f"{entry_point.module_name}")
+
+    from kart.cli import _load_all_commands, print_version
+
+    _load_all_commands()
+    cli = entry_point.resolve()
+
+    # If the entry point isn't a click.Command object, try to find it in the module
+    if not isinstance(cli, click.Command):
+        from importlib import import_module
+        from inspect import getmembers
+
+        if not entry_point.module_name:
+            raise click.ClickException('Could not find module name for "{name}".')
+        ep_module = import_module(entry_point.module_name)
+        ep_members = getmembers(ep_module, lambda x: isinstance(x, click.Command))
+
+        ep_name, cli = ep_members[0]
+
+    generate_help_pages(name, cli, version=entry_point.dist.version, target_dir=target)

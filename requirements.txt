@@ -4,7 +4,7 @@
 #
 #    make py-requirements
 #
-attrs==21.4.0
+attrs==22.1.0
     # via jsonschema
 cached-property==1.5.2
     # via pygit2
@@ -53,9 +53,9 @@ rst2txt==1.1.0
     # via -r requirements/requirements.in
 rtree==0.9.7
     # via -r requirements/requirements.in
-shellingham==1.4.0
+shellingham==1.5.0
     # via -r requirements/requirements.in
-sqlalchemy==1.4.39
+sqlalchemy==1.4.40
     # via -r requirements/requirements.in
 typing-extensions==4.3.0
     # via importlib-metadata

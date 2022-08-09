@@ -8,17 +8,17 @@ aspectlib==1.5.2
     # via pytest-benchmark
 atomicwrites==1.4.1
     # via -r requirements/test.in
-attrs==21.4.0
+attrs==22.1.0
     # via
     #   -c requirements/../requirements.txt
     #   pytest
 colorama==0.4.5
     # via -r requirements/test.in
-coverage[toml]==6.4.2
+coverage[toml]==6.4.3
     # via pytest-cov
 fields==5.0.0
     # via aspectlib
-gprof2dot==2021.2.21
+gprof2dot==2022.7.29
     # via pytest-profiling
 html5lib==1.1
     # via -r requirements/test.in

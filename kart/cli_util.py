@@ -23,9 +23,6 @@ class KartCommand(click.Command):
         try:
             render(ctx)
         except Exception as e:
-            import pdb
-
-            pdb.set_trace()
             L.debug(f"Failed rendering help page: {e}")
             return super().format_help(ctx, formatter)
 

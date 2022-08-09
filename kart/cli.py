@@ -15,8 +15,6 @@ import click
 import pygit2
 
 from . import core, is_darwin, is_linux, is_windows  # noqa
-
-from . import core  # noqa
 from .cli_util import add_help_subcommand, call_and_exit_flag, tool_environment, render
 from .context import Context
 from .exec import run_and_wait
