@@ -714,6 +714,12 @@ class TestHelpers:
         subprocess.check_call(cmd + list(paths))
 
     @classmethod
+    def get_git_datetime(cls, sha: str) -> str:
+        cmd = ["git", "show", "-s", "--format=%cd", sha]
+        date = subprocess.check_output(cmd)
+        return date.decode("utf-8").strip()
+
+    @classmethod
     def parameter_ids(cls, request):
         """Get an array of parameter IDs"""
         # nodeid = 'test_import_feature_performance[0.2.0-spec-counties-table]'
