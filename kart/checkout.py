@@ -76,6 +76,12 @@ def checkout(
         else:
             resolved = CommitWithReference.resolve(repo, "HEAD")
     except NotFound:
+        # Allow a pointless "kart checkout main" on empty repos already on branch main.
+        if repo.head_branch and repo.head_branch_shorthand == refish:
+            if new_branch or spatial_filter_spec:
+                raise  # But don't allow them to do anything more complicated.
+            return
+
         # Guess: that the user wants create a new local branch to track a remote
         remote_branch = (
             _find_remote_branch_by_name(repo, refish) if do_guess and refish else None
@@ -233,6 +239,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             resolved = CommitWithReference.resolve(repo, start_point)
         else:
             resolved = CommitWithReference.resolve(repo, "HEAD")
+
         commit = resolved.commit
 
         do_switch_commit = repo.head_commit != commit
@@ -284,6 +291,9 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             existing_branch = _find_remote_branch_by_name(repo, refish)
 
         if not existing_branch:
+            # Allow a pointless "kart switch main" on empty repos already on branch main.
+            if repo.head_branch_shorthand == refish:
+                return
             raise NotFound(f"Branch '{refish}' not found.", exit_code=NO_BRANCH)
 
         commit = existing_branch.peel(pygit2.Commit)
