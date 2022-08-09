@@ -14,6 +14,7 @@ from pathlib import Path
 from PyInstaller.compat import is_win, is_darwin, is_linux
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.depend import dylib
+from PyInstaller.utils.hooks import collect_data_files
 
 
 with open(os.path.join('kart', 'VERSION')) as version_file:
@@ -35,6 +36,8 @@ if is_win:
             vr.write(vr_doc)
 
 if is_linux:
+    # TODO - these don't actually exclude these files as the check is run in 
+    #  a separate process
     # This needs to match the OS dependencies in platforms/linux/fpm.sh
     # We want to treat libstdc++ as a system dependency
     dylib._excludes |= {r'libstdc\+\+\.so(\..*)?'}
@@ -50,7 +53,10 @@ if is_linux:
     assert dylib.exclude_list.search('libstdc++.so.6.0.20')
     assert dylib.exclude_list.search('libgcc_s.so.1')
 
+
 if is_linux or is_darwin:
+    # TODO - these don't actually exclude these files as the check is run in 
+    #  a separate process
     # We want to treat unixODBC (libodbc) as a system dependency, since the MSSQL
     # drivers depend on it, and we don't want two different versions imported
     # in the same process.
@@ -66,6 +72,7 @@ if is_linux or is_darwin:
     )
     assert dylib.exclude_list.search('libodbc.2.dylib')
     assert dylib.exclude_list.search('libodbc.so.1')
+    assert dylib.exclude_list.search('libodbc.so.2')
 
 if is_darwin:
     # on macOS every dylib dependency path gets rewritten to @loader_path/...,
@@ -88,8 +95,14 @@ if is_darwin:
 pyi_analysis = Analysis(
     ['platforms/kart_cli.py'],
     pathex=[],
+    # only set kart_cli_helper as a binary for Linux or MacOS, need to
+    # do here as modifying after the Analysis instance is created fails
     binaries=[
-        ('vendor/dist/env/lib/*', '.'),
+        binary for binary in 
+        (
+            ('vendor/dist/env/lib/*', '.'),
+            ('cli_helper/kart_cli_helper', '.')
+        ) if is_linux or is_darwin or is_win and binary[0] != "cli_helper/kart_cli_helper"
     ],
     datas=[
         ('kart/VERSION', 'kart'),
@@ -117,6 +130,9 @@ pyi_analysis = Analysis(
     cipher=None,
     noarchive=False,
 )
+
+if is_linux or is_darwin:
+    pyi_analysis.exclude_system_libraries(list_of_exceptions=['libffi*', 'libreadline*'])
 
 if is_win:
     pyi_analysis.datas += Tree('vendor/dist/git', prefix='git')
@@ -187,11 +203,6 @@ if is_darwin:
     dist_bin_root = os.path.join(DISTPATH, 'Kart.app', 'Contents', 'MacOS')
     dist_resources_root = os.path.join(DISTPATH, 'Kart.app', 'Contents', 'Resources')
     dist_libexec_root = os.path.join(dist_resources_root, 'libexec')
-
-    shutil.move(os.path.join(dist_bin_root, 'base_library.zip'), dist_resources_root)
-    os.symlink(
-        '../Resources/base_library.zip', os.path.join(dist_bin_root, 'base_library.zip')
-    )
 
     os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
     os.symlink('../Resources/libexec', os.path.join(dist_bin_root, 'libexec'))

@@ -48,7 +48,7 @@ venv\.test.installed: venv\.requirements.installed
 
 venv\.tools.installed: venv
 	pip install \
-		pyinstaller==3.6.* \
+		pyinstaller==5.3.* \
 		pypiwin32
 	echo "">$@
 

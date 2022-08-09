@@ -13,6 +13,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Fixed primary key issues for shapefile import - now generates an `auto_pk` by default, but uses an existing field if specified (doesn't use the FID). [#646](https://github.com/koordinates/kart/pull/646)
 - Add `--with-dataset-types` option to `kart meta get` which is informative now that there is more than one type of dataset. [#649](https://github.com/koordinates/kart/pull/649)
 - Support `kart diff COMMIT1 COMMIT2` as an alternative to typing `kart diff COMMIT1...COMMIT2` [#666](https://github.com/koordinates/kart/issues/666)
+- Add `kart helper` which starts a long running process to reduce the overhead of Python startup.
 
 ## 0.11.3
 

@@ -13,6 +13,7 @@ pyinstaller := $(abspath ../venv/bin/pyinstaller)
 
 export PATH := $(abspath ../venv/bin):$(PATH)
 
+
 pyapp-Linux = linux/dist/kart/kart_cli
 pyapp-Darwin = macos/dist/Kart.app
 deb = linux/dist/kart_$(VERSION)-1_amd64.deb
@@ -94,9 +95,6 @@ pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 		--workpath platforms/macos/build/ \
 		--distpath platforms/macos/dist/ \
 		kart.spec
-
-# fix for https://github.com/pyinstaller/pyinstaller/issues/5442
-	sed -i '' -e 's#<string>MacOS/kart_cli</string>#<string>kart_cli</string>#' macos/dist/Kart.app/Contents/Info.plist
 
 	-$(RM) -r $(SRC)/vendor/dist/env/
 

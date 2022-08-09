@@ -13,10 +13,10 @@ import traceback
 import click
 import pygit2
 
-from . import core  # noqa
+from . import core, is_darwin, is_linux, is_windows  # noqa
 from .cli_util import add_help_subcommand, call_and_exit_flag, tool_environment
 from .context import Context
-from .exec import execvp
+from .exec import run_and_wait
 from kart.completion import Shells, install_callback
 
 MODULE_COMMANDS = {
@@ -30,6 +30,7 @@ MODULE_COMMANDS = {
     "data": {"data"},
     "diff": {"diff"},
     "fsck": {"fsck"},
+    "helper": {"helper"},
     "init": {"init"},
     "log": {"log"},
     "merge": {"merge"},
@@ -122,6 +123,11 @@ def print_version(ctx):
             f"» SpatialIndex v{sidx_version}"
         )
     )
+
+    # report on whether this was run through helper mode
+    helper_pid = os.environ.get('KART_HELPER_PID')
+    if helper_pid:
+        click.echo(f"Executed via helper, PID: {helper_pid}")
 
     ctx.exit()
 
@@ -233,6 +239,7 @@ def push(ctx, do_progress, args):
     )
 
 
+
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.option(
@@ -312,7 +319,7 @@ def git(ctx, args):
     params = ["git"]
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
-    execvp("git", [*params, *args])
+    run_and_wait("git", [*params, *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
@@ -327,7 +334,7 @@ def lfs(ctx, args):
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
     params += ["lfs"]
-    execvp("git", [*params, *args])
+    run_and_wait("git", [*params, *args])
 
 
 @cli.command(

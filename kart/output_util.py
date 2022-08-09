@@ -269,7 +269,12 @@ def get_input_mode():
 
 def is_empty_stream(stream):
     if stream.seekable():
-        pos = stream.tell()
+        try:
+            pos = stream.tell()
+        except OSError:
+            # if the stream is a pipe it will return .seekable() as True
+            # though it is actually not.
+            return False
         if stream.read(1) == "":
             return True
         stream.seek(pos)

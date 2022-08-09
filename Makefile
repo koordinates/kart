@@ -108,11 +108,12 @@ endif
 		'pip-tools==5.*' \
 		liccheck \
 		pipdeptree \
-		'pyinstaller==3.6.*' \
+		'pyinstaller==5.3.*' \
 		$(WHEELTOOL)
 
 	# disable the pyodbc hook. TODO: We can override it in PyInstaller 4.x
-	rm $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/PyInstaller/hooks/hook-pyodbc.py
+	echo "disable pyodbc hook"
+	rm $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/_pyinstaller_hooks_contrib/hooks/stdhooks/hook-pyodbc.py
 
 	touch $@
 
@@ -148,6 +149,21 @@ py-deps: $(vendor-install) $(py-install-main) | $(VIRTUAL_ENV)
 .PHONY: py-deps-dev
 py-deps-dev: py-deps $(py-install-dev) $(py-install-tools)
 
+# CLI Helper
+kart-cli-helper = cli_helper/kart_cli_helper
+$(kart-cli-helper): cli_helper/kart.c.o cli_helper/cJSON.c.o  | $(VIRTUAL_ENV)
+	$(CC) -o $@ cli_helper/kart.c.o cli_helper/cJSON.c.o
+
+cli_helper/kart.c.o: cli_helper/kart.c 
+	$(CC) -Wall -o $@ -g  -c $<
+
+cli_helper/cJSON.c.o: cli_helper/cJSON.c
+	$(CC) -Wall -o $@ -g  -c $<
+
+.PHONY: cli-helper
+cli-helper: $(kart-cli-helper)
+
+
 # App code
 kart-app-release = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/kart
 kart-app-dev = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/kart.egg-link
@@ -172,7 +188,12 @@ dev: $(kart-app-dev)
 
 # Top-level targets
 .PHONY: all
+
+ifeq ($(OS),Windows_NT)
 all: dev
+else
+all: dev cli-helper
+endif
 
 .PHONY: install
 install: | $(kart-app-any)
@@ -215,6 +236,7 @@ clean:
 
 .PHONY: cleaner
 cleaner: clean
+	$(RM) cli_helper/kart.c.o cli_helper/cJSON.c.o cli_helper/kart_cli_helper
 	-$(MAKE) -C vendor clean clean-configure
 	-$(MAKE) -C platforms clean
 
