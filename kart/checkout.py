@@ -77,7 +77,10 @@ def checkout(
             resolved = CommitWithReference.resolve(repo, "HEAD")
     except NotFound:
         # Allow a pointless "kart checkout main" on empty repos already on branch main.
-        if repo.head_branch and repo.head_branch_shorthand == refish:
+        if refish is not None and refish in (
+            repo.head_branch,
+            repo.head_branch_shorthand,
+        ):
             if new_branch or spatial_filter_spec:
                 raise  # But don't allow them to do anything more complicated.
             return
@@ -292,7 +295,10 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
 
         if not existing_branch:
             # Allow a pointless "kart switch main" on empty repos already on branch main.
-            if repo.head_branch_shorthand == refish:
+            if refish is not None and refish in (
+                repo.head_branch,
+                repo.head_branch_shorthand,
+            ):
                 return
             raise NotFound(f"Branch '{refish}' not found.", exit_code=NO_BRANCH)
 
