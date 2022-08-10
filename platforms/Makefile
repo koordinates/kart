@@ -98,6 +98,15 @@ pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 
 	-$(RM) -r $(SRC)/vendor/dist/env/
 
+	# fix up dylibs which should be symlinks
+	(cd $(SRC)/platforms/macos/dist/Kart.app/Contents/MacOS/ \
+		&& for library in `find . -name \*.dylib  | xargs basename`; do \
+		if [ -L $(SRC)/venv/lib/$$library ]; then \
+			ln -sf `readlink $(SRC)/venv/lib/$$library` $$library; \
+		fi; \
+	done)
+
+
 ifdef CODESIGN
 	$(MAKE) app-sign
 endif

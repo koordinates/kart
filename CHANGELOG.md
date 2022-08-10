@@ -15,6 +15,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Support `kart diff COMMIT1 COMMIT2` as an alternative to typing `kart diff COMMIT1...COMMIT2` [#666](https://github.com/koordinates/kart/issues/666)
 - Add `kart helper` which starts a long running process to reduce the overhead of Python startup.
 - the `--num-processes` option to `init` and `import` commands is now deprecated and does nothing. In most situations it offered no performance gain. [#692](https://github.com/koordinates/kart/issues/692)
+- Honour symlinks for shared libraries rather than including copies created by PyInstaller. [#691](https://github.com/koordinates/kart/issues/691)
+- Strip shared libraries on Linux to reduce package size. [#691](https://github.com/koordinates/kart/issues/691)
 
 ## 0.11.3
 
