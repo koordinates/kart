@@ -8,6 +8,7 @@ from kart.exceptions import (
     INVALID_FILE_FORMAT,
     WORKING_COPY_OR_IMPORT_CONFLICT,
     UNCOMMITTED_CHANGES,
+    NO_CHANGES,
 )
 from kart.repo import KartRepo
 from .fixtures import requires_pdal, requires_git_lfs  # noqa
@@ -424,6 +425,23 @@ def test_import_update_existing(cli_runner, data_archive, requires_pdal):
             assert inserts == 1
             assert updates == 1
             assert deletes == 1
+
+
+def test_import_empty_commit_error(cli_runner, data_archive, requires_pdal):
+    with data_archive("point-cloud/laz-auckland.tgz") as src:
+        with data_archive("point-cloud/auckland.tgz"):
+            # Update an existing tile from the same source (ie no changes)
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    "--dataset-path=auckland",
+                    "--update-existing",
+                    "--convert-to-copc",
+                    f"{src}/auckland_0_0.laz",
+                ]
+            )
+            assert r.exit_code == NO_CHANGES, r.stderr
+            assert "No changes to commit" in r.stderr
 
 
 def test_import_single_las_no_convert(
