@@ -300,7 +300,6 @@ def _upgrade_commit(
         fast_import_tables(
             dest_repo,
             source_datasets,
-            settings=FastImportSettings(num_processes=1),
             replace_existing=replace_existing,
             from_commit=from_commit,
             replace_ids=replace_ids,

@@ -1,10 +1,11 @@
 import os
+import warnings
 from pathlib import Path
 
 import click
 
 
-from .cli_util import StringFromFile
+from .cli_util import StringFromFile, RemovalInKart013Warning
 from .core import check_git_user
 from .dataset_util import validate_dataset_paths
 from .exceptions import InvalidOperation
@@ -72,8 +73,9 @@ from .working_copy import PartType
 )
 @click.option(
     "--num-processes",
-    type=click.INT,
-    help="How many git-fast-import processes to use. Defaults to the number of available CPU cores.",
+    help="Deprecated (no longer used)",
+    default=None,
+    hidden=True,
 )
 @click.option(
     "--spatial-filter",
@@ -98,6 +100,12 @@ def init(
     Initialise a new repository and optionally import data.
     DIRECTORY must be empty. Defaults to the current directory.
     """
+    if num_processes is not None:
+        warnings.warn(
+            "--num-processes is deprecated and will be removed in Kart 0.13.",
+            RemovalInKart013Warning,
+        )
+
     if directory is None:
         directory = os.curdir
     repo_path = Path(directory).resolve()
@@ -138,9 +146,7 @@ def init(
         fast_import_tables(
             repo,
             sources,
-            settings=FastImportSettings(
-                num_processes=num_processes, max_delta_depth=max_delta_depth
-            ),
+            settings=FastImportSettings(max_delta_depth=max_delta_depth),
             from_commit=None,
             message=message,
         )

@@ -1,9 +1,8 @@
 import logging
-import math
 import subprocess
 import time
 import uuid
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from enum import Enum, auto
 
 import click
@@ -11,25 +10,16 @@ import pygit2
 
 from .cli_util import tool_environment
 from .exceptions import NO_CHANGES, InvalidOperation, NotFound, SubprocessError
-from .object_builder import ObjectBuilder
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     dataset_class_for_version,
     extra_blobs_for_version,
 )
-from .structure import Datasets
 from .tabular.import_source import TableImportSource
 from .tabular.pk_generation import PkGeneratingTableImportSource
 from .timestamps import minutes_to_tz_offset
-from .utils import get_num_available_cores
 
 L = logging.getLogger("kart.fast_import")
-
-
-def get_default_num_processes():
-    num_processes = get_num_available_cores()
-    # that's a float, but we need an int
-    return max(1, int(math.ceil(num_processes)))
 
 
 class FastImportSettings:
@@ -38,8 +28,7 @@ class FastImportSettings:
     If not set, reasonable defaults are used.
     """
 
-    def __init__(self, *, num_processes=None, max_pack_size=None, max_delta_depth=None):
-        self.num_processes = num_processes or get_default_num_processes()
+    def __init__(self, *, max_pack_size=None, max_delta_depth=None):
         # Maximum size of pack files
         self.max_pack_size = max_pack_size or "2G"
         # Maximum depth of delta-compression chains
@@ -174,7 +163,7 @@ def git_fast_import(repo, *args):
         )
 
 
-def fast_import_clear_trees(*, procs, replace_ids, replacing_dataset, source):
+def fast_import_clear_tree(*, proc, replace_ids, replacing_dataset, source):
     """
     Clears out the appropriate trees in each of the fast_import processes,
     before importing any actual data over the top.
@@ -184,35 +173,25 @@ def fast_import_clear_trees(*, procs, replace_ids, replacing_dataset, source):
         return
     dest_path = source.dest_path
     dest_inner_path = f"{dest_path}/{replacing_dataset.DATASET_DIRNAME}"
-    for i, proc in enumerate(procs):
-        if replace_ids is None:
-            # Delete the existing dataset, before we re-import it.
-            proc.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
-        else:
-            # Delete and reimport any attachments at dest_path
-            attachment_names = [
-                obj.name for obj in replacing_dataset.tree if obj.type_str == "blob"
-            ]
-            for name in attachment_names:
-                proc.stdin.write(f"D {dest_path}/{name}\n".encode("utf8"))
-            # Delete and reimport <inner_path>/meta/
-            proc.stdin.write(f"D {dest_inner_path}/meta\n".encode("utf8"))
+    if replace_ids is None:
+        # Delete the existing dataset, before we re-import it.
+        proc.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
+    else:
+        # Delete and reimport any attachments at dest_path
+        attachment_names = [
+            obj.name for obj in replacing_dataset.tree if obj.type_str == "blob"
+        ]
+        for name in attachment_names:
+            proc.stdin.write(f"D {dest_path}/{name}\n".encode("utf8"))
+        # Delete and reimport <inner_path>/meta/
+        proc.stdin.write(f"D {dest_inner_path}/meta\n".encode("utf8"))
 
-            # delete all features not pertaining to this process.
-            # we also delete the features that *do*, but we do it further down
-            # so that we don't have to iterate the IDs more than once.
-            for subtree in replacing_dataset.feature_path_encoder.tree_names():
-                if hash(subtree) % len(procs) != i:
-                    proc.stdin.write(
-                        f"D {dest_inner_path}/feature/{subtree}\n".encode("utf8")
-                    )
-
-        # We just deleted the legends, but we still need them to reimport
-        # data efficiently. Copy them from the original dataset.
-        for x in write_blobs_to_stream(
-            proc.stdin, replacing_dataset.iter_legend_blob_data()
-        ):
-            pass
+    # We just deleted the legends, but we still need them to reimport
+    # data efficiently. Copy them from the original dataset.
+    for x in write_blobs_to_stream(
+        proc.stdin, replacing_dataset.iter_legend_blob_data()
+    ):
+        pass
 
 
 UNSPECIFIED = object()
@@ -255,18 +234,8 @@ def fast_import_tables(
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
-    MAX_PROCESSES = 64
-
     if settings is None:
         settings = FastImportSettings()
-
-    if settings.num_processes < 1:
-        settings.num_processes = 1
-    elif settings.num_processes > MAX_PROCESSES:
-        # this is almost certainly a mistake, but also:
-        # we want to split 256 trees roughly evenly, and if we're trying to split them across
-        # too many processes it won't be very even.
-        raise ValueError(f"Can't import with more than {MAX_PROCESSES} processes")
 
     # The commit that this import is using as the basis for the new commit.
     # If we are replacing everything, we start from scratch, so from_commit is None.
@@ -304,64 +273,28 @@ def fast_import_tables(
     for arg in extra_cmd_args:
         cmd_args.append(arg)
 
-    import_refs = []
-
     if verbosity >= 1:
         click.echo("Starting git-fast-import...")
 
     try:
-        with ExitStack() as stack:
-            procs = []
+        import_ref = None
+        if header is None:
+            # import onto a temp branch. then reset the head branch afterwards.
+            import_ref = f"refs/kart-import/{uuid.uuid4()}"
 
-            # PARALLEL IMPORTING
-            # To do an import in parallel:
-            #   * we only have one Kart process, and one connection to the source.
-            #   * we have multiple git-fast-import backend processes
-            #   * we send all 'meta' blobs (anything that isn't a feature) to process 0
-            #   * we assign feature blobs to a process based on it's first subtree.
-            #     (all features in tree `datasetname/feature/01` will go to process 1, etc)
-            #   * after the importing is all done, we merge the trees together.
-            #   * there should never be any conflicts in this merge process.
-            for i in range(settings.num_processes):
-                if header is not None:
-                    # A client-supplied header won't work if num_processes > 1 because we'll try and write to
-                    # the same branch multiple times in parallel.
-                    # Luckily only upgrade script passes a header in, so there we just use 1 proc.
-                    proc_header = header
-                    assert settings.num_processes == 1
-                else:
-                    # import onto a temp branch. then reset the head branch afterwards.
-                    import_ref = f"refs/kart-import/{uuid.uuid4()}"
-                    import_refs.append(import_ref)
+            # orig_branch may be None, if head is detached
+            # FIXME - this code relies upon the fact that we always either a) import at HEAD (import flow)
+            # or b) Fix up the branch heads later (upgrade flow).
+            orig_branch = repo.head_branch
+            header = generate_header(repo, sources, message, import_ref, from_commit)
 
-                    # orig_branch may be None, if head is detached
-                    # FIXME - this code relies upon the fact that we always either a) import at HEAD (import flow)
-                    # or b) Fix up the branch heads later (upgrade flow).
-                    orig_branch = repo.head_branch
-                    proc_header = generate_header(
-                        repo, sources, message, import_ref, from_commit
-                    )
-
-                proc = stack.enter_context(git_fast_import(repo, *cmd_args))
-                procs.append(proc)
-                proc.stdin.write(proc_header.encode("utf8"))
+        with git_fast_import(repo, *cmd_args) as proc:
+            proc.stdin.write(header.encode("utf8"))
 
             # Write the extra blob that records the repo's version:
-            for i, blob_path in write_blobs_to_stream(procs[0].stdin, extra_blobs):
+            for i, blob_path in write_blobs_to_stream(proc.stdin, extra_blobs):
                 if replace_existing != ReplaceExisting.ALL and blob_path in from_tree:
                     raise ValueError(f"{blob_path} already exists")
-
-            if settings.num_processes == 1:
-
-                def proc_for_feature_path(path):
-                    return procs[0]
-
-            else:
-
-                def proc_for_feature_path(path):
-                    feature_rel_path = path.rsplit("/feature/", 1)[1]
-                    first_subtree_name = feature_rel_path.split("/", 1)[0]
-                    return procs[hash(first_subtree_name) % len(procs)]
 
             for source in sources:
                 _import_single_source(
@@ -369,46 +302,22 @@ def fast_import_tables(
                     source,
                     replace_existing,
                     from_commit,
-                    procs,
-                    proc_for_feature_path,
+                    proc,
                     replace_ids,
                     limit,
                     verbosity,
                 )
 
-        if import_refs:
-            # we created temp branches for the import above.
-            # each of the branches has _part_ of the import.
-            # we have to merge the trees together to get a sensible commit.
-            trees = [repo.revparse_single(b).peel(pygit2.Tree) for b in import_refs]
-            if len(import_refs) > 1:
-                click.echo(f"Joining {len(import_refs)} parallel-imported trees...")
-                t1 = time.monotonic()
-                builder = ObjectBuilder(repo, trees[0])
-                for t in trees[1:]:
-                    datasets = Datasets(repo, t)
-                    for ds in datasets:
-                        try:
-                            feature_tree = ds.feature_tree
-                        except (KeyError, AttributeError):
-                            pass
-                        else:
-                            for subtree in feature_tree:
-                                builder.insert(
-                                    f"{ds.inner_path}/{ds.FEATURE_PATH}{subtree.name}",
-                                    subtree,
-                                )
-                new_tree = builder.flush()
-                t2 = time.monotonic()
-                click.echo(f"Joined trees in {(t2-t1):.0f}s")
-            else:
-                new_tree = trees[0]
+        if import_ref is not None:
+            # we created a temp branch for the import above.
+            # now we need to reset the head branch to the temp branch tip.
+            new_tree = repo.revparse_single(import_ref).peel(pygit2.Tree)
             if not allow_empty:
                 if new_tree == from_tree:
                     raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
             # use the existing commit details we already imported, but use the new tree
-            existing_commit = repo.revparse_single(import_refs[0]).peel(pygit2.Commit)
+            existing_commit = repo.revparse_single(import_ref).peel(pygit2.Commit)
             repo.create_commit(
                 orig_branch or "HEAD",
                 existing_commit.author,
@@ -419,9 +328,8 @@ def fast_import_tables(
             )
     finally:
         # remove the import branches
-        for b in import_refs:
-            if b in repo.references:
-                repo.references.delete(b)
+        if import_ref is not None and import_ref in repo.references:
+            repo.references.delete(import_ref)
 
 
 def _import_single_source(
@@ -429,8 +337,7 @@ def _import_single_source(
     source,
     replace_existing,
     from_commit,
-    procs,
-    proc_for_feature_path,
+    proc,
     replace_ids,
     limit,
     verbosity,
@@ -440,8 +347,7 @@ def _import_single_source(
     source - an individual TableImportSource
     replace_existing - See ReplaceExisting enum
     from_commit - the commit to be used as a starting point before beginning the import.
-    procs - all the processes to be used (for parallel imports)
-    proc_for_feature_path - function, given a feature path returns the process to use to import it
+    proc - the subprocess.Popen instance to be used
     replace_ids - list of PK values to replace, or None
     limit - maximum number of features to import per source.
     verbosity - integer:
@@ -457,8 +363,8 @@ def _import_single_source(
             # no such dataset; no problem
             replacing_dataset = None
 
-        fast_import_clear_trees(
-            procs=procs,
+        fast_import_clear_tree(
+            proc=proc,
             replace_ids=replace_ids,
             replacing_dataset=replacing_dataset,
             source=source,
@@ -492,9 +398,7 @@ def _import_single_source(
                 for pk in replace_ids:
                     pk = dataset.schema.sanitise_pks(pk)
                     path = dataset.encode_pks_to_path(pk)
-                    proc_for_feature_path(path).stdin.write(
-                        f"D {path}\n".encode("utf8")
-                    )
+                    proc.stdin.write(f"D {path}\n".encode("utf8"))
                     yield pk
 
             id_iterator = _ids()
@@ -535,11 +439,10 @@ def _import_single_source(
             )
 
         for i, (feature_path, blob_data) in enumerate(feature_blob_iter):
-            stream = proc_for_feature_path(feature_path).stdin
             if feature_blobs_already_written:
-                copy_existing_blob_to_stream(stream, feature_path, blob_data)
+                copy_existing_blob_to_stream(proc.stdin, feature_path, blob_data)
             else:
-                write_blob_to_stream(stream, feature_path, blob_data)
+                write_blob_to_stream(proc.stdin, feature_path, blob_data)
 
             if i and progress_every and i % progress_every == 0:
                 click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
@@ -554,7 +457,7 @@ def _import_single_source(
 
         # Meta items - written second as certain importers generate extra metadata as they import features.
         for x in write_blobs_to_stream(
-            procs[0].stdin, dataset.import_iter_meta_blobs(repo, source)
+            proc.stdin, dataset.import_iter_meta_blobs(repo, source)
         ):
             pass
 

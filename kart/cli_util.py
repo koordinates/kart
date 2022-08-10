@@ -370,3 +370,7 @@ def parse_output_format(output_format, json_style):
 
 class RemovalInKart012Warning(UserWarning):
     pass
+
+
+class RemovalInKart013Warning(UserWarning):
+    pass

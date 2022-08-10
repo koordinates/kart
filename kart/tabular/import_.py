@@ -1,8 +1,15 @@
+import warnings
 import click
 from osgeo import gdal
 
 from kart import is_windows
-from kart.cli_util import JsonFromFile, MutexOption, StringFromFile, call_and_exit_flag
+from kart.cli_util import (
+    JsonFromFile,
+    MutexOption,
+    StringFromFile,
+    call_and_exit_flag,
+    RemovalInKart013Warning,
+)
 from kart.core import check_git_user
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import InvalidOperation
@@ -181,8 +188,9 @@ def any_at_all(iterable):
 )
 @click.option(
     "--num-processes",
-    type=click.INT,
-    help="How many git-fast-import processes to use. Defaults to the number of available CPU cores.",
+    help="Deprecated (no longer used)",
+    default=None,
+    hidden=True,
 )
 def import_(
     ctx,
@@ -218,6 +226,12 @@ def import_(
 
     $ kart import --list GPKG:my.gpkg
     """
+
+    if num_processes is not None:
+        warnings.warn(
+            "--num-processes is deprecated and will be removed in Kart 0.13.",
+            RemovalInKart013Warning,
+        )
 
     if output_format == "json" and not do_list:
         raise click.UsageError(
@@ -319,9 +333,7 @@ def import_(
     fast_import_tables(
         repo,
         import_sources,
-        settings=FastImportSettings(
-            num_processes=num_processes, max_delta_depth=max_delta_depth
-        ),
+        settings=FastImportSettings(max_delta_depth=max_delta_depth),
         verbosity=ctx.obj.verbosity + 1,
         message=message,
         replace_existing=replace_existing_enum,
