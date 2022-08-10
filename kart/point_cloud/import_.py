@@ -14,6 +14,7 @@ from kart.exceptions import (
     NO_IMPORT_SOURCE,
     INVALID_FILE_FORMAT,
     NO_DATA,
+    NO_CHANGES,
 )
 from kart.fast_import import (
     FastImportSettings,
@@ -106,6 +107,16 @@ L = logging.getLogger(__name__)
     is_flag=True,
     help="Amend the previous commit instead of adding a new commit",
 )
+@click.option(
+    "--allow-empty",
+    is_flag=True,
+    default=False,
+    help=(
+        "Usually recording a commit that has the exact same tree as its sole "
+        "parent commit is a mistake, and the command prevents you from making "
+        "such a commit. This option bypasses the safety"
+    ),
+)
 @click.argument("sources", metavar="SOURCES", nargs=-1, required=False)
 def point_cloud_import(
     ctx,
@@ -117,6 +128,7 @@ def point_cloud_import(
     update_existing,
     delete,
     amend,
+    allow_empty,
     sources,
 ):
     """
@@ -220,6 +232,13 @@ def point_cloud_import(
         source_hash = "sha256:" + source_to_hash_and_size[source][0]
         source_to_metadata[source]["tile"]["sourceOid"] = source_hash
 
+    # fast-import doesn't really have a way to amend a commit.
+    # So we'll use a temporary branch for this fast-import,
+    # And create a new commit on top of the head commit, without advancing HEAD.
+    # Then we'll squash the two commits after the fast-import,
+    # and move the HEAD branch to the new commit.
+    # This also comes in useful for checking tree equivalence when --allow-empty is not used.
+    fast_import_on_branch = f"refs/kart-import/{uuid.uuid4()}"
     if amend:
         if not repo.head_commit:
             raise InvalidOperation(
@@ -227,14 +246,7 @@ def point_cloud_import(
             )
         if not message:
             message = repo.head_commit.message
-        # fast-import doesn't really have a way to amend a commit.
-        # So we'll use a temporary branch for this fast-import,
-        # And create a new commit on top of the head commit, without advancing HEAD.
-        # Then we'll squash the two commits after the fast-import,
-        # and move the HEAD branch to the new commit
-        fast_import_on_branch = f"refs/kart-import/{uuid.uuid4()}"
     else:
-        fast_import_on_branch = repo.head_branch
         if message is None:
             message = f"Importing {len(sources)} LAZ tiles as {ds_path}"
 
@@ -363,21 +375,35 @@ def point_cloud_import(
             ensure_bytes(normalise_wkt(merged_metadata["crs"])),
         )
 
-    if amend:
-        # Squash the commit we just created into its parent, replacing both commits on the head branch.
-        new_tree = repo.references[fast_import_on_branch].peel(pygit2.Tree)
-        new_commit = repo.create_commit(
-            # Don't move a branch tip. pygit2 doesn't allow us to use head_branch here
-            # (because we're not using its tip as the first parent)
-            # so we just create a detached commit and then move the branch tip afterwards.
-            None,
-            repo.head_commit.author,
-            repo.committer_signature(),
-            message,
-            new_tree.oid,
-            repo.head_commit.parent_ids,
-        )
-        repo.references[repo.head_branch].set_target(new_commit)
+    try:
+        if amend:
+            # Squash the commit we just created into its parent, replacing both commits on the head branch.
+            new_tree = repo.references[fast_import_on_branch].peel(pygit2.Tree)
+            new_commit_oid = repo.create_commit(
+                # Don't move a branch tip. pygit2 doesn't allow us to use head_branch here
+                # (because we're not using its tip as the first parent)
+                # so we just create a detached commit and then move the branch tip afterwards.
+                None,
+                repo.head_commit.author,
+                repo.committer_signature(),
+                message,
+                new_tree.oid,
+                repo.head_commit.parent_ids,
+            )
+        else:
+            # Just reset the head branch tip to the new commit we created on the temp branch
+            new_commit = repo.references[fast_import_on_branch].peel(pygit2.Commit)
+            new_commit_oid = new_commit.oid
+            if (not allow_empty) and repo.head_tree:
+                if new_commit.peel(pygit2.Tree).oid == repo.head_tree.oid:
+                    raise NotFound("No changes to commit", exit_code=NO_CHANGES)
+        if repo.head_branch not in repo.references:
+            # unborn head
+            repo.references.create(repo.head_branch, new_commit_oid)
+        else:
+            repo.references[repo.head_branch].set_target(new_commit_oid)
+    finally:
+        # Clean up the temp branch
         repo.references[fast_import_on_branch].delete()
 
     parts_to_create = [PartType.WORKDIR] if do_checkout else []
