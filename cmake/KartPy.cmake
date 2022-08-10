@@ -20,6 +20,7 @@ endif()
 set(VENV_PIP_INSTALL ${VENV_PY} -m pip install --isolated --disable-pip-version-check)
 
 cmake_path(SET VENV_PYTEST ${VENV_BIN}/pytest)
+cmake_path(SET VENV_DOCS ${CMAKE_CURRENT_BINARY_DIR}/venv/help)
 cmake_path(NATIVE_PATH VENV_PYTEST VENV_PYTEST)
 
 add_custom_command(
@@ -59,7 +60,14 @@ add_custom_command(
           ${CMAKE_CURRENT_SOURCE_DIR}/cmake/link.cmake
   COMMENT "Installing Kart...")
 
+add_custom_command(
+  OUTPUT ${VENV_DOCS}
+  DEPENDS ${KART_EXE_VENV}
+  COMMAND ${VENV_PY} ${CMAKE_CURRENT_BINARY_DIR}/scripts/doc_gen.py
+          ${CMAKE_CURRENT_BINARY_DIR}/commands ${VENV_DOCS}
+  COMMENT "Generating help pages...")
+
 add_custom_target(
   cli ALL
-  DEPENDS ${KART_EXE_BUILD}
+  DEPENDS ${KART_EXE_BUILD} ${VENV_DOCS}
   COMMENT "Kart CLI")

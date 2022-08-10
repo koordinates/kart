@@ -84,6 +84,10 @@ else()
   set(VENDOR_TARGET vendor)
 endif()
 
+set(DOCS "docs/pages/commands")
+file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+set(DOCS "scripts")
+file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 #
 # main build targets
 #

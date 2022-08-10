@@ -8,32 +8,37 @@ The original click-man source is licensed under the MIT License. Changes are
 licensed under the Kart license (GPL).
 """
 
-import os
 import platform
 from pathlib import Path
+import sys
 import time
 import typing as t
-from pkg_resources import iter_entry_points
 
 import click
 import rst2txt
+from inspect import getmembers
+from importlib import import_module
 from docutils.core import publish_string
 from docutils.writers import manpage
 
-COMMANDS_FOLDER = Path.home() / os.path.join(
-    "Documents", "gh", "kart", "docs", "pages", "commands"
-)
+try:
+    from importlib.metadata import distribution
+except ImportError:
+    try:
+        from importlib_metadata import distribution
+    except ImportError:
+        from pkg_resources import load_entry_point
 
 
 def generate_help_pages(
     name: str,
+    input_dir: str,
     cli: click.Command,
     parent_ctx: click.Context = None,
-    version: str = None,
     target_dir: str = None,
 ):
     ctx = click.Context(cli, info_name=name, parent=parent_ctx)
-    doc_path = Path(COMMANDS_FOLDER) / f'{ctx.command_path.replace(" ", "-")}.rst'
+    doc_path = Path(input_dir) / f'{ctx.command_path.replace(" ", "_")}.rst'
     contents = ""
     if doc_path.exists():
         contents = doc_path.read_text()
@@ -47,7 +52,11 @@ def generate_help_pages(
         if command.hidden:
             continue
         generate_help_pages(
-            name, command, parent_ctx=ctx, version=version, target_dir=target_dir
+            name,
+            input_dir,
+            command,
+            parent_ctx=ctx,
+            target_dir=target_dir,
         )
 
 
@@ -331,34 +340,36 @@ class TextPageWriter(BaseDocWriter):
         help_page.write_text(text_page)
 
 
-if __name__ == "__main__":
+def main():
+    if len(sys.argv) < 3:
+        print(f"USAGE: {sys.argv[0]} INPUT_DIR OUTPUT_DIR")
+        sys.exit(2)
 
     name = "kart"
-    target = Path.home() / os.path.join(
-        "Documents", "gh", "kart", "build", "venv", "help_page"
+    input_dir = sys.argv[1]
+    output_dir = Path(sys.argv[2])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    entry_point = load_entry_point("kart", "console_scripts", "kart")
+    ep_module = import_module(entry_point.value.split(":")[0])
+    ep_module._load_all_commands()
+    ep_members = getmembers(ep_module, lambda x: isinstance(x, click.Command))
+    _, cli = ep_members[0]
+
+    generate_help_pages(name, input_dir, cli, target_dir=output_dir)
+
+
+def importlib_load_entry_point(spec, group, name):
+    dist_name, _, _ = spec.partition("==")
+    matches = (
+        entry_point
+        for entry_point in distribution(dist_name).entry_points
+        if entry_point.group == group and entry_point.name == name
     )
-    console_scripts = [ep for ep in iter_entry_points("console_scripts", name=name)]
-    entry_point = console_scripts[0]
-    target.mkdir(parents=True, exist_ok=True)
-    import importlib
+    return list(matches)[0]
 
-    mod = importlib.import_module(f"{entry_point.module_name}")
 
-    from kart.cli import _load_all_commands, print_version
+globals().setdefault("load_entry_point", importlib_load_entry_point)
 
-    _load_all_commands()
-    cli = entry_point.resolve()
 
-    # If the entry point isn't a click.Command object, try to find it in the module
-    if not isinstance(cli, click.Command):
-        from importlib import import_module
-        from inspect import getmembers
-
-        if not entry_point.module_name:
-            raise click.ClickException('Could not find module name for "{name}".')
-        ep_module = import_module(entry_point.module_name)
-        ep_members = getmembers(ep_module, lambda x: isinstance(x, click.Command))
-
-        ep_name, cli = ep_members[0]
-
-    generate_help_pages(name, cli, version=entry_point.dist.version, target_dir=target)
+if __name__ == "__main__":
+    main()
