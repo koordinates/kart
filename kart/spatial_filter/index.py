@@ -1,7 +1,6 @@
 import functools
 import logging
 import math
-import re
 import subprocess
 import sys
 import time
@@ -16,6 +15,7 @@ from kart.crs_util import make_crs, normalise_wkt
 from kart.exceptions import InvalidOperation, SubprocessError
 from kart.geometry import Geometry
 from kart.repo import KartRepoFiles
+from kart.rev_list_objects import rev_list_feature_blobs
 from kart.serialise_util import msg_unpack
 from kart.sqlalchemy import TableSet
 from kart.sqlalchemy.sqlite import sqlite_engine
@@ -47,43 +47,6 @@ L.buffered_bulk_warn = buffered_bulk_warn.__get__(L)
 L.flush_bulk_warns = flush_bulk_warns.__get__(L)
 L.bulk_warns = {}
 L.bulk_warn_samples = {}
-
-
-def _revlist_command(repo):
-    return [
-        "git",
-        "-C",
-        repo.path,
-        "rev-list",
-        "--objects",
-        "--in-commit-order",
-        "--missing=allow-promisor",
-    ]
-
-
-DS_PATH_PATTERN = r"(.+)/\.(sno|table)-dataset/"
-
-
-def _parse_revlist_output(repo, line_iter, rel_path_pattern):
-    full_path_pattern = re.compile(DS_PATH_PATTERN + rel_path_pattern)
-
-    commit_id = None
-    for line in line_iter:
-        parts = line.split(" ", maxsplit=1)
-        if len(parts) == 1:
-            oid = parts[0].strip()
-            if repo[oid].type_str == "commit":
-                commit_id = oid
-            continue
-
-        oid, path = parts
-        m = full_path_pattern.match(path)
-        if not m:
-            continue
-        ds_path = m.group(1)
-        obj = repo[oid]
-        if obj.type_str == "blob":
-            yield commit_id, ds_path, obj
 
 
 class CrsHelper:
@@ -258,22 +221,6 @@ def drop_tables(sess):
     sess.execute("DROP TABLE IF EXISTS feature_envelopes;")
 
 
-def iter_feature_blobs(repo, start_commits, stop_commits):
-    cmd = [*_revlist_command(repo), *start_commits, "--not", *stop_commits]
-    try:
-        p = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            encoding="utf8",
-            env=tool_environment(),
-        )
-        yield from _parse_revlist_output(repo, p.stdout, r"feature/.+")
-    except subprocess.CalledProcessError as e:
-        raise SubprocessError(
-            f"There was a problem with git rev-list: {e}", called_process_error=e
-        )
-
-
 def _minimal_description_of_commit_set(repo, commits):
     """
     Returns the minimal set of commit IDs that have the same set of ancestors as
@@ -369,7 +316,7 @@ def update_spatial_filter_index(
         click.echo("Nothing to do: index already up to date.")
         return
 
-    feature_blob_iter = iter_feature_blobs(repo, start_commits, stop_commits)
+    feature_blob_iter = rev_list_feature_blobs(repo, start_commits, stop_commits)
 
     progress_every = None
     if verbosity >= 1:
@@ -411,11 +358,14 @@ def update_spatial_filter_index(
     with db:
         dbcur = db.cursor()
 
-        for i, (commit_id, ds_path, feature_blob) in enumerate(feature_blob_iter):
+        for i, (commit_id, path_match_result, feature_blob) in enumerate(
+            feature_blob_iter
+        ):
             if i and progress_every and i % progress_every == 0:
                 click.echo(f"  {i:,d} features... @{time.monotonic()-t0:.1f}s")
                 L.flush_bulk_warns()
 
+            ds_path = path_match_result.group(1)
             transforms = crs_helper.transforms_for_dataset_at_commit(
                 ds_path,
                 commit_id,
@@ -607,8 +557,8 @@ class EnvelopeEncoder:
         self.BITS_PER_VALUE = bits_per_value
         self.BITS_PER_ENVELOPE = 4 * self.BITS_PER_VALUE
         self.BYTES_PER_ENVELOPE = self.BITS_PER_ENVELOPE // 8
-        self.VALUE_MAX_INT = 2 ** self.BITS_PER_VALUE - 1
-        self.ENVELOPE_MAX_INT = 2 ** self.BITS_PER_ENVELOPE - 1
+        self.VALUE_MAX_INT = 2**self.BITS_PER_VALUE - 1
+        self.ENVELOPE_MAX_INT = 2**self.BITS_PER_ENVELOPE - 1
 
         self.BYTE_ORDER = "big"
 
