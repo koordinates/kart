@@ -1,6 +1,5 @@
 from glob import glob
 import json
-import re
 import subprocess
 import pytest
 
@@ -105,12 +104,15 @@ def test_import_single_las(
             assert r.exit_code == 0, r.stderr
             repo.config[f"lfs.{DUMMY_REPO}/info/lfs.locksverify"] = False
 
+            head_sha = repo.head_commit.hex
             stdout = subprocess.check_output(
-                ["kart", "lfs", "push", "origin", "--all", "--dry-run"], encoding="utf8"
+                ["kart", "lfs+", "pre-push", "origin", "DUMMY_REPO", "--dry-run"],
+                input=f"main {head_sha} main 0000000000000000000000000000000000000000\n",
+                encoding="utf8",
             )
-            assert re.match(
-                r"push [0-9a-f]{64} => autzen/.point-cloud-dataset.v1/tile/60/autzen",
-                stdout.splitlines()[0],
+            assert (
+                stdout.splitlines()[0]
+                == "Running pre-push with --dry-run: pushing 1 LFS blobs"
             )
 
             assert (repo_path / "autzen" / "autzen.copc.laz").is_file()
@@ -172,15 +174,16 @@ def test_import_several_laz(
             assert r.exit_code == 0, r.stderr
             repo.config[f"lfs.{DUMMY_REPO}/info/lfs.locksverify"] = False
 
+            head_sha = repo.head_commit.hex
             stdout = subprocess.check_output(
-                ["kart", "lfs", "push", "origin", "--all", "--dry-run"], encoding="utf8"
+                ["kart", "lfs+", "pre-push", "origin", "DUMMY_REPO", "--dry-run"],
+                input=f"main {head_sha} main 0000000000000000000000000000000000000000\n",
+                encoding="utf8",
             )
-            lines = stdout.splitlines()
-            for i in range(16):
-                assert re.match(
-                    r"push [0-9a-f]{64} => auckland/.point-cloud-dataset.v1/tile/[0-9a-f]{2}/auckland_\d_\d",
-                    lines[i],
-                )
+            assert (
+                stdout.splitlines()[0]
+                == "Running pre-push with --dry-run: pushing 16 LFS blobs"
+            )
 
             for x in range(4):
                 for y in range(4):
