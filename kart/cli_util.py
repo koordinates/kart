@@ -5,6 +5,8 @@ import os
 import logging
 import platform
 import warnings
+import shutil
+import subprocess
 from pathlib import Path
 
 import click
@@ -13,22 +15,48 @@ import pygit2
 from click.core import Argument
 from click.shell_completion import CompletionItem
 
-from kart.help import kart_help
-
-
 L = logging.getLogger("kart.cli_util")
 
 
 class KartCommand(click.Command):
     def format_help(self, ctx, formatter):
         try:
-            return kart_help(ctx)
+            render(ctx)
         except Exception as e:
             import pdb
 
             pdb.set_trace()
             L.debug(f"Failed rendering help page: {e}")
             return super().format_help(ctx, formatter)
+
+
+def render(ctx: click.Context):
+    """Sends output to pager depending on current platform"""
+    if platform.system() == "Windows":
+        return render_windows(ctx)
+
+    return render_posix(ctx)
+
+
+def render_posix(ctx: click.Context) -> None:
+    from kart import prefix
+
+    man_page = Path(prefix) / "help" / f'{ctx.command_path.replace(" ", "-")}.1'
+    cmdline = ["man", str(man_page)]
+    if not shutil.which(cmdline[0]):
+        raise click.ClickException(
+            f"Pager {cmdline[0]} not found in PATH, printing raw help."
+        )
+    L.debug("Running command: %s", cmdline)
+    p = subprocess.Popen(cmdline)
+    p.communicate()
+
+
+def render_windows(ctx: click.Context) -> bytes:
+    from kart import prefix
+
+    text_page = Path(prefix) / "help" / f'{ctx.command_path.replace(" ", "-")}'
+    click.echo_via_pager(text_page.read_text())
 
 
 def _pygit2_configs():

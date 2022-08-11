@@ -15,16 +15,9 @@ import click
 import pygit2
 
 from . import core, is_darwin, is_linux, is_windows  # noqa
-from kart.help import get_renderer
 
 from . import core  # noqa
-from .cli_util import (
-    add_help_subcommand,
-    call_and_exit_flag,
-    tool_environment,
-    KartCommand,
-    kart_help,
-)
+from .cli_util import add_help_subcommand, call_and_exit_flag, tool_environment, render
 from .context import Context
 from .exec import run_and_wait
 from kart.completion import Shells, install_callback
@@ -147,8 +140,6 @@ def print_version(ctx):
 
 
 class KartGroup(click.Group):
-    command_class = KartCommand
-
     def get_command(self, ctx, cmd_name):
         rv = super().get_command(ctx, cmd_name)
         if rv is not None:
@@ -188,7 +179,7 @@ class KartGroup(click.Group):
 
     def format_help(self, ctx, formatter):
         try:
-            return kart_help(ctx)
+            render(ctx)
         except Exception as e:
             return super().format_help(ctx, formatter)
 
