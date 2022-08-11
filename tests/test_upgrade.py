@@ -11,20 +11,6 @@ from kart.repo import KartRepo
 
 H = pytest.helpers.helpers()
 
-POINTS_UPGRADE_RESULT = [
-    f"commit {H.POINTS.HEAD_SHA}",
-    "Author: Robert Coup <robert@coup.net.nz>",
-    f"Date:   {H.POINTS.DATE_TIME}",
-    "",
-    "    Improve naming on Coromandel East coast",
-    "",
-    f"commit {H.POINTS.HEAD1_SHA}",
-    "Author: Robert Coup <robert@coup.net.nz>",
-    f"Date:   {H.POINTS.DATE_TIME1}",
-    "",
-    "    Import from nz-pa-points-topo-150k.gpkg",
-]
-
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
@@ -59,6 +45,19 @@ def test_upgrade_v0(archive, layer, data_archive_readonly, cli_runner, tmp_path,
         assert r.exit_code == 0, r.stderr
 
         if layer == H.POINTS.LAYER:
+            POINTS_UPGRADE_RESULT = [
+                f"commit {H.POINTS.HEAD_SHA}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                f"Date:   {H.get_git_datetime(H.POINTS.HEAD_SHA)}",
+                "",
+                "    Improve naming on Coromandel East coast",
+                "",
+                f"commit {H.POINTS.HEAD1_SHA}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                f"Date:   {H.get_git_datetime(H.POINTS.HEAD1_SHA)}",
+                "",
+                "    Import from nz-pa-points-topo-150k.gpkg",
+            ]
             assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
 
 
@@ -95,6 +94,19 @@ def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path,
         assert r.exit_code == 0, r.stderr
 
         if layer == H.POINTS.LAYER:
+            POINTS_UPGRADE_RESULT = [
+                f"commit {H.POINTS.HEAD_SHA}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                f"Date:   {H.get_git_datetime(H.POINTS.HEAD_SHA)}",
+                "",
+                "    Improve naming on Coromandel East coast",
+                "",
+                f"commit {H.POINTS.HEAD1_SHA}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                f"Date:   {H.get_git_datetime(H.POINTS.HEAD1_SHA)}",
+                "",
+                "    Import from nz-pa-points-topo-150k.gpkg",
+            ]
             assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
 
         r = cli_runner.invoke(["status", "--output-format=json"])
@@ -141,6 +153,19 @@ def test_upgrade_v2(
         assert r.exit_code == 0, r.stderr
 
         if layer == H.POINTS.LAYER:
+            POINTS_UPGRADE_RESULT = [
+                f"commit {H.POINTS.HEAD_SHA}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                f"Date:   {H.get_git_datetime(H.POINTS.HEAD_SHA)}",
+                "",
+                "    Improve naming on Coromandel East coast",
+                "",
+                f"commit {H.POINTS.HEAD1_SHA}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                f"Date:   {H.get_git_datetime(H.POINTS.HEAD1_SHA)}",
+                "",
+                "    Import from nz-pa-points-topo-150k.gpkg",
+            ]
             assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
 
         r = cli_runner.invoke(["status", "--output-format=json"])
@@ -184,6 +209,19 @@ def test_upgrade_v2_in_place(archive, layer, data_archive, cli_runner, tmp_path,
         assert r.exit_code == 0, r.stderr
 
         if layer == H.POINTS.LAYER:
+            POINTS_UPGRADE_RESULT = [
+                f"commit {H.POINTS.HEAD_SHA}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                f"Date:   {H.get_git_datetime(H.POINTS.HEAD_SHA)}",
+                "",
+                "    Improve naming on Coromandel East coast",
+                "",
+                f"commit {H.POINTS.HEAD1_SHA}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                f"Date:   {H.get_git_datetime(H.POINTS.HEAD1_SHA)}",
+                "",
+                "    Import from nz-pa-points-topo-150k.gpkg",
+            ]
             assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
 
 
