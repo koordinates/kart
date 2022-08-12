@@ -4,7 +4,8 @@ import sys
 
 import click
 
-from kart.cli_util import add_help_subcommand
+from kart.cli_util import add_help_subcommand, tool_environment
+from kart.exceptions import SubprocessError
 from kart.lfs_util import get_hash_from_pointer_file
 from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
@@ -34,7 +35,7 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
     This means it won't encounter any features that are missing due to spatial filtering, which git-lfs stumbles over.
     """
 
-    if not remote_url and not remote_url:
+    if not remote_name and not remote_url:
         raise RuntimeError(
             "kart lfs+ pre-push should be run through Kart's pre-push hook."
         )
@@ -63,11 +64,17 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
         return
 
     if lfs_oids:
-        # TODO - chunk lfs_oids so that we don't overflow the maximum argument size.
-        # TODO - capture chunk progress and report our own overall progress
-        subprocess.check_call(
-            ["git-lfs", "push", remote_name, "--object-id", *lfs_oids]
-        )
+        try:
+            # TODO - chunk lfs_oids so that we don't overflow the maximum argument size.
+            # TODO - capture chunk progress and report our own overall progress
+            subprocess.check_call(
+                ["git-lfs", "push", remote_name, "--object-id", *lfs_oids],
+                env=tool_environment,
+            )
+        except subprocess.CalledProcessError as e:
+            raise SubprocessError(
+                f"There was a problem with git-lfs push: {e}", called_process_error=e
+            )
 
 
 def get_start_and_stop_commits(input_iter):
