@@ -96,6 +96,21 @@ def rev_list_feature_blobs(repo, start_commits, stop_commits):
     )
 
 
+TILE_POINTER_FILES_PATTERN = re.compile(r"(.+)/\.point-cloud-dataset[^/]*/tile/.+")
+
+
+def rev_list_tile_pointer_files(repo, start_commits, stop_commits):
+    """
+    Yield all the blobs with a path identifying them as features (or rows) of a "table-dataset".
+    (commit_id, match_result, blob).
+    To get the entire path, use match_result.group(0) - this can be decoded if necessary.
+    To get the dataset-path, use match_result.group(1)
+    """
+    return rev_list_matching_blobs(
+        repo, start_commits, stop_commits, TILE_POINTER_FILES_PATTERN
+    )
+
+
 def _parse_revlist_output(repo, line_iter):
     commit_id = None
     for line in line_iter:

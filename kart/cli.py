@@ -32,6 +32,7 @@ MODULE_COMMANDS = {
     "fsck": {"fsck"},
     "helper": {"helper"},
     "init": {"init"},
+    "lfs_commands": {"lfs+"},
     "log": {"log"},
     "merge": {"merge"},
     "meta": {"commit-files", "meta"},
@@ -46,14 +47,17 @@ MODULE_COMMANDS = {
     "point_cloud.import_": {"point-cloud-import"},
 }
 
+# These commands aren't valid Python symbols, even when we change dash to underscore.
+COMMAND_TO_FUNCTION_NAME = {
+    "import": "import_",
+    "lfs+": "lfs_plus",
+}
+
 
 def _load_commands_from_module(mod_name):
     mod = importlib.import_module(f".{mod_name}", "kart")
     for k in MODULE_COMMANDS[mod_name]:
-        k = k.replace("-", "_")
-        if k == "import":
-            # a special case
-            k = "import_"
+        k = COMMAND_TO_FUNCTION_NAME.get(k) or k.replace("-", "_")
         command = getattr(mod, k)
         cli.add_command(command)
 
@@ -125,7 +129,7 @@ def print_version(ctx):
     )
 
     # report on whether this was run through helper mode
-    helper_pid = os.environ.get('KART_HELPER_PID')
+    helper_pid = os.environ.get("KART_HELPER_PID")
     if helper_pid:
         click.echo(f"Executed via helper, PID: {helper_pid}")
 
@@ -237,7 +241,6 @@ def push(ctx, do_progress, args):
             *args,
         ],
     )
-
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))

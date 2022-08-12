@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 import re
 import shutil
-import subprocess
+import stat
 import uuid
 
 import pygit2
@@ -21,10 +21,15 @@ _STANDARD_LFS_KEYS = set(("version", "oid", "size"))
 _EMPTY_SHA256 = "sha256:" + ("0" * 64)
 
 
+PRE_PUSH_HOOK = "\n".join(["#!/bin/sh", 'kart lfs+ pre-push "$@"', ""])
+
+
 def install_lfs_hooks(repo):
-    if not (repo.gitdir_path / "hooks" / "pre-push").is_file():
-        subprocess.check_call(
-            ["git", "-C", str(repo.gitdir_path), "lfs", "install", "hooks"]
+    pre_push_hook = repo.gitdir_path / "hooks" / "pre-push"
+    if not pre_push_hook.is_file():
+        pre_push_hook.write_text(PRE_PUSH_HOOK)
+        pre_push_hook.chmod(
+            pre_push_hook.stat().st_mode | stat.S_IXOTH | stat.S_IXGRP | stat.S_IXUSR
         )
 
 
