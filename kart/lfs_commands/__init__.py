@@ -32,6 +32,7 @@ def lfs_plus(ctx, **kwargs):
 def pre_push(ctx, remote_name, remote_url, dry_run):
     """
     Re-implementation of git-lfs pre-push - but, only searches for pointer blobs at **/.point-cloud-dataset.v?/tile/**
+    (In contrast with git-lfs pre-push, which scans any and all blobs, looking for pointer files).
     This means it won't encounter any features that are missing due to spatial filtering, which git-lfs stumbles over.
     """
 
@@ -53,6 +54,9 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
     for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
         repo, start_commits, stop_commits
     ):
+        # Because of the way a Kart repo is laid out, we know that:
+        # All LFS pointer files are blobs inside **/.point-cloud-dataset.v?/tile/**
+        # All blobs inside **/.point-cloud-dataset.v?/tile/** are LFS pointer files.
         lfs_oids.add(get_hash_from_pointer_file(pointer_blob))
 
     if dry_run:

@@ -87,7 +87,7 @@ FEATURE_BLOBS_PATTERN = re.compile(r"(.+)/\.(?:sno|table)-dataset[^/]*/feature/.
 def rev_list_feature_blobs(repo, start_commits, stop_commits):
     """
     Yield all the blobs with a path identifying them as features (or rows) of a "table-dataset".
-    (commit_id, match_result, blob).
+    Yields tuples in the form: (commit_id, match_result, blob).
     To get the entire path, use match_result.group(0) - this can be decoded if necessary.
     To get the dataset-path, use match_result.group(1)
     """
@@ -101,8 +101,8 @@ TILE_POINTER_FILES_PATTERN = re.compile(r"(.+)/\.point-cloud-dataset[^/]*/tile/.
 
 def rev_list_tile_pointer_files(repo, start_commits, stop_commits):
     """
-    Yield all the blobs with a path identifying them as features (or rows) of a "table-dataset".
-    (commit_id, match_result, blob).
+    Yield all the blobs with a path identifying them as LFS pointers to the tiles of a point-cloud dataset.
+    Yields tuples in the form: (commit_id, match_result, blob).
     To get the entire path, use match_result.group(0) - this can be decoded if necessary.
     To get the dataset-path, use match_result.group(1)
     """
