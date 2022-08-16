@@ -20,6 +20,7 @@ from kart.cli_util import tool_environment
 from kart import diff_util
 from kart.exceptions import NotFound, NO_WORKING_COPY, translate_subprocess_exit_code
 from kart.lfs_util import get_local_path_from_lfs_hash
+from kart.lfs_commands import fetch_lfs_blobs_for_pointer_files
 from kart.key_filters import RepoKeyFilter
 from kart.point_cloud.v1 import PointCloudV1
 from kart.point_cloud.tilename_util import remove_tile_extension, get_tile_path_pattern
@@ -211,30 +212,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def _is_head(self, commit_or_tree):
         return commit_or_tree.peel(pygit2.Tree) == self.repo.head_tree
 
-    def fetch_lfs_blobs(self, commit_or_tree, quiet=False):
-        if commit_or_tree is None:
-            return  # Nothing to do.
-
-        extra_args = []
-        if isinstance(commit_or_tree, pygit2.Commit) and not self._is_head(
-            commit_or_tree
-        ):
-            # Generally, `lfs fetch` does exactly what we need or at least the best we can do.
-            # The exception is resetting to a commit that is not HEAD - then we can tell lfs to fetch that commit.
-            remote_name = self.repo.head_remote_name_or_default
-            if remote_name:
-                extra_args = [remote_name, commit_or_tree.id.hex]
-
-        if quiet:
-            extra_kwargs = {"stdout": subprocess.DEVNULL}
-        else:
-            click.echo("LFS: ", nl=False)
-            extra_kwargs = {}
-        self.repo.invoke_git("lfs", "fetch", *extra_args, **extra_kwargs)
-
-        if not quiet:
-            click.echo()  # LFS fetch sometimes leaves the cursor at the start of a line that already has text - scroll past that.
-
     def reset(
         self,
         commit_or_tree,
@@ -259,9 +236,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
         filter is up to date.
         """
-
-        # We fetch the LFS tiles immediately before writing them to the working copy - unlike ODB objects that are already fetched.
-        self.fetch_lfs_blobs(commit_or_tree, quiet=quiet)
 
         if rewrite_full:
             # These aren't supported when we're doing a full rewrite.
@@ -323,20 +297,24 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             repo_key_filter,
         )
 
-        if ds_deletes:
-            self.delete_datasets_from_workdir([base_datasets[d] for d in ds_deletes])
-        if ds_inserts:
-            self.write_full_datasets_to_workdir(
-                [target_datasets[d] for d in ds_inserts]
+        pointer_files_to_fetch = set()
+        workdir_diff_cache = self.workdir_diff_cache()
+        update_diffs = {}
+
+        # First pass - make sure the LFS blobs are present in the local LFS cache:
+        # - For the datasets that will be inserted (written from scratch):
+        for ds_path in ds_inserts:
+            pointer_files_to_fetch.update(
+                blob.hex for blob in target_datasets[ds_path].tile_pointer_blobs()
             )
 
-        workdir_diff_cache = self.workdir_diff_cache()
+        # - For the datasets that will be updated:
         for ds_path in ds_updates:
             # The diffing code can diff from any arbitrary commit, but not from the working copy -
             # it can only diff *to* the working copy.
             # So, we need to diff from=target to=working copy then take the inverse.
             # TODO: Make this less confusing.
-            diff_to_apply = ~diff_util.get_dataset_diff(
+            update_diffs[ds_path] = ~diff_util.get_dataset_diff(
                 ds_path,
                 target_datasets,
                 base_datasets,
@@ -344,16 +322,50 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 workdir_diff_cache=workdir_diff_cache,
                 ds_filter=repo_key_filter[ds_path],
             )
+            pointer_files_to_fetch.update(
+                blob.hex
+                for blob in self._list_new_pointer_blobs_for_diff(
+                    update_diffs[ds_path], target_datasets[ds_path]
+                )
+            )
 
+        # We fetch the LFS tiles immediately before writing them to the working copy -
+        # unlike ODB objects that are already fetched.
+        fetch_lfs_blobs_for_pointer_files(
+            self.repo, pointer_files_to_fetch, quiet=quiet
+        )
+
+        # Second pass - actually update the working copy:
+        if ds_deletes:
+            self.delete_datasets_from_workdir([base_datasets[d] for d in ds_deletes])
+        if ds_inserts:
+            self.write_full_datasets_to_workdir(
+                [target_datasets[d] for d in ds_inserts]
+            )
+        for ds_path in ds_updates:
             self._update_dataset_in_workdir(
                 ds_path,
-                diff_to_apply,
+                update_diffs[ds_path],
                 ds_filter=repo_key_filter[ds_path],
                 track_changes_as_dirty=track_changes_as_dirty,
             )
 
         if not track_changes_as_dirty:
             self.update_state_table_tree(target_tree_id)
+
+    def _list_new_pointer_blobs_for_diff(self, dataset_diff, point_cloud_dataset):
+        inner_tree = point_cloud_dataset.inner_tree
+        if not inner_tree:
+            return
+
+        tile_diff = dataset_diff.get("tile")
+        if not tile_diff:
+            return
+        for tilename in tile_diff.keys():
+            path = point_cloud_dataset.tilename_to_blob_path(tilename, relative=True)
+            pointer_blob = point_cloud_dataset.get_blob_at(path, missing_ok=True)
+            if pointer_blob:
+                yield pointer_blob
 
     def write_full_datasets_to_workdir(self, datasets):
         for dataset in datasets:

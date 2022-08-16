@@ -13,6 +13,7 @@ from .repo import KartRepoFiles
 from .structs import CommitWithReference
 from .tabular.feature_output import feature_as_geojson, feature_as_json, feature_as_text
 from .utils import ungenerator
+from kart.lfs_commands import fetch_lfs_blobs_for_commits
 from kart.point_cloud.tilename_util import set_tile_extension
 
 
@@ -888,8 +889,7 @@ class WorkingCopyMerger:
             return
 
         commit_ids = set(v.commit_id for v in self.merge_context.versions if v)
-        for commit_id in commit_ids:
-            workdir.fetch_lfs_blobs(self.repo[commit_id], quiet=True)
+        fetch_lfs_blobs_for_commits(self.repo, commit_ids)
 
     def resolve_conflict(self, conflict):
         """
