@@ -73,7 +73,8 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
             # TODO - capture chunk progress and report our own overall progress
             subprocess.check_call(
                 ["git-lfs", "push", remote_name, "--object-id", *lfs_oids],
-                env=tool_environment,
+                env=tool_environment(),
+                cwd=repo.workdir_path,
             )
         except subprocess.CalledProcessError as e:
             raise SubprocessError(

@@ -22,6 +22,8 @@ def set_tile_extension(filename, ext=None, tile_format=None):
             # Format summary string.
             ext = f".{tile_format[0:3]}"
 
+        assert ext in (".las", ".laz")
+
         if is_copc(tile_format):
             ext = ".copc" + ext
 
