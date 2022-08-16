@@ -1002,3 +1002,33 @@ def test_working_copy_mtime_updated(
         # Finally, check that the point cloud tiles themselves are not found in the ODB:
         for laz_file in repo.workdir_path.glob("auckland/*.laz"):
             assert pygit2.hashfile(laz_file) not in repo.odb
+
+
+def test_lfs_fetch(cli_runner, data_archive, monkeypatch):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        # Delete everything in the local LFS cache.
+        shutil.rmtree(repo_path / ".kart" / "lfs")
+
+        r = cli_runner.invoke(["lfs+", "fetch", "HEAD", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Running fetch with --dry-run: fetching 16 LFS blobs",
+            "LFS blob OID:                                                    (Pointer file OID):",
+            "11ba773069c7e935735f7076b2fa44334d0bb41c4742d8cd8111f575359a773c (9e46ecc5d5503a77d6b8604a92b1da1372f39c03)",
+            "23c4bb0642bf467bb35ece586f5460f7f4d32288832796458bcbe1a928b32fb4 (8b5c7ceaad04b6c459ee4b090c77069a07374f84)",
+            "3ba3a4bd4629af7c934c61fa132021bf2b3bdd1a52d981315ce5ecb09d71e10a (194ffbeaafc7f19be592fdd434baf3126189e3b7)",
+            "467dbced134249ad341e762737ca42e731f92dadd2d290cf093b68c788aa0067 (d0cc8a1cacb1f9dd1d79542324fd0f3551de2ec3)",
+            "64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3 (ba01f6e0d8a64b920e1d8dbaa563a7a641c164b6)",
+            "7041a3ee11a33d750289d44ef4096fd7efcc195958d52f56ab363415f9363e61 (847a284d68b10387ac85ff1aae000f712677b8e4)",
+            "7d160940ad3087f610ccf6d41f5b7a49a4425bae61bf0ca59e3693910b5b11d4 (adbbcfa66956fa01cca20e0df97da0f8a40a63b0)",
+            "817b6ddadd95166012143df55fa73dd6c5a8b42b603c33d1b6c38f187261096e (364046ba21d4a0154c77a2544348bea9fd6baa93)",
+            "9c49d1b59f33fa3f46ca6caf8cfc26e13e7e951758b41d811a9b734918ad1711 (7dcc82fd2e182075b6ece5599aca915ce2df8faf)",
+            "a1862450841dede2759af665825403e458dfa551c095d9a65ea6e6765aeae0f7 (8bb24273e1fc68e68dbe40b2e182f6e743af74cf)",
+            "a968f575322d6de93ebc10f972a4b20a36f918f4f8f76891da4d67232f3976e4 (3ce5e7e1006946fd03cc9b870a1a70bb73f81901)",
+            "add2d011a19b39c0c8d70ed2313ad4955b1e0faf9a24394ab1a103930580a267 (5d62415f8d4d1c314a78ff0725534a3633343cbb)",
+            "bf4210be91ea2013ff13961a885cc9b16cb631a5b54cc89276010d1e4adf74e2 (0b89060b81491a2ade1448417ba1509aa73a0a51)",
+            "c7874972e856eaff4d28fa851b9abc72be9056caa41187211de0258b5ac30f28 (4d79b37fdfdb80166965c4f7d65ffec5f8ed0f86)",
+            "d380a98414ab209f36c7fba4734b02f67de519756e341837217716c5b4768339 (f866ac0ecf4326931d10aaa16140e2240eeada90)",
+            "ec80af6cae31be5318f9380cd953b25469bd8ecda25086deca2b831bbb89168a (c76e89f23f512214063d31e7a9c85657f0cf8fb6)",
+        ]
