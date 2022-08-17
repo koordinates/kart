@@ -2,6 +2,8 @@ import functools
 import os
 import re
 
+import pygit2
+
 from kart.base_dataset import (
     BaseDataset,
     MetaItemDefinition,
@@ -196,6 +198,9 @@ class TableV3(RichTableDataset):
             else:
                 rel_path = self.encode_pks_to_path(pk_values, relative=True)
             data = self.get_data_at(rel_path, as_memoryview=True)
+        elif getattr(data, "type", None) == pygit2.GIT_OBJ_BLOB:
+            # Data is a blob - open a memoryview on it.
+            data = memoryview(data)
 
         legend_hash, non_pk_values = msg_unpack(data)
         legend = self.get_legend(legend_hash)
