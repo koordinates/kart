@@ -510,7 +510,7 @@ NO_GEOMETRY_COLUMN = object()
 
 
 def get_geometry(repo, feature_blob):
-    legend, fields = msg_unpack(feature_blob)
+    legend, fields = msg_unpack(memoryview(feature_blob))
     col_id = get_geometry.legend_to_col_id.get(legend)
     if col_id is None:
         col_id = _find_geometry_column(fields)
