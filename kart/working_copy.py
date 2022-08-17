@@ -356,6 +356,13 @@ class WorkingCopy:
                 committed_diff=committed_diff,
             )
 
+    def matches_spatial_filter_hash(self, spatial_filter_hash):
+        """Returns True iff the spatial-filter-hash stored in every part matches the given hash."""
+        for p in self.parts():
+            if p.get_spatial_filter_hash() != spatial_filter_hash:
+                return False
+        return True
+
 
 class WorkingCopyPart:
     """Abstract base class for a particular part of a working copy - eg the tabular part, or the file-based part."""

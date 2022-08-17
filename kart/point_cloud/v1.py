@@ -30,6 +30,7 @@ from kart.point_cloud.tilename_util import (
     get_tile_path_pattern,
 )
 from kart.serialise_util import hexhash
+from kart.spatial_filter import SpatialFilter
 from kart.working_copy import PartType
 
 
@@ -60,24 +61,36 @@ class PointCloudV1(BaseDataset):
     def tile_tree(self):
         return self.get_subtree(self.TILE_PATH)
 
-    def tile_pointer_blobs(self):
+    def tile_pointer_blobs(self, spatial_filter=SpatialFilter.MATCH_ALL):
         """Returns a generator that yields every tile pointer blob in turn."""
         tile_tree = self.tile_tree
-        if tile_tree:
+        if not tile_tree:
+            return
+
+        if spatial_filter.match_all:
             yield from find_blobs_in_tree(tile_tree)
+            return
+
+        spatial_filter = spatial_filter.transform_for_dataset(self)
+
+        for tile in find_blobs_in_tree(tile_tree):
+            if spatial_filter.matches(tile):
+                yield tile
 
     @property
     def tile_count(self):
         """The total number of features in this dataset."""
         return sum(1 for blob in self.tile_pointer_blobs())
 
-    def tilenames_with_lfs_hashes(self, fix_extensions=True):
+    def tilenames_with_lfs_hashes(
+        self, spatial_filter=SpatialFilter.MATCH_ALL, fix_extensions=True
+    ):
         """
         Returns a generator that yields every tilename along with its LFS hash.
         If fix_extensions is True, then the returned name will be modified to have the correct extension for the
         type of tile the blob is pointing to (eg .laz or .copc.laz), regardless of the blob's extension (if any).
         """
-        for blob in self.tile_pointer_blobs():
+        for blob in self.tile_pointer_blobs(spatial_filter=spatial_filter):
             if fix_extensions:
                 pointer_dict = pointer_file_bytes_to_dict(blob)
                 tile_format = pointer_dict["format"]
@@ -86,10 +99,12 @@ class PointCloudV1(BaseDataset):
             else:
                 yield blob.name, get_hash_from_pointer_file(blob)
 
-    def tilenames_with_lfs_paths(self, fix_extensions=True):
+    def tilenames_with_lfs_paths(
+        self, spatial_filter=SpatialFilter.MATCH_ALL, fix_extensions=True
+    ):
         """Returns a generator that yields every tilename along with the path where the tile content is stored locally."""
         for blob_name, lfs_hash in self.tilenames_with_lfs_hashes(
-            fix_extensions=fix_extensions
+            spatial_filter=spatial_filter, fix_extensions=fix_extensions
         ):
             yield blob_name, get_local_path_from_lfs_hash(self.repo, lfs_hash)
 

@@ -12,6 +12,7 @@ from kart.exceptions import (
     UNCOMMITTED_CHANGES,
     SPATIAL_FILTER_PK_CONFLICT,
 )
+from kart.geometry import ring_as_wkt, bbox_as_wkt_polygon
 from kart.promisor_utils import FetchPromisedBlobsProcess, LibgitSubcode
 from kart.repo import KartRepo
 
@@ -104,24 +105,6 @@ def git_with_spatial_filter_support(git_supports_spatial_filter):
         "Git with spatial filters",
         "KART_EXPECT_GITSPATIALFILTER",
         git_supports_spatial_filter,
-    )
-
-
-def ring_as_wkt(*points):
-    return "(" + ",".join(f"{x} {y}" for x, y in points) + ")"
-
-
-def bbox_as_wkt_polygon(min_x, max_x, min_y, max_y):
-    return (
-        "POLYGON("
-        + ring_as_wkt(
-            (min_x, min_y),
-            (max_x, min_y),
-            (max_x, max_y),
-            (min_x, max_y),
-            (min_x, min_y),
-        )
-        + ")"
     )
 
 
@@ -371,14 +354,12 @@ def test_reclone_with_larger_spatial_filter(
         repo1_url = f"file://{repo1_path.resolve()}"
         # Clone repo using spatial filter
         repo2_path = tmp_path / "repo2"
-        # TODO: Invert some of this test when --spatial-filter-during-clone is inverted.
         r = cli_runner.invoke(
             [
                 "clone",
                 repo1_url,
                 repo2_path,
                 f"--spatial-filter={EMPTY_SPATIAL_FILTER}",
-                "--spatial-filter-during-clone",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -765,7 +746,7 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
 def test_spatial_filtered_workingcopy(
     archive, table, filter_key, data_archive, cli_runner
 ):
-    """ Checkout a working copy to edit """
+    """Checkout a working copy to edit"""
     with data_archive(archive) as repo_path:
         repo = KartRepo(repo_path)
         H.clear_working_copy()

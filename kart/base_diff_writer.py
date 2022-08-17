@@ -475,12 +475,12 @@ class BaseDiffWriter:
         )
         sf = self.spatial_filter
         old_spatial_filter = (
-            sf.transform_for_schema_and_crs(old_schema, old_crs, ds_path)
+            sf.transform_for_table_schema_and_crs(old_schema, old_crs, ds_path)
             if old_schema
             else SpatialFilter.MATCH_ALL
         )
         new_spatial_filter = (
-            sf.transform_for_schema_and_crs(new_schema, new_crs, ds_path)
+            sf.transform_for_table_schema_and_crs(new_schema, new_crs, ds_path)
             if new_schema
             else SpatialFilter.MATCH_ALL
         )

@@ -18,7 +18,13 @@ from sqlalchemy.schema import CreateTable
 
 from kart.cli_util import tool_environment
 from kart import diff_util
-from kart.exceptions import NotFound, NO_WORKING_COPY, translate_subprocess_exit_code
+from kart.diff_structs import Delta
+from kart.exceptions import (
+    NotFound,
+    SubprocessError,
+    NO_WORKING_COPY,
+    translate_subprocess_exit_code,
+)
 from kart.lfs_util import get_local_path_from_lfs_hash
 from kart.lfs_commands import fetch_lfs_blobs_for_pointer_files
 from kart.key_filters import RepoKeyFilter
@@ -305,22 +311,20 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         # - For the datasets that will be inserted (written from scratch):
         for ds_path in ds_inserts:
             pointer_files_to_fetch.update(
-                blob.hex for blob in target_datasets[ds_path].tile_pointer_blobs()
+                blob.hex
+                for blob in target_datasets[ds_path].tile_pointer_blobs(
+                    self.repo.spatial_filter
+                )
             )
 
         # - For the datasets that will be updated:
         for ds_path in ds_updates:
-            # The diffing code can diff from any arbitrary commit, but not from the working copy -
-            # it can only diff *to* the working copy.
-            # So, we need to diff from=target to=working copy then take the inverse.
-            # TODO: Make this less confusing.
-            update_diffs[ds_path] = ~diff_util.get_dataset_diff(
+            update_diffs[ds_path] = self._diff_to_reset(
                 ds_path,
-                target_datasets,
                 base_datasets,
-                include_wc_diff=True,
-                workdir_diff_cache=workdir_diff_cache,
-                ds_filter=repo_key_filter[ds_path],
+                target_datasets,
+                workdir_diff_cache,
+                repo_key_filter[ds_path],
             )
             pointer_files_to_fetch.update(
                 blob.hex
@@ -353,6 +357,42 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         if not track_changes_as_dirty:
             self.update_state_table_tree(target_tree_id)
 
+    def _diff_to_reset(
+        self, ds_path, base_datasets, target_datasets, workdir_diff_cache, ds_filter
+    ):
+        """
+        Get the diff-to-apply needed to reset a particular dataset - currently based on base_datasets[ds_path] -
+        to the target state at target_datasets[ds_path]."""
+        # The diffing code can diff from any arbitrary commit, but not from the working copy -
+        # it can only diff *to* the working copy.
+        # So, we need to diff from=target to=working copy then take the inverse.
+        # TODO: Make this less confusing.
+        ds_diff = ~diff_util.get_dataset_diff(
+            ds_path,
+            target_datasets,
+            base_datasets,
+            include_wc_diff=True,
+            workdir_diff_cache=workdir_diff_cache,
+            ds_filter=ds_filter,
+        )
+        tile_diff = ds_diff.get("tile")
+        # Remove new values that don't match the spatial filter - we don't want them in the working copy.
+        if tile_diff and not self.repo.spatial_filter.match_all:
+            spatial_filter = self.repo.spatial_filter.transform_for_dataset(
+                target_datasets[ds_path]
+            )
+            tiles_to_remove = set()
+            for tilename, delta in tile_diff.items():
+                if delta.new_value and not spatial_filter.matches(delta.new_value):
+                    tiles_to_remove.add(tilename)
+            for tilename in tiles_to_remove:
+                delta = tile_diff[tilename]
+                if delta.old is not None:
+                    tile_diff[tilename] = Delta.delete(delta.old)
+                else:
+                    del tile_diff[tilename]
+        return ds_diff
+
     def _list_new_pointer_blobs_for_diff(self, dataset_diff, point_cloud_dataset):
         inner_tree = point_cloud_dataset.inner_tree
         if not inner_tree:
@@ -374,7 +414,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             wc_tiles_dir = self.path / dataset.path
             (wc_tiles_dir).mkdir(parents=True, exist_ok=True)
 
-            for tilename, lfs_path in dataset.tilenames_with_lfs_paths():
+            for tilename, lfs_path in dataset.tilenames_with_lfs_paths(
+                self.repo.spatial_filter
+            ):
                 if not lfs_path.is_file():
                     click.echo(
                         f"Couldn't find tile {tilename} locally - skipping...", err=True
@@ -506,6 +548,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 "--all",
                 "--intent-to-add",
                 "--dry-run",
+                "--ignore-missing",
                 "--",
                 *paths,
             ]
@@ -515,7 +558,10 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 .splitlines()
             )
         except subprocess.CalledProcessError as e:
-            sys.exit(translate_subprocess_exit_code(e.returncode))
+            raise SubprocessError(
+                f"There was a problem with git add --intent-to-add --dry-run: {e}",
+                called_process_error=e,
+            )
 
         if not output_lines:
             # Nothing to be done.
