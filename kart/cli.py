@@ -63,7 +63,7 @@ def _load_commands_from_module(mod_name):
         cli.add_command(command)
 
 
-def _load_all_commands():
+def load_all_commands():
     for mod in MODULE_COMMANDS:
         _load_commands_from_module(mod)
 
@@ -417,14 +417,14 @@ def _hackily_parse_command(args, skip_first_arg=True):
 def load_commands_from_args(args, skip_first_arg=True):
     command = _hackily_parse_command(args, skip_first_arg=skip_first_arg)
     if command == "help":
-        _load_all_commands()
+        load_all_commands()
     elif command not in cli.commands:
         for mod, commands in MODULE_COMMANDS.items():
             if command in commands:
                 _load_commands_from_module(mod)
                 break
         else:
-            _load_all_commands()
+            load_all_commands()
 
 
 def entrypoint():

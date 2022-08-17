@@ -16,18 +16,8 @@ import typing as t
 
 import click
 import rst2txt
-from inspect import getmembers
-from importlib import import_module
 from docutils.core import publish_string
 from docutils.writers import manpage
-
-try:
-    from importlib.metadata import distribution
-except ImportError:
-    try:
-        from importlib_metadata import distribution
-    except ImportError:
-        from pkg_resources import load_entry_point
 
 
 def generate_help_pages(
@@ -344,31 +334,14 @@ def main():
     if len(sys.argv) < 3:
         print(f"USAGE: {sys.argv[0]} INPUT_DIR OUTPUT_DIR")
         sys.exit(2)
-
     name = "kart"
     input_dir = sys.argv[1]
     output_dir = Path(sys.argv[2])
     output_dir.mkdir(parents=True, exist_ok=True)
-    entry_point = load_entry_point("kart", "console_scripts", "kart")
-    ep_module = import_module(entry_point.value.split(":")[0])
-    ep_module._load_all_commands()
-    ep_members = getmembers(ep_module, lambda x: isinstance(x, click.Command))
-    _, cli = ep_members[0]
+    from kart import cli
 
-    generate_help_pages(name, input_dir, cli, target_dir=output_dir)
-
-
-def importlib_load_entry_point(spec, group, name):
-    dist_name, _, _ = spec.partition("==")
-    matches = (
-        entry_point
-        for entry_point in distribution(dist_name).entry_points
-        if entry_point.group == group and entry_point.name == name
-    )
-    return list(matches)[0]
-
-
-globals().setdefault("load_entry_point", importlib_load_entry_point)
+    cli.load_all_commands()
+    generate_help_pages(name, input_dir, cli.cli, target_dir=output_dir)
 
 
 if __name__ == "__main__":
