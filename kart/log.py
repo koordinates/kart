@@ -61,7 +61,7 @@ class PreserveDoubleDash(click.Command):
 
     def format_help(self, ctx, formatter):
         try:
-            render(ctx)
+            render(ctx.command_path)
         except Exception as e:
             L.debug(f"Failed rendering help page: {e}")
             return super().format_help(ctx, formatter)

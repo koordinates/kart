@@ -21,38 +21,42 @@ L = logging.getLogger("kart.cli_util")
 class KartCommand(click.Command):
     def format_help(self, ctx, formatter):
         try:
-            render(ctx)
+            render(ctx.command_path)
         except Exception as e:
             L.debug(f"Failed rendering help page: {e}")
             return super().format_help(ctx, formatter)
 
 
-def render(ctx: click.Context):
+def render(command_path: str):
     """Sends output to pager depending on current platform"""
     if platform.system() == "Windows":
-        return render_windows(ctx)
+        return render_windows(command_path)
 
-    return render_posix(ctx)
+    return render_posix(command_path)
 
 
-def render_posix(ctx: click.Context) -> None:
+def render_posix(command_path: str) -> None:
     from kart import prefix
 
-    man_page = Path(prefix) / "help" / f'{ctx.command_path.replace(" ", "-")}.1'
+    man_page = Path(prefix) / "help" / f'{command_path.replace(" ", "-")}.1'
+    if not man_page.exists():
+        raise FileNotFoundError(f"{man_page} not found at given path")
     cmdline = ["man", str(man_page)]
     if not shutil.which(cmdline[0]):
         raise click.ClickException(
-            f"Pager {cmdline[0]} not found in PATH, printing raw help."
+            f"{cmdline[0]} not found in PATH, printing raw help."
         )
     L.debug("Running command: %s", cmdline)
     p = subprocess.Popen(cmdline)
     p.communicate()
 
 
-def render_windows(ctx: click.Context) -> bytes:
+def render_windows(command_path: str) -> bytes:
     from kart import prefix
 
-    text_page = Path(prefix) / "help" / f'{ctx.command_path.replace(" ", "-")}'
+    text_page = Path(prefix) / "help" / f'{command_path.replace(" ", "-")}'
+    if not text_page.exists():
+        raise FileNotFoundError(f"{text_page} not found at given path")
     click.echo_via_pager(text_page.read_text())
 
 
@@ -156,7 +160,11 @@ def add_help_subcommand(group):
         if topic is None:
             click.echo(ctx.parent.get_help())
         else:
-            click.echo(group.get_command(ctx, topic).get_help(ctx))
+            try:
+                command_path = " ".join(ctx.command_path.split()[:-1])
+                render(f"{command_path} {topic}")
+            except Exception:
+                click.echo(group.get_command(ctx, topic).get_help(ctx))
 
     return group
 

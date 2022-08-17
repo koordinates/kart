@@ -177,7 +177,7 @@ class KartGroup(click.Group):
 
     def format_help(self, ctx, formatter):
         try:
-            render(ctx)
+            render(ctx.command_path)
         except Exception as e:
             return super().format_help(ctx, formatter)
 
