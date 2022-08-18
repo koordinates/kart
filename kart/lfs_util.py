@@ -27,6 +27,7 @@ PRE_PUSH_HOOK = "\n".join(["#!/bin/sh", 'kart lfs+ pre-push "$@"', ""])
 def install_lfs_hooks(repo):
     pre_push_hook = repo.gitdir_path / "hooks" / "pre-push"
     if not pre_push_hook.is_file():
+        pre_push_hook.parent.mkdir(parents=True, exist_ok=True)
         pre_push_hook.write_text(PRE_PUSH_HOOK)
         pre_push_hook.chmod(
             pre_push_hook.stat().st_mode | stat.S_IXOTH | stat.S_IXGRP | stat.S_IXUSR
