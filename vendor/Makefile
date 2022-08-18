@@ -27,7 +27,7 @@ ifeq ($(PLATFORM),Darwin)
 	LIBSUFFIX = dylib
 	WHEELTOOL = delocate==0.8.2
 	PY3 ?= $(realpath /Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7)
-	WHEELID = macosx_10_9_x86_64
+	WHEELID = macosx_*_x86_64
 	export LDFLAGS += -Wl,-rpath,'@loader_path'
 else ifeq ($(PLATFORM),Linux)
 	LIBINFIX = cpython-37m-x86_64-linux-gnu
@@ -80,7 +80,7 @@ build: $(build-libs)
 
 env:
 	@echo PY3=$(PY3)
-	$(PY3) -m venv --copies env
+	if [ ! -d env ]; then $(PY3) -m venv --copies env; fi;
 	env/bin/pip install -U $(PYDEPS)
 
 # dependencies
