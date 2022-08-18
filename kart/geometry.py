@@ -223,6 +223,10 @@ class Geometry(bytes):
     def from_hex_ewkb(cls, hex_ewkb):
         return hex_ewkb_to_gpkg_geom(hex_ewkb)
 
+    @classmethod
+    def from_bbox(cls, min_x, max_x, min_y, max_y):
+        return cls.from_wkt(bbox_as_wkt_polygon(min_x, max_x, min_y, max_y))
+
 
 def _validate_gpkg_geom(gpkg_geom):
     """
@@ -698,3 +702,21 @@ def geom_envelope(gpkg_geom, only_2d=False, calculate_if_missing=False):
         return None
     else:
         return envelope
+
+
+def ring_as_wkt(*points):
+    return "(" + ",".join(f"{x} {y}" for x, y in points) + ")"
+
+
+def bbox_as_wkt_polygon(min_x, max_x, min_y, max_y):
+    return (
+        "POLYGON("
+        + ring_as_wkt(
+            (min_x, min_y),
+            (max_x, min_y),
+            (max_x, max_y),
+            (min_x, max_y),
+            (min_x, min_y),
+        )
+        + ")"
+    )

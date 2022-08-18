@@ -6,6 +6,7 @@ import sys
 from enum import Enum, auto
 
 import click
+import pygit2
 
 from kart.cli_util import StringFromFile, add_help_subcommand
 from kart.crs_util import make_crs
@@ -16,7 +17,8 @@ from kart.exceptions import (
     NotFound,
     NotYetImplemented,
 )
-from kart.geometry import GeometryType, geometry_from_string
+from kart.geometry import Geometry, GeometryType, geometry_from_string
+from kart.lfs_util import pointer_file_bytes_to_dict
 from kart.output_util import dump_json_output
 from kart.promisor_utils import object_is_promised
 from kart.repo import KartRepoState
@@ -285,9 +287,7 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
             repo.del_config(f"remote.{update_remote}.partialclonefilter")
 
     def matches_working_copy(self, repo):
-        # TODO: this code shouldn't special-case tabular working copies
-        table_wc = repo.working_copy.tabular
-        return table_wc is None or table_wc.get_spatial_filter_hash() == self.hexhash
+        return repo.working_copy.matches_spatial_filter_hash(self.hexhash)
 
     @property
     def hexhash(self):
@@ -520,7 +520,7 @@ class SpatialFilter:
         return OriginalSpatialFilter(crs_spec, geometry_spec)
 
     def __init__(
-        self, crs, filter_geometry_ogr, geom_column_name=None, match_all=False
+        self, crs, filter_geometry_ogr, *, extract_geometry=None, match_all=False
     ):
         """
         Create a new spatial filter.
@@ -535,22 +535,22 @@ class SpatialFilter:
             self.filter_ogr = None
             self.filter_prep = None
             self.filter_env = None
-            self.geom_column_name = None
+            self.extract_geometry = None
         else:
             self.crs = crs
             self.filter_ogr = filter_geometry_ogr
             self.filter_prep = filter_geometry_ogr.CreatePreparedGeometry()
             self.filter_env = self.filter_ogr.GetEnvelope()
-            self.geom_column_name = geom_column_name
+            self.extract_geometry = extract_geometry
 
     def matches(self, feature):
         """
         Returns True if the given feature geometry matches this spatial filter.
         The feature to be tested is assumed to be using the same CRS as this spatial filter,
         otherwise the intersection test makes no sense.
-        To get a spatial filter for a particular CRS, see transfrom_for_dataset / transform_for_crs.
+        To get a spatial filter for a particular CRS, see transform_for_dataset / transform_for_crs.
 
-        feature_geometry - either a feature dict (in which case self.geom_column_name must be set)
+        feature_geometry - either a feature that contains a geometry (in which case self.geometry_extractor must be set)
             or a geometry.Geometry object.
         """
         if feature is None:
@@ -558,7 +558,11 @@ class SpatialFilter:
         if self.match_all:
             return MatchResult.MATCHING
 
-        feature_geometry = feature[self.geom_column_name]
+        if isinstance(feature, Geometry):
+            feature_geometry = feature
+        else:
+            feature_geometry = self.extract_geometry(feature)
+
         if feature_geometry is None:
             return MatchResult.MATCHING
 
@@ -651,6 +655,12 @@ class OriginalSpatialFilter(SpatialFilter):
         if self.match_all:
             return SpatialFilter._MATCH_ALL
 
+        if dataset.DATASET_TYPE == "table":
+            return self._transform_for_table_dataset(dataset)
+        elif dataset.DATASET_TYPE == "point-cloud":
+            return self._transform_for_point_cloud_dataset(dataset)
+
+    def _transform_for_table_dataset(self, dataset):
         if not dataset.geom_column_name:
             return SpatialFilter._MATCH_ALL
 
@@ -664,9 +674,11 @@ class OriginalSpatialFilter(SpatialFilter):
             )
         ds_crs_def = list(ds_crs_defs.values())[0]
 
-        return self.transform_for_schema_and_crs(dataset.schema, ds_crs_def, ds_path)
+        return self.transform_for_table_schema_and_crs(
+            dataset.schema, ds_crs_def, ds_path
+        )
 
-    def transform_for_schema_and_crs(self, schema, crs, ds_path=None):
+    def transform_for_table_schema_and_crs(self, schema, crs, ds_path=None):
         """
         Similar to transform_for_dataset above, but can also be used without a dataset object - for example,
         to apply the spatial filter to a working copy table which might not exactly match any dataset.
@@ -692,16 +704,39 @@ class OriginalSpatialFilter(SpatialFilter):
             transform = osr.CoordinateTransformation(self.crs, crs)
             new_filter_ogr = self.filter_ogr.Clone()
             new_filter_ogr.Transform(transform)
-            return SpatialFilter(crs, new_filter_ogr, new_geom_column_name)
+            extract_geometry = lambda feature: feature[new_geom_column_name]
+            return SpatialFilter(crs, new_filter_ogr, extract_geometry=extract_geometry)
 
         except RuntimeError as e:
             crs_desc = f"CRS for {ds_path!r}" if ds_path else f"CRS:\n {crs_spec!r}"
             raise CrsError(f"Can't reproject spatial filter into {crs_desc}:\n{e}")
 
+    def _transform_for_point_cloud_dataset(self, dataset):
+        def extract_geometry(tile):
+            if getattr(tile, "type", None) == pygit2.GIT_OBJ_BLOB:
+                tile = pointer_file_bytes_to_dict(tile)
+            native_extent = tile["nativeExtent"].split(",")
+            return Geometry.from_bbox(*native_extent[:4])
+
+        crs_wkt = dataset.get_meta_item("crs.wkt")
+
+        from osgeo import osr
+
+        try:
+            crs = make_crs(crs_wkt)
+            crs.DemoteTo2D()
+            transform = osr.CoordinateTransformation(self.crs, crs)
+            new_filter_ogr = self.filter_ogr.Clone()
+            new_filter_ogr.Transform(transform)
+            return SpatialFilter(crs, new_filter_ogr, extract_geometry=extract_geometry)
+
+        except RuntimeError as e:
+            raise CrsError(
+                f"Can't reproject spatial filter into CRS for {dataset.path!r}:\n{e}"
+            )
+
     def matches_working_copy(self, repo):
-        # TODO: this code shouldn't special-case tabular working copies
-        table_wc = repo.working_copy.tabular
-        return table_wc is None or table_wc.get_spatial_filter_hash() == self.hexhash
+        return repo.working_copy.matches_spatial_filter_hash(self.hexhash)
 
 
 # A SpatialFilter object that matches everything.
