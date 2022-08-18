@@ -15,7 +15,12 @@ import click
 import pygit2
 
 from . import core, is_darwin, is_linux, is_windows  # noqa
-from .cli_util import add_help_subcommand, call_and_exit_flag, tool_environment, render
+from .cli_util import (
+    add_help_subcommand,
+    call_and_exit_flag,
+    tool_environment,
+    KartGroup,
+)
 from .context import Context
 from .exec import run_and_wait
 from kart.completion import Shells, install_callback
@@ -135,51 +140,6 @@ def print_version(ctx):
         click.echo(f"Executed via helper, PID: {helper_pid}")
 
     ctx.exit()
-
-
-class KartGroup(click.Group):
-    def get_command(self, ctx, cmd_name):
-        rv = super().get_command(ctx, cmd_name)
-        if rv is not None:
-            return rv
-
-        # typo? Suggest similar commands.
-        import difflib
-
-        matches = difflib.get_close_matches(
-            cmd_name, list(self.list_commands(ctx)), n=3
-        )
-
-        fail_message = f"kart: '{cmd_name}' is not a kart command. See 'kart --help'.\n"
-        if matches:
-            if len(matches) == 1:
-                fail_message += "\nThe most similar command is\n"
-            else:
-                fail_message += "\nThe most similar commands are\n"
-            for m in matches:
-                fail_message += f"\t{m}\n"
-        ctx.fail(fail_message)
-
-    def invoke(self, ctx):
-        if ctx.params.get("post_mortem"):
-            try:
-                return super().invoke(ctx)
-            except Exception:
-                try:
-                    import ipdb as pdb
-                except ImportError:
-                    # ipdb is only installed in dev venvs, not releases
-                    import pdb
-                pdb.post_mortem()
-                raise
-        else:
-            return super().invoke(ctx)
-
-    def format_help(self, ctx, formatter):
-        try:
-            render(ctx.command_path)
-        except Exception as e:
-            return super().format_help(ctx, formatter)
 
 
 @add_help_subcommand

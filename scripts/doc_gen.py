@@ -39,8 +39,6 @@ def generate_help_pages(
 
     commands = getattr(cli, "commands", {})
     for name, command in commands.items():
-        if command.hidden:
-            continue
         generate_help_pages(
             name,
             input_dir,

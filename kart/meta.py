@@ -24,10 +24,11 @@ from .output_util import (
     write_with_indent,
 )
 from .pack_util import packfile_object_builder
+from .cli_util import KartGroup, KartCommand
 
 
 @add_help_subcommand
-@click.group()
+@click.group(cls=KartGroup)
 @click.pass_context
 def meta(ctx, **kwargs):
     """

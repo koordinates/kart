@@ -8,7 +8,7 @@ from enum import Enum, auto
 import click
 import pygit2
 
-from kart.cli_util import StringFromFile, add_help_subcommand
+from kart.cli_util import KartGroup, StringFromFile, add_help_subcommand
 from kart.crs_util import make_crs
 from kart.exceptions import (
     NO_SPATIAL_FILTER,
@@ -57,7 +57,7 @@ def spatial_filter_help_text(allow_reference=True):
 
 
 @add_help_subcommand
-@click.group(hidden=True)
+@click.group(hidden=True, cls=KartGroup)
 @click.pass_context
 def spatial_filter(ctx, **kwargs):
     """
