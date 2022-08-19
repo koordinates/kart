@@ -62,12 +62,10 @@ class TextDiffWriter(BaseDiffWriter):
             for key, delta in ds_diff["meta"].sorted_items():
                 self.write_meta_delta(ds_path, key, delta)
 
-        for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
-            self.write_dict_delta_only_show_diffs(ds_path, "feature", key, delta)
-
-        if "tile" in ds_diff:
-            for key, delta in ds_diff["tile"].sorted_items():
-                self.write_dict_delta_only_show_diffs(ds_path, "tile", key, delta)
+        item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
+        if item_type:
+            for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
+                self.write_dict_delta_only_show_diffs(ds_path, item_type, key, delta)
 
     def write_full_delta(self, ds_path, item_type, key, delta):
         """Writes the old and new halves of a delta in full - ie, not just those parts that have changed."""

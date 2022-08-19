@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.11.6 (UNRELEASED)
+
+- "Primary key conflicts" - conflicts caused by reusing a primary key which is already assigned to a feature outside the spatial filter - are renamed to "spatial filter conflicts" for future proofing with other dataset types. Consequently, commit option `--allow-pk-conflicts` is renamed to `--allow-spatial-filter-conflicts`.
+
 ## 0.11.5
 
 ### Major changes

@@ -14,7 +14,7 @@ from .cli_util import StringFromFile, tool_environment, KartCommand
 from .core import check_git_user
 from .exceptions import (
     NO_CHANGES,
-    SPATIAL_FILTER_PK_CONFLICT,
+    SPATIAL_FILTER_CONFLICT,
     InvalidOperation,
     NotFound,
     SubprocessError,
@@ -40,11 +40,11 @@ class CommitDiffWriter(BaseDiffWriter):
 
         if not self.spatial_filter.match_all:
             self.record_spatial_filter_stats = True
-            self.spatial_filter_pk_conflicts = RepoKeyFilter()
+            self.spatial_filter_conflicts = RepoKeyFilter()
             self.now_outside_spatial_filter = RepoKeyFilter()
         else:
             self.record_spatial_filter_stats = False
-            self.spatial_filter_pk_conflicts = None
+            self.spatial_filter_conflicts = None
             self.now_outside_spatial_filter = None
 
     def get_repo_diff(self):
@@ -57,14 +57,14 @@ class CommitDiffWriter(BaseDiffWriter):
         return repo_diff
 
     def record_spatial_filter_stat(
-        self, ds_path, key, delta, old_match_result, new_match_result
+        self, ds_path, item_type, key, delta, old_match_result, new_match_result
     ):
         super().record_spatial_filter_stat(
-            ds_path, key, delta, old_match_result, new_match_result
+            ds_path, item_type, key, delta, old_match_result, new_match_result
         )
         if delta.new is not None and not new_match_result:
             self.now_outside_spatial_filter.recursive_set(
-                [ds_path, "feature", key], True
+                [ds_path, item_type, key], True
             )
 
 
@@ -90,7 +90,7 @@ class CommitDiffWriter(BaseDiffWriter):
     ),
 )
 @click.option(
-    "--allow-pk-conflicts",
+    "--allow-spatial-filter-conflicts",
     is_flag=True,
     default=False,
     help=(
@@ -123,7 +123,7 @@ def commit(
     ctx,
     message,
     allow_empty,
-    allow_pk_conflicts,
+    allow_spatial_filter_conflicts,
     convert_to_dataset_format,
     output_format,
     filters,
@@ -147,13 +147,17 @@ def commit(
     if not wc_diff and not allow_empty:
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
-    pk_conflicts = commit_diff_writer.spatial_filter_pk_conflicts
-    if not allow_pk_conflicts and pk_conflicts and any(pk_conflicts.values()):
+    sf_conflicts = commit_diff_writer.spatial_filter_conflicts
+    if (
+        not allow_spatial_filter_conflicts
+        and sf_conflicts
+        and any(sf_conflicts.values())
+    ):
         commit_diff_writer.write_warnings_footer()
         raise InvalidOperation(
-            "Aborting commit due to conflicting primary key values - use --allow-pk-conflicts to commit anyway "
+            "Aborting commit due to conflicting primary key values - use --allow-spatial-filter-conflicts to commit anyway "
             "(this will overwrite some existing features that are outside of the current spatial filter)",
-            exit_code=SPATIAL_FILTER_PK_CONFLICT,
+            exit_code=SPATIAL_FILTER_CONFLICT,
         )
 
     do_json = output_format == "json"

@@ -95,25 +95,23 @@ class JsonDiffWriter(BaseDiffWriter):
                     key: self._postprocess_simple_delta(value)
                     for key, value in ds_diff["meta"].items()
                 }
-            if "feature" in ds_diff:
-                result["feature"] = self.filtered_ds_feature_deltas_as_json(
+            item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
+            if item_type and item_type in ds_diff:
+                result[item_type] = self.filtered_dataset_deltas_as_json(
                     ds_path, ds_diff
                 )
-            if "tile" in ds_diff:
-                result["tile"] = [
-                    self._postprocess_simple_delta(value)
-                    for key, value in ds_diff["tile"].items()
-                ]
             return result
 
         return None
 
-    def filtered_ds_feature_deltas_as_json(self, ds_path, ds_diff):
-        if "feature" not in ds_diff:
+    def filtered_dataset_deltas_as_json(self, ds_path, ds_diff):
+        item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
+        if not item_type or item_type not in ds_diff:
             return
 
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
-        for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
+
+        for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
             delta_as_json = {}
 
             if delta.old:
@@ -144,7 +142,7 @@ class PatchWriter(JsonDiffWriter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.nonmatching_feature_counts = {p: 0 for p in self.all_ds_paths}
+        self.nonmatching_item_counts = {p: 0 for p in self.all_ds_paths}
 
     def add_json_header(self, obj):
         if self.commit is not None:
@@ -167,26 +165,29 @@ class PatchWriter(JsonDiffWriter):
             }
 
     def record_spatial_filter_stat(
-        self, ds_path, key, delta, old_match_result, new_match_result
+        self, ds_path, item_type, key, delta, old_match_result, new_match_result
     ):
         """
         Records which / how many features were inside / outside the spatial filter for which reasons.
         These records are used by write_warnings_footer to show warnings to the user.
         """
         if not old_match_result and not new_match_result:
-            self.nonmatching_feature_counts[ds_path] += 1
+            self.nonmatching_item_counts[ds_path] += 1
 
     def write_warnings_footer(self):
         super().write_warnings_footer()
-        if any(self.nonmatching_feature_counts.values()):
+        if any(self.nonmatching_item_counts.values()):
             click.secho(
                 "Warning: The generated patch does not contain the entire commit: ",
                 bold=True,
                 err=True,
             )
-            for ds_path, count in self.nonmatching_feature_counts.items():
+            for ds_path, count in self.nonmatching_item_counts.items():
+                if not count:
+                    continue
+                item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
                 click.echo(
-                    f"  In dataset {ds_path} there are {count} changed features not included due to spatial filter",
+                    f"  In dataset {ds_path} there are {count} changed {item_type}s not included due to spatial filter",
                     err=True,
                 )
 
@@ -313,8 +314,7 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             )
 
         self.write_meta_deltas(ds_path, ds_diff)
-        self.write_feature_deltas(ds_path, ds_diff)
-        self.write_tile_deltas(ds_path, ds_diff)
+        self.write_filtered_dataset_deltas(ds_path, ds_diff)
 
     def write_meta_deltas(self, ds_path, ds_diff):
         if "meta" not in ds_diff:
@@ -326,13 +326,17 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             obj["change"] = delta.to_plus_minus_dict()
             self.dump(obj)
 
-    def write_feature_deltas(self, ds_path, ds_diff):
-        if "feature" not in ds_diff:
+    def write_filtered_dataset_deltas(self, ds_path, ds_diff):
+        item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
+        if not item_type or item_type not in ds_diff:
             return
 
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
-        obj = {"type": "feature", "dataset": ds_path, "change": None}
-        for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
+
+        obj = {"type": item_type, "dataset": ds_path, "change": None}
+
+        for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
+            obj["type"] = item_type
             change = {}
             if delta.old:
                 change["-"] = feature_as_json(
@@ -342,18 +346,6 @@ class JsonLinesDiffWriter(BaseDiffWriter):
                 change["+"] = feature_as_json(
                     delta.new_value, delta.new_key, new_transform
                 )
-            obj["change"] = change
-            self.dump(obj)
-
-    def write_tile_deltas(self, ds_path, ds_diff):
-        if "tile" not in ds_diff:
-            return
-
-        obj = {"type": "tile", "dataset": ds_path, "change": None}
-        for key, delta in ds_diff["tile"].sorted_items():
-            change = delta.to_plus_minus_dict()
-            for char in change:
-                change[char] = {"name": key, **change[char]}
             obj["change"] = change
             self.dump(obj)
 
@@ -418,13 +410,11 @@ class GeojsonDiffWriter(BaseDiffWriter):
             if not ds_diff:
                 continue
 
-            self._warn_about_any_meta_diffs(ds_path, ds_diff)
+            self._warn_about_any_non_feature_diffs(ds_path, ds_diff)
             has_changes = True
             output_obj = {
                 "type": "FeatureCollection",
-                "features": self.filtered_ds_feature_deltas_as_geojson(
-                    ds_path, ds_diff
-                ),
+                "features": self.filtered_dataset_deltas_as_geojson(ds_path, ds_diff),
             }
 
             if self.output_path == "-":
@@ -440,15 +430,23 @@ class GeojsonDiffWriter(BaseDiffWriter):
         self.has_changes = has_changes
         self.write_warnings_footer()
 
-    def _warn_about_any_meta_diffs(self, ds_path: str, ds_diff: DatasetDiff) -> None:
+    def _warn_about_any_non_feature_diffs(
+        self, ds_path: str, ds_diff: DatasetDiff
+    ) -> None:
         if "meta" in ds_diff:
             meta_changes = ", ".join(ds_diff["meta"].keys())
             click.echo(
                 f"Warning: {ds_path} meta changes aren't included in GeoJSON output: {meta_changes}",
                 err=True,
             )
+        if "tile" in ds_diff:
+            count = len(ds_diff["tile"])
+            click.echo(
+                f"Warning: {count} tile changes in {ds_path} aren't included in GeoJSON output",
+                err=True,
+            )
 
-    def filtered_ds_feature_deltas_as_geojson(
+    def filtered_dataset_deltas_as_geojson(
         self, ds_path: str, ds_diff: DatasetDiff
     ) -> Union[None, dict]:
         if "feature" not in ds_diff:
@@ -456,7 +454,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
 
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
 
-        for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
+        for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
             if delta.old:
                 change_type = "U-" if delta.new else "D"
                 yield feature_as_geojson(

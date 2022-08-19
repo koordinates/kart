@@ -651,16 +651,31 @@ class OriginalSpatialFilter(SpatialFilter):
         return True
 
     def transform_for_dataset(self, dataset):
-        """Transform this spatial filter so that it matches the CRS (and geometry column name) of the given dataset."""
+        """
+        Transform this spatial filter so that it matches the CRS of the given dataset.
+        The resulting spatial filter will also have the extract_geometry function set
+        so that it can extract the geometry out of the features or tiles of the given dataset.
+        """
         if self.match_all:
             return SpatialFilter._MATCH_ALL
 
         if dataset.DATASET_TYPE == "table":
-            return self._transform_for_table_dataset(dataset)
+            return self.transform_for_table_dataset(dataset)
         elif dataset.DATASET_TYPE == "point-cloud":
-            return self._transform_for_point_cloud_dataset(dataset)
+            return self.transform_for_point_cloud_dataset(dataset)
+        raise RuntimeError(
+            f"Spatial filtering is not supported for a dataset of type {dataset.DATASET_TYPE}"
+        )
 
-    def _transform_for_table_dataset(self, dataset):
+    def transform_for_table_dataset(self, dataset):
+        """
+        Transform this spatial filter so that it matches the CRS of the given dataset.
+        The resulting spatial filter will also have the extract_geometry function set so that it can
+        extract the geometry from the feature by reading the column with the appropriate name.
+        """
+        if self.match_all:
+            return SpatialFilter._MATCH_ALL
+
         if not dataset.geom_column_name:
             return SpatialFilter._MATCH_ALL
 
@@ -680,11 +695,11 @@ class OriginalSpatialFilter(SpatialFilter):
 
     def transform_for_table_schema_and_crs(self, schema, crs, ds_path=None):
         """
-        Similar to transform_for_dataset above, but can also be used without a dataset object - for example,
+        Similar to transform_for_table_dataset above, but can also be used without a dataset object - for example,
         to apply the spatial filter to a working copy table which might not exactly match any dataset.
 
-        schema - the dataset (or table) schema.
-        new_crs - the crs definition of the dataset or table.
+        schema - the table dataset (or working-copy table) schema.
+        crs - the crs definition of the dataset or table.
             The CRS should be a name eg EPSG:4326, or a full CRS definition, or an osgeo.osr.SpatialReference.
         """
         if self.match_all:
@@ -693,7 +708,61 @@ class OriginalSpatialFilter(SpatialFilter):
         geometry_columns = schema.geometry_columns
         if not geometry_columns:
             return SpatialFilter._MATCH_ALL
-        new_geom_column_name = geometry_columns[0].name
+        geom_column_name = geometry_columns[0].name
+        extract_geometry = lambda feature: feature[geom_column_name]
+
+        return self._transform_for_crs(
+            crs, extract_geometry=extract_geometry, ds_path=ds_path
+        )
+
+    def transform_for_point_cloud_dataset(self, dataset):
+        """
+        Transform this spatial filter so that it matches the CRS of the given dataset.
+        The resulting spatial filter will also have the extract_geometry function set such that
+        it can extract a flattened-to-2D point-cloud extent out of a tile summary.
+        """
+        if self.match_all:
+            return SpatialFilter._MATCH_ALL
+
+        return self.transform_for_point_cloud_crs(
+            dataset.get_meta_item("crs.wkt"), ds_path=dataset.path
+        )
+
+    def transform_for_point_cloud_crs(self, crs, ds_path=None):
+        """
+        Similar to transform_for_point_cloud_dataset above, but can also be used without a dataset object - for example,
+        to apply the spatial filter to a working-copy directory which might not exactly match any dataset.
+
+        crs - the crs definition of the dataset or directory.
+            The CRS should be a name eg EPSG:4326, or a full CRS definition, or an osgeo.osr.SpatialReference.
+        """
+        if self.match_all:
+            return SpatialFilter._MATCH_ALL
+
+        def extract_geometry(tile):
+            if getattr(tile, "type", None) == pygit2.GIT_OBJ_BLOB:
+                tile = pointer_file_bytes_to_dict(tile)
+            native_extent = tile["nativeExtent"].split(",")
+            return Geometry.from_bbox(*native_extent[:4])
+
+        return self._transform_for_crs(
+            crs, extract_geometry=extract_geometry, demote_to_2d=True, ds_path=ds_path
+        )
+
+    def _transform_for_crs(
+        self, crs, *, extract_geometry=None, demote_to_2d=False, ds_path=None
+    ):
+        """
+        Transforms this spatial filter to the given CRS.
+
+        crs - a name eg EPSG:4326, or a full CRS definition, or an osgeo.osr.SpatialReference.
+        extract_geometry - a function that knows how to extract geometry from a feature or tile. If set,
+            then the resulting spatial-filter can be applied not only to geometry, but also to features or tiles.
+        demote_to_2d - should be set to True if a 3D CRS is supplied, since Kart spatial-filters are 2D only.
+        ds_path - the path to the dataset that this spatial filter will be used for. Used only in error messages.
+        """
+        if self.match_all:
+            return SpatialFilter._MATCH_ALL
 
         from osgeo import osr
 
@@ -701,39 +770,16 @@ class OriginalSpatialFilter(SpatialFilter):
             crs_spec = str(crs)
             if isinstance(crs, str):
                 crs = make_crs(crs)
+            if demote_to_2d:
+                crs.DemoteTo2D()
             transform = osr.CoordinateTransformation(self.crs, crs)
             new_filter_ogr = self.filter_ogr.Clone()
             new_filter_ogr.Transform(transform)
-            extract_geometry = lambda feature: feature[new_geom_column_name]
             return SpatialFilter(crs, new_filter_ogr, extract_geometry=extract_geometry)
 
         except RuntimeError as e:
             crs_desc = f"CRS for {ds_path!r}" if ds_path else f"CRS:\n {crs_spec!r}"
             raise CrsError(f"Can't reproject spatial filter into {crs_desc}:\n{e}")
-
-    def _transform_for_point_cloud_dataset(self, dataset):
-        def extract_geometry(tile):
-            if getattr(tile, "type", None) == pygit2.GIT_OBJ_BLOB:
-                tile = pointer_file_bytes_to_dict(tile)
-            native_extent = tile["nativeExtent"].split(",")
-            return Geometry.from_bbox(*native_extent[:4])
-
-        crs_wkt = dataset.get_meta_item("crs.wkt")
-
-        from osgeo import osr
-
-        try:
-            crs = make_crs(crs_wkt)
-            crs.DemoteTo2D()
-            transform = osr.CoordinateTransformation(self.crs, crs)
-            new_filter_ogr = self.filter_ogr.Clone()
-            new_filter_ogr.Transform(transform)
-            return SpatialFilter(crs, new_filter_ogr, extract_geometry=extract_geometry)
-
-        except RuntimeError as e:
-            raise CrsError(
-                f"Can't reproject spatial filter into CRS for {dataset.path!r}:\n{e}"
-            )
 
     def matches_working_copy(self, repo):
         return repo.working_copy.matches_spatial_filter_hash(self.hexhash)
