@@ -9,7 +9,7 @@ import pygit2
 
 from kart.completion_shared import conflict_completer
 
-from .cli_util import MutexOption
+from .cli_util import MutexOption, KartCommand
 from .exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
 from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
 from .geometry import geojson_to_gpkg_geom
@@ -257,7 +257,7 @@ def update_workingcopy_with_resolve(
             shutil.copy(lfs_path, workdir_path)
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--with",

@@ -7,13 +7,13 @@ import click
 from kart.completion_shared import ref_completer
 
 from . import merge
-from .cli_util import tool_environment
+from .cli_util import tool_environment, KartCommand
 from .exceptions import NO_BRANCH, NotFound
 
 L = logging.getLogger("kart.pull")
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.option(
     "--ff/--no-ff",
     default=True,

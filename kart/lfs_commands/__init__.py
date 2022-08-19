@@ -6,7 +6,7 @@ import sys
 
 import click
 
-from kart.cli_util import add_help_subcommand, tool_environment
+from kart.cli_util import KartGroup, add_help_subcommand, tool_environment
 from kart.exceptions import SubprocessError
 from kart.lfs_util import get_hash_from_pointer_file, get_local_path_from_lfs_hash
 from kart.object_builder import ObjectBuilder
@@ -17,7 +17,7 @@ EMPTY_SHA = "0" * 40
 
 
 @add_help_subcommand
-@click.group("lfs+", hidden=True)
+@click.group("lfs+", hidden=True, cls=KartGroup)
 @click.pass_context
 def lfs_plus(ctx, **kwargs):
     """Git-LFS commands re-implemented in Kart to allow for spatial filtering."""

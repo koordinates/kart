@@ -3,7 +3,7 @@ import sys
 import click
 
 from . import diff_estimation
-from .cli_util import OutputFormatType, parse_output_format
+from .cli_util import OutputFormatType, parse_output_format, KartCommand
 from .crs_util import CoordinateReferenceString
 from .exceptions import NotFound
 from .output_util import dump_json_output
@@ -53,7 +53,7 @@ def feature_count_diff(
         sys.exit(1)
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--output-format",

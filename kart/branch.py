@@ -6,9 +6,10 @@ import pygit2
 from .exceptions import InvalidOperation
 from .exec import run_and_wait
 from .output_util import dump_json_output
+from kart.cli_util import KartCommand
 
 
-@click.command(context_settings=dict(ignore_unknown_options=True))
+@click.command(cls=KartCommand, context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.option(
     "--output-format",
@@ -18,7 +19,7 @@ from .output_util import dump_json_output
 )
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def branch(ctx, output_format, args):
-    """ List, create, or delete branches """
+    """List, create, or delete branches"""
     repo = ctx.obj.repo
 
     sargs = set(args)

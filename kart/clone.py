@@ -8,6 +8,7 @@ import click
 from .exceptions import InvalidOperation
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
+from kart.cli_util import KartCommand
 
 
 def get_directory_from_url(url, is_bare):
@@ -41,7 +42,7 @@ def get_directory_from_url(url, is_bare):
     return name
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--bare",

@@ -8,6 +8,7 @@ from .apply import apply_patch
 from .cli_util import (
     OutputFormatType,
     StringFromFile,
+    KartCommand,
     add_help_subcommand,
     parse_output_format,
     value_optionally_from_binary_file,
@@ -23,10 +24,11 @@ from .output_util import (
     write_with_indent,
 )
 from .pack_util import packfile_object_builder
+from .cli_util import KartGroup, KartCommand
 
 
 @add_help_subcommand
-@click.group()
+@click.group(cls=KartGroup)
 @click.pass_context
 def meta(ctx, **kwargs):
     """
@@ -207,7 +209,7 @@ def meta_set(ctx, message, dataset, items):
     )
 
 
-@click.command("commit-files", hidden=True)
+@click.command("commit-files", hidden=True, cls=KartCommand)
 @click.option(
     "--message",
     "-m",

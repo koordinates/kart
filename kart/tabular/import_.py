@@ -9,6 +9,7 @@ from kart.cli_util import (
     StringFromFile,
     call_and_exit_flag,
     RemovalInKart013Warning,
+    KartCommand,
 )
 from kart.core import check_git_user
 from kart.dataset_util import validate_dataset_paths
@@ -64,7 +65,7 @@ def any_at_all(iterable):
     return any(True for _ in iterable)
 
 
-@click.command("import")
+@click.command("import", cls=KartCommand)
 @click.pass_context
 @click.argument("source")
 @click.argument(

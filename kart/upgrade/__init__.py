@@ -13,6 +13,7 @@ from kart.tabular.version import DEFAULT_NEW_REPO_VERSION
 from kart.structure import RepoStructure
 from kart.tabular.v2 import TableV2
 from kart.timestamps import minutes_to_tz_offset
+from kart.cli_util import KartCommand
 
 
 def dataset_class_for_legacy_version(version, in_place=False):
@@ -100,7 +101,7 @@ class ForceLatestVersionRepo(KartRepo):
         return DEFAULT_NEW_REPO_VERSION
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--in-place",

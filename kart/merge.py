@@ -4,7 +4,7 @@ import sys
 import click
 
 from . import commit
-from .cli_util import StringFromFile, call_and_exit_flag
+from .cli_util import StringFromFile, call_and_exit_flag, KartCommand
 from .conflicts_writer import BaseConflictsWriter
 from .diff_util import get_repo_diff
 from .exceptions import InvalidOperation
@@ -263,7 +263,7 @@ def complete_merging_state(ctx):
     repo.working_copy.reset_to_head()
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.option(
     "--ff/--no-ff",
     default=True,

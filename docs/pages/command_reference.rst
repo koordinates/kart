@@ -83,6 +83,8 @@ adds remotes to the source repository.
 -  ``<directory>`` The directory for the new repository. Defaults to the
    last path component of the cloned repository.
 
+
+
 Managing Working Copies
 -----------------------
 

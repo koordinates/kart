@@ -2,8 +2,11 @@ import functools
 import io
 import json
 import os
+import logging
 import platform
 import warnings
+import shutil
+import subprocess
 from pathlib import Path
 
 import click
@@ -11,6 +14,97 @@ import jsonschema
 import pygit2
 from click.core import Argument
 from click.shell_completion import CompletionItem
+
+L = logging.getLogger("kart.cli_util")
+
+
+class KartCommand(click.Command):
+    def format_help(self, ctx, formatter):
+        try:
+            render(ctx.command_path)
+        except Exception as e:
+            L.debug(f"Failed rendering help page: {e}")
+            return super().format_help(ctx, formatter)
+
+
+class KartGroup(click.Group):
+    command_class = KartCommand
+
+    def get_command(self, ctx, cmd_name):
+        rv = super().get_command(ctx, cmd_name)
+        if rv is not None:
+            return rv
+
+        # typo? Suggest similar commands.
+        import difflib
+
+        matches = difflib.get_close_matches(
+            cmd_name, list(self.list_commands(ctx)), n=3
+        )
+
+        fail_message = f"kart: '{cmd_name}' is not a kart command. See 'kart --help'.\n"
+        if matches:
+            if len(matches) == 1:
+                fail_message += "\nThe most similar command is\n"
+            else:
+                fail_message += "\nThe most similar commands are\n"
+            for m in matches:
+                fail_message += f"\t{m}\n"
+        ctx.fail(fail_message)
+
+    def invoke(self, ctx):
+        if ctx.params.get("post_mortem"):
+            try:
+                return super().invoke(ctx)
+            except Exception:
+                try:
+                    import ipdb as pdb
+                except ImportError:
+                    # ipdb is only installed in dev venvs, not releases
+                    import pdb
+                pdb.post_mortem()
+                raise
+        else:
+            return super().invoke(ctx)
+
+    def format_help(self, ctx, formatter):
+        try:
+            render(ctx.command_path)
+        except Exception as e:
+            return super().format_help(ctx, formatter)
+
+
+def render(command_path: str):
+    """Sends output to pager depending on current platform"""
+    if platform.system() == "Windows":
+        return render_windows(command_path)
+
+    return render_posix(command_path)
+
+
+def render_posix(command_path: str) -> None:
+    from kart import prefix
+
+    man_page = Path(prefix) / "help" / f'{command_path.replace(" ", "-")}.1'
+    if not man_page.exists():
+        raise FileNotFoundError(f"{man_page} not found at given path")
+    cmdline = ["man", str(man_page)]
+    if not shutil.which(cmdline[0]):
+        raise click.ClickException(
+            f"{cmdline[0]} not found in PATH, printing raw help."
+        )
+    L.debug("Running command: %s", cmdline)
+    p = subprocess.Popen(cmdline)
+    p.communicate()
+
+
+def render_windows(command_path: str) -> bytes:
+    from kart import prefix
+
+    text_page = Path(prefix) / "help" / f'{command_path.replace(" ", "-")}'
+    if not text_page.exists():
+        raise FileNotFoundError(f"{text_page} not found at given path")
+    click.echo_via_pager(text_page.read_text())
 
 
 def _pygit2_configs():
@@ -113,7 +207,11 @@ def add_help_subcommand(group):
         if topic is None:
             click.echo(ctx.parent.get_help())
         else:
-            click.echo(group.get_command(ctx, topic).get_help(ctx))
+            try:
+                command_path = " ".join(ctx.command_path.split()[:-1])
+                render(f"{command_path} {topic}")
+            except Exception:
+                click.echo(group.get_command(ctx, topic).get_help(ctx))
 
     return group
 

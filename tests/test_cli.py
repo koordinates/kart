@@ -33,6 +33,12 @@ def test_cli_help():
         assert cmd.help, f"`{name}` command has no help text"
 
 
+@pytest.mark.parametrize("command", [["--help"], ["init", "--help"]])
+def test_help_page_render(cli_runner, command):
+    r = cli_runner.invoke(command)
+    assert r.exit_code == 0, r.stderr
+
+
 @pytest.fixture
 def empty_gitconfig(monkeypatch, tmpdir):
     old = os.environ["HOME"]

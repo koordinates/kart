@@ -5,6 +5,7 @@ import pygit2
 
 from kart.diff_estimation import estimate_diff_feature_counts
 from kart.exceptions import InvalidOperation
+from kart.cli_util import KartCommand
 
 from .db import annotations_session, is_db_writable
 
@@ -22,7 +23,7 @@ def gen_reachable_commits(repo):
     yield from walker
 
 
-@click.command(name="build-annotations")
+@click.command(cls=KartCommand, name="build-annotations")
 @click.pass_context
 @click.option(
     "--all-reachable",

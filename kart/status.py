@@ -14,6 +14,7 @@ from .merge_util import MergeContext, merge_status_to_text
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
+from kart.cli_util import KartCommand
 
 
 class StatusDiffWriter(BaseDiffWriter):
@@ -69,7 +70,7 @@ class StatusDiffWriter(BaseDiffWriter):
         return repo_type_counts
 
 
-@click.command()
+@click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
     "--output-format",

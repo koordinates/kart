@@ -2,7 +2,7 @@ import sys
 
 import click
 
-from .cli_util import StringFromFile, add_help_subcommand
+from .cli_util import KartGroup, StringFromFile, add_help_subcommand
 from .commit import commit_json_to_text, commit_obj_to_json, get_commit_message
 from .diff_structs import DatasetDiff, Delta, DeltaDiff, RepoDiff
 from .exceptions import NO_TABLE, NotFound
@@ -15,7 +15,7 @@ from .completion_shared import ref_completer
 
 
 @add_help_subcommand
-@click.group()
+@click.group(cls=KartGroup)
 @click.pass_context
 def data(ctx, **kwargs):
     """Information about the datasets in a repository."""
