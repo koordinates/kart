@@ -4,12 +4,16 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.11.4 (UNRELEASED)
+## 0.11.4
+
+### Major changes
+
+- Tab completion. Run `kart config --install-tab-completion=auto` to install. Supports Windows cmd, Windows PowerShell, macOS and Linux. [#643](https://github.com/koordinates/kart/issues/643)
+- Add `kart helper` which starts a long running process to reduce the overhead of Python startup.
+
+### Other changes
 
 - Add man-style pagers instead of click's default help page on `kart <command> --help`. [#643](https://github.com/koordinates/kart/issues/643)
-- Support tab completion in powershell for kart. [#643](https://github.com/koordinates/kart/issues/643)
-- Add `--install-tab-completion` option for installing shell completion. [#643](https://github.com/koordinates/kart/issues/643)
-- Add tab completion for kart commands and user-specific data. [#643](https://github.com/koordinates/kart/issues/643)
 - Changed format of feature IDs in GeoJSON output to be more informative and consistent. [#135](https://github.com/koordinates/kart/issues/135)
 - Fixed primary key issues for shapefile import - now generates an `auto_pk` by default, but uses an existing field if specified (doesn't use the FID). [#646](https://github.com/koordinates/kart/pull/646)
 - Add `--with-dataset-types` option to `kart meta get` which is informative now that there is more than one type of dataset. [#649](https://github.com/koordinates/kart/pull/649)
