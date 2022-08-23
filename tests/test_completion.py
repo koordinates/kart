@@ -14,11 +14,6 @@ DIFF_OUTPUT_FORMATS = ["text", "geojson", "json", "json-lines", "quiet", "html"]
 SHOW_OUTPUT_FORMATS = DIFF_OUTPUT_FORMATS
 
 
-def test_completion_install_no_shell(cli_runner):
-    r = cli_runner.invoke(["config", "--install-tab-completion"])
-    assert "Error: Option '--install-tab-completion' requires an argument" in r.stderr
-
-
 def test_completion_install_bash(cli_runner):
     bash_completion_path = Path.home() / ".bashrc"
     bash_profile = Path.home() / ".bash_profile"
@@ -27,7 +22,7 @@ def test_completion_install_bash(cli_runner):
     text = ""
     if bash_completion_path.is_file():
         text = bash_completion_path.read_text()
-    r = cli_runner.invoke(["config", "--install-tab-completion", "bash"])
+    r = cli_runner.invoke(["install", "tab-completion", "--shell", "bash"])
     new_text = bash_completion_path.read_text()
     bash_completion_path.write_text(text)
     install_source = os.path.join(".bash_completions", "cli.sh")
@@ -49,7 +44,7 @@ def test_completion_install_zsh(cli_runner):
         completion_path.write_text('echo "custom .zshrc"')
     if completion_path.is_file():
         text = completion_path.read_text()
-    r = cli_runner.invoke(["config", "--install-tab-completion", "zsh"])
+    r = cli_runner.invoke(["install", "tab-completion", "--shell", "zsh"])
     new_text = completion_path.read_text()
     completion_path.write_text(text)
     zfunc_fragment = "fpath+=~/.zfunc"
@@ -67,7 +62,7 @@ def test_completion_install_fish(cli_runner):
     completion_path: Path = Path.home() / os.path.join(
         ".config", "fish", "completions", "cli.fish"
     )
-    r = cli_runner.invoke(["config", "--install-tab-completion", "fish"])
+    r = cli_runner.invoke(["install", "tab-completion", "--shell", "fish"])
     new_text = completion_path.read_text()
     completion_path.unlink()
     assert "complete --no-files --command cli" in new_text
@@ -154,7 +149,7 @@ def test_completion_install_powershell(cli_runner, mocker):
             ["pwsh"], returncode=0, stdout=str(completion_path)
         ),
     )
-    result = cli_runner.invoke(["config", "--install-tab-completion", "auto"])
+    result = cli_runner.invoke(["install", "tab-completion"])
     install_script = "Register-ArgumentCompleter -Native -CommandName mocked-typer-testing-app -ScriptBlock $scriptblock"
     parent: Path = completion_path.parent
     parent.mkdir(parents=True, exist_ok=True)
