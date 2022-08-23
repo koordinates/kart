@@ -12,7 +12,7 @@ from .socket_utils import recv_fds
 from .cli import load_commands_from_args, cli, is_windows, is_darwin, is_linux
 
 
-@click.command(context_settings=dict(ignore_unknown_options=True))
+@click.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
 @click.pass_context
 @click.option(
     "--socket",
