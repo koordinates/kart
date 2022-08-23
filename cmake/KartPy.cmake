@@ -14,7 +14,7 @@ else()
   set(VENV_EXEC_ENV ${CMAKE_COMMAND} -E env "PATH=${VENV_BIN}:$ENV{PATH}")
   set(VENV_PY ${VENV_EXEC_ENV} ${VENV_BIN}/python)
   cmake_path(SET KART_EXE_VENV ${VENV_BIN}/kart)
-  cmake_path(SET KART_EXE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/kart)
+  cmake_path(SET KART_EXE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/kart_cli)
 endif()
 
 set(VENV_PIP_INSTALL ${VENV_PY} -m pip install --isolated --disable-pip-version-check)
@@ -56,9 +56,9 @@ add_custom_command(
   DEPENDS pydeps.stamp setup.py
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${VENV_PIP_INSTALL} --force-reinstall --no-deps --editable "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMAND ${CMAKE_COMMAND} "-DTARGET:FILEPATH=${KART_EXE_VENV}" "-DLINK_NAME:FILEPATH=kart" -P
-          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/link.cmake
-  COMMENT "Installing Kart...")
+  COMMAND ${CMAKE_COMMAND} "-DTARGET:FILEPATH=${KART_EXE_VENV}"
+          "-DLINK_NAME:FILEPATH=${KART_EXE_BUILD}" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/link.cmake
+  COMMENT "Setting executable...")
 
 add_custom_command(
   OUTPUT ${VENV_DOCS}

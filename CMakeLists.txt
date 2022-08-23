@@ -25,6 +25,8 @@ include(CCache)
 option(IS_HERMETIC "Isolated build where Kart builds all dependencies")
 message("Hermetic build? ${IS_HERMETIC}")
 
+option(USE_HELPER "Use kart_cli_helper by default")
+
 set(VENDOR_ARCHIVE
     ""
     CACHE
@@ -88,10 +90,37 @@ set(DOCS "docs/pages/commands")
 file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 set(DOCS "scripts")
 file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 #
 # main build targets
 #
 include(KartPy)
+
+if(NOT WIN32)
+  # Build the CLI helper
+  add_subdirectory(cli_helper)
+  set_target_properties(kart_cli_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                                   ${CMAKE_CURRENT_BINARY_DIR})
+
+  if(USE_HELPER)
+    # Make kart a symlink to kart_cli_helper
+    add_custom_target(
+      kart
+      DEPENDS kart_cli_helper
+      COMMAND ${CMAKE_COMMAND} -E create_symlink kart_cli_helper kart
+      COMMENT "Setting kart symlink...")
+  else()
+    # Make kart a symlink to kart_cli
+    add_custom_target(
+      kart
+      DEPENDS ${KART_EXE_BUILD}
+      COMMAND ${CMAKE_COMMAND} -E create_symlink kart_cli kart
+      COMMENT "Setting kart symlink...")
+  endif()
+
+  # cli is our general target
+  add_dependencies(cli kart)
+endif()
 
 # install
 
