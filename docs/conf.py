@@ -15,7 +15,7 @@ sys.path.append(".")
 project = "Kart"
 copyright = "2022, Kart Contributors"
 author = "Kart Contributors"
-release = "0.11.4"
+release = "0.11.5"
 
 
 # -- General configuration ---------------------------------------------------
