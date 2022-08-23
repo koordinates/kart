@@ -44,9 +44,7 @@ class HtmlDiffWriter(BaseDiffWriter):
         all_datasets_geojson = {
             ds_path: {
                 "type": "FeatureCollection",
-                "features": self.filtered_ds_feature_deltas_as_geojson(
-                    ds_path, ds_diff
-                ),
+                "features": self.filtered_dataset_deltas_as_geojson(ds_path, ds_diff),
             }
             for ds_path, ds_diff in repo_diff.items()
         }
@@ -70,6 +68,6 @@ class HtmlDiffWriter(BaseDiffWriter):
         self.write_warnings_footer()
 
 
-HtmlDiffWriter.filtered_ds_feature_deltas_as_geojson = (
-    GeojsonDiffWriter.filtered_ds_feature_deltas_as_geojson
+HtmlDiffWriter.filtered_dataset_deltas_as_geojson = (
+    GeojsonDiffWriter.filtered_dataset_deltas_as_geojson
 )

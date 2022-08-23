@@ -21,8 +21,8 @@ class StatusDiffWriter(BaseDiffWriter):
     """
     Counts inserts, updates, and deletes for each part of each dataset.
     Updates where the old value of the feature is outside the spatial don't count towards updates - instead, they are
-    considered to be primaryKeyConflicts (that is, the user is probably accidentally reusing existing primary keys
-    of the features outside the filter that they can't see.)
+    considered to be spatialFilterConflicts (that is, the user is probably accidentally reusing existing primary keys
+    of the features outside the filter that they can't see, or similarly for names of tiles.)
     """
 
     def __init__(self, repo):
@@ -30,15 +30,15 @@ class StatusDiffWriter(BaseDiffWriter):
 
         if not self.spatial_filter.match_all:
             self.record_spatial_filter_stats = True
-            self.spatial_filter_pk_conflicts = RepoKeyFilter()
+            self.spatial_filter_conflicts = RepoKeyFilter()
         else:
             self.record_spatial_filter_stats = False
-            self.spatial_filter_pk_conflicts = None
+            self.spatial_filter_conflicts = None
 
     def get_type_counts(self):
         """
         Gets a summary of changes - broken down first by dataset, then by dataset-part, then by changetype
-        - one of "insert", "update", "delete" or unusually, "primaryKeyConflict".
+        - one of "insert", "update", "delete" or unusually, "spatialFilterConflict".
         """
         repo_type_counts = {}
 
@@ -49,23 +49,24 @@ class StatusDiffWriter(BaseDiffWriter):
                 continue
 
             repo_type_counts[ds_path] = ds_type_counts
-            feature_type_counts = ds_type_counts.get("feature")
+            item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
+            filtered_type_counts = ds_type_counts.get(item_type)
 
             if (
                 self.record_spatial_filter_stats
-                and feature_type_counts
-                and feature_type_counts.get("updates")
+                and filtered_type_counts
+                and filtered_type_counts.get("updates")
             ):
                 self.record_spatial_filter_stats_for_dataset(ds_path, ds_diff)
-                pk_conflicts = self.spatial_filter_pk_conflicts.recursive_get(
-                    [ds_path, "feature"]
+                sf_conflicts = self.spatial_filter_conflicts.recursive_get(
+                    [ds_path, item_type]
                 )
-                if pk_conflicts:
-                    pk_conflicts_count = len(pk_conflicts)
-                    feature_type_counts["primaryKeyConflicts"] = pk_conflicts_count
-                    feature_type_counts["updates"] -= pk_conflicts_count
-                    if not feature_type_counts["updates"]:
-                        del feature_type_counts["updates"]
+                if sf_conflicts:
+                    sf_conflicts_count = len(sf_conflicts)
+                    filtered_type_counts["spatialFilterConflicts"] = sf_conflicts_count
+                    filtered_type_counts["updates"] -= sf_conflicts_count
+                    if not filtered_type_counts["updates"]:
+                        del filtered_type_counts["updates"]
 
         return repo_type_counts
 
@@ -152,8 +153,8 @@ def get_working_copy_status_json(repo):
 
 def get_diff_status_json(repo):
     """
-    Returns a structured count of all the inserts, updates, and deletes (and primaryKeyConflicts) for meta items
-    or  features in each dataset.
+    Returns a structured count of all the inserts, updates, and deletes (and spatialFilterConflicts)
+    for items in each dataset.
     """
     if not repo.working_copy.exists():
         return {}
@@ -294,7 +295,7 @@ def diff_status_to_text(jdict):
         ("inserts", "inserts"),
         ("updates", "updates"),
         ("deletes", "deletes"),
-        ("primaryKeyConflicts", "primary key conflicts"),
+        ("spatialFilterConflicts", "spatial filter conflicts"),
     )
 
     message = []

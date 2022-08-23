@@ -33,6 +33,8 @@ class TableDataset(BaseDataset, TableImportSource):
 
     DATASET_TYPE = "table"
 
+    ITEM_TYPE = "feature"
+
     # Paths are all defined relative to the inner path:
     FEATURE_PATH = "feature/"
 

@@ -10,7 +10,7 @@ from kart.exceptions import (
     INVALID_ARGUMENT,
     NO_SPATIAL_FILTER,
     UNCOMMITTED_CHANGES,
-    SPATIAL_FILTER_PK_CONFLICT,
+    SPATIAL_FILTER_CONFLICT,
 )
 from kart.geometry import ring_as_wkt, bbox_as_wkt_polygon
 from kart.promisor_utils import FetchPromisedBlobsProcess, LibgitSubcode
@@ -484,7 +484,7 @@ def test_spatially_filtered_fetch_promised(
 
             r = cli_runner.invoke(["-C", repo2_path, "status"])
             assert r.exit_code == 0, r.stderr
-            assert "6 primary key conflicts" in r.stdout
+            assert "6 spatial filter conflicts" in r.stdout
             # All of the 6 featues that are conflicts / were "updated" in the WC have been loaded:
             assert fetch_count == 6
             assert local_features(ds) == 58
@@ -916,12 +916,12 @@ def test_pk_conflict_due_to_spatial_filter(
         assert r.exit_code == 0, r.stderr
         change_status = json.loads(r.stdout)["kart.status/v1"]["workingCopy"]["changes"]
         feature_changes = change_status["nz_pa_points_topo_150k"]["feature"]
-        assert feature_changes == {"inserts": 1, "primaryKeyConflicts": 1}
+        assert feature_changes == {"inserts": 1, "spatialFilterConflicts": 1}
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr
         assert "1 inserts" in r.stdout
-        assert "1 primary key conflicts" in r.stdout
+        assert "1 spatial filter conflicts" in r.stdout
 
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0
@@ -932,7 +932,7 @@ def test_pk_conflict_due_to_spatial_filter(
         )
 
         r = cli_runner.invoke(["commit", "-m", "test"])
-        assert r.exit_code == SPATIAL_FILTER_PK_CONFLICT
+        assert r.exit_code == SPATIAL_FILTER_CONFLICT
         assert (
             "In dataset nz_pa_points_topo_150k the conflicting primary key values are: 1"
             in r.stderr
@@ -940,7 +940,9 @@ def test_pk_conflict_due_to_spatial_filter(
         assert "Aborting commit due to conflicting primary key values" in r.stderr
         assert repo.head_tree.id == head_tree_id
 
-        r = cli_runner.invoke(["commit", "-m", "test", "--allow-pk-conflicts"])
+        r = cli_runner.invoke(
+            ["commit", "-m", "test", "--allow-spatial-filter-conflicts"]
+        )
         assert r.exit_code == 0
         assert repo.head_tree.id != head_tree_id
 

@@ -5,7 +5,7 @@ import os
 from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
 from kart.core import find_blobs_in_tree
 from kart.decorators import allow_classmethod
-from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue
+from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue, WORKING_COPY_EDIT
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
 from kart.lfs_util import (
@@ -40,6 +40,8 @@ class PointCloudV1(BaseDataset):
     VERSION = 1
     DATASET_TYPE = "point-cloud"
     DATASET_DIRNAME = ".point-cloud-dataset.v1"
+
+    ITEM_TYPE = "tile"
 
     WORKING_COPY_PART_TYPE = PartType.WORKDIR
 
@@ -281,6 +283,7 @@ class PointCloudV1(BaseDataset):
                 new_half_delta = tilename, new_tile_summary
 
             tile_delta = Delta(old_half_delta, new_half_delta)
+            tile_delta.flags = WORKING_COPY_EDIT
             tile_diff[tilename] = tile_delta
 
         if not tile_diff:

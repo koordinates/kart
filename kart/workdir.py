@@ -451,6 +451,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         If including_conflict_versions is True, then variants of the tile name that include conflict version infixes
         - .ancestor. or .ours. or .theirs. - will also be deleted.
         """
+        if not repo_key_filter:
+            return
+
         if repo_key_filter.match_all:
             raise NotImplementedError(
                 "delete_tiles currently only supports deleting specific tiles, not match_all"
@@ -674,6 +677,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         self._hard_reset_after_commit_for_converted_tiles(datasets, committed_diff)
 
         self._reset_workdir_index_for_datasets(datasets, repo_key_filter=mark_as_clean)
+        self.delete_tiles(now_outside_spatial_filter, track_changes_as_dirty=False)
+
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
 
     def dirty_paths(self):

@@ -526,10 +526,10 @@ if you force Kart to commit it anyway, then that feature will be
 overwritten.
 
 Kart will warn about these conflicts when running ``kart status`` or
-``kart diff``. They are called "primary key conflicts". Kart attempts to
+``kart diff``. They are called "spatial filter conflicts". Kart attempts to
 help you avoid them by setting up the working copy so that the next
 primary key in the sequence that is chosen by default will not conflict
-with any existing features. If you do accidentally create primary key
+with any existing features. If you do accidentally create spatial filter
 conflicts, the appropriate fix is to reassign the conflicting features
 new primary key values that are not used elsewhere.
 

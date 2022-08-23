@@ -1,3 +1,4 @@
+import functools
 import itertools
 import logging
 import re
@@ -95,7 +96,7 @@ class BaseDiffWriter:
         )
         self.workdir_diff_cache = self.repo.working_copy.workdir_diff_cache()
 
-        self.spatial_filter_pk_conflicts = None
+        self.spatial_filter_conflicts = None
         if (
             not self.spatial_filter.match_all
             and self.base_rs == self.target_rs
@@ -103,7 +104,7 @@ class BaseDiffWriter:
         ):
             # When generating a WC diff with a spatial filter active, we need to keep track of PK conflicts:
             self.record_spatial_filter_stats = True
-            self.spatial_filter_pk_conflicts = RepoKeyFilter()
+            self.spatial_filter_conflicts = RepoKeyFilter()
 
         self.output_path = self._check_output_path(
             repo, self._normalize_output_path(output_path)
@@ -207,31 +208,43 @@ class BaseDiffWriter:
 
     def write_warnings_footer(self):
         """For writing any footer that is not part of the diff itself. Generally just writes warnings to stderr."""
-        pk_conflicts = self.spatial_filter_pk_conflicts
-        if pk_conflicts:
+        pk_conflicts = self.spatial_filter_conflicts
+        if not pk_conflicts:
+            return
+
+        conflict_item_types = {}
+        for ds_path, ds_key_filter in pk_conflicts.items():
+            item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
+            if ds_key_filter.get(item_type):
+                conflict_item_types.setdefault(item_type, []).append(ds_path)
+
+        for item_type, ds_paths in conflict_item_types.items():
+            conflicting_property = (
+                "primary key value" if item_type == "feature" else "name"
+            )
             click.secho(
-                "Warning: Some primary keys of newly-inserted features in the working copy conflict with other features "
-                "outside the spatial filter - if committed, they would overwrite those features.",
+                f"Warning: Some {conflicting_property}s of newly-inserted {item_type}s in the working copy conflict with "
+                f"other {item_type}s outside the spatial filter - if committed, they would overwrite those {item_type}s.",
                 bold=True,
                 err=True,
             )
-            for ds_path, ds_key_filter in pk_conflicts.items():
-                # So far we only support pk conflicts in vector features:
-                pk_list = ds_key_filter.get("feature")
-                if pk_list:
-                    if len(pk_list) <= 100:
-                        pk_list = ", ".join(str(pk) for pk in pk_list)
+            for ds_path in ds_paths:
+                ds_key_filter in pk_conflicts[ds_path]
+                conflict_list = ds_key_filter.get(item_type)
+                if conflict_list:
+                    if len(conflict_list) <= 100:
+                        conflict_list = ", ".join(str(c) for c in conflict_list)
                     else:
-                        pk_list = (
-                            ", ".join(str(pk) for pk in pk_list[0:50])
-                            + f", (... {len(pk_list) - 50} more)"
+                        conflict_list = (
+                            ", ".join(str(c) for c in conflict_list[0:50])
+                            + f", (... {len(conflict_list) - 50} more)"
                         )
                     click.echo(
-                        f"  In dataset {ds_path} the conflicting primary key values are: {pk_list}",
+                        f"  In dataset {ds_path} the conflicting {conflicting_property}s are: {conflict_list}",
                         err=True,
                     )
             click.echo(
-                "  To continue, change the primary key values of those features.",
+                f"  To continue, change the {conflicting_property}s of those {item_type}s.",
                 err=True,
             )
 
@@ -275,7 +288,7 @@ class BaseDiffWriter:
         and may contain feature values that have not yet been loaded. Spatial filtering
         cannot be applied to it while it remains a dict, since this would involve loading
         all the features up front, which breaks diff streaming.
-        To apply the spatial filter to it, call self.filtered_ds_feature_deltas(ds_path, ds_diff)
+        To apply the spatial filter to it, call self.filtered_dataset_deltas(ds_path, ds_diff)
         which will return a generator that filters features as it loads and outputs them,
         which can be used to output streaming diffs.
         """
@@ -289,32 +302,18 @@ class BaseDiffWriter:
             convert_to_dataset_format=self.do_convert_to_dataset_format,
         )
 
-    def _unfiltered_ds_feature_deltas(self, ds_path, ds_diff):
-        if "feature" not in ds_diff:
-            return
-
-        yield from ds_diff["feature"].sorted_items()
-
-    def record_spatial_filter_stats_for_dataset(self, ds_path, ds_diff):
+    def filtered_dataset_deltas(self, ds_path, ds_diff):
         """
-        Goes through the given dataset-diff and checks which features match the spatial filter by calling
-        record_spatial_filter_stat on each one.
-        No need to call this if filtered_ds_feature_deltas is called, which does this as a side effect.
-        """
-        for _ in self.filtered_ds_feature_deltas(ds_path, ds_diff):
-            pass
-
-    def filtered_ds_feature_deltas(self, ds_path, ds_diff):
-        """
-        Yields the key, delta for only those feature-deltas from the given dataset diff that match
-        self.spatial_filter. Note that feature-deltas are always considered to match the spatial-filter
+        Yields the key, delta for only those deltas from the given dataset diff that match
+        self.spatial_filter. Note that deltas are always considered to match the spatial-filter
         if they are marked as working-copy edits, since working-copy edits are always relevant to the user
         even if they are outside the spatial filter.
         """
-        if "feature" not in ds_diff:
+        item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
+        if not item_type or item_type not in ds_diff:
             return
 
-        unfiltered_deltas = self._unfiltered_ds_feature_deltas(ds_path, ds_diff)
+        unfiltered_deltas = ds_diff[item_type].sorted_items()
 
         if self.spatial_filter.match_all:
             yield from unfiltered_deltas
@@ -340,7 +339,7 @@ class BaseDiffWriter:
                 return None
             return callable()
 
-        delta_fetcher = DeltaFetcher(self, ds_path)
+        delta_fetcher = self._get_delta_fetcher(ds_path)
 
         for key, delta in unfiltered_deltas:
             do_yield = bool(delta.flags & WORKING_COPY_EDIT)
@@ -349,25 +348,49 @@ class BaseDiffWriter:
             nmr = lazy_eval(lambda: new_spatial_filter.matches_delta_value(delta.new))
             do_yield |= bool(nmr)
             if omr is not None and nmr is not None:
-                self.record_spatial_filter_stat(ds_path, key, delta, omr, nmr)
+                self.record_spatial_filter_stat(
+                    ds_path, item_type, key, delta, omr, nmr
+                )
             if do_yield:
                 if delta_fetcher.ensure_delta_is_ready_or_start_fetch(key, delta):
                     yield key, delta
 
         yield from delta_fetcher.finish_fetching_deltas()
 
+    def record_spatial_filter_stats_for_dataset(self, ds_path, ds_diff):
+        """
+        Goes through the given dataset-diff and checks which features / tiles match the spatial filter by calling
+        record_spatial_filter_stat on each one.
+        This is only necessary if the filtered deltas are not being output - the stats are recorded automatically
+        as the deltas are filtered and output. In fact, this function works just by iterating over them without
+        outputting them, which causes the stats to be recorded in the same way.
+        """
+        for _ in self.filtered_dataset_deltas(ds_path, ds_diff):
+            pass
+
     def record_spatial_filter_stat(
-        self, ds_path, key, delta, old_match_result, new_match_result
+        self, ds_path, item_type, key, delta, old_match_result, new_match_result
     ):
         """
         Records which / how many features were inside / outside the spatial filter for which reasons.
         These records are used by write_warnings_footer to show warnings to the user.
         """
-        if self.spatial_filter_pk_conflicts is not None:
+        if self.spatial_filter_conflicts is not None:
             if not old_match_result and delta.old is not None and delta.new is not None:
-                self.spatial_filter_pk_conflicts.recursive_set(
-                    [ds_path, "feature", key], True
+                self.spatial_filter_conflicts.recursive_set(
+                    [ds_path, item_type, key], True
                 )
+
+    def _get_delta_fetcher(self, ds_path):
+        dataset = self._get_old_or_new_dataset(ds_path)
+
+        if dataset.DATASET_TYPE == "table":
+            # Table datasets can have missing ODB blobs that we need to fetch during a diff.
+            return FeatureDeltaFetcher(self, ds_path)
+        else:
+            # Point-cloud datasets should not have missing data - all ODB blobs should be present.
+            # The tile LFS blobs themselves may be missing, but these are not needed to generate a diff.
+            return NullDeltaFetcher(ds_path, dataset.DATASET_TYPE)
 
     def _get_old_and_new_schema(self, ds_path, ds_diff):
         from kart.schema import Schema
@@ -382,13 +405,23 @@ class BaseDiffWriter:
             return old_schema, new_schema
 
         # No diff - old and new schemas are the same.
-        ds = self.base_rs.datasets().get(ds_path) or self.target_rs.datasets().get(
-            ds_path
-        )
-        schema = ds.schema
+        dataset = self._get_old_or_new_dataset(ds_path)
+        schema = dataset.schema
         return schema, schema
 
-    def _get_old_and_new_crs(self, ds_path, ds_diff, context=None):
+    def get_old_and_new_crs(self, ds_path, ds_diff, context=None):
+        dataset = self._get_old_or_new_dataset(ds_path)
+        if dataset.DATASET_TYPE == "table":
+            return self._get_old_and_new_table_crs(ds_path, ds_diff, context=context)
+        elif dataset.DATASET_TYPE == "point-cloud":
+            return self._get_old_and_new_point_cloud_crs(
+                ds_path, ds_diff, context=context
+            )
+        raise RuntimeError(
+            f"Can't load old and new CRS for dataset of type {dataset.DATASET_TYPE}"
+        )
+
+    def _get_old_and_new_table_crs(self, ds_path, ds_diff, context=None):
         from kart.crs_util import make_crs
 
         # If the CRS is changing during the diff, we extract the two CRS from the diff.
@@ -415,15 +448,31 @@ class BaseDiffWriter:
                 return old_crs, new_crs
 
         # No diff - old and new CRS are the same.
-        ds = self.base_rs.datasets().get(ds_path) or self.target_rs.datasets().get(
-            ds_path
-        )
-        crs_defs = list(ds.crs_definitions().values())
+        dataset = self._get_old_or_new_dataset(ds_path)
+        crs_defs = list(dataset.crs_definitions().values())
         if not crs_defs:
             return None, None
         if len(crs_defs) > 1:
             self._raise_multi_crs_error(ds_path, context=context)
         crs = make_crs(crs_defs[0], context=ds_path)
+        return crs, crs
+
+    def _get_old_and_new_point_cloud_crs(self, ds_path, ds_diff, context=None):
+        from kart.crs_util import make_crs
+
+        # If the CRS is changing during the diff, we extract the two CRS from the diff.
+        crs_delta = ds_diff.recursive_get(["meta", "crs.wkt"])
+        if crs_delta:
+            old_crs_def = crs_delta.old_value
+            old_crs = make_crs(old_crs_def, context=ds_path) if old_crs_def else None
+            new_crs_def = crs_delta.new_value
+            new_crs = make_crs(new_crs_def, context=ds_path) if new_crs_def else None
+            return old_crs, new_crs
+
+        # No diff - old and new CRS are the same.
+        dataset = self._get_old_or_new_dataset(ds_path)
+        crs_def = dataset.get_meta_item("crs.wkt")
+        crs = make_crs(crs_def, context=ds_path) if crs_def else None
         return crs, crs
 
     def _raise_multi_crs_error(ds_path, context=None):
@@ -444,6 +493,12 @@ class BaseDiffWriter:
         if self.target_crs is None:
             return None, None
 
+        dataset = self._get_old_or_new_dataset(ds_path)
+        if dataset.DATASET_TYPE != "table":
+            # So far, table datasets are the only ones which have deltas transformed to the target CRS.
+            # TODO - support transformed output for point-cloud datasets too.
+            return None, None
+
         def _get_transform(source_crs):
             if source_crs is None:
                 return None
@@ -457,7 +512,7 @@ class BaseDiffWriter:
                     f"Can't reproject dataset {ds_path!r} into target CRS: {e}"
                 )
 
-        old_crs, new_crs = self._get_old_and_new_crs(
+        old_crs, new_crs = self.get_old_and_new_crs(
             ds_path, ds_diff, context="reprojection"
         )
         return (_get_transform(old_crs), _get_transform(new_crs))
@@ -469,8 +524,18 @@ class BaseDiffWriter:
         and new_spatial_filter is the transform that should be applied to new, post-diff values,
         so that the spatial filter's CRS and geometry column name match the dataset.
         """
+        dataset = self._get_old_or_new_dataset(ds_path)
+        if dataset.DATASET_TYPE == "table":
+            return self._get_table_spatial_filters(ds_path, ds_diff)
+        elif dataset.DATASET_TYPE == "point-cloud":
+            return self._get_point_cloud_spatial_filters(ds_path, ds_diff)
+        raise RuntimeError(
+            f"Spatial filtering is not supported for dataset of type {dataset.DATASET_TYPE}"
+        )
+
+    def _get_table_spatial_filters(self, ds_path, ds_diff):
         old_schema, new_schema = self._get_old_and_new_schema(ds_path, ds_diff)
-        old_crs, new_crs = self._get_old_and_new_crs(
+        old_crs, new_crs = self._get_old_and_new_table_crs(
             ds_path, ds_diff, context="spatial filtering"
         )
         sf = self.spatial_filter
@@ -486,6 +551,23 @@ class BaseDiffWriter:
         )
         return old_spatial_filter, new_spatial_filter
 
+    def _get_point_cloud_spatial_filters(self, ds_path, ds_diff):
+        old_crs, new_crs = self._get_old_and_new_point_cloud_crs(
+            ds_path, ds_diff, context="spatial filtering"
+        )
+        sf = self.spatial_filter
+        old_spatial_filter = (
+            sf.transform_for_point_cloud_crs(old_crs, ds_path)
+            if old_crs
+            else SpatialFilter.MATCH_ALL
+        )
+        new_spatial_filter = (
+            sf.transform_for_point_cloud_crs(new_crs, ds_path)
+            if new_crs
+            else SpatialFilter.MATCH_ALL
+        )
+        return old_spatial_filter, new_spatial_filter
+
     def exit_with_code(self):
         """Exit with code 1 if the diff already written had changes, otherwise exit with code 0."""
         if not hasattr(self, "has_changes"):
@@ -497,8 +579,20 @@ class BaseDiffWriter:
         else:
             sys.exit(0)
 
+    @functools.lru_cache()
+    def _get_old_or_new_dataset(self, ds_path):
+        """
+        Returns the dataset at ds_path. Could be the old version or the new version of the dataset,
+        so, useful for accessing things that won't change (its path, its type), or for accessing
+        things that haven't changed (ie, check the diff first to make sure it hasn't changed).
+        """
+        dataset = self.base_rs.datasets().get(ds_path)
+        if not dataset:
+            dataset = self.target_rs.datasets().get(ds_path)
+        return dataset
 
-class DeltaFetcher:
+
+class FeatureDeltaFetcher:
     """
     Given a diff Delta, either reports that it is available immediately, or kicks off a fetch so that it will be
     available soon, and adds it to the list of buffered deltas. This lets the diff writer above first output the deltas
@@ -566,3 +660,35 @@ class DeltaFetcher:
             if object_is_promised(e):
                 return False
             raise
+
+
+class NullDeltaFetcher:
+    """
+    Given a diff Delta, checks to make sure that it is immediately available. If it is not, outputs an error message.
+    """
+
+    def __init__(self, ds_path, ds_type):
+        self.ds_path = ds_path
+        self.ds_type = ds_type
+
+    def ensure_delta_is_ready_or_start_fetch(self, key, delta):
+        """
+        If the delta is locally available, simply returns True.
+        If the delta is not locally available, raises an error.
+        """
+
+        old_value_ready = self._is_delta_value_ready(delta.old)
+        new_value_ready = self._is_delta_value_ready(delta.new)
+        if old_value_ready and new_value_ready:
+            return True
+
+        raise RuntimeError(
+            f"Dataset {self.ds_path} has missing+promised blobs - this is not expected for a {self.ds_type} dataset"
+        )
+
+    def finish_fetching_deltas(self):
+        # Nothing to do here.
+        yield from ()
+
+
+NullDeltaFetcher._is_delta_value_ready = FeatureDeltaFetcher._is_delta_value_ready
