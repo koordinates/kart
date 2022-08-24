@@ -5,9 +5,10 @@ from pathlib import Path
 import click
 import pygit2
 
-from kart import checkout, context
+from kart import context
+from kart.create_workingcopy import create_workingcopy
 from kart.exceptions import InvalidOperation, NotFound
-from kart.fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
+from kart.fast_import import ReplaceExisting, fast_import_tables
 from kart.repo import KartConfigKeys, KartRepo
 from kart.tabular.version import DEFAULT_NEW_REPO_VERSION
 from kart.structure import RepoStructure
@@ -233,7 +234,7 @@ def upgrade(ctx, source, dest, in_place):
         subctx = click.Context(ctx.command, parent=ctx)
         subctx.ensure_object(context.Context)
         subctx.obj.user_repo_path = str(dest)
-        subctx.invoke(checkout.create_workingcopy)
+        subctx.invoke(create_workingcopy)
 
     if in_place:
         dest_repo.config[KartConfigKeys.KART_REPOSTRUCTURE_VERSION] = str(

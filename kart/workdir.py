@@ -141,6 +141,18 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         with sm() as s:
             s.execute(CreateTable(KartState.__table__, if_not_exists=True))
 
+    def delete(self):
+        """Deletes the index file and state table, and attempts to clean up any datasets in the workdir itself."""
+        datasets = self.repo.datasets(
+            self.get_tree_id(), filter_dataset_type="point-cloud"
+        )
+        self.delete_datasets_from_workdir(datasets, track_changes_as_dirty=True)
+
+        if self.index_path.is_file():
+            self.index_path.unlink()
+        if self.state_path.is_file():
+            self.state_path.unlink()
+
     @contextlib.contextmanager
     def state_session(self):
         """
@@ -209,10 +221,10 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         )
         workdir_diff_cache = self.workdir_diff_cache()
         for dataset in datasets:
-            ds_diff = dataset.diff_to_working_copy(workdir_diff_cache)
-            ds_diff.prune()
-            if ds_diff:
-                return True
+            ds_tiles_path_pattern = get_tile_path_pattern(parent_path=dataset.path)
+            for tile_path in workdir_diff_cache.dirty_paths_for_dataset(dataset):
+                if ds_tiles_path_pattern.fullmatch(tile_path):
+                    return True
         return False
 
     def _is_head(self, commit_or_tree):
@@ -407,7 +419,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if pointer_blob:
                 yield pointer_blob
 
-    def write_full_datasets_to_workdir(self, datasets):
+    def write_full_datasets_to_workdir(self, datasets, track_changes_as_dirty=False):
         for dataset in datasets:
             assert isinstance(dataset, PointCloudV1)
 
@@ -424,9 +436,10 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     continue
                 shutil.copy(lfs_path, wc_tiles_dir / tilename)
 
-        self._reset_workdir_index_for_datasets(datasets)
+        if not track_changes_as_dirty:
+            self._reset_workdir_index_for_datasets(datasets)
 
-    def delete_datasets_from_workdir(self, datasets):
+    def delete_datasets_from_workdir(self, datasets, track_changes_as_dirty=False):
         for dataset in datasets:
             assert isinstance(dataset, PointCloudV1)
 
@@ -437,7 +450,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if ds_tiles_dir.is_dir():
                 shutil.rmtree(ds_tiles_dir)
 
-        self._reset_workdir_index_for_datasets(datasets)
+        if not track_changes_as_dirty:
+            self._reset_workdir_index_for_datasets(datasets)
 
     def delete_tiles(
         self,
