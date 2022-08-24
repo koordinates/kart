@@ -18,6 +18,8 @@ except ImportError:
 def provide_default_shell():
     if os.name == 'posix':
         return os.environ.get('SHELL', '')
+    elif os.name == 'nt':
+        return os.environ.get('COMSPEC', '')
     raise NotImplementedError(f'OS {os.name!r} support not available')
 
 class Shells(str, Enum):
