@@ -204,11 +204,10 @@ def helper(ctx, socket_filename, timeout, args):
                         )
 
                     except Exception as e:
-                        print(os.environ)
                         print(
                             f"kart helper: unhandled exception"
                         )  # TODO - should ext-run capture/handle this?
-                        traceback.print_exc(file=sys.stdout)
+                        traceback.print_exc(file=sys.stderr)
                         libc.semctl(semid, 0, SETVAL, struct_semun(val=1001))
                     try:
                         # send a signal to caller that we are done

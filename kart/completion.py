@@ -17,7 +17,7 @@ except ImportError:
 
 def provide_default_shell():
     if os.name == 'posix':
-        return os.environ['SHELL']
+        return os.environ.get('SHELL', '')
     raise NotImplementedError(f'OS {os.name!r} support not available')
 
 class Shells(str, Enum):
