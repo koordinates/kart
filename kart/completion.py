@@ -15,6 +15,12 @@ try:
 except ImportError:
     shellingham = None
 
+def provide_default_shell():
+    if os.name == 'posix':
+        return os.environ.get('SHELL', '')
+    elif os.name == 'nt':
+        return os.environ.get('COMSPEC', '')
+    raise NotImplementedError(f'OS {os.name!r} support not available')
 
 class Shells(str, Enum):
     bash = "bash"
@@ -187,7 +193,10 @@ def install_tab_completion(
     if complete_var is None:
         complete_var = "_{}_COMPLETE".format(prog_name.replace("-", "_").upper())
     if shell is None and shellingham is not None:
-        shell, _ = shellingham.detect_shell()
+        try:
+            shell, _ = shellingham.detect_shell()
+        except shellingham.ShellDetectionFailure:
+            shell = os.path.basename(provide_default_shell())
     if shell == "bash":
         installed_path = install_bash(
             prog_name=prog_name, complete_var=complete_var, shell=shell

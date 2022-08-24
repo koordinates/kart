@@ -115,6 +115,8 @@ pyi_analysis = Analysis(
         '_cffi_backend',
         # via a cython module ???
         'csv',
+        'shellingham.posix',
+        'shellingham.nt',
         *collect_submodules('kart'),
         *collect_submodules('sqlalchemy'),
     ],

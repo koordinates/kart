@@ -50,6 +50,7 @@ $SQLITE=(Join-Path $KART_PREFIX 'sqlite3.exe')
 New-Item -ItemType Directory -Path "${TMP_PATH}\test"
 Push-Location "${TMP_PATH}\test"
 try {
+    Exec { kart -vvvv install tab-completion --shell auto }
     Exec { kart init --initial-branch=main . }
     Exec { kart -v config --local 'user.name' 'Kart E2E Test 1' }
     Exec { kart -v config --local 'user.email' 'kart-e2e-test-1@email.invalid' }
