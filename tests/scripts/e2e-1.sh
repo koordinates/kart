@@ -33,7 +33,7 @@ set -x
 
 echo "Using helper mode: ${KART_USE_HELPER:-0}"
 
-kart -vvvv config --install-tab-completion auto
+kart -vvvv install tab-completion --shell auto
 
 kart init --initial-branch=main .
 kart config user.name "Kart E2E Test 1"
