@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.11.6 (UNRELEASED)
 
 - "Primary key conflicts" - conflicts caused by reusing a primary key which is already assigned to a feature outside the spatial filter - are renamed to "spatial filter conflicts" for future proofing with other dataset types. Consequently, commit option `--allow-pk-conflicts` is renamed to `--allow-spatial-filter-conflicts`.
+- Bugfix: directing geojson diff output to the console didn't work in a multi-dataset repo, even if only one dataset had changed. [#702](https://github.com/koordinates/kart/issues/702)
 
 ## 0.11.5
 

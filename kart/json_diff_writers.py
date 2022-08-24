@@ -398,20 +398,16 @@ class GeojsonDiffWriter(BaseDiffWriter):
         return output_path
 
     def write_diff(self):
-        has_changes = False
 
-        if len(self.all_ds_paths) > 1 and not isinstance(self.output_path, Path):
+        repo_diff = self.get_repo_diff()
+        self.has_changes = bool(repo_diff)
+        if len(repo_diff) > 1 and not isinstance(self.output_path, Path):
             raise click.BadParameter(
                 "Need to specify a directory via --output for GeoJSON with more than one dataset",
                 param_hint="--output",
             )
-        for ds_path in self.all_ds_paths:
-            ds_diff = self.get_dataset_diff(ds_path)
-            if not ds_diff:
-                continue
-
+        for ds_path, ds_diff in repo_diff.items():
             self._warn_about_any_non_feature_diffs(ds_path, ds_diff)
-            has_changes = True
             output_obj = {
                 "type": "FeatureCollection",
                 "features": self.filtered_dataset_deltas_as_geojson(ds_path, ds_diff),
@@ -427,7 +423,6 @@ class GeojsonDiffWriter(BaseDiffWriter):
                 ds_output_path,
                 json_style=self.json_style,
             )
-        self.has_changes = has_changes
         self.write_warnings_footer()
 
     def _warn_about_any_non_feature_diffs(
