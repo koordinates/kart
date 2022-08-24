@@ -1897,12 +1897,22 @@ def test_diff_geojson_usage(data_archive, cli_runner, tmp_path):
             r = cli_runner.invoke(["-C", repo_path, "import", src_gpkg_path])
             assert r.exit_code == 0, r.stderr
 
-        # file/stdout output isn't allowed when there are multiple datasets
+        # stdout output is allowed even though there are multiple datasets - as long as only one has changed:
         r = cli_runner.invoke(
             [
                 "diff",
                 "--output-format=geojson",
                 "HEAD^...",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # stdout output is not allowed when there are changes to multiple datasets:
+        r = cli_runner.invoke(
+            [
+                "diff",
+                "--output-format=geojson",
+                "HEAD^^...",
             ]
         )
         assert r.exit_code == 2, r.stderr
@@ -1920,7 +1930,7 @@ def test_diff_geojson_usage(data_archive, cli_runner, tmp_path):
                 "diff",
                 "--output-format=geojson",
                 f"--output={myfile}",
-                "HEAD^...",
+                "HEAD^^...",
             ]
         )
         assert r.exit_code == 2, r.stderr

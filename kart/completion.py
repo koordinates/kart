@@ -181,7 +181,7 @@ def install_powershell(*, prog_name: str, complete_var: str, shell: str) -> Path
     return path_obj
 
 
-def install(
+def install_tab_completion(
     shell: Optional[str] = None,
     prog_name: Optional[str] = None,
     complete_var: Optional[str] = None,
@@ -218,18 +218,6 @@ def install(
     else:
         click.echo(f"Shell {shell} is not supported.")
         raise click.exceptions.Exit(1)
-
-
-def install_callback(ctx: click.Context, param: click.Parameter, value: Any) -> Any:
-    if not value or ctx.resilient_parsing:
-        return value
-    if value == "auto":
-        shell, path = install()
-    else:
-        shell, path = install(shell=value)
-    click.secho(f"{shell} completion installed in {path}", fg="green")
-    click.echo("Completion will take effect once you restart the terminal")
-    sys.exit(0)
 
 
 @click.shell_completion.add_completion_class
