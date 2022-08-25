@@ -10,6 +10,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - "Primary key conflicts" - conflicts caused by reusing a primary key which is already assigned to a feature outside the spatial filter - are renamed to "spatial filter conflicts" for future proofing with other dataset types. Consequently, commit option `--allow-pk-conflicts` is renamed to `--allow-spatial-filter-conflicts`.
 - Support shell detection for tab completion installation when running in helper mode. [#704](https://github.com/koordinates/kart/pull/704)
 - Bugfix: directing geojson diff output to the console didn't work in a multi-dataset repo, even if only one dataset had changed. [#702](https://github.com/koordinates/kart/issues/702)
+- Improve argument parsing for `kart diff` and `kart show`. [#706](https://github.com/koordinates/kart/issues/706)
 
 ## 0.11.5
 

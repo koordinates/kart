@@ -1562,11 +1562,28 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
             }
 
 
-def test_diff_filtered_text(data_archive_readonly, cli_runner):
+@pytest.mark.parametrize(
+    "diff_command",
+    [
+        ["diff", "HEAD^", "HEAD", "nz_pa_points_topo_150k:1182"],
+        ["diff", "HEAD^", "HEAD", "--", "nz_pa_points_topo_150k:1182"],
+        ["diff", "HEAD^...", "nz_pa_points_topo_150k:1182"],
+        ["diff", "HEAD^...", "--", "nz_pa_points_topo_150k:1182"],
+        ["show", "nz_pa_points_topo_150k:1182"],
+        ["show", "--", "nz_pa_points_topo_150k:1182"],
+        ["show", "HEAD", "nz_pa_points_topo_150k:1182"],
+        ["show", "HEAD", "--", "nz_pa_points_topo_150k:1182"],
+    ],
+)
+def test_diff_filtered_text(diff_command, data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
-        r = cli_runner.invoke(["diff", "HEAD^...", "nz_pa_points_topo_150k:1182"])
+        r = cli_runner.invoke(diff_command)
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines() == [
+
+        is_show = diff_command[0] == "show"
+        diff_lines = r.stdout.splitlines()[6:] if is_show else r.stdout.splitlines()
+
+        assert diff_lines == [
             "--- nz_pa_points_topo_150k:feature:1182",
             "+++ nz_pa_points_topo_150k:feature:1182",
             "-                               name_ascii = ␀",

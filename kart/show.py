@@ -2,13 +2,15 @@ import click
 
 from kart.completion_shared import ref_completer
 
-from . import diff_estimation
-from .cli_util import OutputFormatType, parse_output_format, KartCommand
-from .crs_util import CoordinateReferenceString
-from .repo import KartRepoState
+from kart import diff_estimation
+from kart.cli_util import KartCommand, OutputFormatType, parse_output_format
+from kart.completion_shared import path_completer
+from kart.crs_util import CoordinateReferenceString
+from kart.parse_args import PreserveDoubleDash, parse_commits_and_filters
+from kart.repo import KartRepoState
 
 
-@click.command(cls=KartCommand)
+@click.command(cls=PreserveDoubleDash)
 @click.pass_context
 @click.option(
     "--output-format",
@@ -67,8 +69,13 @@ from .repo import KartRepoState
         "Otherwise, the feature count will be approximated with varying levels of accuracy."
     ),
 )
-@click.argument("refish", default="HEAD", required=False)
-@click.argument("filters", nargs=-1)
+@click.argument(
+    "args",
+    metavar="[REVISION] [--] [FILTERS]",
+    nargs=-1,
+    type=click.UNPROCESSED,
+    shell_complete=path_completer,
+)
 def show(
     ctx,
     *,
@@ -78,18 +85,25 @@ def show(
     exit_code,
     json_style,
     only_feature_count,
-    refish,
-    filters,
+    args,
 ):
     """
     Show the given commit, or HEAD
     """
-    if ".." in refish:
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    options, commits, filters = parse_commits_and_filters(repo, args)
+
+    if len(commits) > 1:
         raise click.BadParameter(
-            f"Can only show a single ref-ish - can't show {refish}", param_hint="refish"
+            f"Can only show a single revision - can't show {', '.join(commits)}"
+        )
+    commit = commits[0] if commits else "HEAD"
+    if ".." in commit:
+        raise click.BadParameter(
+            f"Can only show a single revision - can't show {commit}"
         )
 
-    commit_spec = f"{refish}^?...{refish}"
+    commit_spec = f"{commit}^?...{commit}"
 
     output_type, fmt = parse_output_format(output_format, json_style)
 
@@ -97,7 +111,7 @@ def show(
         from .diff import feature_count_diff
 
         return feature_count_diff(
-            ctx,
+            repo,
             output_type,
             commit_spec,
             output_path,
@@ -108,7 +122,6 @@ def show(
 
     from .base_diff_writer import BaseDiffWriter
 
-    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_type)
     diff_writer = diff_writer_class(
         repo, commit_spec, filters, output_path, json_style=fmt, target_crs=crs
