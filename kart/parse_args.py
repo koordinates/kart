@@ -148,16 +148,12 @@ def parse_commits_and_filters(
     if kwargs is not None and allow_options:
         for option_name, option_val in kwargs.items():
             option_name = option_name.replace("_", "-", 1)
-            mapping = {
-                "int": lambda: options.append(f"--{option_name}={option_val}"),
-                "str": lambda: options.append(f"--{option_name}={option_val}"),
-                "tuple": lambda: options.extend(
-                    [f"--{option_name}={o}" for o in option_val]
-                ),
-                "bool": lambda: options.append(f"--{option_name}")
-                if option_val
-                else None,
-            }
-            mapping.get(type(option_val).__name__, lambda: "None")()
+            t = type(option_val)
+            if t == int or t == str:
+                options.append(f"--{option_name}={option_val}")
+            elif t == tuple:
+                options.extend([f"--{option_name}={o}" for o in option_val]),
+            elif t == bool and option_val:
+                options.append(f"--{option_name}")
 
     return options, commits, filters
