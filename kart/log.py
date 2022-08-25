@@ -1,162 +1,26 @@
-import os
-import re
 import subprocess
 import sys
-import warnings
 import logging
 from datetime import datetime, timedelta, timezone
-from enum import Enum, auto
 
 import click
-import pygit2
 
-from . import diff_estimation
-from .cli_util import (
+from kart import diff_estimation
+from kart.cli_util import (
     OutputFormatType,
-    RemovalInKart012Warning,
     parse_output_format,
     tool_environment,
 )
-from .exceptions import NotYetImplemented, SubprocessError
-from .exec import run_and_wait
-from .key_filters import RepoKeyFilter
-from .output_util import dump_json_output
-from .repo import KartRepoState
-from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from kart.completion_shared import path_completer
-from kart.cli_util import render
+from kart.exceptions import NotYetImplemented, SubprocessError
+from kart.exec import run_and_wait
+from kart.key_filters import RepoKeyFilter
+from kart.output_util import dump_json_output
+from kart.parse_args import PreserveDoubleDash, parse_commits_and_filters
+from kart.repo import KartRepoState
+from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
 L = logging.getLogger("kart.log")
-
-
-class PreserveDoubleDash(click.Command):
-    """
-    Preserves the double-dash ("--") arg from user input.
-
-    Click normally swallows this arg, but using this command class preserves it.
-    """
-
-    def parse_args(self, ctx, args):
-        from kart.cli import get_version_tuple
-
-        args = list(args)
-        for i in range(len(args)):
-            arg = args[i]
-            if arg == "--":
-                if "--" in args[i + 1 :] and get_version_tuple() <= ("0", "12"):
-                    # Before we added this shim, we had users using a workaround (adding the `--` twice themselves),
-                    # which ideally we'd like them to stop doing.
-                    warnings.warn(
-                        "Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
-                        RemovalInKart012Warning,
-                    )
-                else:
-                    # Insert a second `--` arg.
-                    # One of the `--` gets consumed by Click during super() below.
-                    # Then the second one gets left alone and we can pass it to git.
-                    args.insert(i + 1, "--")
-                break
-
-        return super(PreserveDoubleDash, self).parse_args(ctx, args)
-
-    def format_help(self, ctx, formatter):
-        try:
-            render(ctx.command_path)
-        except Exception as e:
-            L.debug(f"Failed rendering help page: {e}")
-            return super().format_help(ctx, formatter)
-
-
-class LogArgType(Enum):
-    # What to log - a commit, ref, range, etc:
-    COMMIT = auto()
-    # How to log it.
-    OPTION = auto()
-    # Which path(s) the user is interested in. Paths must come last.
-    PATH = auto()
-
-
-def get_arg_type(repo, arg, allow_paths=True):
-    """Decides what some user-supplied argument to kart log is supposed to do."""
-    if arg.startswith("-"):
-        # It's not explicitly stated by https://git-scm.com/docs/git-check-ref-format
-        # but this isn't a valid commit-ish.
-        #    $ git branch -c -- -x
-        #    fatal: '-x' is not a valid branch name.
-        # So we can assume it's a CLI flag, presumably for git rather than kart.
-        # It *could* be a path, but in that case the user should add a `--` before this option
-        # to disambiguate, and they haven't done so here.
-        issue_link = "https://github.com/koordinates/kart/issues/508"
-        warnings.warn(
-            f"{arg!r} is unknown to Kart and will be passed directly to git. "
-            f"This will be removed in Kart 0.12! Please comment on {issue_link} if you need to use this option.",
-            RemovalInKart012Warning,
-        )
-        return LogArgType.OPTION
-
-    range_parts = re.split(r"\.\.\.?", arg)
-    if len(range_parts) <= 2:
-        try:
-            for part in range_parts:
-                repo.resolve_refish(part or "HEAD")
-            return LogArgType.COMMIT
-        except (KeyError, pygit2.InvalidSpecError):
-            pass
-
-    if allow_paths:
-        return LogArgType.PATH
-
-    raise click.UsageError(
-        f"Argument not recognised as a valid commit, ref, or range: {arg}"
-    )
-
-
-def parse_extra_args(
-    repo,
-    args,
-    **kwargs,
-):
-    """
-    Interprets positional `kart log` args, including "--", commits/refs, and paths.
-    Returns a two-tuple: (other_args, paths)
-    """
-    # As soon as we encounter a path, we assume all remaining args are also paths.
-    # i.e. the paths must be given *last*.
-    # If it's ambiguous whether something is a path or not, we assume it's a commit-ish.
-    # If you want to be unambiguous, provide the `--` arg to separate the list of commit-ish-es and paths.
-    # This behaviour should be consistent with git's behaviour.
-
-    if "--" in args:
-        dash_index = args.index("--")
-        paths = list(args[dash_index + 1 :])
-        args = args[:dash_index]
-    else:
-        dash_index = None
-        paths = []
-
-    options = []
-    commits = []
-    allow_paths = dash_index is None
-    for arg in args:
-        arg_type = get_arg_type(repo, arg, allow_paths=allow_paths)
-        {
-            LogArgType.OPTION: options,
-            LogArgType.COMMIT: commits,
-            LogArgType.PATH: paths,
-        }[arg_type].append(arg)
-
-    for option_name, option_val in kwargs.items():
-        option_name = option_name.replace("_", "-", 1)
-        mapping = {
-            "int": lambda: options.append(f"--{option_name}={option_val}"),
-            "str": lambda: options.append(f"--{option_name}={option_val}"),
-            "tuple": lambda: options.extend(
-                [f"--{option_name}={o}" for o in option_val]
-            ),
-            "bool": lambda: options.append(f"--{option_name}") if option_val else None,
-        }
-        mapping.get(type(option_val).__name__, lambda: "None")()
-    return options, commits, paths
 
 
 def find_dataset(ds_path, repo, commits):
@@ -361,9 +225,8 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
 )
 @click.argument(
     "args",
-    metavar="[REVISION RANGE] [--] [FEATURES]",
+    metavar="[REVISION RANGE] [--] [FILTERS]",
     nargs=-1,
-    type=click.UNPROCESSED,
     shell_complete=path_completer,
 )
 def log(
@@ -385,9 +248,11 @@ def log(
     <dataset-name>:<feature-primary-key>.
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    options, commits, filters = parse_commits_and_filters(
+        repo, args, kwargs, allow_options=True
+    )
 
-    options, commits, paths = parse_extra_args(repo, args, **kwargs)
-    paths = convert_user_patterns_to_raw_paths(paths, repo, commits)
+    paths = convert_user_patterns_to_raw_paths(filters, repo, commits)
     output_type, fmt = parse_output_format(output_format, json_style)
 
     # TODO: should we check paths exist here? git doesn't!
