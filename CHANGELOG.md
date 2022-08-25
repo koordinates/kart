@@ -11,6 +11,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Support shell detection for tab completion installation when running in helper mode. [#704](https://github.com/koordinates/kart/pull/704)
 - Bugfix: directing geojson diff output to the console didn't work in a multi-dataset repo, even if only one dataset had changed. [#702](https://github.com/koordinates/kart/issues/702)
 - Improve argument parsing for `kart diff` and `kart show`. [#706](https://github.com/koordinates/kart/issues/706)
+- Bugfix: don't allow `kart merge` to fast-forward if the user specifies a merge message. [#705](https://github.com/koordinates/kart/issues/705)
 
 ## 0.11.5
 

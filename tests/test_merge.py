@@ -19,14 +19,8 @@ H = pytest.helpers.helpers()
 @pytest.mark.parametrize(
     "data",
     [
-        pytest.param(
-            H.POINTS,
-            id="points",
-        ),
-        pytest.param(
-            H.POLYGONS,
-            id="polygons",
-        ),
+        pytest.param(H.POINTS, id="points"),
+        pytest.param(H.POLYGONS, id="polygons"),
         pytest.param(H.TABLE, id="table"),
     ],
 )
@@ -68,18 +62,14 @@ def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request)
 @pytest.mark.parametrize(
     "data",
     [
-        pytest.param(
-            H.POINTS,
-            id="points",
-        ),
-        pytest.param(
-            H.POLYGONS,
-            id="polygons",
-        ),
+        pytest.param(H.POINTS, id="points"),
+        pytest.param(H.POLYGONS, id="polygons"),
         pytest.param(H.TABLE, id="table"),
     ],
 )
+@pytest.mark.parametrize("no_ff_method", ["--no-ff", "--message=custom message"])
 def test_merge_fastforward_noff(
+    no_ff_method,
     data,
     data_working_copy,
     cli_runner,
@@ -110,7 +100,7 @@ def test_merge_fastforward_noff(
         assert repo.head.target.hex != commit_id
 
         # force creation of a merge commit
-        r = cli_runner.invoke(["merge", "changes", "--no-ff", "-o", "json"])
+        r = cli_runner.invoke(["merge", "changes", no_ff_method, "-o", "json"])
         assert r.exit_code == 0, r
 
         H.git_graph(request, "post-merge")
@@ -123,7 +113,10 @@ def test_merge_fastforward_noff(
         assert len(c.parents) == 2
         assert c.parents[0].hex == h
         assert c.parents[1].hex == commit_id
-        assert c.message == 'Merge branch "changes" into main'
+        if no_ff_method == "--no-ff":
+            assert c.message == 'Merge branch "changes" into main'
+        else:
+            assert c.message == "custom message"
 
 
 @pytest.mark.parametrize(
@@ -236,14 +229,8 @@ def test_merge_shallow_clone(data_archive, tmp_path, cli_runner):
 @pytest.mark.parametrize(
     "data",
     [
-        pytest.param(
-            H.POINTS,
-            id="points",
-        ),
-        pytest.param(
-            H.POLYGONS,
-            id="polygons",
-        ),
+        pytest.param(H.POINTS, id="points"),
+        pytest.param(H.POLYGONS, id="polygons"),
         pytest.param(H.TABLE, id="table"),
     ],
 )
