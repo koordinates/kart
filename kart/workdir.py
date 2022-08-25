@@ -18,7 +18,7 @@ from sqlalchemy.schema import CreateTable
 
 from kart.cli_util import tool_environment
 from kart import diff_util
-from kart.diff_structs import Delta
+from kart.diff_structs import Delta, DatasetDiff
 from kart.exceptions import (
     NotFound,
     SubprocessError,
@@ -375,18 +375,21 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         """
         Get the diff-to-apply needed to reset a particular dataset - currently based on base_datasets[ds_path] -
         to the target state at target_datasets[ds_path]."""
-        # The diffing code can diff from any arbitrary commit, but not from the working copy -
-        # it can only diff *to* the working copy.
-        # So, we need to diff from=target to=working copy then take the inverse.
-        # TODO: Make this less confusing.
-        ds_diff = ~diff_util.get_dataset_diff(
-            ds_path,
-            target_datasets,
-            base_datasets,
-            include_wc_diff=True,
-            workdir_diff_cache=workdir_diff_cache,
-            ds_filter=ds_filter,
+        ds_diff = ~base_datasets[ds_path].diff_to_working_copy(
+            workdir_diff_cache, ds_filter=ds_filter, skip_pdal=True
         )
+        if base_datasets != target_datasets:
+            ds_diff = DatasetDiff.concatenated(
+                ds_diff,
+                diff_util.get_dataset_diff(
+                    ds_path,
+                    base_datasets,
+                    target_datasets,
+                    ds_filter=ds_filter,
+                ),
+                overwrite_original=True,
+            )
+
         tile_diff = ds_diff.get("tile")
         # Remove new values that don't match the spatial filter - we don't want them in the working copy.
         if tile_diff and not self.repo.spatial_filter.match_all:

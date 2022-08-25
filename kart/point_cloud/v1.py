@@ -237,8 +237,17 @@ class PointCloudV1(BaseDataset):
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         *,
         convert_to_dataset_format=False,
+        skip_pdal=False,
     ):
-        """Returns a diff of all changes made to this dataset in the working copy."""
+        """
+        Returns a diff of all changes made to this dataset in the working copy.
+
+        convert_to_dataset_format - user wants this converted to dataset's format as it is
+            committed, and wants to see diffs of what this would look like.
+        skip_pdal - if set, don't run PDAL to check the tile contents. The resulting diffs
+            are missing almost all of the info about the new tiles, but this is faster and more
+            reliable if this information is not needed.
+        """
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
 
         current_metadata = self.tile_metadata
@@ -266,6 +275,8 @@ class PointCloudV1(BaseDataset):
             wc_path = self._workdir_path(tile_path)
             if not wc_path.is_file():
                 new_half_delta = None
+            elif skip_pdal:
+                new_half_delta = tilename, {"name": wc_path.name}
             else:
                 tile_metadata = extract_pc_tile_metadata(wc_path)
                 tilename_to_metadata[wc_path.name] = tile_metadata
