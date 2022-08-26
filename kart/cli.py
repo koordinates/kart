@@ -4,10 +4,8 @@ import importlib.util
 import inspect
 import logging
 import os
-import io
 import pathlib
 import re
-import subprocess
 import sys
 import traceback
 
@@ -15,14 +13,14 @@ import click
 import pygit2
 
 from . import core, is_darwin, is_linux, is_windows  # noqa
-from .cli_util import (
+from kart.cli_util import (
     add_help_subcommand,
     call_and_exit_flag,
     tool_environment,
     KartGroup,
 )
-from .context import Context
-from .exec import run_and_wait
+from kart.context import Context
+from kart import subprocess
 
 MODULE_COMMANDS = {
     "annotations.cli": {"build-annotations"},
@@ -186,7 +184,7 @@ def cli(ctx, repo_dir, verbose, post_mortem):
         logging.getLogger("sqlalchemy.engine").setLevel("INFO")
 
 
-# straight process-replace commands
+# Straight delegate-to-subprocess commands.
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -201,14 +199,7 @@ def cli(ctx, repo_dir, verbose, post_mortem):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def push(ctx, do_progress, args):
     """Update remote refs along with associated objects"""
-    ctx.invoke(
-        git,
-        args=[
-            "push",
-            "--progress" if do_progress else "--quiet",
-            *args,
-        ],
-    )
+    _run_git(ctx, ["push", "--progress" if do_progress else "--quiet", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -223,14 +214,7 @@ def push(ctx, do_progress, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, do_progress, args):
     """Download objects and refs from another repository"""
-    ctx.invoke(
-        git,
-        args=[
-            "fetch",
-            "--progress" if do_progress else "--quiet",
-            *args,
-        ],
-    )
+    _run_git(ctx, ["fetch", "--progress" if do_progress else "--quiet", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -238,7 +222,7 @@ def fetch(ctx, do_progress, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def remote(ctx, args):
     """Manage set of tracked repositories"""
-    ctx.invoke(git, args=["remote", *args])
+    _run_git(ctx, ["remote", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -246,7 +230,7 @@ def remote(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def tag(ctx, args):
     """Create, list, delete or verify a tag object signed with GPG"""
-    ctx.invoke(git, args=["tag", *args])
+    _run_git(ctx, ["tag", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -254,7 +238,7 @@ def tag(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def reflog(ctx, args):
     """Manage reflog information"""
-    ctx.invoke(git, args=["reflog", *args])
+    _run_git(ctx, ["reflog", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -262,7 +246,7 @@ def reflog(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def config(ctx, args):
     """Get and set repository or global options"""
-    ctx.invoke(git, args=["config", *args])
+    _run_git(ctx, ["config", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -270,20 +254,23 @@ def config(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def gc(ctx, args):
     """Cleanup unnecessary files and optimize the local repository"""
-    ctx.invoke(git, args=["gc", *args])
+    _run_git(ctx, ["gc", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def git(ctx, args):
-    """
-    Run an arbitrary Git command, using kart's packaged Git
-    """
+    """Run an arbitrary Git command, using kart's packaged Git"""
+    _run_git(ctx, args)
+
+
+def _run_git(ctx, args):
     params = ["git"]
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
-    run_and_wait("git", [*params, *args])
+    p = subprocess.run([*params, *args], env=tool_environment())
+    sys.exit(p.returncode)
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
@@ -294,11 +281,12 @@ def lfs(ctx, args):
     Run an arbitrary Git LFS command, using Kart's packaged Git.
     Git LFS is not yet packaged with Kart so this will not work unless your Kart environment has Git LFS installed.
     """
-    params = ["git"]
-    if ctx.obj.user_repo_path:
-        params += ["-C", ctx.obj.user_repo_path]
-    params += ["lfs"]
-    run_and_wait("git", [*params, *args])
+    from kart.repo import KartRepoState
+
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    kwargs = {"cwd": repo.workdir_path} if repo else {}
+    p = subprocess.run(["git-lfs", *args], **kwargs, env=tool_environment)
+    sys.exit(p.returncode)
 
 
 @cli.command(
