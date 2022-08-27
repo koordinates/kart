@@ -13,6 +13,7 @@ rst2txt
 shellingham
 sqlalchemy
 tqdm
+reflink
 
 # jsonschema>=4.2 pulls in importlib_resources, which breaks PyInstaller<4.8
 # https://github.com/pyinstaller/pyinstaller/pull/6195
