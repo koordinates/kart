@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from reflink import reflink, ReflinkImpossibleError
 
 import pygit2
 import sqlalchemy as sa
@@ -423,6 +424,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 yield pointer_blob
 
     def write_full_datasets_to_workdir(self, datasets, track_changes_as_dirty=False):
+        _copy = reflink # assume CoW filesystem
         for dataset in datasets:
             assert isinstance(dataset, PointCloudV1)
 
@@ -437,7 +439,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                         f"Couldn't find tile {tilename} locally - skipping...", err=True
                     )
                     continue
-                shutil.copy(lfs_path, wc_tiles_dir / tilename)
+                try:
+                    _copy(lfs_path, wc_tiles_dir / tilename)
+                except ReflinkImpossibleError: # CoW not supported
+                    _copy = shutil.copy
+                    _copy(lfs_path, wc_tiles_dir / tilename)
 
         if not track_changes_as_dirty:
             self._reset_workdir_index_for_datasets(datasets)
