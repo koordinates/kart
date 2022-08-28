@@ -14,7 +14,7 @@ attrs==22.1.0
     #   pytest
 colorama==0.4.5
     # via -r requirements/test.in
-coverage[toml]==6.4.3
+coverage[toml]==6.4.4
     # via pytest-cov
 fields==5.0.0
     # via aspectlib

@@ -5,7 +5,9 @@
 #    make py-requirements
 #
 appnope==0.1.3
-    # via -r requirements/dev.in
+    # via
+    #   -r requirements/dev.in
+    #   ipython
 attrs==22.1.0
     # via
     #   -c requirements/../requirements.txt
@@ -43,7 +45,7 @@ ipython==7.34.0
     #   ipdb
 jedi==0.18.1
     # via ipython
-matplotlib-inline==0.1.3
+matplotlib-inline==0.1.6
     # via ipython
 packaging==21.3
     # via
@@ -71,7 +73,7 @@ py==1.11.0
     #   -c requirements/test.txt
     #   pytest
     #   pytest-forked
-pygments==2.12.0
+pygments==2.13.0
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/docs.txt
