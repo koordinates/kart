@@ -11,6 +11,9 @@ yum install -y ccache openssl-devel gettext wget unixODBC-devel expat-devel
 export PATH=/opt/python/cp37-cp37m-shared/bin:${PATH}
 export LD_LIBRARY_PATH=/build/env/lib:${LD_LIBRARY_PATH}
 
+# Workaround for https://github.com/pypa/manylinux/issues/1203
+unset SSL_CERT_FILE
+
 # setup ccache
 echo ">>> Setting up ccache ..."
 if [ -n "$CCACHE_DIR" ]; then
