@@ -3,6 +3,7 @@ import itertools
 import pygit2
 import subprocess
 import sys
+import tempfile
 
 import click
 
@@ -12,6 +13,7 @@ from kart.lfs_util import get_hash_from_pointer_file, get_local_path_from_lfs_ha
 from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
+from kart.subprocess_util import subprocess_tee
 
 EMPTY_SHA = "0" * 40
 
@@ -21,6 +23,53 @@ EMPTY_SHA = "0" * 40
 @click.pass_context
 def lfs_plus(ctx, **kwargs):
     """Git-LFS commands re-implemented in Kart to allow for spatial filtering."""
+
+
+def push_lfs_oids(repo, remote_name, lfs_oids):
+    """
+    Given a list of OIDs of LFS blobs (not the pointer files, but the LFS blobs themselves)
+    push all of those LFS blobs from the local cache to the given remote.
+    """
+    # Older git-lfs doesn't support stdin so we fall back to using args if we somehow have an older version.
+    if not _push_lfs_oids_using_stdin(repo, remote_name, lfs_oids):
+        _push_lfs_oids_using_args(repo, remote_name, lfs_oids)
+
+
+def _push_lfs_oids_using_stdin(repo, remote_name, lfs_oids):
+    # TODO - capture progress reporting and do our own.
+    with tempfile.TemporaryFile() as oid_file:
+        oid_file.write("\n".join(lfs_oids).encode("utf-8"))
+        oid_file.write(b"\n")
+        oid_file.seek(0)
+
+        returncode, stdout, stderr = subprocess_tee(
+            ["git-lfs", "push", remote_name, "--object-id", "--stdin"],
+            env=tool_environment(),
+            cwd=repo.workdir_path,
+            stdin=oid_file,
+        )
+        if returncode == 0:
+            return True
+        elif b"unknown flag: --stdin" in stderr:
+            return False
+        else:
+            raise SubprocessError(
+                "There was a problem with git-lfs push", exit_code=returncode
+            )
+
+
+def _push_lfs_oids_using_args(repo, remote_name, lfs_oids):
+    try:
+        # TODO - capture progress reporting and do our own.
+        subprocess.check_call(
+            ["git-lfs", "push", remote_name, "--object-id", *lfs_oids],
+            env=tool_environment(),
+            cwd=repo.workdir_path,
+        )
+    except subprocess.CalledProcessError as e:
+        raise SubprocessError(
+            f"There was a problem with git-lfs push: {e}", called_process_error=e
+        )
 
 
 @lfs_plus.command()
@@ -71,18 +120,7 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
         return
 
     if lfs_oids:
-        try:
-            # TODO - chunk lfs_oids so that we don't overflow the maximum argument size.
-            # TODO - capture chunk progress and report our own overall progress
-            subprocess.check_call(
-                ["git-lfs", "push", remote_name, "--object-id", *lfs_oids],
-                env=tool_environment(),
-                cwd=repo.workdir_path,
-            )
-        except subprocess.CalledProcessError as e:
-            raise SubprocessError(
-                f"There was a problem with git-lfs push: {e}", called_process_error=e
-            )
+        push_lfs_oids(repo, remote_name, lfs_oids)
 
 
 def get_start_and_stop_commits(input_iter):
