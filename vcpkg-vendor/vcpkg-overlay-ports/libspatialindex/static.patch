@@ -1,0 +1,20 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 8c4d4ba..1557ced 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -178,8 +178,13 @@ set(SIDX_SOURCES
+   ${SIDX_HPP}
+   ${SIDX_CPP})
+ 
+-add_library(spatialindex ${SIDX_SOURCES})
+-add_library(spatialindex_c ${SIDX_CAPI_CPP})
++if(BUILD_SHARED_LIBS)
++  add_library(spatialindex SHARED ${SIDX_SOURCES})
++  add_library(spatialindex_c SHARED ${SIDX_CAPI_CPP})
++else(BUILD_SHARED_LIBS)
++  add_library(spatialindex STATIC ${SIDX_SOURCES})
++  add_library(spatialindex_c STATIC ${SIDX_CAPI_CPP})
++endif(BUILD_SHARED_LIBS)
+ 
+ target_link_libraries(spatialindex_c spatialindex)
+ 

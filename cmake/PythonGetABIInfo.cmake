@@ -39,13 +39,15 @@ function(PythonGetABIInfo)
     set(py_ver_code
         "cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}-cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}${Python3_ABIFLAGS}"
     )
-    if(MACOS)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
       # find the macOS deployment target Python was built with. this determines the associated
       # version of extension modules
       if(NOT Python3_MACOS_DEPLOYMENT_TARGET)
         execute_process(
-          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos_get_deployment.sh "${Python3_EXECUTABLE}"
-                  COMMAND_ERROR_IS_FATAL ANY
+          COMMAND
+            ${Python3_EXECUTABLE} -c
+            "import sysconfig; print(sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET'))"
+            COMMAND_ERROR_IS_FATAL ANY
           OUTPUT_VARIABLE Python3_MACOS_DEPLOYMENT_TARGET
           OUTPUT_STRIP_TRAILING_WHITESPACE)
         if((NOT ${RESULT_VARIABLE} EQUAL 0) OR (NOT ${Python3_MACOS_DEPLOYMENT_TARGET}))
@@ -62,7 +64,7 @@ function(PythonGetABIInfo)
       # turn 10.9 into 10_9
       string(REPLACE "." "_" py_deployment_target_id ${Python3_MACOS_DEPLOYMENT_TARGET})
       set(py_wheelid "${py_ver_code}-macosx_${py_deployment_target_id}_${CMAKE_SYSTEM_PROCESSOR}")
-    elseif(LINUX)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
       set(py_wheelid "${py_ver_code}-linux_${CMAKE_SYSTEM_PROCESSOR}")
     elseif(WIN32)
       set(win_platform ${CMAKE_GENERATOR_PLATFORM})
@@ -74,7 +76,9 @@ function(PythonGetABIInfo)
       elseif(win_platform STREQUAL "x64")
         set(py_wheelid "${py_ver_code}-win_amd64")
       else()
-        message(FATAL_ERROR "Couldn't determine Windows arch from CMAKE_GENERATOR_PLATFORM/CMAKE_VS_PLATFORM_NAME")
+        message(
+          FATAL_ERROR
+            "Couldn't determine Windows arch from CMAKE_GENERATOR_PLATFORM/CMAKE_VS_PLATFORM_NAME")
       endif()
     else()
       message(FATAL_ERROR "PythonGetABIInfo: Unknown OS")

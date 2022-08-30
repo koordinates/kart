@@ -22,9 +22,7 @@ include(CCache)
 # options
 #
 
-option(IS_HERMETIC "Isolated build where Kart builds all dependencies")
-message("Hermetic build? ${IS_HERMETIC}")
-
+option(USE_VCPKG "Use vcpkg for vendor dependencies")
 set(VENDOR_ARCHIVE
     ""
     CACHE
@@ -42,46 +40,52 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(MACOS ON)
 endif()
 
-# OSX: prefer Homebrew over Frameworks
-set(Python3_FIND_IMPLEMENTATIONS "CPython")
-find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
-pythongetabiinfo()
-
-#
-# dependencies
-#
-if(VENDOR_ARCHIVE)
-  message("Using prebuilt vendor dependencies from ${VENDOR_ARCHIVE} ...")
-  if(NOT EXISTS ${VENDOR_ARCHIVE})
-    message(
-      FATAL_ERROR
-        "${VENDOR_ARCHIVE} not found. Download from https://github.com/koordinates/kart/actions")
-  endif()
-  # CI artifacts are zips: extract it to get the inner vendor archive
-  cmake_path(GET VENDOR_ARCHIVE EXTENSION LAST_ONLY vendor_ext)
-  if(vendor_ext STREQUAL ".zip" AND NOT (WIN32 AND DEFINED ENV{CI}))
-    message("Extracting CI artifact ${VENDOR_ARCHIVE}...")
-    # cmake-lint: disable=E1126
-    file(
-      ARCHIVE_EXTRACT
-      INPUT
-      ${VENDOR_ARCHIVE}
-      DESTINATION
-      ${CMAKE_CURRENT_BINARY_DIR}
-      PATTERNS
-      vendor-${CMAKE_SYSTEM_NAME}.*
-      VERBOSE)
-    if(WIN32)
-      set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.zip)
-    else()
-      set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
-    endif()
-  endif()
-  set(VENDOR_TARGET ${VENDOR_ARCHIVE})
+if(USE_VCPKG)
+  message("Using VCPKG for vendor dependencies...")
+  add_subdirectory(vcpkg-vendor)
+  set(VENDOR_TARGET vendor_vcpkg)
 else()
-  message("Using local vendor dependencies...")
-  add_subdirectory(vendor)
-  set(VENDOR_TARGET vendor)
+  # OSX: prefer Homebrew over Frameworks
+  set(Python3_FIND_IMPLEMENTATIONS "CPython")
+  find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
+  pythongetabiinfo()
+
+  #
+  # dependencies
+  #
+  if(VENDOR_ARCHIVE)
+    message("Using prebuilt vendor dependencies from ${VENDOR_ARCHIVE} ...")
+    if(NOT EXISTS ${VENDOR_ARCHIVE})
+      message(
+        FATAL_ERROR
+          "${VENDOR_ARCHIVE} not found. Download from https://github.com/koordinates/kart/actions")
+    endif()
+    # CI artifacts are zips: extract it to get the inner vendor archive
+    cmake_path(GET VENDOR_ARCHIVE EXTENSION LAST_ONLY vendor_ext)
+    if(vendor_ext STREQUAL ".zip" AND NOT (WIN32 AND DEFINED ENV{CI}))
+      message("Extracting CI artifact ${VENDOR_ARCHIVE}...")
+      # cmake-lint: disable=E1126
+      file(
+        ARCHIVE_EXTRACT
+        INPUT
+        ${VENDOR_ARCHIVE}
+        DESTINATION
+        ${CMAKE_CURRENT_BINARY_DIR}
+        PATTERNS
+        vendor-${CMAKE_SYSTEM_NAME}.*
+        VERBOSE)
+      if(WIN32)
+        set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.zip)
+      else()
+        set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
+      endif()
+    endif()
+    set(VENDOR_TARGET ${VENDOR_ARCHIVE})
+  else()
+    message("Using local vendor dependencies...")
+    add_subdirectory(vendor)
+    set(VENDOR_TARGET vendor)
+  endif()
 endif()
 
 set(DOCS "docs/pages/commands")

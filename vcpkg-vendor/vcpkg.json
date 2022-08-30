@@ -1,0 +1,68 @@
+{
+    "name": "kart-vendor",
+    "version-string": "0.1.2",
+    "builtin-baseline": "9259a0719d94c402aae2ab7975bc096afdec15df",
+    "dependencies": [
+        {
+            "name": "sqlite3",
+            "features": [
+                "json1", "rtree", "tool", "zlib"
+            ]
+        },
+        {
+            "name": "libpq",
+            "features": [
+                "client"
+            ]
+        },
+        {
+            "name": "libgit2"
+        },
+        {
+            "name": "unixodbc",
+            "platform": "!windows"
+        },
+        {
+            "name": "curl",
+            "default-features": false,
+            "features": ["ssl", "http2"]
+        },
+        {
+            "name": "proj",
+            "features": [
+                "tools"
+            ]
+        },
+        {
+            "name": "gdal",
+            "default-features": false,
+            "version>=": "3.5.1",
+            "features": [
+                "tools",
+                "postgresql",
+                "geos",
+                "curl"
+            ]
+        },
+        {
+            "name": "python3"
+        },
+        {
+            "name": "libspatialindex"
+        },
+        {
+            "name": "pdal",
+            "default-features": false
+        },
+        {
+            "name": "libspatialite",
+            "default-features": false
+        },
+        {
+            "name": "pcre2"
+        },
+        {
+            "name": "openssl"
+        }
+    ]
+}
