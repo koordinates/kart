@@ -1,6 +1,7 @@
 import os
 import itertools
 import pygit2
+import re
 import subprocess
 import sys
 import tempfile
@@ -8,7 +9,7 @@ import tempfile
 import click
 
 from kart.cli_util import KartGroup, add_help_subcommand, tool_environment
-from kart.exceptions import SubprocessError
+from kart.exceptions import SubprocessError, InvalidOperation
 from kart.lfs_util import get_hash_from_pointer_file, get_local_path_from_lfs_hash
 from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
@@ -23,53 +24,6 @@ EMPTY_SHA = "0" * 40
 @click.pass_context
 def lfs_plus(ctx, **kwargs):
     """Git-LFS commands re-implemented in Kart to allow for spatial filtering."""
-
-
-def push_lfs_oids(repo, remote_name, lfs_oids):
-    """
-    Given a list of OIDs of LFS blobs (not the pointer files, but the LFS blobs themselves)
-    push all of those LFS blobs from the local cache to the given remote.
-    """
-    # Older git-lfs doesn't support stdin so we fall back to using args if we somehow have an older version.
-    if not _push_lfs_oids_using_stdin(repo, remote_name, lfs_oids):
-        _push_lfs_oids_using_args(repo, remote_name, lfs_oids)
-
-
-def _push_lfs_oids_using_stdin(repo, remote_name, lfs_oids):
-    # TODO - capture progress reporting and do our own.
-    with tempfile.TemporaryFile() as oid_file:
-        oid_file.write("\n".join(lfs_oids).encode("utf-8"))
-        oid_file.write(b"\n")
-        oid_file.seek(0)
-
-        returncode, stdout, stderr = subprocess_tee(
-            ["git-lfs", "push", remote_name, "--object-id", "--stdin"],
-            env=tool_environment(),
-            cwd=repo.workdir_path,
-            stdin=oid_file,
-        )
-        if returncode == 0:
-            return True
-        elif b"unknown flag: --stdin" in stderr:
-            return False
-        else:
-            raise SubprocessError(
-                "There was a problem with git-lfs push", exit_code=returncode
-            )
-
-
-def _push_lfs_oids_using_args(repo, remote_name, lfs_oids):
-    try:
-        # TODO - capture progress reporting and do our own.
-        subprocess.check_call(
-            ["git-lfs", "push", remote_name, "--object-id", *lfs_oids],
-            env=tool_environment(),
-            cwd=repo.workdir_path,
-        )
-    except subprocess.CalledProcessError as e:
-        raise SubprocessError(
-            f"There was a problem with git-lfs push: {e}", called_process_error=e
-        )
 
 
 @lfs_plus.command()
@@ -137,6 +91,53 @@ def get_start_and_stop_commits(input_iter):
     stop_commits.discard(EMPTY_SHA)
     start_commits -= stop_commits
     return start_commits, stop_commits
+
+
+def push_lfs_oids(repo, remote_name, lfs_oids):
+    """
+    Given a list of OIDs of LFS blobs (not the pointer files, but the LFS blobs themselves)
+    push all of those LFS blobs from the local cache to the given remote.
+    """
+    # Older git-lfs doesn't support stdin so we fall back to using args if we somehow have an older version.
+    if not _push_lfs_oids_using_stdin(repo, remote_name, lfs_oids):
+        _push_lfs_oids_using_args(repo, remote_name, lfs_oids)
+
+
+def _push_lfs_oids_using_stdin(repo, remote_name, lfs_oids):
+    # TODO - capture progress reporting and do our own.
+    with tempfile.TemporaryFile() as oid_file:
+        oid_file.write("\n".join(lfs_oids).encode("utf-8"))
+        oid_file.write(b"\n")
+        oid_file.seek(0)
+
+        returncode, stdout, stderr = subprocess_tee(
+            ["git-lfs", "push", remote_name, "--object-id", "--stdin"],
+            env=tool_environment(),
+            cwd=repo.workdir_path,
+            stdin=oid_file,
+        )
+        if returncode == 0:
+            return True
+        elif b"unknown flag: --stdin" in stderr:
+            return False
+        else:
+            raise SubprocessError(
+                "There was a problem with git-lfs push", exit_code=returncode
+            )
+
+
+def _push_lfs_oids_using_args(repo, remote_name, lfs_oids):
+    try:
+        # TODO - capture progress reporting and do our own.
+        subprocess.check_call(
+            ["git-lfs", "push", remote_name, "--object-id", *lfs_oids],
+            env=tool_environment(),
+            cwd=repo.workdir_path,
+        )
+    except subprocess.CalledProcessError as e:
+        raise SubprocessError(
+            f"There was a problem with git-lfs push: {e}", called_process_error=e
+        )
 
 
 @lfs_plus.command()
@@ -255,3 +256,91 @@ def fetch_lfs_blobs_for_pointer_files(
         raise SubprocessError(
             f"There was a problem with git-lfs fetch: {e}", called_process_error=e
         )
+
+
+LFS_OID_PATTERN = re.compile("[0-9a-fA-F]{64}")
+
+
+@lfs_plus.command()
+@click.pass_context
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Don't fetch anything, just show what would be fetched",
+)
+def gc(ctx, dry_run):
+    """
+    Delete (garbage-collect) LFS files that are not referenced at HEAD from the local cache.
+
+    Point Cloud tiles are LFS files, and they will remain in the local cache until they are explicitly garbage
+    collected. Tiles will be present but unreferenced if they part of a commit that was checked out previously, but not
+    part of the current commit. The previously checked-out commit could be an earlier revision of the current branch,
+    or on another branch entirely.
+    """
+    repo = ctx.obj.repo
+
+    remote_name = repo.head_remote_name_or_default
+    if not remote_name:
+        raise InvalidOperation(
+            "LFS files cannot be garbage collected unless there is a remote to refetch them from."
+        )
+
+    unpushed_lfs_oids = set()
+    for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
+        repo, ["--branches"], ["--remotes"]
+    ):
+        unpushed_lfs_oids.add(get_hash_from_pointer_file(pointer_blob))
+
+    spatial_filter = repo.spatial_filter
+    checked_out_lfs_oids = set()
+    for dataset in repo.datasets("HEAD", filter_dataset_type="point-cloud"):
+        checked_out_lfs_oids.update(
+            dataset.tile_lfs_hashes(spatial_filter.transform_for_dataset(dataset))
+        )
+
+    to_delete = set()
+    total_size_to_delete = 0
+
+    to_delete_once_pushed = set()
+    total_size_to_delete_once_pushed = 0
+
+    for file in (repo.gitdir_path / "lfs" / "objects").glob("**/*"):
+        if not file.is_file() or not LFS_OID_PATTERN.fullmatch(file.name):
+            continue  # Not an LFS blob at all.
+
+        if file.name in checked_out_lfs_oids:
+            continue  # Can't garbage-collect anything that's currently checked out.
+
+        if file.name in unpushed_lfs_oids:
+            to_delete_once_pushed.add(file)
+            total_size_to_delete_once_pushed += file.stat().st_size
+        else:
+            to_delete.add(file)
+            total_size_to_delete += file.stat().st_size
+
+    if to_delete_once_pushed:
+        size_desc = human_readable_bytes(total_size_to_delete_once_pushed)
+        click.echo(
+            f"Can't delete {len(to_delete_once_pushed)} LFS blobs ({size_desc}) from the cache since they have not been pushed to the remote"
+        )
+
+    size_desc = human_readable_bytes(total_size_to_delete)
+    if dry_run:
+        click.echo(
+            f"Running gc with --dry-run: deleting {len(to_delete)} LFS blobs ({size_desc}) from the cache"
+        )
+        for file in sorted(to_delete, key=lambda f: f.name):
+            click.echo(file.name)
+        return
+
+    click.echo(f"Deleting {len(to_delete)} LFS blobs ({size_desc}) from the cache...")
+    for file in to_delete:
+        file.unlink()
+
+
+def human_readable_bytes(num):
+    for unit in ("", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"):
+        if num < 1024:
+            return f"{num:.1f}{unit}B" if (unit and num < 10) else f"{num:.0f}{unit}B"
+        num /= 1024.0
+    return f"{num:.1f}YiB"

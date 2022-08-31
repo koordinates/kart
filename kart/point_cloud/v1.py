@@ -84,6 +84,11 @@ class PointCloudV1(BaseDataset):
         """The total number of features in this dataset."""
         return sum(1 for blob in self.tile_pointer_blobs())
 
+    def tile_lfs_hashes(self, spatial_filter=SpatialFilter.MATCH_ALL):
+        """Returns a generator that yields every LFS hash."""
+        for blob in self.tile_pointer_blobs(spatial_filter=spatial_filter):
+            yield get_hash_from_pointer_file(blob)
+
     def tilenames_with_lfs_hashes(
         self, spatial_filter=SpatialFilter.MATCH_ALL, fix_extensions=True
     ):
