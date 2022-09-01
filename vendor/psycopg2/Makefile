@@ -19,8 +19,8 @@ ifeq ($(PLATFORM),Darwin)
 	LDFLAGS += -Wl,-rpath,'@loader_path/../../..'
 	export LDFLAGS += $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config libssl --libs)
 	export CFLAGS += $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config libssl --cflags)
-	SSL_PREFIX := /usr/local/opt/openssl@1.1
-	PG_PREFIX := /usr/local/opt/postgresql
+	SSL_PREFIX := /usr/local/opt/openssl@1.1/lib
+	PG_PREFIX := /usr/local/opt/postgresql@14/lib/postgresql@14
 else ifeq ($(PLATFORM),Linux)
 	LIBSUFFIX = so
 	CCACHE_PATH = /usr/lib/ccache
@@ -83,9 +83,9 @@ source: src
 .PHONY: py-fix-Darwin
 py-fix-Darwin:
 	install_name_tool \
-		-change "$(SSL_PREFIX)/lib/libssl.1.1.dylib" "@rpath/libssl.1.1.dylib" \
-		-change "$(SSL_PREFIX)/lib/libcrypto.1.1.dylib" "@rpath/libcrypto.1.1.dylib" \
-		-change "$(PG_PREFIX)/lib/libpq.5.dylib" "@rpath/libpq.5.dylib" \
+		-change "$(SSL_PREFIX)/libssl.1.1.dylib" "@rpath/libssl.1.1.dylib" \
+		-change "$(SSL_PREFIX)/libcrypto.1.1.dylib" "@rpath/libcrypto.1.1.dylib" \
+		-change "$(PG_PREFIX)/libpq.5.dylib" "@rpath/libpq.5.dylib" \
 		src/build/lib.macosx*/psycopg2/_psycopg.cpython-37m-darwin.so; \
 	otool -L src/build/lib.macosx*/psycopg2/_psycopg.cpython-37m-darwin.so
 
