@@ -285,7 +285,7 @@ def test_apply_minimal_style_patch_without_base(data_archive, cli_runner, tmp_pa
         assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
 
 
-def test_apply_minimal_style_meta_patch(data_archive, cli_runner, tmp_path):
+def test_apply_minimal_style_meta_patch_with_update(data_archive, cli_runner, tmp_path):
     patch = points_patch(
         {
             "meta": {
@@ -322,6 +322,31 @@ def test_apply_minimal_style_meta_patch(data_archive, cli_runner, tmp_path):
         with write_patch(patch, tmp_path) as patch_path:
             r = cli_runner.invoke(["apply", patch_path])
         assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
+
+
+def test_apply_minimal_style_meta_patch_with_delete(data_archive, cli_runner, tmp_path):
+    patch = points_patch(
+        {
+            "meta": {
+                "metadata.xml": {
+                    # content is ignored, so this must work
+                    "-": None,
+                }
+            }
+        }
+    )
+    with data_archive("points"):
+        with write_patch(patch, tmp_path) as patch_path:
+            r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == 0, r.stderr
+
+        # Check that the change was actually applied
+        r = cli_runner.invoke(["show", "-o", "json", "HEAD"])
+        assert r.exit_code == 0
+        show = json.loads(r.stdout)
+        meta = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+        # metadata was deleted
+        assert meta["metadata.xml"].keys() == {"-"}
 
 
 def test_apply_minimal_style_feature_patch_with_edit(

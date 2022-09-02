@@ -336,7 +336,7 @@ def apply_patch(
 @click.argument("patch_file", type=click.File("r", encoding="utf-8"))
 def apply(ctx, **kwargs):
     """
-    Applies and commits the given JSON patch (as created by `kart show -o json`)
+    Applies and commits the given JSON patch (as created by `kart create-patch`)
     """
     repo = ctx.obj.repo
     apply_patch(repo=repo, **kwargs)
