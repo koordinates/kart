@@ -1032,3 +1032,67 @@ def test_lfs_fetch(cli_runner, data_archive, monkeypatch):
             "d380a98414ab209f36c7fba4734b02f67de519756e341837217716c5b4768339 (f866ac0ecf4326931d10aaa16140e2240eeada90)",
             "ec80af6cae31be5318f9380cd953b25469bd8ecda25086deca2b831bbb89168a (c76e89f23f512214063d31e7a9c85657f0cf8fb6)",
         ]
+
+
+def test_lfs_gc(cli_runner, data_archive, monkeypatch):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        # Delete everything in the local LFS cache.
+        for file in (repo_path / "auckland").glob("auckland_3_*.copc.laz"):
+            file.unlink()
+
+        r = cli_runner.invoke(["lfs+", "gc", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Running gc with --dry-run: deleting 0 LFS blobs (0B) from the cache"
+        ]
+
+        r = cli_runner.invoke(["commit", "-m", "Delete auckland_3_*"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["lfs+", "gc", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Can't delete 4 LFS blobs (100KiB) from the cache since they have not been pushed to the remote",
+            "Running gc with --dry-run: deleting 0 LFS blobs (0B) from the cache",
+        ]
+
+        # Simulate pushing the latest commit to the remote (we don't actually have a remote set up):
+        (repo_path / ".kart" / "refs" / "remotes" / "origin").mkdir(
+            parents=True, exist_ok=True
+        )
+        shutil.copy(
+            repo_path / ".kart" / "refs" / "heads" / "main",
+            repo_path / ".kart" / "refs" / "remotes" / "origin" / "main",
+        )
+
+        r = cli_runner.invoke(["lfs+", "gc", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Running gc with --dry-run: deleting 4 LFS blobs (100KiB) from the cache",
+            "64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
+            "817b6ddadd95166012143df55fa73dd6c5a8b42b603c33d1b6c38f187261096e",
+            "d380a98414ab209f36c7fba4734b02f67de519756e341837217716c5b4768339",
+            "ec80af6cae31be5318f9380cd953b25469bd8ecda25086deca2b831bbb89168a",
+        ]
+
+        r = cli_runner.invoke(["lfs+", "gc"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Deleting 4 LFS blobs (100KiB) from the cache..."
+        ]
+
+        r = cli_runner.invoke(["lfs+", "gc"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == ["Deleting 0 LFS blobs (0B) from the cache..."]
+
+        r = cli_runner.invoke(["lfs+", "fetch", "HEAD^", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Running fetch with --dry-run: fetching 4 LFS blobs",
+            "LFS blob OID:                                                    (Pointer file OID):",
+            "64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3 (ba01f6e0d8a64b920e1d8dbaa563a7a641c164b6)",
+            "817b6ddadd95166012143df55fa73dd6c5a8b42b603c33d1b6c38f187261096e (364046ba21d4a0154c77a2544348bea9fd6baa93)",
+            "d380a98414ab209f36c7fba4734b02f67de519756e341837217716c5b4768339 (f866ac0ecf4326931d10aaa16140e2240eeada90)",
+            "ec80af6cae31be5318f9380cd953b25469bd8ecda25086deca2b831bbb89168a (c76e89f23f512214063d31e7a9c85657f0cf8fb6)",
+        ]
