@@ -285,7 +285,7 @@ def lfs(ctx, args):
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     kwargs = {"cwd": repo.workdir_path} if repo else {}
-    p = subprocess.run(["git-lfs", *args], **kwargs, env=tool_environment)
+    p = subprocess.run(["git-lfs", *args], **kwargs, env=tool_environment())
     sys.exit(p.returncode)
 
 
