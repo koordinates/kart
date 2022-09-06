@@ -7,10 +7,13 @@ import html5lib
 import pytest
 
 import kart
+from kart.base_diff_writer import BaseDiffWriter
 from kart.diff_structs import Delta, DeltaDiff
+from kart.diff_util import get_attachment_diff
 from kart.json_diff_writers import JsonLinesDiffWriter
 from kart.geometry import hex_wkb_to_ogr
 from kart.repo import KartRepo
+from kart.serialise_util import b64decode_str
 
 
 H = pytest.helpers.helpers()
@@ -1955,3 +1958,119 @@ def test_diff_geojson_usage(data_archive, cli_runner, tmp_path):
             r.stderr.splitlines()[-1]
             == "Error: Invalid value for --output: Output path should be a directory for GeoJSON format."
         )
+
+
+@pytest.mark.parametrize(
+    "output_format",
+    [o for o in SHOW_OUTPUT_FORMATS if o not in {"html", "quiet"}],
+)
+def test_attachment_diff(output_format, data_archive, cli_runner):
+    with data_archive("points-with-attachments") as repo_path:
+        r = cli_runner.invoke(["show", f"--output-format={output_format}"])
+        assert r.exit_code == 0, r.stderr
+        if output_format == "text":
+            assert r.stdout.splitlines()[-4:] == [
+                "+++ LICENSE.txt",
+                "+ (file 1674aa1)",
+                "+++ logo.png",
+                "+ (file f8555b6)",
+            ]
+        elif output_format == "json":
+            jdict = json.loads(r.stdout)
+            files = jdict["kart.diff/v1+hexwkb"]["<files>"]
+            assert files == {
+                "LICENSE.txt": {"+": "1674aa1"},
+                "logo.png": {"+": "f8555b6"},
+            }
+
+        elif output_format == "json-lines":
+            lines = r.stdout.splitlines()
+            jdict = json.loads(lines[-2])
+            assert jdict == {
+                "type": "file",
+                "path": "LICENSE.txt",
+                "change": {"+": "1674aa1"},
+            }
+
+            jdict = json.loads(lines[-1])
+            assert jdict == {
+                "type": "file",
+                "path": "logo.png",
+                "change": {"+": "f8555b6"},
+            }
+
+
+@pytest.mark.parametrize(
+    "output_format",
+    [o for o in SHOW_OUTPUT_FORMATS if o not in {"html", "quiet"}],
+)
+def test_full_attachment_diff(output_format, data_archive, cli_runner):
+    with data_archive("points-with-attachments") as repo_path:
+        r = cli_runner.invoke(
+            ["show", f"--output-format={output_format}", "--diff-files"]
+        )
+        assert r.exit_code == 0, r.stderr
+        if output_format == "text":
+            assert r.stdout.splitlines()[-8:] == [
+                "+++ LICENSE.txt",
+                "+ NZ Pa Points (Topo, 1:50k)",
+                "+ https://data.linz.govt.nz/layer/50308-nz-pa-points-topo-150k/",
+                "+ Land Information New Zealand",
+                "+ CC-BY",
+                "+ ",
+                "+++ logo.png",
+                "+ (binary file f8555b6)",
+            ]
+        elif output_format == "json":
+            jdict = json.loads(r.stdout)
+            files = jdict["kart.diff/v1+hexwkb"]["<files>"]
+            logo = files["logo.png"]
+            # Check just the first 4 bytes of the binary file...
+            logo["+"] = b64decode_str(logo["+"])[:4]
+
+            assert files == {
+                "LICENSE.txt": {
+                    "+": "NZ Pa Points (Topo, 1:50k)\nhttps://data.linz.govt.nz/layer/50308-nz-pa-points-topo-150k/\nLand Information New Zealand\nCC-BY\n"
+                },
+                "logo.png": {"+": b"\x89PNG"},
+            }
+
+        elif output_format == "json-lines":
+            lines = r.stdout.splitlines()
+            jdict = json.loads(lines[-2])
+            assert jdict == {
+                "type": "file",
+                "path": "LICENSE.txt",
+                "binary": False,
+                "change": {
+                    "+": "NZ Pa Points (Topo, 1:50k)\nhttps://data.linz.govt.nz/layer/50308-nz-pa-points-topo-150k/\nLand Information New Zealand\nCC-BY\n"
+                },
+            }
+
+            jdict = json.loads(lines[-1])
+            # Check just the first 4 bytes of the binary file...
+            jdict["change"]["+"] = b64decode_str(jdict["change"]["+"])[:4]
+            assert jdict == {
+                "type": "file",
+                "path": "logo.png",
+                "binary": True,
+                "change": {"+": b"\x89PNG"},
+            }
+
+
+def test_attachment_patch(data_archive, cli_runner):
+    with data_archive("points-with-attachments") as repo_path:
+        r = cli_runner.invoke(["create-patch", "HEAD"])
+        assert r.exit_code == 0, r.stderr
+        jdict = json.loads(r.stdout)
+        files = jdict["kart.diff/v1+hexwkb"]["<files>"]
+        logo = files["logo.png"]
+        # Check just the first 4 bytes of the binary file...
+        logo["+"] = b64decode_str(logo["+"])[:4]
+
+        assert files == {
+            "LICENSE.txt": {
+                "+": "NZ Pa Points (Topo, 1:50k)\nhttps://data.linz.govt.nz/layer/50308-nz-pa-points-topo-150k/\nLand Information New Zealand\nCC-BY\n"
+            },
+            "logo.png": {"+": b"\x89PNG"},
+        }

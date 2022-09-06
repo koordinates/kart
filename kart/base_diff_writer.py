@@ -6,14 +6,16 @@ import sys
 from pathlib import Path
 
 import click
+import pygit2
 
-from . import diff_util
-from .diff_structs import WORKING_COPY_EDIT
-from .exceptions import CrsError, InvalidOperation
-from .key_filters import RepoKeyFilter
-from .promisor_utils import FetchPromisedBlobsProcess, object_is_promised
-from .repo import KartRepoState
-from .spatial_filter import SpatialFilter
+from kart import diff_util
+from kart.diff_structs import ATTACHMENT_KEY, WORKING_COPY_EDIT, BINARY_FILE, Delta
+from kart.exceptions import CrsError, InvalidOperation
+from kart.key_filters import RepoKeyFilter
+from kart.promisor_utils import FetchPromisedBlobsProcess, object_is_promised
+from kart.repo import KartRepoState
+from kart.spatial_filter import SpatialFilter
+from kart.serialise_util import b64encode_str
 
 
 L = logging.getLogger("kart.diff_writer")
@@ -115,6 +117,7 @@ class BaseDiffWriter:
 
         self.commit = None
         self.do_convert_to_dataset_format = False
+        self.do_full_attachment_diffs = False
 
     def include_target_commit_as_header(self):
         """
@@ -125,6 +128,9 @@ class BaseDiffWriter:
 
     def convert_to_dataset_format(self, do_convert_to_dataset_format=True):
         self.do_convert_to_dataset_format = do_convert_to_dataset_format
+
+    def full_attachment_diffs(self, do_full_attachment_diffs=True):
+        self.do_full_attachment_diffs = do_full_attachment_diffs
 
     @classmethod
     def _normalize_output_path(cls, output_path):
@@ -254,6 +260,7 @@ class BaseDiffWriter:
         self.has_changes = False
         for ds_path in self.all_ds_paths:
             self.has_changes |= self.write_ds_diff_for_path(ds_path)
+        self.has_changes |= self.write_attachment_diff(self.get_attachment_diff())
         self.write_warnings_footer()
 
     def write_ds_diff_for_path(self, ds_path):
@@ -267,7 +274,38 @@ class BaseDiffWriter:
         """For outputting ds_diff, the diff of a particular dataset."""
         raise NotImplementedError()
 
-    def get_repo_diff(self):
+    def write_attachment_diff(self, attachment_diff):
+        """For outputting attachment_diff - all the files that have changed, without reference to any dataset."""
+        raise NotImplementedError()
+
+    def _full_attachment_delta(self, delta, skip_binary_files=False):
+        def get_blob(half_delta):
+            return self.repo[half_delta.value] if half_delta else None
+
+        def is_binary(blob):
+            return blob.is_binary if blob else False
+
+        old_blob = get_blob(delta.old)
+        new_blob = get_blob(delta.new)
+        delta_is_binary = is_binary(old_blob) or is_binary(new_blob)
+
+        if is_binary(old_blob) or is_binary(new_blob):
+            delta.flags |= BINARY_FILE
+            if skip_binary_files:
+                return delta
+
+            blob_to_text = lambda blob: b64encode_str(memoryview(blob))
+        else:
+            blob_to_text = lambda blob: str(memoryview(blob), "utf-8")
+
+        old_half_delta = (delta.old_key, blob_to_text(old_blob)) if delta.old else None
+        new_half_delta = (delta.new_key, blob_to_text(new_blob)) if delta.new else None
+
+        result = Delta(old_half_delta, new_half_delta)
+        result.flags = delta.flags
+        return result
+
+    def get_repo_diff(self, include_attachments=True):
         """
         Generates a RepoDiff containing an entry for every dataset in the repo (that matches self.repo_key_filter).
         """
@@ -278,6 +316,7 @@ class BaseDiffWriter:
             workdir_diff_cache=self.workdir_diff_cache,
             repo_key_filter=self.repo_key_filter,
             convert_to_dataset_format=self.do_convert_to_dataset_format,
+            include_attachments=include_attachments,
         )
 
     def get_dataset_diff(self, ds_path):
@@ -300,6 +339,15 @@ class BaseDiffWriter:
             workdir_diff_cache=self.workdir_diff_cache,
             ds_filter=self.repo_key_filter[ds_path],
             convert_to_dataset_format=self.do_convert_to_dataset_format,
+        )
+
+    def get_attachment_diff(self):
+        """Returns the DatasetDiff object for the deltas that do not belong to any dataset."""
+        return diff_util.get_attachment_diff(
+            self.base_rs,
+            self.target_rs,
+            include_wc_diff=False,
+            repo_key_filter=self.repo_key_filter,
         )
 
     def filtered_dataset_deltas(self, ds_path, ds_diff):
@@ -586,6 +634,8 @@ class BaseDiffWriter:
         so, useful for accessing things that won't change (its path, its type), or for accessing
         things that haven't changed (ie, check the diff first to make sure it hasn't changed).
         """
+        if ds_path == ATTACHMENT_KEY:
+            return None
         dataset = self.base_rs.datasets().get(ds_path)
         if not dataset:
             dataset = self.target_rs.datasets().get(ds_path)
