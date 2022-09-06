@@ -4,8 +4,6 @@ vcpkg_from_github(
     REF ab1a031ff1be0516dac90c53df164777959010d2
     SHA512 1a21736e3f14b7d4dab93130727c66f8fdc2d851446715269d76fd6426cab33217c853c0cb0d05edcd9624259cb6b0525821b69cd491ee26bcf7b044000300fb
     HEAD_REF master
-    PATCHES
-        static.patch
 )
 
 vcpkg_configure_cmake(

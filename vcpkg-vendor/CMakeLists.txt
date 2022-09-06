@@ -36,36 +36,46 @@ find_package(PkgConfig REQUIRED)
 
 include(ExternalProject)
 
-function(copy_lib_symlinks tgt output)
-  if(NOT TARGET ${tgt})
-    message("There is no target named '${tgt}'")
-    return()
-  endif()
+# function(copy_lib_symlinks tgt output)
+#   if(NOT TARGET ${tgt})
+#     message("There is no target named '${tgt}'")
+#     return()
+#   endif()
 
-  get_target_property(location ${tgt} LOCATION)
-  cmake_path(GET ${location} FILENAME name)
-  cmake_path(GET ${location} EXTENSION ext)  # .1.2.3.dylib / .so.1.2.3
-  cmake_path(GET ${location} STEM stem)      # libfoo
+#   get_target_property(location ${tgt} LOCATION)  # /path/to/libfoo.1.2.3.dylib / .so.1.2.3
+#   cmake_path(GET ${location} FILENAME dir)  # /path/to
+#   cmake_path(GET ${location} FILENAME fullname)  # libfoo.1.2.3.dylib / libfoo.so.1.2.3
+#   cmake_path(GET ${location} FILENAME name)  # libfoo.1.2.3.dylib / libfoo.so.1.2.3
+#   cmake_path(GET ${location} EXTENSION ext)  # .1.2.3.dylib / .so.1.2.3
+#   cmake_path(GET ${location} STEM stem)      # libfoo
 
-  add_custom_target(${name}_lib_symlinks
+#   add_custom_target(${name}_lib_symlinks)
 
-  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    # libfoo.1.2.3.dylib
-    add_custom_target(${output}/${name}.dylib
-      COMMAND ${CMAKE_COMMAND} -E create_symlink ${name} ${out}
-    )
-    
+#   if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+#     # libfoo.1.2.3.dylib
+#     # libfoo.1.2.dylib -> libfoo.1.2.3.dylib
+#     # libfoo.1.dylib -> libfoo.1.2.3.dylib
+#     add_custom_target(${output}/${name}.dylib
+#       COMMAND ${CMAKE_COMMAND} -E create_symlink ${name} ${out}
+#     )
 
 
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    # libfoo.so.1.2.3
-    while(NOT STREQUAL(ext) ".so")
 
-    endwhile()
-  else()
-    return()
-  endif()
-endfunction(copy_lib_symlinks)
+#   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+#     # libfoo.so.1.2.3
+#     # libfoo.so.1.2 -> libfoo.so.1.2.3
+#     # libfoo.so.1 -> libfoo.so.1.2.3
+#     while(NOT STREQUAL(ext) ".so")
+#       add_custom_target("${dir}/${stem}${ext}"
+#         COMMAND ${CMAKE_COMMAND} -E create_symlink "${fullname}" "${dir}/${stem}${ext}"
+#       )
+
+#       cmake_path(GET "${stem}${ext}" EXTENSION ext)
+#     endwhile()
+#   else()
+#     return()
+#   endif()
+# endfunction(copy_lib_symlinks)
 
 # -----------------------------------------------------------------------------
 # Debugging helpers
