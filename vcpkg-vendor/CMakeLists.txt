@@ -346,7 +346,27 @@ print_target_properties(pdalcpp)
 print_target_properties(pdal_util)
 
 #
+# Git-LFS
+#
+
+ExternalProject_Add(
+  git-lfs
+  GIT_REPOSITORY https://github.com/git-lfs/git-lfs
+  GIT_TAG c6497f8b1fe78b5cea7468581ef0fde3ca8056f9
+  GIT_SHALLOW ON
+  BUILD_IN_SOURCE ON
+  EXCLUDE_FROM_ALL ON
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND make "VERSION=v3.2.0-46-gc6497f8b"
+  INSTALL_COMMAND ""
+)
+set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
+list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
+
+#
 # Git
+# Note: we define the Git dependency last since it affects GIT_VERSION_STRING etc,
+# which can break other dependencies.
 #
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 pkg_check_modules(OPENSSL REQUIRED openssl)
@@ -356,7 +376,7 @@ list(JOIN LIBCURL_STATIC_LDFLAGS " " GIT_BUILD_CURL_LDFLAGS)
 
 cmake_path(SET GIT_SPATIAL_FILTER_EXT "../vendor/spatial-filter/spatial.a")
 cmake_path(ABSOLUTE_PATH GIT_SPATIAL_FILTER_EXT)
-set(GIT_BUILD_LDFLAGS "-L${SQLITE3_LIB_DIR} -lsqlite3")
+set(GIT_BUILD_LDFLAGS "-L${SQLITE3_LIB_DIR} -lsqlite3 -lstdc++")
 
 set(gitBuildConfig
   "V=1"
