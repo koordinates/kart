@@ -6,7 +6,7 @@ from kart import diff_estimation
 from kart.cli_util import KartCommand, OutputFormatType, parse_output_format
 from kart.completion_shared import path_completer
 from kart.crs_util import CoordinateReferenceString
-from kart.parse_args import PreserveDoubleDash, parse_commits_and_filters
+from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
 
 
@@ -88,10 +88,12 @@ def show(
     args,
 ):
     """
-    Show the given commit, or HEAD
+    Shows the given REVISION, or HEAD if none in specified.
+
+    To list only particular changes, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    options, commits, filters = parse_commits_and_filters(repo, args)
+    options, commits, filters = parse_revisions_and_filters(repo, args)
 
     if len(commits) > 1:
         raise click.BadParameter(

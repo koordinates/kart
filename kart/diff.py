@@ -7,7 +7,7 @@ from kart.cli_util import OutputFormatType, parse_output_format
 from kart.completion_shared import path_completer
 from kart.crs_util import CoordinateReferenceString
 from kart.output_util import dump_json_output
-from kart.parse_args import PreserveDoubleDash, parse_commits_and_filters
+from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
 
 
@@ -124,7 +124,7 @@ def feature_count_diff(
 )
 @click.argument(
     "args",
-    metavar="[REVISION RANGE] [--] [FILTERS]",
+    metavar="[REVISIONS] [--] [FILTERS]",
     nargs=-1,
     type=click.UNPROCESSED,
     shell_complete=path_completer,
@@ -144,15 +144,15 @@ def diff(
     """
     Show changes between two commits, or between a commit and the working copy.
 
-    COMMIT_SPEC -
+    REVISIONS -
 
     - if not supplied, the default is HEAD, to diff between HEAD and the working copy.
 
-    - if a single ref is supplied: commit-A - diffs between commit-A and the working copy.
+    - if a single revision is supplied: commit-A - diffs between commit-A and the working copy.
 
     - if supplied with the form: commit-A...commit-B - diffs between commit-A and commit-B.
 
-    - supplying two seperate refs: commit-A commit-B - also diffs between commit-A and commit-B
+    - supplying two seperate revisions: commit-A commit-B - also diffs between commit-A and commit-B
 
     - if supplied with the form: commit-A..commit-B - diffs between (the common ancestor of
     commit-A and commit-B) and (commit-B).
@@ -160,7 +160,7 @@ def diff(
     To list only particular changes, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    options, commits, filters = parse_commits_and_filters(repo, args)
+    options, commits, filters = parse_revisions_and_filters(repo, args)
     output_type, fmt = parse_output_format(output_format, json_style)
 
     assert len(commits) <= 2
