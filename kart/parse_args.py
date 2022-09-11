@@ -72,37 +72,44 @@ def _append_kwargs_to_options(options, kwargs, allow_options):
 
     for option_name, option_val in kwargs.items():
         option_name = option_name.replace("_", "-", 1)
-        t = type(option_val)
-        if t == int or t == str:
+        if isinstance(option_val, bool):
+            if option_val:
+                options.append(f"--{option_name}")
+        elif isinstance(option_val, (int, str)):
             options.append(f"--{option_name}={option_val}")
-        elif t == tuple:
-            options.extend([f"--{option_name}={o}" for o in option_val]),
-        elif t == bool and option_val:
-            options.append(f"--{option_name}")
+        elif isinstance(option_val, tuple):
+            options.extend([f"--{option_name}={o}" for o in option_val])
 
 
-HEAD_PATTERN = re.compile(r"^HEAD\b", re.IGNORECASE)
+HEAD_PATTERN = re.compile(r"^HEAD\b")
+RANGE_PATTERN = re.compile(r"[^/]\.{2,}[^/]")
 
 HINT = "Use '--' to separate paths from revisions, like this:\n'kart <command> [<revision>...] -- [<filter>...]'"
 SILENCING_HINT = "To silence this warning, use '--' to separate paths from revisions, like this:\n'kart <command> [<revision>...] -- [<filter>...]'\n"
 
 
-def _is_revision(repo, arg, warning_set):
+def _is_revision(repo, arg, dedupe_warnings):
     # These things *could* be a path, but in that case the user should add a `--` before this arg to
     # disambiguate, and they haven't done that here.
-    if arg == "[EMPTY]" or ".." in arg or HEAD_PATTERN.match(arg) or arg.endswith("^?"):
+    if (
+        arg == "[EMPTY]"
+        or arg.endswith("^?")
+        or RANGE_PATTERN.search(arg)
+        or HEAD_PATTERN.search(arg)
+    ):
         return True
 
     filter_path = arg.split(":", maxsplit=1)[0]
     head_tree = repo.head_tree
     is_useful_filter_at_head = head_tree and filter_path in head_tree
 
-    if ":" in arg and not is_useful_filter_at_head:
-        click.echo(
-            f"Assuming '{arg}' is a filter argument (that doesn't match anything at HEAD)",
-            err=True,
-        )
-        warning_set.add(SILENCING_HINT)
+    if ":" in arg:
+        if not is_useful_filter_at_head:
+            click.echo(
+                f"Assuming '{arg}' is a filter argument (that doesn't match anything at HEAD)",
+                err=True,
+            )
+            dedupe_warnings.add(SILENCING_HINT)
         return False
 
     try:
@@ -128,9 +135,9 @@ def _is_revision(repo, arg, warning_set):
 def _disambiguate_revisions_and_filters(repo, args):
     revisions = []
     filters = []
-    warning_set = set()
+    dedupe_warnings = set()
     for i, arg in enumerate(args):
-        if _is_revision(repo, arg, warning_set):
+        if _is_revision(repo, arg, dedupe_warnings):
             if filters:
                 raise click.UsageError(
                     f"Filter argument '{filters[0]}' should go after revision argument '{arg}'\n{HINT}"
@@ -138,7 +145,7 @@ def _disambiguate_revisions_and_filters(repo, args):
             revisions.append(arg)
         else:
             filters.append(arg)
-    for warning in warning_set:
+    for warning in dedupe_warnings:
         click.echo(warning, err=True)
     return revisions, filters
 

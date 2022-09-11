@@ -88,7 +88,7 @@ def show(
     args,
 ):
     """
-    Shows the given REVISION, or HEAD if none in specified.
+    Shows the given REVISION, or HEAD if none is specified.
 
     To list only particular changes, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
