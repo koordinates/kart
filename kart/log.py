@@ -14,7 +14,7 @@ from kart.completion_shared import path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import dump_json_output
-from kart.parse_args import PreserveDoubleDash, parse_commits_and_filters
+from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
 from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
@@ -223,7 +223,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
 )
 @click.argument(
     "args",
-    metavar="[REVISION RANGE] [--] [FILTERS]",
+    metavar="[REVISIONS] [--] [FILTERS]",
     nargs=-1,
     shell_complete=path_completer,
 )
@@ -238,15 +238,15 @@ def log(
 ):
     """
     Show commit logs.
-    The REVISION RANGE can be a commit, a set of commits, or references to commits. A log containing those commits
+    The REVISIONS can be a commit, a set of commits, or references to commits. A log containing those commits
     and all their ancestors will be output. The log of a particular range of commits can also be requested
     using the format <commit1>..<commit2> - for more details, see https://git-scm.com/docs/git-log.
-    If FEATURES are specified, then only commits where those features were changed will be output. Entire
-    datasets can be specified by name, or individual features can be specified using the format
+    If FILTERS are specified, then only commits where the datasets or features specified were changed will be output.
+    Entire datasets can be specified by name, or individual features can be specified using the format
     <dataset-name>:<feature-primary-key>.
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    options, commits, filters = parse_commits_and_filters(
+    options, commits, filters = parse_revisions_and_filters(
         repo, args, kwargs, allow_options=True
     )
 

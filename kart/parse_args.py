@@ -1,11 +1,11 @@
-from enum import Enum, auto
+import re
 import warnings
-
-from .cli_util import KartCommand, RemovalInKart012Warning
-
 
 import click
 import pygit2
+
+from kart.cli_util import KartCommand, RemovalInKart012Warning
+from kart.exceptions import NotFound
 
 
 class PreserveDoubleDash(KartCommand):
@@ -39,29 +39,15 @@ class PreserveDoubleDash(KartCommand):
         return super(PreserveDoubleDash, self).parse_args(ctx, args)
 
 
-class ArgType(Enum):
-    # Which revision(s) to display - a commit, ref, range, etc:
-    COMMIT = auto()
-    # How to log it.
-    OPTION = auto()
-    # Which item(s) the user is interested in. These must come last.
-    # In Git you filter by path so these are called paths - but we don't expose the internal path
-    # of most Kart items, so we we just call these filters.
-    FILTER = auto()
-
-
-def get_arg_type(repo, arg, allow_options=True, allow_commits=True, allow_filters=True):
-    """Decides if some user-supplied argument is a commit-ish or a filter (or even an option)."""
-
-    # We prefer to parse args as commits if at all plausible - if the user meant it to be a filter,
-    # they always have the possibility to force it to be a filter using "--".
-    # So we parse "foo...bar" as a commit range without checking if foo and bar exist - it's more likely that the user
-    # meant that, than that they want to filter to the path "foo...bar" and if it doesn't work, we'll error accordingly.
-
-    assert allow_commits or allow_filters
-
-    if arg.startswith("-"):
-        if allow_options:
+def _separate_options(args, allow_options):
+    options = []
+    others = []
+    for arg in args:
+        if not arg.startswith("-"):
+            others.append(arg)
+        elif not allow_options:
+            raise click.UsageError(f"No such option: {arg}")
+        else:
             # It's not explicitly stated by https://git-scm.com/docs/git-check-ref-format
             # but this isn't a valid commit-ish.
             #    $ git branch -c -- -x
@@ -75,29 +61,96 @@ def get_arg_type(repo, arg, allow_options=True, allow_commits=True, allow_filter
                 f"This will be removed in Kart 0.12! Please comment on {issue_link} if you need to use this option.",
                 RemovalInKart012Warning,
             )
-            return ArgType.OPTION
+            options.append(arg)
+    return options, others
+
+
+def _append_kwargs_to_options(options, kwargs, allow_options):
+    if not kwargs:
+        return
+    assert allow_options
+
+    for option_name, option_val in kwargs.items():
+        option_name = option_name.replace("_", "-", 1)
+        if isinstance(option_val, bool):
+            if option_val:
+                options.append(f"--{option_name}")
+        elif isinstance(option_val, (int, str)):
+            options.append(f"--{option_name}={option_val}")
+        elif isinstance(option_val, tuple):
+            options.extend([f"--{option_name}={o}" for o in option_val])
+
+
+HEAD_PATTERN = re.compile(r"^HEAD\b")
+RANGE_PATTERN = re.compile(r"[^/]\.{2,}[^/]")
+
+HINT = "Use '--' to separate paths from revisions, like this:\n'kart <command> [<revision>...] -- [<filter>...]'"
+SILENCING_HINT = "To silence this warning, use '--' to separate paths from revisions, like this:\n'kart <command> [<revision>...] -- [<filter>...]'\n"
+
+
+def _is_revision(repo, arg, dedupe_warnings):
+    # These things *could* be a path, but in that case the user should add a `--` before this arg to
+    # disambiguate, and they haven't done that here.
+    if (
+        arg == "[EMPTY]"
+        or arg.endswith("^?")
+        or RANGE_PATTERN.search(arg)
+        or HEAD_PATTERN.search(arg)
+    ):
+        return True
+
+    filter_path = arg.split(":", maxsplit=1)[0]
+    head_tree = repo.head_tree
+    is_useful_filter_at_head = head_tree and filter_path in head_tree
+
+    if ":" in arg:
+        if not is_useful_filter_at_head:
+            click.echo(
+                f"Assuming '{arg}' is a filter argument (that doesn't match anything at HEAD)",
+                err=True,
+            )
+            dedupe_warnings.add(SILENCING_HINT)
+        return False
+
+    try:
+        repo.resolve_refish(arg)
+        is_revision = True
+    except (KeyError, ValueError, pygit2.InvalidSpecError):
+        is_revision = False
+
+    if is_revision and not is_useful_filter_at_head:
+        return True
+    elif is_useful_filter_at_head and not is_revision:
+        return False
+    elif is_revision and is_useful_filter_at_head:
+        raise click.UsageError(
+            f"Ambiguous argument '{arg}' - could be either a revision or a filter\n{HINT}"
+        )
+    else:
+        raise NotFound(
+            f"Ambiguous argument '{arg}' - doesn't appear to be either a revision or a filter\n{HINT}"
+        )
+
+
+def _disambiguate_revisions_and_filters(repo, args):
+    revisions = []
+    filters = []
+    dedupe_warnings = set()
+    for i, arg in enumerate(args):
+        if _is_revision(repo, arg, dedupe_warnings):
+            if filters:
+                raise click.UsageError(
+                    f"Filter argument '{filters[0]}' should go after revision argument '{arg}'\n{HINT}"
+                )
+            revisions.append(arg)
         else:
-            raise click.UsageError(f"No such option: {arg}")
-
-    if allow_commits:
-        if arg == "[EMPTY]" or ".." in arg:
-            return ArgType.COMMIT
-
-        try:
-            repo.resolve_refish(arg)
-            return ArgType.COMMIT
-        except (KeyError, ValueError, pygit2.InvalidSpecError):
-            pass
-
-    if allow_filters:
-        return ArgType.FILTER
-
-    raise click.UsageError(
-        f"Argument not recognised as a valid commit, ref, or range: {arg}"
-    )
+            filters.append(arg)
+    for warning in dedupe_warnings:
+        click.echo(warning, err=True)
+    return revisions, filters
 
 
-def parse_commits_and_filters(
+def parse_revisions_and_filters(
     repo,
     args,
     kwargs=None,
@@ -107,6 +160,9 @@ def parse_commits_and_filters(
     Interprets positional args for kart diff, show, and log, including "--", commits/refs/ranges, and filters.
     Returns a three-tuple: (options, commits/refs/ranges, filters)
     """
+
+    # If kwargs are passed, allow_options must be set.
+    assert allow_options or not kwargs
 
     # As soon as we encounter a filter, we assume all remaining args are also filters.
     # i.e. the filters must be given *last*.
@@ -118,42 +174,11 @@ def parse_commits_and_filters(
         dash_index = args.index("--")
         filters = list(args[dash_index + 1 :])
         args = args[:dash_index]
+        options, revisions = _separate_options(args, allow_options)
+        _append_kwargs_to_options(options, kwargs, allow_options)
+        return options, revisions, filters
     else:
-        dash_index = None
-        filters = []
-
-    options = []
-    commits = []
-
-    lists_by_type = {
-        ArgType.OPTION: options,
-        ArgType.COMMIT: commits,
-        ArgType.FILTER: filters,
-    }
-
-    allow_commits = True
-    allow_filters = dash_index is None
-    for arg in args:
-        arg_type = get_arg_type(
-            repo,
-            arg,
-            allow_options=allow_options,
-            allow_commits=allow_commits,
-            allow_filters=allow_filters,
-        )
-        lists_by_type[arg_type].append(arg)
-        if arg_type == ArgType.FILTER:
-            allow_commits = False
-
-    if kwargs is not None and allow_options:
-        for option_name, option_val in kwargs.items():
-            option_name = option_name.replace("_", "-", 1)
-            t = type(option_val)
-            if t == int or t == str:
-                options.append(f"--{option_name}={option_val}")
-            elif t == tuple:
-                options.extend([f"--{option_name}={o}" for o in option_val]),
-            elif t == bool and option_val:
-                options.append(f"--{option_name}")
-
-    return options, commits, filters
+        options, args = _separate_options(args, allow_options)
+        _append_kwargs_to_options(options, kwargs, allow_options)
+        revisions, filters = _disambiguate_revisions_and_filters(repo, args)
+        return options, revisions, filters
