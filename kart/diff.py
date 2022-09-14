@@ -205,7 +205,7 @@ def diff(
         diff_estimate_accuracy=add_feature_count_estimate,
     )
     diff_writer.convert_to_dataset_format(convert_to_dataset_format)
-    diff_writer.full_attachment_diffs(diff_files)
+    diff_writer.full_file_diffs(diff_files)
     diff_writer.write_diff()
 
     if exit_code or output_type == "quiet":

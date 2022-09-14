@@ -9,7 +9,7 @@ import pytest
 import kart
 from kart.base_diff_writer import BaseDiffWriter
 from kart.diff_structs import Delta, DeltaDiff
-from kart.diff_util import get_attachment_diff
+from kart.diff_util import get_file_diff
 from kart.json_diff_writers import JsonLinesDiffWriter
 from kart.geometry import hex_wkb_to_ogr
 from kart.repo import KartRepo

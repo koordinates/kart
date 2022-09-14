@@ -134,7 +134,7 @@ def show(
     diff_writer = diff_writer_class(
         repo, commit_spec, filters, output_path, json_style=fmt, target_crs=crs
     )
-    diff_writer.full_attachment_diffs(diff_files)
+    diff_writer.full_file_diffs(diff_files)
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff()
 
@@ -192,6 +192,6 @@ def create_patch(ctx, *, refish, json_style, output_path, patch_type, **kwargs):
         json_style=json_style,
         patch_type=patch_type,
     )
-    diff_writer.full_attachment_diffs(True)
+    diff_writer.full_file_diffs(True)
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff()

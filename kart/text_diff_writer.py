@@ -309,19 +309,19 @@ class TextDiffWriter(BaseDiffWriter):
                 inserted_set.add(old_item)
                 old_index += 1
 
-    def write_attachment_diff(self, attachment_diff):
-        for key, delta in attachment_diff.sorted_items():
-            self.write_attachment_delta(key, delta)
-        return bool(attachment_diff)
+    def write_file_diff(self, file_diff):
+        for key, delta in file_diff.sorted_items():
+            self.write_file_delta(key, delta)
+        return bool(file_diff)
 
-    def write_attachment_delta(self, key, delta):
+    def write_file_delta(self, key, delta):
         if delta.old:
             click.secho(f"--- {key}", bold=True, **self.pecho)
         if delta.new:
             click.secho(f"+++ {key}", bold=True, **self.pecho)
 
-        if self.do_full_attachment_diffs:
-            delta = self._full_attachment_delta(delta, skip_binary_files=True)
+        if self.do_full_file_diffs:
+            delta = self._full_file_delta(delta, skip_binary_files=True)
             if not (delta.flags & BINARY_FILE):
                 if delta.old:
                     output = self._prefix_item(delta.old_value, delta.old_key, "- ")

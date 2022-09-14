@@ -188,8 +188,8 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
 
     WORKING_COPY_PART_TYPE = None  # Example: working_copy.PartType.TABULAR
 
-    # Paths are generally relative to self.inner_tree, but datasets may choose to put extra data in the outer
-    # tree also where it will eventually be user-visible (once attachments are fully supported).
+    # Paths are generally relative to self.inner_tree, but table datasets put certain meta items in the outer-tree.
+    # (This is an anti-pattern - when designing a new dataset type, don't put meta items in the outer-tree.)
 
     # Where meta-items are stored - blobs containing metadata about the structure or schema of the dataset.
     META_PATH = "meta/"

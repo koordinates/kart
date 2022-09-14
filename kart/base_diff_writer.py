@@ -9,7 +9,7 @@ import click
 import pygit2
 
 from kart import diff_util
-from kart.diff_structs import ATTACHMENT_KEY, WORKING_COPY_EDIT, BINARY_FILE, Delta
+from kart.diff_structs import FILES_KEY, WORKING_COPY_EDIT, BINARY_FILE, Delta
 from kart.exceptions import CrsError, InvalidOperation
 from kart.key_filters import RepoKeyFilter
 from kart.promisor_utils import FetchPromisedBlobsProcess, object_is_promised
@@ -117,7 +117,7 @@ class BaseDiffWriter:
 
         self.commit = None
         self.do_convert_to_dataset_format = False
-        self.do_full_attachment_diffs = False
+        self.do_full_file_diffs = False
 
     def include_target_commit_as_header(self):
         """
@@ -129,8 +129,8 @@ class BaseDiffWriter:
     def convert_to_dataset_format(self, do_convert_to_dataset_format=True):
         self.do_convert_to_dataset_format = do_convert_to_dataset_format
 
-    def full_attachment_diffs(self, do_full_attachment_diffs=True):
-        self.do_full_attachment_diffs = do_full_attachment_diffs
+    def full_file_diffs(self, do_full_file_diffs=True):
+        self.do_full_file_diffs = do_full_file_diffs
 
     @classmethod
     def _normalize_output_path(cls, output_path):
@@ -260,7 +260,7 @@ class BaseDiffWriter:
         self.has_changes = False
         for ds_path in self.all_ds_paths:
             self.has_changes |= self.write_ds_diff_for_path(ds_path)
-        self.has_changes |= self.write_attachment_diff(self.get_attachment_diff())
+        self.has_changes |= self.write_file_diff(self.get_file_diff())
         self.write_warnings_footer()
 
     def write_ds_diff_for_path(self, ds_path):
@@ -274,11 +274,11 @@ class BaseDiffWriter:
         """For outputting ds_diff, the diff of a particular dataset."""
         raise NotImplementedError()
 
-    def write_attachment_diff(self, attachment_diff):
-        """For outputting attachment_diff - all the files that have changed, without reference to any dataset."""
+    def write_file_diff(self, file_diff):
+        """For outputting file_diff - all the files that have changed, without reference to any dataset."""
         raise NotImplementedError()
 
-    def _full_attachment_delta(self, delta, skip_binary_files=False):
+    def _full_file_delta(self, delta, skip_binary_files=False):
         def get_blob(half_delta):
             return self.repo[half_delta.value] if half_delta else None
 
@@ -305,7 +305,7 @@ class BaseDiffWriter:
         result.flags = delta.flags
         return result
 
-    def get_repo_diff(self, include_attachments=True):
+    def get_repo_diff(self, include_files=True):
         """
         Generates a RepoDiff containing an entry for every dataset in the repo (that matches self.repo_key_filter).
         """
@@ -316,7 +316,7 @@ class BaseDiffWriter:
             workdir_diff_cache=self.workdir_diff_cache,
             repo_key_filter=self.repo_key_filter,
             convert_to_dataset_format=self.do_convert_to_dataset_format,
-            include_attachments=include_attachments,
+            include_files=include_files,
         )
 
     def get_dataset_diff(self, ds_path):
@@ -341,9 +341,9 @@ class BaseDiffWriter:
             convert_to_dataset_format=self.do_convert_to_dataset_format,
         )
 
-    def get_attachment_diff(self):
+    def get_file_diff(self):
         """Returns the DatasetDiff object for the deltas that do not belong to any dataset."""
-        return diff_util.get_attachment_diff(
+        return diff_util.get_file_diff(
             self.base_rs,
             self.target_rs,
             include_wc_diff=False,
@@ -634,7 +634,7 @@ class BaseDiffWriter:
         so, useful for accessing things that won't change (its path, its type), or for accessing
         things that haven't changed (ie, check the diff first to make sure it hasn't changed).
         """
-        if ds_path == ATTACHMENT_KEY:
+        if ds_path == FILES_KEY:
             return None
         dataset = self.base_rs.datasets().get(ds_path)
         if not dataset:

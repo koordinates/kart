@@ -5,11 +5,12 @@ from typing import Any
 from .exceptions import InvalidOperation
 
 
-# A pseudo "dataset-path" used as the key for storing files (aka attachments). These files are not considered to be
-# part of any dataset. They may be alongside dataset content (ie <dataset-path>/my-attachment.txt) or not (ie
-# <repo-root>/my-attachment.txt) but when outputting diffs, they go in the <files> area and not in any dataset.
+# A pseudo "dataset-path" used as the key for storing files. Files are all individual top-level items in the repo,
+# not pieces of a dataset - and so are addressed like this "path/to/file.txt" rather than something like this
+# "<dataset-path>:feature:<primary-key>". They may be alongside dataset content (ie <dataset-path>/my-attachment.txt)
+# or not (ie <repo-root>/my-attachment.txt) but when outputting diffs, they all go in the <files> area and not in any dataset.
 # Note that this is not a valid dataset-path, so it cannot conflict with any dataset.
-ATTACHMENT_KEY = "<files>"
+FILES_KEY = "<files>"
 
 
 class Conflict(Exception):

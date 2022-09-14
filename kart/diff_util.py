@@ -5,7 +5,7 @@ from pathlib import PurePosixPath
 import subprocess
 
 from kart.cli_util import tool_environment
-from kart.diff_structs import ATTACHMENT_KEY, Delta, DeltaDiff, DatasetDiff, RepoDiff
+from kart.diff_structs import FILES_KEY, Delta, DeltaDiff, DatasetDiff, RepoDiff
 from kart.exceptions import SubprocessError
 from kart.key_filters import DatasetKeyFilter, RepoKeyFilter
 from kart.structure import RepoStructure
@@ -46,7 +46,7 @@ def get_repo_diff(
     workdir_diff_cache=None,
     repo_key_filter=RepoKeyFilter.MATCH_ALL,
     convert_to_dataset_format=False,
-    include_attachments=False,
+    include_files=False,
 ):
     """
     Generates a RepoDiff containing an entry for every dataset in the repo
@@ -60,8 +60,8 @@ def get_repo_diff(
     repo_key_filter - controls which datasets (and PK values) match and are included in the diff.
     convert_to_dataset_format - whether to show the diff of what would be committed if files were
        converted to dataset format at commit-time (ie, for point-cloud tiles)
-    include_attachments - whether to include a DatasetDiff in the result for changes that are not
-       contained in any particular dataset.
+    include_files - whether to include a DatasetDiff in the result for changes to files that
+       are simply standalone files, rather than part of a dataset's contents.
     """
 
     all_ds_paths = get_all_ds_paths(base_rs, target_rs, repo_key_filter)
@@ -80,12 +80,10 @@ def get_repo_diff(
             ds_filter=repo_key_filter[ds_path],
             convert_to_dataset_format=convert_to_dataset_format,
         )
-    if include_attachments:
-        attachment_diff = get_attachment_diff(
-            base_rs, target_rs, repo_key_filter=repo_key_filter
-        )
-        if attachment_diff:
-            repo_diff.recursive_set([ATTACHMENT_KEY, ATTACHMENT_KEY], attachment_diff)
+    if include_files:
+        file_diff = get_file_diff(base_rs, target_rs, repo_key_filter=repo_key_filter)
+        if file_diff:
+            repo_diff.recursive_set([FILES_KEY, FILES_KEY], file_diff)
 
     # No need to prune recursively since self.get_dataset_diff already prunes the dataset diffs.
     repo_diff.prune(recurse=False)
@@ -160,7 +158,7 @@ def get_dataset_diff(
 ZEROES = re.compile(r"0+")
 
 
-def get_attachment_diff(
+def get_file_diff(
     base_rs,
     target_rs,
     *,
