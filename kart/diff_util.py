@@ -218,7 +218,7 @@ def get_attachment_diff(
     for line in lines:
         parts = line.split()
         old_sha, new_sha, path = parts[2], parts[3], parts[5]
-        if path not in repo_key_filter or not repo_key_filter[path].match_all:
+        if not path_matches_repo_key_filter(path, repo_key_filter):
             continue
         if is_dataset_metadata_xml(old_tree, new_tree, path):
             continue
@@ -227,6 +227,25 @@ def get_attachment_diff(
         attachment_deltas.add_delta(Delta(old_half_delta, new_half_delta))
 
     return attachment_deltas
+
+
+def path_matches_repo_key_filter(path, repo_key_filter):
+    if repo_key_filter.match_all:
+        return True
+    # Return attachments that have a name that we are matching all of.
+    if path in repo_key_filter and repo_key_filter[path].match_all:
+        return True
+    # Return attachments that are inside a folder that we are matching all of.
+    for p, dataset_filter in repo_key_filter.items():
+        if not dataset_filter.match_all:
+            continue
+        if p == path:
+            return True
+        if path.startswith(p) and (p.endswith("/") or path[len(p)] == "/"):
+            return True
+    # Don't return attachments inside a dataset / folder that we are only matching some of
+    # ie, only matching certain features or meta items.
+    return False
 
 
 def is_dataset_metadata_xml(old_tree, new_tree, path):
