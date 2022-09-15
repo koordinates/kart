@@ -67,6 +67,8 @@ def b64encode_str(bytestring):
 
 def b64decode_str(b64_str):
     """urlsafe str -> bytes"""
+    if b64_str.startswith("base64:"):
+        b64_str = b64_str[7:]  # len("base64:") = 7
     return base64.urlsafe_b64decode(b64_str)
 
 

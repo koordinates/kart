@@ -1964,8 +1964,8 @@ def test_diff_geojson_usage(data_archive, cli_runner, tmp_path):
     "output_format",
     [o for o in SHOW_OUTPUT_FORMATS if o not in {"html", "quiet"}],
 )
-def test_attachment_diff(output_format, data_archive, cli_runner):
-    with data_archive("points-with-attachments") as repo_path:
+def test_attached_files_diff(output_format, data_archive, cli_runner):
+    with data_archive("points-with-attached-files") as repo_path:
         r = cli_runner.invoke(["show", f"--output-format={output_format}"])
         assert r.exit_code == 0, r.stderr
         if output_format == "text":
@@ -2004,8 +2004,8 @@ def test_attachment_diff(output_format, data_archive, cli_runner):
     "output_format",
     [o for o in SHOW_OUTPUT_FORMATS if o not in {"html", "quiet"}],
 )
-def test_full_attachment_diff(output_format, data_archive, cli_runner):
-    with data_archive("points-with-attachments") as repo_path:
+def test_full_attached_files_diff(output_format, data_archive, cli_runner):
+    with data_archive("points-with-attached-files") as repo_path:
         r = cli_runner.invoke(
             ["show", f"--output-format={output_format}", "--diff-files"]
         )
@@ -2025,7 +2025,7 @@ def test_full_attachment_diff(output_format, data_archive, cli_runner):
             jdict = json.loads(r.stdout)
             files = jdict["kart.diff/v1+hexwkb"]["<files>"]
             logo = files["logo.png"]
-            # Check just the first 4 bytes of the binary file...
+            # Check just the first 4 bytes of the binary file data...
             logo["+"] = b64decode_str(logo["+"])[:4]
 
             assert files == {
@@ -2048,7 +2048,7 @@ def test_full_attachment_diff(output_format, data_archive, cli_runner):
             }
 
             jdict = json.loads(lines[-1])
-            # Check just the first 4 bytes of the binary file...
+            # Check just the first 4 bytes of the binary file data...
             jdict["change"]["+"] = b64decode_str(jdict["change"]["+"])[:4]
             assert jdict == {
                 "type": "file",
@@ -2058,14 +2058,14 @@ def test_full_attachment_diff(output_format, data_archive, cli_runner):
             }
 
 
-def test_attachment_patch(data_archive, cli_runner):
-    with data_archive("points-with-attachments") as repo_path:
+def test_attached_files_patch(data_archive, cli_runner):
+    with data_archive("points-with-attached-files") as repo_path:
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0, r.stderr
         jdict = json.loads(r.stdout)
         files = jdict["kart.diff/v1+hexwkb"]["<files>"]
         logo = files["logo.png"]
-        # Check just the first 4 bytes of the binary file...
+        # Check just the first 4 bytes of the binary file data...
         logo["+"] = b64decode_str(logo["+"])[:4]
 
         assert files == {

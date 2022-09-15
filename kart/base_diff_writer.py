@@ -294,7 +294,7 @@ class BaseDiffWriter:
             if skip_binary_files:
                 return delta
 
-            blob_to_text = lambda blob: b64encode_str(memoryview(blob))
+            blob_to_text = lambda blob: "base64:" + b64encode_str(memoryview(blob))
         else:
             blob_to_text = lambda blob: str(memoryview(blob), "utf-8")
 
