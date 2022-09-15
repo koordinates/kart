@@ -250,9 +250,6 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             """
         )
 
-    # Postgis has nowhere obvious to put this metadata.
-    _UNSUPPORTED_META_ITEMS = ("description", "metadata/dataset.json", "metadata.xml")
-
     # PostGIS approximates an int8 as an int16 - see super()._remove_hidden_meta_diffs
     @classmethod
     def try_align_schema_col(cls, old_col_dict, new_col_dict):
@@ -274,14 +271,6 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             new_col_dict["length"] = old_col_dict.get("length")
 
         return new_type == old_type
-
-    def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
-        super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
-
-        # Nowhere to put these in postgis WC
-        for key in self._UNSUPPORTED_META_ITEMS:
-            if key in ds_meta_items:
-                del ds_meta_items[key]
 
     def _is_builtin_crs(self, crs):
         auth_name, auth_code = crs_util.parse_authority(crs)

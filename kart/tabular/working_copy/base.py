@@ -15,6 +15,7 @@ from kart.exceptions import (
     NotYetImplemented,
 )
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, RepoKeyFilter
+from kart import meta_items
 from kart.promisor_utils import LibgitSubcode
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tabular.table_dataset import TableDataset
@@ -41,6 +42,14 @@ class TableWorkingCopy(WorkingCopyPart):
     self.db_schema - database-schema that this working copy controls, if any.
     self.kart_tables - sqlalchemy Table definitions for kart_state and kart_track tables.
     """
+
+    # Subclasses should override if they can support more meta-items eg description or metadata.xml
+    SUPPORTED_META_ITEMS = (
+        meta_items.TITLE,
+        meta_items.SCHEMA_JSON,
+        meta_items.CRS_DEFINITIONS
+        # Not description, not metadata.xml, except where overridden by a subclass.
+    )
 
     @property
     def WORKING_COPY_TYPE_NAME(self):
@@ -505,6 +514,16 @@ class TableWorkingCopy(WorkingCopyPart):
             if old_col_dict.get(name) is None and new_col_dict.get(name) == default_val:
                 new_col_dict[name] = None
 
+    def _is_supported_meta_item(self, meta_item_name):
+        if meta_item_name in self.SUPPORTED_META_ITEMS:
+            return True
+        for definition in self.SUPPORTED_META_ITEMS:
+            if not isinstance(definition, meta_items.MetaItemDefinition):
+                continue
+            if definition.matches(meta_item_name):
+                return True
+        return False
+
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         """
         Remove any meta diffs that can't or shouldn't be committed, and so shouldn't be shown to the user.
@@ -515,6 +534,11 @@ class TableWorkingCopy(WorkingCopyPart):
 
         def _safe_del(dict_, key):
             dict_.pop(key, None)
+
+        ds_meta_keys = list(ds_meta_items.keys())
+        for key in ds_meta_keys:
+            if not self._is_supported_meta_item(key):
+                _safe_del(ds_meta_items, key)
 
         # A dataset should have at most ONE of "metadata.xml" or "metadata/dataset.json".
         # The XML file is newer and supercedes the JSON file.

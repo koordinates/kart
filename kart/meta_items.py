@@ -7,6 +7,31 @@ from kart.schema import Schema
 from kart.serialise_util import ensure_text, ensure_bytes, json_pack, json_unpack
 
 
+class TagsJsonFileType:
+    # schema.json should be checked on read and write, by dropping any optional fields that are None.
+    def decode_from_bytes(self, data):
+        if data is None:
+            return None
+        return self.assert_list_of_strings(json_unpack(data))
+
+    def encode_to_bytes(self, meta_item):
+        if meta_item is None:
+            return None
+        return json_pack(self.assert_list_of_strings(meta_item))
+
+    def assert_list_of_strings(self, meta_item):
+        try:
+            assert isinstance(meta_item, list)
+            for tag in meta_item:
+                assert isinstance(tag, str)
+        except AssertionError as e:
+            raise AssertionError("tags.json should be a list of strings")
+        return meta_item
+
+
+TagsJsonFileType.INSTANCE = TagsJsonFileType()
+
+
 class SchemaJsonFileType:
     # schema.json should be normalised on read and write, by dropping any optional fields that are None.
     def decode_from_bytes(self, data):
@@ -155,6 +180,9 @@ TITLE = MetaItemDefinition("title", MetaItemFileType.TEXT)
 
 # A longer description about the dataset's contents:
 DESCRIPTION = MetaItemDefinition("description", MetaItemFileType.TEXT)
+
+# A list of tags - each tag is free form text.
+TAGS_JSON = MetaItemDefinition("tags.json", TagsJsonFileType.INSTANCE)
 
 # JSON representation of the dataset's schema. See kart/tabular/schema.py, datasets_v3.rst
 SCHEMA_JSON = MetaItemDefinition("schema.json", SchemaJsonFileType.INSTANCE)

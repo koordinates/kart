@@ -52,6 +52,7 @@ class PointCloudV1(BaseDataset):
 
     TITLE = meta_items.TITLE
     DESCRIPTION = meta_items.DESCRIPTION
+    TAGS_JSON = meta_items.TAGS_JSON
     METADATA_XML = meta_items.METADATA_XML
 
     # Which tile format(s) this dataset requires / allows.
@@ -63,6 +64,7 @@ class PointCloudV1(BaseDataset):
     META_ITEMS = (
         TITLE,
         DESCRIPTION,
+        TAGS_JSON,
         METADATA_XML,
         FORMAT_JSON,
         SCHEMA_JSON,

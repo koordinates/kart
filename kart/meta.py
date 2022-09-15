@@ -181,6 +181,8 @@ def meta_set(ctx, message, dataset, items):
         message = f"Update metadata for {dataset}"
 
     def _parse(key, value):
+        if value == "":
+            return None
         value = value_optionally_from_text_file(value, key, ctx, encoding="utf-8")
         if key.endswith(".json"):
             try:

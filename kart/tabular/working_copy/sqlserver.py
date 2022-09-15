@@ -263,19 +263,8 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
         return new_type == old_type
 
-    _UNSUPPORTED_META_ITEMS = (
-        "description",
-        "metadata/dataset.json",
-        "metadata.xml",
-    )
-
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
-
-        # Nowhere to put these in SQL Server WC
-        for key in self._UNSUPPORTED_META_ITEMS:
-            if key in ds_meta_items:
-                del ds_meta_items[key]
 
         # Nowhere to put custom CRS in SQL Server, so remove custom CRS diffs.
         # The working copy doesn't know the true authority name, so refers to them all as CUSTOM.

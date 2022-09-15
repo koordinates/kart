@@ -228,19 +228,8 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
 
         return new_type == old_type
 
-    _UNSUPPORTED_META_ITEMS = (
-        "description",
-        "metadata/dataset.json",
-        "metadata.xml",
-    )
-
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
-
-        # Nowhere to put these in SQL Server WC
-        for key in self._UNSUPPORTED_META_ITEMS:
-            if key in ds_meta_items:
-                del ds_meta_items[key]
 
         for key in ds_meta_items.keys() & wc_meta_items.keys():
             if not key.startswith("crs/"):

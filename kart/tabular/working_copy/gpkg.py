@@ -11,6 +11,7 @@ from osgeo import gdal
 import sqlalchemy as sa
 from kart import crs_util
 from kart.exceptions import InvalidOperation
+from kart import meta_items
 from kart.sqlalchemy import text_with_inlined_params
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.schema import Schema
@@ -33,6 +34,15 @@ class WorkingCopy_GPKG(TableWorkingCopy):
     """
 
     WORKING_COPY_TYPE_NAME = "GPKG"
+
+    SUPPORTED_META_ITEMS = (
+        meta_items.TITLE,
+        meta_items.DESCRIPTION,
+        meta_items.SCHEMA_JSON,
+        meta_items.CRS_DEFINITIONS,
+        meta_items.METADATA_XML,
+        "metadata/dataset.json",
+    )
 
     def __init__(self, repo, location):
         self.repo = repo
@@ -93,7 +103,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
 
     @property
     def full_path(self):
-        """ Return a full absolute path to the working copy """
+        """Return a full absolute path to the working copy"""
         return (self.repo.workdir_path / self.path).resolve()
 
     @property

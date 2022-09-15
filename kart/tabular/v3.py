@@ -69,6 +69,7 @@ class TableV3(RichTableDataset):
     # === Visible meta-items ===
     TITLE = meta_items.TITLE
     DESCRIPTION = meta_items.DESCRIPTION
+    TAGS_JSON = meta_items.TAGS_JSON
     METADATA_XML = meta_items.METADATA_XML
     SCHEMA_JSON = meta_items.SCHEMA_JSON
     CRS_DEFINITIONS = meta_items.CRS_DEFINITIONS
@@ -92,6 +93,7 @@ class TableV3(RichTableDataset):
     META_ITEMS = (
         TITLE,
         DESCRIPTION,
+        TAGS_JSON,
         METADATA_XML,
         SCHEMA_JSON,
         CRS_DEFINITIONS,

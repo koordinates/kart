@@ -403,11 +403,9 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
 
         # Actual implementation once we've figured out there's no conflict:
         if new_value is not None:
-            if name.endswith(".json"):
-                new_value = json_pack(new_value)
-            else:
-                new_value = ensure_bytes(new_value)
-            object_builder.insert(name, new_value)
+            definition = self.get_meta_item_definition(name)
+            file_type = MetaItemFileType.get_from_definition_or_suffix(definition, name)
+            object_builder.insert(name, file_type.encode_to_bytes(delta.new_value))
         else:
             object_builder.remove(name)
 
