@@ -99,6 +99,9 @@ def _is_revision(repo, arg, dedupe_warnings):
     ):
         return True
 
+    if "*" in arg:
+        return False
+
     filter_path = arg.split(":", maxsplit=1)[0]
     head_tree = repo.head_tree
     is_useful_filter_at_head = head_tree and filter_path in head_tree

@@ -69,6 +69,11 @@ from kart.repo import KartRepoState
         "Otherwise, the feature count will be approximated with varying levels of accuracy."
     ),
 )
+@click.option(
+    "--diff-files",
+    is_flag=True,
+    help="Show changes to file contents (instead of just showing the object IDs of changed files)",
+)
 @click.argument(
     "args",
     metavar="[REVISION] [--] [FILTERS]",
@@ -85,6 +90,7 @@ def show(
     exit_code,
     json_style,
     only_feature_count,
+    diff_files,
     args,
 ):
     """
@@ -128,6 +134,7 @@ def show(
     diff_writer = diff_writer_class(
         repo, commit_spec, filters, output_path, json_style=fmt, target_crs=crs
     )
+    diff_writer.full_file_diffs(diff_files)
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff()
 
@@ -185,5 +192,6 @@ def create_patch(ctx, *, refish, json_style, output_path, patch_type, **kwargs):
         json_style=json_style,
         patch_type=patch_type,
     )
+    diff_writer.full_file_diffs(True)
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff()

@@ -13,11 +13,12 @@ from .diff_estimation import (
     estimate_diff_feature_counts,
     terminate_estimate_thread,
 )
-from .diff_structs import DatasetDiff
-from .log import commit_obj_to_json
-from .output_util import dump_json_output, resolve_output_path
-from .tabular.feature_output import feature_as_geojson, feature_as_json
-from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
+from kart.diff_structs import FILES_KEY, BINARY_FILE, DatasetDiff
+from kart.log import commit_obj_to_json
+from kart.output_util import dump_json_output, resolve_output_path
+from kart.serialise_util import b64encode_str
+from kart.tabular.feature_output import feature_as_geojson, feature_as_json
+from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
 L = logging.getLogger(__name__)
 
@@ -79,16 +80,23 @@ class JsonDiffWriter(BaseDiffWriter):
         self.write_warnings_footer()
 
     def _postprocess_simple_delta(self, delta):
-        r = delta.to_plus_minus_dict()
-        if self.patch_type == "minimal" and "+" in r and "-" in r:
-            r.pop("-")
-            r["*"] = r.pop("+")
-        return r
+        return delta.to_plus_minus_dict(minimal=self.patch_type == "minimal")
+
+    def _postprocess_attachment_delta(self, delta):
+        if self.do_full_file_diffs:
+            delta = self._full_file_delta(delta)
+        return delta.to_plus_minus_dict(minimal=self.patch_type == "minimal")
 
     def default(self, obj):
         # Part of JsonEncoder interface - adapt objects that couldn't otherwise be encoded.
         if isinstance(obj, DatasetDiff):
             ds_path, ds_diff = obj.ds_path, obj
+            if ds_path == FILES_KEY:
+                return {
+                    key: self._postprocess_attachment_delta(value)
+                    for key, value in ds_diff[FILES_KEY].sorted_items()
+                }
+
             result = {}
             if "meta" in ds_diff:
                 result["meta"] = {
@@ -348,6 +356,21 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             obj["change"] = change
             self.dump(obj)
 
+    def write_file_diff(self, file_diff):
+        obj = {"type": "file", "path": None, "binary": False, "change": None}
+        if not self.do_full_file_diffs:
+            obj.pop("binary")
+
+        for key, delta in file_diff.sorted_items():
+            obj["path"] = key
+            if self.do_full_file_diffs:
+                delta = self._full_file_delta(delta)
+                obj["binary"] = bool(delta.flags & BINARY_FILE)
+            obj["change"] = delta.to_plus_minus_dict()
+            self.dump(obj)
+
+        return bool(file_diff)
+
     def write_warnings_footer(self):
         # If there's an estimate thread running (see write_header()), ask it to terminate
         terminate_estimate_thread.set()
@@ -397,8 +420,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
         return output_path
 
     def write_diff(self):
-
-        repo_diff = self.get_repo_diff()
+        repo_diff = self.get_repo_diff(include_files=False)
         self.has_changes = bool(repo_diff)
         if len(repo_diff) > 1 and not isinstance(self.output_path, Path):
             raise click.BadParameter(

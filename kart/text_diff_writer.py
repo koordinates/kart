@@ -6,11 +6,12 @@ from pathlib import Path
 
 import click
 
-from .base_diff_writer import BaseDiffWriter
-from .list_of_conflicts import ListOfConflicts
-from .output_util import format_wkt_for_output, resolve_output_path
-from .tabular.feature_output import feature_as_text, feature_field_as_text
-from .schema import Schema
+from kart.base_diff_writer import BaseDiffWriter
+from kart.diff_structs import BINARY_FILE
+from kart.list_of_conflicts import ListOfConflicts
+from kart.output_util import format_wkt_for_output, resolve_output_path
+from kart.tabular.feature_output import feature_as_text, feature_field_as_text
+from kart.schema import Schema
 
 _NULL = object()
 
@@ -307,3 +308,31 @@ class TextDiffWriter(BaseDiffWriter):
                 # So matching item must be treated as inserted when its position is found in new_list
                 inserted_set.add(old_item)
                 old_index += 1
+
+    def write_file_diff(self, file_diff):
+        for key, delta in file_diff.sorted_items():
+            self.write_file_delta(key, delta)
+        return bool(file_diff)
+
+    def write_file_delta(self, key, delta):
+        if delta.old:
+            click.secho(f"--- {key}", bold=True, **self.pecho)
+        if delta.new:
+            click.secho(f"+++ {key}", bold=True, **self.pecho)
+
+        if self.do_full_file_diffs:
+            delta = self._full_file_delta(delta, skip_binary_files=True)
+            if not (delta.flags & BINARY_FILE):
+                if delta.old:
+                    output = self._prefix_item(delta.old_value, delta.old_key, "- ")
+                    click.secho(output, fg="red", **self.pecho)
+                if delta.new:
+                    output = self._prefix_item(delta.new_value, delta.new_key, "+ ")
+                    click.secho(output, fg="green", **self.pecho)
+                return
+
+        file_type = "binary file" if delta.flags & BINARY_FILE else "file"
+        if delta.old:
+            click.secho(f"- ({file_type} {delta.old_value})", fg="red", **self.pecho)
+        if delta.new:
+            click.secho(f"+ ({file_type} {delta.new_value})", fg="green", **self.pecho)

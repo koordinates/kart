@@ -122,6 +122,11 @@ def feature_count_diff(
     help="Ignores file format differences in any new files when generating the diff - assumes that the new files will "
     "also committed using --convert-to-dataset-format, so the conversion step will remove the format differences.",
 )
+@click.option(
+    "--diff-files",
+    is_flag=True,
+    help="Show changes to file contents (instead of just showing the object IDs of changed files)",
+)
 @click.argument(
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
@@ -139,6 +144,7 @@ def diff(
     only_feature_count,
     add_feature_count_estimate,
     convert_to_dataset_format,
+    diff_files,
     args,
 ):
     """
@@ -199,6 +205,7 @@ def diff(
         diff_estimate_accuracy=add_feature_count_estimate,
     )
     diff_writer.convert_to_dataset_format(convert_to_dataset_format)
+    diff_writer.full_file_diffs(diff_files)
     diff_writer.write_diff()
 
     if exit_code or output_type == "quiet":

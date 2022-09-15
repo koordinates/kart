@@ -5,6 +5,14 @@ from typing import Any
 from .exceptions import InvalidOperation
 
 
+# A pseudo "dataset-path" used as the key for storing files. Files are all individual top-level items in the repo,
+# not pieces of a dataset - and so are addressed like this "path/to/file.txt" rather than something like this
+# "<dataset-path>:feature:<primary-key>". They may be alongside dataset content (ie <dataset-path>/my-attachment.txt)
+# or not (ie <repo-root>/my-attachment.txt) but when outputting diffs, they all go in the <files> area and not in any dataset.
+# Note that this is not a valid dataset-path, so it cannot conflict with any dataset.
+FILES_KEY = "<files>"
+
+
 class Conflict(Exception):
     pass
 
@@ -42,6 +50,7 @@ class KeyValue:
 
 # Delta flags:
 WORKING_COPY_EDIT = 0x1  # Delta represents a change made in the WC - it is "dirty".
+BINARY_FILE = 0x2  # Delta is a change to a binary file.
 
 
 @dataclass
@@ -182,7 +191,12 @@ class Delta:
             result.flags = self.flags | other.flags
         return result
 
-    def to_plus_minus_dict(self):
+    def to_plus_minus_dict(self, minimal=False):
+        # NOTE - it might make more sense to have:
+        # insert ++      delete --      update - +      minimal-update +
+        # but this is a breaking change, would need to be co-ordinated.
+        if minimal and self.old and self.new:
+            return {"*": self.new_value}
         result = {}
         if self.old:
             result["-"] = self.old_value
