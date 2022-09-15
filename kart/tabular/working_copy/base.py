@@ -1388,9 +1388,10 @@ class TableWorkingCopy(WorkingCopyPart):
                     f"CRS changes not supported by update - should be drop + re-write_full: {key}"
                 )
             func_key = key.replace("/", "_").replace(".", "_")
-            func = getattr(self, f"_apply_meta_{func_key}")
-            delta = meta_diff[key]
-            func(sess, target_ds, delta.old_value, delta.new_value)
+            func = getattr(self, f"_apply_meta_{func_key}", None)
+            if func is not None:
+                delta = meta_diff[key]
+                func(sess, target_ds, delta.old_value, delta.new_value)
 
     def apply_meta_title(self, sess, dataset, src_value, dest_value):
         raise RuntimeError(

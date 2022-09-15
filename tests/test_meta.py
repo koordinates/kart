@@ -122,6 +122,33 @@ def test_meta_set(data_archive, cli_runner):
         assert meta["description"]["+"] == "newdescription"
 
 
+def test_meta_set_custom_fields(data_archive, cli_runner):
+    with data_archive("points"):
+        # Make sure this works even when we have a working copy
+        # (working copies have to handle certain meta-item changes).
+        r = cli_runner.invoke(["checkout"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(
+            [
+                "meta",
+                "set",
+                "nz_pa_points_topo_150k",
+                "custom_string=example",
+                "custom_list.json=[1, 2, 3]",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["show", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        output = json.loads(r.stdout)
+        patch_info = output.pop("kart.show/v1")
+        assert patch_info["message"] == "Update metadata for nz_pa_points_topo_150k"
+        meta = output["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+        assert meta["custom_string"] == {"+": "example"}
+        assert meta["custom_list.json"]["+"] == [1, 2, 3]
+
+
 def test_meta_get_ref(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(
