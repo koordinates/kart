@@ -1,8 +1,8 @@
 import functools
 import re
 
-from kart.base_dataset import MetaItemDefinition, MetaItemFileType
 from kart.geometry import normalise_gpkg_geom
+from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.tabular.table_dataset import TableDataset

@@ -4,18 +4,15 @@ import re
 
 import pygit2
 
-from kart.base_dataset import (
-    BaseDataset,
-    MetaItemDefinition,
-    MetaItemFileType,
-    MetaItemVisibility,
-)
+from kart.base_dataset import BaseDataset
 from kart.core import find_blobs_in_tree
 from kart.exceptions import (
     PATCH_DOES_NOT_APPLY,
     InvalidOperation,
     NotYetImplemented,
 )
+from kart import meta_items
+from kart.meta_items import MetaItemDefinition, MetaItemFileType, MetaItemVisibility
 from kart.schema import Legend, Schema
 from kart.serialise_util import (
     b64decode_str,
@@ -28,24 +25,6 @@ from kart.serialise_util import (
 )
 from .v3_paths import PathEncoder
 from .rich_table_dataset import RichTableDataset
-
-
-class SchemaJsonFileType:
-    # schema.json should be normalised on read and write, by dropping any optional fields that are None.
-    def decode_from_bytes(self, data):
-        if data is None:
-            return None
-        return Schema.normalise_column_dicts(json_unpack(data))
-
-    def encode_to_bytes(self, meta_item):
-        if meta_item is None:
-            return None
-        if not isinstance(meta_item, Schema):
-            meta_item = Schema.from_column_dicts(meta_item)
-        return meta_item.dumps()
-
-
-SchemaJsonFileType.INSTANCE = SchemaJsonFileType()
 
 
 class TableV3(RichTableDataset):
@@ -88,8 +67,11 @@ class TableV3(RichTableDataset):
     SCHEMA_PATH = META_PATH + "schema.json"
 
     # === Visible meta-items ===
-    # Override schema.json to normalise schemas during serialisation.
-    SCHEMA_JSON = MetaItemDefinition("schema.json", SchemaJsonFileType.INSTANCE)
+    TITLE = meta_items.TITLE
+    DESCRIPTION = meta_items.DESCRIPTION
+    METADATA_XML = meta_items.METADATA_XML
+    SCHEMA_JSON = meta_items.SCHEMA_JSON
+    CRS_DEFINITIONS = meta_items.CRS_DEFINITIONS
 
     # == Hidden meta-items (which don't show in diffs) ==
     # How automatically generated PKs have been assigned so far:
@@ -108,11 +90,11 @@ class TableV3(RichTableDataset):
     )
 
     META_ITEMS = (
-        BaseDataset.TITLE,
-        BaseDataset.DESCRIPTION,
-        BaseDataset.METADATA_XML,
+        TITLE,
+        DESCRIPTION,
+        METADATA_XML,
         SCHEMA_JSON,
-        BaseDataset.CRS_DEFINITIONS,
+        CRS_DEFINITIONS,
         GENERATED_PKS,
         PATH_STRUCTURE,
         LEGEND,

@@ -6,8 +6,8 @@ import re
 import msgpack
 import pygit2
 
-from kart.base_dataset import MetaItemDefinition, MetaItemFileType
 from kart.geometry import Geometry, normalise_gpkg_geom
+from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.tabular.table_dataset import TableDataset
@@ -148,7 +148,7 @@ class TableV1(TableDataset):
 
         RE_DIR = re.compile(r"([0-9a-f]{2})?$")
         RE_LEAF = re.compile(
-            fr"(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$"
+            rf"(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$"
         )
 
         for dir1 in feature_tree:

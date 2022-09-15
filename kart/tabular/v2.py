@@ -1,6 +1,6 @@
-from kart.base_dataset import MetaItemDefinition, MetaItemFileType
-from .v3 import TableV3
-from .v3_paths import PathEncoder
+from kart.meta_items import MetaItemDefinition, MetaItemFileType
+from kart.tabular.v3 import TableV3
+from kart.tabular.v3_paths import PathEncoder
 
 
 class TableV2(TableV3):

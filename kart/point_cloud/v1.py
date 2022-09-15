@@ -2,7 +2,7 @@ import functools
 import shutil
 import os
 
-from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
+from kart.base_dataset import BaseDataset
 from kart.core import find_blobs_in_tree
 from kart.decorators import allow_classmethod
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue, WORKING_COPY_EDIT
@@ -16,6 +16,8 @@ from kart.lfs_util import (
     pointer_file_bytes_to_dict,
     dict_to_pointer_file_bytes,
 )
+from kart import meta_items
+from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.point_cloud.metadata_util import (
     RewriteMetadata,
     extract_pc_tile_metadata,
@@ -48,15 +50,23 @@ class PointCloudV1(BaseDataset):
     # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
     TILE_PATH = "tile/"
 
+    TITLE = meta_items.TITLE
+    DESCRIPTION = meta_items.DESCRIPTION
+    METADATA_XML = meta_items.METADATA_XML
+
+    # Which tile format(s) this dataset requires / allows.
     FORMAT_JSON = MetaItemDefinition("format.json", MetaItemFileType.JSON)
 
+    SCHEMA_JSON = meta_items.SCHEMA_JSON
+    CRS_WKT = meta_items.CRS_WKT
+
     META_ITEMS = (
-        BaseDataset.TITLE,
-        BaseDataset.DESCRIPTION,
-        BaseDataset.METADATA_XML,
+        TITLE,
+        DESCRIPTION,
+        METADATA_XML,
         FORMAT_JSON,
-        BaseDataset.SCHEMA_JSON,
-        BaseDataset.CRS_WKT,
+        SCHEMA_JSON,
+        CRS_WKT,
     )
 
     @property
