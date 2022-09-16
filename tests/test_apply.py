@@ -766,8 +766,7 @@ def test_apply_attach_files(data_working_copy, cli_runner):
 
         r = cli_runner.invoke(["show", "--diff-files"])
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines() == [
-            "commit c27eb30709ac1e3ddc9273d417d46c51715706b3",
+        assert r.stdout.splitlines()[1:] == [
             "Author: Andrew Olsen <andrew.olsen@koordinates.com>",
             "Date:   Sat Jun 11 23:03:58 2022 +1200",
             "",

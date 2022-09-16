@@ -237,7 +237,7 @@ class RepoStructure:
 
         for ds_path, ds_diff in repo_diff.items():
             if ds_path == FILES_KEY:
-                self.apply_file_diff(
+                self.apply_files_diff(
                     ds_diff.get(FILES_KEY),
                     object_builder,
                     resolve_missing_values_from_rs=resolve_missing_values_from_rs,
@@ -321,6 +321,7 @@ class RepoStructure:
                 if new_schema is None:
                     raise InvalidOperation(
                         f"Can't {feature_delta.type} feature {feature_delta.new_key} in deleted dataset {ds_path}",
+                        exit_code=PATCH_DOES_NOT_APPLY,
                     )
                 all_features_valid &= new_schema.validate_feature(
                     new_value, ds_violations
@@ -335,7 +336,7 @@ class RepoStructure:
                 exit_code=SCHEMA_VIOLATION,
             )
 
-    def apply_file_diff(
+    def apply_files_diff(
         self, file_diff, object_builder, resolve_missing_values_from_rs=None
     ):
         if not file_diff:
