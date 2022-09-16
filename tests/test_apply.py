@@ -1,5 +1,4 @@
 import json
-import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -756,3 +755,30 @@ def test_apply_benchmark(data_working_copy, benchmark, cli_runner, monkeypatch):
         monkeypatch.setattr(apply, "apply_patch", _benchmark_apply)
 
         cli_runner.invoke(["apply", "-"], input=patch_text)
+
+
+def test_apply_attach_files(data_working_copy, cli_runner):
+    patch_filename = "points-attach-files.kartpatch"
+    with data_working_copy("points") as (repo_dir, wc_path):
+        patch_path = patches / patch_filename
+        r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["show", "--diff-files"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "commit c27eb30709ac1e3ddc9273d417d46c51715706b3",
+            "Author: Andrew Olsen <andrew.olsen@koordinates.com>",
+            "Date:   Sat Jun 11 23:03:58 2022 +1200",
+            "",
+            "    Add attachments to nz_pa_points_topo_150k",
+            "",
+            "+++ LICENSE.txt",
+            "+ NZ Pa Points (Topo, 1:50k)",
+            "+ https://data.linz.govt.nz/layer/50308-nz-pa-points-topo-150k/",
+            "+ Land Information New Zealand",
+            "+ CC-BY",
+            "+ ",
+            "+++ logo.png",
+            "+ (binary file f8555b6)",
+        ]

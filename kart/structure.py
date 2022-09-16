@@ -7,6 +7,7 @@ from typing import Optional
 import click
 import pygit2
 
+from kart.diff_structs import FILES_KEY
 from .exceptions import (
     NO_CHANGES,
     NO_COMMIT,
@@ -235,6 +236,14 @@ class RepoStructure:
                 object_builder.insert(path, blob)
 
         for ds_path, ds_diff in repo_diff.items():
+            if ds_path == FILES_KEY:
+                self.apply_file_diff(
+                    ds_diff.get(FILES_KEY),
+                    object_builder,
+                    resolve_missing_values_from_rs=resolve_missing_values_from_rs,
+                )
+                continue
+
             schema_delta = ds_diff.recursive_get(["meta", "schema.json"])
             if schema_delta and self.repo.table_dataset_version < 2:
                 # This should have been handled already, but just to be safe.
@@ -275,10 +284,14 @@ class RepoStructure:
         return tree
 
     def check_values_match_schema(self, repo_diff):
+        # TODO - checking data validity within datasets should be delegated to the datasets class.
         all_features_valid = True
         violations = {}
 
         for ds_path, ds_diff in repo_diff.items():
+            if ds_path == FILES_KEY:
+                continue
+
             ds_violations = {}
             violations[ds_path] = ds_violations
 
@@ -308,7 +321,6 @@ class RepoStructure:
                 if new_schema is None:
                     raise InvalidOperation(
                         f"Can't {feature_delta.type} feature {feature_delta.new_key} in deleted dataset {ds_path}",
-                        exit_code=PATCH_DOES_NOT_APPLY,
                     )
                 all_features_valid &= new_schema.validate_feature(
                     new_value, ds_violations
@@ -322,6 +334,27 @@ class RepoStructure:
                 "Schema violation - values do not match schema",
                 exit_code=SCHEMA_VIOLATION,
             )
+
+    def apply_file_diff(
+        self, file_diff, object_builder, resolve_missing_values_from_rs=None
+    ):
+        if not file_diff:
+            return
+
+        for path, delta in file_diff.items():
+            if DATASET_PATH_PATTERN.search(path):
+                raise InvalidOperation(
+                    f"Applying <files> diff shouldn't change the contents of a dataset:\n{path}",
+                    exit_code=SCHEMA_VIOLATION,
+                )
+
+            # TODO - check for conflicts.
+
+            assert isinstance(delta.new_value, (bytes, type(None)))
+            if delta.new_value is not None:
+                object_builder.insert(path, delta.new_value)
+            else:
+                object_builder.remove(path)
 
     def commit_diff(
         self,

@@ -8,8 +8,16 @@ import pygit2
 
 from kart.completion_shared import ref_completer
 
-from .diff_structs import Delta, DeltaDiff, KeyValue, RepoDiff
-from .exceptions import (
+from kart.cli_util import KartCommand
+from kart.diff_structs import (
+    FILES_KEY,
+    KeyValue,
+    Delta,
+    DeltaDiff,
+    DatasetDiff,
+    RepoDiff,
+)
+from kart.exceptions import (
     NO_TABLE,
     NO_WORKING_COPY,
     PATCH_DOES_NOT_APPLY,
@@ -17,10 +25,10 @@ from .exceptions import (
     NotFound,
     NotYetImplemented,
 )
-from .geometry import hex_wkb_to_gpkg_geom
-from .schema import Schema
-from .timestamps import iso8601_tz_to_timedelta, iso8601_utc_to_datetime
-from kart.cli_util import KartCommand
+from kart.geometry import hex_wkb_to_gpkg_geom
+from kart.schema import Schema
+from kart.serialise_util import b64decode_str, ensure_bytes
+from kart.timestamps import iso8601_tz_to_timedelta, iso8601_utc_to_datetime
 
 V1_NO_META_UPDATE = (
     "Sorry, patches that make meta changes are not supported until Datasets V2\n"
@@ -41,11 +49,11 @@ class MetaChangeType(Enum):
     META_UPDATE = auto()
 
 
-def _meta_change_type(ds_diff_dict):
-    meta_diff = ds_diff_dict.get("meta", {})
-    if not meta_diff:
+def _meta_change_type(ds_diff_input):
+    meta_diff_input = ds_diff_input.get("meta", {})
+    if not meta_diff_input:
         return None
-    schema_diff = meta_diff.get("schema.json", {})
+    schema_diff = meta_diff_input.get("schema.json", {})
     if "+" in schema_diff and "-" not in schema_diff:
         return MetaChangeType.CREATE_DATASET
     elif "-" in schema_diff and "+" not in schema_diff:
@@ -124,7 +132,7 @@ class NullSchemaParser:
         )
 
 
-class DeltaParser:
+class FeatureDeltaParser:
     """Parses JSON for a delta - ie {"-": old-value, "+": new-value} - into a Delta object."""
 
     def __init__(self, old_schema, new_schema, *, allow_minimal_updates=False):
@@ -178,6 +186,59 @@ def _build_signature(patch_metadata, person, repo):
     return repo.author_signature(**signature)
 
 
+def parse_file_diff(file_diff_input, allow_minimal_updates=None):
+    def convert_half_delta(half_delta):
+        if half_delta is None:
+            return None
+        elif half_delta.value.startswith("base64:"):
+            return (half_delta.key, b64decode_str(half_delta.value))
+        else:
+            return (half_delta.key, ensure_bytes(half_delta.value))
+
+    def convert_delta(delta):
+        return Delta(convert_half_delta(delta.old), convert_half_delta(delta.new))
+
+    delta_diff = DeltaDiff(
+        convert_delta(
+            Delta.from_key_and_plus_minus_dict(
+                k, v, allow_minimal_updates=allow_minimal_updates
+            )
+        )
+        for (k, v) in file_diff_input.items()
+    )
+    return DatasetDiff([(FILES_KEY, delta_diff)])
+
+
+def parse_meta_diff(meta_diff_input, allow_minimal_updates=False):
+    return DeltaDiff(
+        Delta.from_key_and_plus_minus_dict(
+            k, v, allow_minimal_updates=allow_minimal_updates
+        )
+        for (k, v) in meta_diff_input.items()
+    )
+
+
+def parse_feature_diff(
+    feature_diff_input, dataset, meta_diff, allow_minimal_updates=False
+):
+    old_schema = new_schema = None
+    if dataset is not None:
+        old_schema = new_schema = dataset.schema
+
+    schema_delta = meta_diff.get("schema.json") if meta_diff else None
+    if schema_delta and schema_delta.old_value:
+        old_schema = Schema.from_column_dicts(schema_delta.old_value)
+    if schema_delta and schema_delta.new_value:
+        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+
+    delta_parser = FeatureDeltaParser(
+        old_schema,
+        new_schema,
+        allow_minimal_updates=allow_minimal_updates,
+    )
+    return DeltaDiff((delta_parser.parse(change) for change in feature_diff_input))
+
+
 def apply_patch(
     *,
     repo,
@@ -192,10 +253,10 @@ def apply_patch(
     except json.JSONDecodeError as e:
         raise click.FileError("Failed to parse JSON patch file") from e
 
-    json_diff = patch.get("kart.diff/v1+hexwkb")
-    if json_diff is None:
-        json_diff = patch.get("sno.diff/v1+hexwkb")
-    if json_diff is None:
+    diff_input = patch.get("kart.diff/v1+hexwkb")
+    if diff_input is None:
+        diff_input = patch.get("sno.diff/v1+hexwkb")
+    if diff_input is None:
         raise click.FileError(
             "Failed to parse JSON patch file: patch contains no `kart.diff/v1+hexwkb` object"
         )
@@ -208,7 +269,7 @@ def apply_patch(
         raise click.UsageError("Patch contains no author or head information")
 
     resolve_missing_values_from_rs = None
-    if "base" in metadata:
+    if metadata.get("base") is not None:
         # if the patch has a `base` that's present in this repo,
         # then we allow the `-` blobs to be missing, because we can resolve the `-` blobs
         # from that revision.
@@ -230,6 +291,8 @@ def apply_patch(
         except KeyError:
             raise NotFound(f"No such ref {ref}")
 
+    allow_minimal_updates = bool(resolve_missing_values_from_rs)
+
     rs = repo.structure(ref)
     # TODO: this code shouldn't special-case tabular working copies
     # Specifically, we need to check if those part(s) of the WC exists which the patch applies to.
@@ -241,46 +304,29 @@ def apply_patch(
     repo.working_copy.check_not_dirty()
 
     repo_diff = RepoDiff()
-    for ds_path, ds_diff_dict in json_diff.items():
+    for ds_path, ds_diff_input in diff_input.items():
+        if ds_path == FILES_KEY:
+            repo_diff[FILES_KEY] = parse_file_diff(ds_diff_input, allow_minimal_updates)
+            continue
+
         dataset = rs.datasets().get(ds_path)
-        meta_change_type = _meta_change_type(ds_diff_dict)
+        meta_change_type = _meta_change_type(ds_diff_input)
         check_change_supported(
             repo.table_dataset_version, dataset, ds_path, meta_change_type, do_commit
         )
 
-        meta_changes = ds_diff_dict.get("meta", {})
+        meta_diff_input = ds_diff_input.get("meta", {})
 
-        if meta_changes:
-            allow_minimal_updates = bool(resolve_missing_values_from_rs)
-            meta_diff = DeltaDiff(
-                Delta.from_key_and_plus_minus_dict(
-                    k, v, allow_minimal_updates=allow_minimal_updates
-                )
-                for (k, v) in meta_changes.items()
-            )
+        if meta_diff_input:
+            meta_diff = parse_meta_diff(meta_diff_input, allow_minimal_updates)
             repo_diff.recursive_set([ds_path, "meta"], meta_diff)
         else:
             meta_diff = None
 
-        feature_changes = ds_diff_dict.get("feature", [])
-        if feature_changes:
-            old_schema = new_schema = None
-            if dataset is not None:
-                old_schema = new_schema = dataset.schema
-
-            schema_delta = meta_diff.get("schema.json") if meta_diff else None
-            if schema_delta and schema_delta.old_value:
-                old_schema = Schema.from_column_dicts(schema_delta.old_value)
-            if schema_delta and schema_delta.new_value:
-                new_schema = Schema.from_column_dicts(schema_delta.new_value)
-
-            delta_parser = DeltaParser(
-                old_schema,
-                new_schema,
-                allow_minimal_updates=bool(resolve_missing_values_from_rs),
-            )
-            feature_diff = DeltaDiff(
-                (delta_parser.parse(change) for change in feature_changes)
+        feature_diff_input = ds_diff_input.get("feature", [])
+        if feature_diff_input:
+            feature_diff = parse_feature_diff(
+                feature_diff_input, dataset, meta_diff, allow_minimal_updates
             )
             repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 

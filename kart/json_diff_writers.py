@@ -16,7 +16,6 @@ from .diff_estimation import (
 from kart.diff_structs import FILES_KEY, BINARY_FILE, DatasetDiff
 from kart.log import commit_obj_to_json
 from kart.output_util import dump_json_output, resolve_output_path
-from kart.serialise_util import b64encode_str
 from kart.tabular.feature_output import feature_as_geojson, feature_as_json
 from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
@@ -171,6 +170,8 @@ class PatchWriter(JsonDiffWriter):
                 "message": self.commit.message,
                 "base": original_parent,
             }
+            if not original_parent:
+                del obj["kart.patch/v1"]["base"]
 
     def record_spatial_filter_stat(
         self, ds_path, item_type, key, delta, old_match_result, new_match_result
