@@ -2070,7 +2070,7 @@ def test_attached_files_patch(data_archive, cli_runner):
 
         assert files == {
             "LICENSE.txt": {
-                "+": "NZ Pa Points (Topo, 1:50k)\nhttps://data.linz.govt.nz/layer/50308-nz-pa-points-topo-150k/\nLand Information New Zealand\nCC-BY\n"
+                "+": "text:NZ Pa Points (Topo, 1:50k)\nhttps://data.linz.govt.nz/layer/50308-nz-pa-points-topo-150k/\nLand Information New Zealand\nCC-BY\n"
             },
             "logo.png": {"+": b"\x89PNG"},
         }

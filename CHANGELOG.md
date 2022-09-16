@@ -12,7 +12,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Bugfix: directing geojson diff output to the console didn't work in a multi-dataset repo, even if only one dataset had changed. [#702](https://github.com/koordinates/kart/issues/702)
 - Improve argument parsing for `kart diff` and `kart show`. [#706](https://github.com/koordinates/kart/issues/706)
 - Bugfix: don't allow `kart merge` to fast-forward if the user specifies a merge message. [#705](https://github.com/koordinates/kart/issues/705)
-- Kart now shows diffs to attached files that have been created using `kart commit-files`, if any [#583](https://github.com/koordinates/kart/issues/583)
+- `diff`, `show`, `create-patch` and `apply` now handle attached files (as could already be created using `kart commit-files`) [#583](https://github.com/koordinates/kart/issues/583)
 
 ## 0.11.5
 
