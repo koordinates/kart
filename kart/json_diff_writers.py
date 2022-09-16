@@ -147,6 +147,9 @@ class PatchWriter(JsonDiffWriter):
     - it is at the key "kart.patch/v1" instead of "kart.show/v1"
     """
 
+    # Avoid any ambiguity in file-patches.
+    TEXT_PREFIX = "text:"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.nonmatching_item_counts = {p: 0 for p in self.all_ds_paths}

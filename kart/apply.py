@@ -190,10 +190,12 @@ def parse_file_diff(file_diff_input, allow_minimal_updates=None):
     def convert_half_delta(half_delta):
         if half_delta is None:
             return None
-        elif half_delta.value.startswith("base64:"):
-            return (half_delta.key, b64decode_str(half_delta.value))
-        else:
-            return (half_delta.key, ensure_bytes(half_delta.value))
+        val = half_delta.value
+        if val.startswith("base64:"):
+            return (half_delta.key, b64decode_str(val))
+        if val.startswith("text:"):
+            val = val[5:]  # len("text:") = 5
+        return (half_delta.key, ensure_bytes(val))
 
     def convert_delta(delta):
         return Delta(convert_half_delta(delta.old), convert_half_delta(delta.new))

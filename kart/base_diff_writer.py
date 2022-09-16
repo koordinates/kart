@@ -278,6 +278,11 @@ class BaseDiffWriter:
         """For outputting file_diff - all the files that have changed, without reference to any dataset."""
         raise NotImplementedError()
 
+    BASE64_PREFIX = "base64:"
+    # Not having a text-prefix looks nicer but is slightly ambiguous in certain circumstances.
+    # Subclasses can override if ambiguity would be bad.
+    TEXT_PREFIX = ""
+
     def _full_file_delta(self, delta, skip_binary_files=False):
         def get_blob(half_delta):
             return self.repo[half_delta.value] if half_delta else None
@@ -294,9 +299,13 @@ class BaseDiffWriter:
             if skip_binary_files:
                 return delta
 
-            blob_to_text = lambda blob: "base64:" + b64encode_str(memoryview(blob))
+            blob_to_text = lambda blob: self.BASE64_PREFIX + b64encode_str(
+                memoryview(blob)
+            )
         else:
-            blob_to_text = lambda blob: str(memoryview(blob), "utf-8")
+            blob_to_text = lambda blob: self.TEXT_PREFIX + str(
+                memoryview(blob), "utf-8"
+            )
 
         old_half_delta = (delta.old_key, blob_to_text(old_blob)) if delta.old else None
         new_half_delta = (delta.new_key, blob_to_text(new_blob)) if delta.new else None
