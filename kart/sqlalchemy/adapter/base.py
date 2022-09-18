@@ -129,13 +129,11 @@ class BaseKartAdapter:
             return v2_type, {}
 
     @classmethod
-    def all_v2_meta_items(
-        cls, sess, db_schema, table_name, id_salt, include_legacy_items=False
-    ):
+    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
         """
         Returns a dict all V2 meta items for the specified table.
         Guaranteed to at least generate the table's V2 schema with key "schema.json", if the table exists at all.
-        Possibly returns any or all of the title, description, xml metadata, and attached CRS definitions.
+        Possibly returns any or all of the title, description, and attached CRS definitions.
         Varying the id_salt varies the column ids that are generated for the schema.json item -
         these are generated deterministically so that running the same command twice in a row produces the same output.
         But if the user does something different later, a different salt should be provided.
@@ -152,9 +150,14 @@ class BaseKartAdapter:
                 db_schema,
                 table_name,
                 id_salt,
-                include_legacy_items=include_legacy_items,
             )
         )
+
+    @classmethod
+    def get_metadata_xml(cls, sess, db_schema, table_name):
+        """Read the XML metadata stored within the database for this table, if any."""
+        # As a rule, the database tables themselves don't store XML metadata. The exception is GPKG.
+        return None
 
     @classmethod
     def remove_empty_values(cls, meta_items):

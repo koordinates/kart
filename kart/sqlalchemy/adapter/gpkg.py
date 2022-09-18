@@ -11,6 +11,7 @@ from kart.sqlalchemy.adapter.base import (
 )
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.schema import ColumnSchema, Schema
+from kart.serialise_util import ensure_text
 from kart.timestamps import datetime_to_iso8601_utc
 from kart.utils import ungenerator
 
@@ -156,26 +157,34 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         )
 
     @classmethod
-    def all_v2_meta_items_including_empty(
-        cls, sess, db_schema, table_name, id_salt, include_legacy_items=False
-    ):
+    def all_v2_meta_items_including_empty(cls, sess, db_schema, table_name, id_salt):
         """
         Generate all V2 meta items for the given table.
         Varying the id_salt varies the ids that are generated for the schema.json item.
         """
         assert not db_schema
-        include_metadata_json = include_legacy_items
 
-        gpkg_meta_items = cls._gpkg_meta_items_from_db(sess, table_name)
-        return cls.all_v2_meta_items_from_gpkg_meta_items(
-            gpkg_meta_items, id_salt, include_metadata_json
+        gpkg_meta_items = cls._gpkg_meta_items_from_db(
+            sess, table_name, skip_keys={"gpkg_metadata", "gpkg_metadata_reference"}
         )
+        return cls.all_v2_meta_items_from_gpkg_meta_items(gpkg_meta_items, id_salt)
+
+    @classmethod
+    def get_metadata_xml(cls, sess, db_schema, table_name):
+        """
+        Returns the metadata of type text/xml that is contained and gpkg_metadata
+        and associated with the given table, if any.
+        """
+        assert not db_schema
+
+        gpkg_meta_items = cls._gpkg_meta_items_from_db(
+            sess, table_name, keys={"gpkg_metadata", "gpkg_metadata_reference"}
+        )
+        return cls.gpkg_to_xml_metadata(gpkg_meta_items)
 
     @classmethod
     @ungenerator(dict)
-    def all_v2_meta_items_from_gpkg_meta_items(
-        cls, gpkg_meta_items, id_salt=None, include_metadata_json=False
-    ):
+    def all_v2_meta_items_from_gpkg_meta_items(cls, gpkg_meta_items, id_salt=None):
         """
         Generate all the V2 meta items from the given gpkg_meta_items lists / dicts -
         either loaded from JSON, or generated directly from the database.
@@ -192,10 +201,6 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         )
         schema = cls._gpkg_to_v2_schema(gpkg_meta_items, id_salt)
         yield "schema.json", schema.to_column_dicts() if schema else None
-
-        if include_metadata_json:
-            yield "metadata/dataset.json", cls.gpkg_to_json_metadata(gpkg_meta_items)
-        yield "metadata.xml", cls.gpkg_to_xml_metadata(gpkg_meta_items)
 
         gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys")
         for gsrs in gpkg_spatial_ref_sys:
@@ -311,8 +316,11 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
     @classmethod
     def generate_gpkg_metadata(cls, v2_obj, table_name, reference=False):
         metadata_xml = v2_obj.get_meta_item("metadata.xml")
+        if metadata_xml is None:
+            metadata_xml = ensure_text(v2_obj.get_attachment("metadata.xml"))
         if metadata_xml is not None:
             return cls.xml_to_gpkg_metadata(metadata_xml, table_name, reference)
+
         v2json = v2_obj.get_meta_item("metadata/dataset.json")
         if v2json is not None:
             return cls.json_to_gpkg_metadata(v2json, table_name, reference)
@@ -516,9 +524,8 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         if sole_useful_xml is not None:
             return sole_useful_xml
 
-        # We can't actually commit a whole list of XML, but we need to return something that makes sense.
-        # Simply throwing an error here stops dirty-detection working, and stops commands that would fix the situation
-        # from working, like `kart reset --discard-changes` or `kart create-workingcopy --discard-changes`.
+        # There's not just one XML metadata attached to this table - there's multiple.
+        # We leave this to the caller to handle however they choose.
         return ListOfConflicts(xml_list)
 
     METADATA_QUERY = """
@@ -562,7 +569,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
 
     @classmethod
     @ungenerator(dict)
-    def _gpkg_meta_items_from_db(cls, sess, table_name, keys=None):
+    def _gpkg_meta_items_from_db(cls, sess, table_name, keys=None, skip_keys=None):
         """
         Returns metadata from the gpkg_* tables about this GPKG.
         """
@@ -606,6 +613,8 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         }
         for key, (sql, rtype) in QUERIES.items():
             if keys is not None and key not in keys:
+                continue
+            if skip_keys is not None and key in skip_keys:
                 continue
             # check table exists, the metadata ones may not
             if not key.startswith("sqlite_"):

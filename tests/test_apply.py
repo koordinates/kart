@@ -327,7 +327,7 @@ def test_apply_minimal_style_meta_patch_with_delete(data_archive, cli_runner, tm
     patch = points_patch(
         {
             "meta": {
-                "metadata.xml": {
+                "description": {
                     # content is ignored, so this must work
                     "-": None,
                 }
@@ -344,8 +344,8 @@ def test_apply_minimal_style_meta_patch_with_delete(data_archive, cli_runner, tm
         assert r.exit_code == 0
         show = json.loads(r.stdout)
         meta = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
-        # metadata was deleted
-        assert meta["metadata.xml"].keys() == {"-"}
+        # description was deleted
+        assert meta["description"].keys() == {"-"}
 
 
 def test_apply_minimal_style_feature_patch_with_edit(
@@ -549,59 +549,6 @@ def test_add_and_remove_xml_metadata_as_json(data_archive, cli_runner):
         # check we can add it again too
         m = orig_patch["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"][
             "metadata/dataset.json"
-        ]
-        m["+"] = m.pop("-")
-        patch_file = json.dumps(orig_patch)
-        r = cli_runner.invoke(
-            ["apply", "-"],
-            input=patch_file,
-        )
-        assert r.exit_code == 0, r.stderr
-
-
-def test_add_and_remove_xml_metadata_as_xml(data_archive, cli_runner):
-    with data_archive("polygons"):
-        r = cli_runner.invoke(["meta", "get", "-o", "json"])
-        assert r.exit_code == 0, r.stderr
-        o = json.loads(r.stdout)
-
-        assert "metadata.xml" in o["nz_waca_adjustments"]
-        assert "metadata/dataset.json" not in o["nz_waca_adjustments"]
-
-        xml_content = o["nz_waca_adjustments"]["metadata.xml"]
-
-        orig_patch = {
-            "kart.diff/v1+hexwkb": {
-                "nz_waca_adjustments": {"meta": {"metadata.xml": {"-": xml_content}}}
-            },
-            "kart.patch/v1": {
-                "authorEmail": "robert@example.com",
-                "authorName": "Robert Coup",
-                "authorTime": "2019-06-20T14:28:33Z",
-                "authorTimeOffset": "+01:00",
-                "message": "Remove XML metadata",
-            },
-        }
-        patch_file = json.dumps(orig_patch)
-
-        r = cli_runner.invoke(
-            ["apply", "-"],
-            input=patch_file,
-        )
-        assert r.exit_code == 0, r.stderr
-
-        # Check that the `kart create-patch` output is the same as our original patch file had.
-        r = cli_runner.invoke(["create-patch", "HEAD"])
-        assert r.exit_code == 0
-        patch = json.loads(r.stdout)
-        assert (
-            patch["kart.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"]
-            == orig_patch["kart.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"]
-        )
-
-        # check we can add it again too
-        m = orig_patch["kart.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"][
-            "metadata.xml"
         ]
         m["+"] = m.pop("-")
         patch_file = json.dumps(orig_patch)

@@ -83,10 +83,6 @@ class TableDataset(BaseDataset, TableImportSource):
             self._schema = super().schema
         return self._schema
 
-    def full_attachment_path(self, rel_path):
-        """Given the path of an attachment relative to this dataset's attachment path, returns its full path from the repo root."""
-        return f"{self.path}/{rel_path}"
-
     def decode_path(self, path):
         """
         Given a relative path to something inside this dataset eg "feature/49/3e/Bg==""

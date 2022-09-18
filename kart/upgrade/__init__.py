@@ -11,6 +11,7 @@ from kart.exceptions import InvalidOperation, NotFound
 from kart.fast_import import ReplaceExisting, fast_import_tables
 from kart.repo import KartConfigKeys, KartRepo
 from kart.tabular.version import DEFAULT_NEW_REPO_VERSION
+from kart.serialise_util import ensure_bytes
 from kart.structure import RepoStructure
 from kart.tabular.v2 import TableV2
 from kart.timestamps import minutes_to_tz_offset
@@ -40,31 +41,38 @@ class UpgradeSourceTableV2(TableV2):
     Variant of TableV2 that:
     - preserves all meta_items, even non-standard ones.
     - preserves attachments
-    - upgrades dataset/metadata.json to metadata.xml
+    - upgrades both
+        <dataset>/.table-dataset/meta/dataset/metadata.json
+      and
+        <dataset>/.table-dataset/meta/metadata.xml
+      to <dataset>/metadata.xml
     """
 
     def get_meta_item(self, name, missing_ok=True):
-        # Remove metadata/dataset.json
-        if name == "metadata/dataset.json":
+        # Remove metadata.xml and metadata/dataset.json
+        if name in ("metadata/dataset.json", "metadata.xml"):
             return None
+        return super().get_meta_item(name, missing_ok=missing_ok)
 
-        result = super().get_meta_item(name, missing_ok=missing_ok)
+    def attachments(self):
+        metadata_xml = self.get_metadata_xml()
+        if metadata_xml:
+            yield "metadata.xml", ensure_bytes(metadata_xml)
 
-        # Add metadata.xml:
-        if result is None and name == "metadata.xml":
-            metadata_json = super().get_meta_item("metadata/dataset.json")
-            if metadata_json:
-                metadata_xml = [
-                    m for m in metadata_json.values() if "text/xml" in m.keys()
-                ]
-                if metadata_xml:
-                    return next(iter(metadata_xml))["text/xml"]
-        return result
+        yield from super().attachments()
 
-    def attachment_items(self):
-        attachments = [obj for obj in self.tree if obj.type_str == "blob"]
-        for attachment in attachments:
-            yield attachment.name, attachment.data
+    def get_metadata_xml(self):
+        metadata_xml = super().get_meta_item("metadata.xml", missing_ok=True)
+        if metadata_xml:
+            return metadata_xml
+
+        metadata_json = super().get_meta_item("metadata/dataset.json")
+        if metadata_json:
+            metadata_xml = [m for m in metadata_json.values() if "text/xml" in m.keys()]
+            if metadata_xml:
+                return next(iter(metadata_xml))["text/xml"]
+
+        return None
 
 
 class InPlaceUpgradeSourceTableV2(UpgradeSourceTableV2):

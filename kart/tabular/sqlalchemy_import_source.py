@@ -7,9 +7,11 @@ import click
 import sqlalchemy
 from kart.exceptions import NO_IMPORT_SOURCE, NO_TABLE, NotFound, NotYetImplemented
 from kart.output_util import dump_json_output
+from kart.list_of_conflicts import ListOfConflicts
 from kart.schema import Schema
 from kart.sqlalchemy import DbType, separate_last_path_part, strip_username_and_password
 from kart.utils import chunk, ungenerator
+from kart.serialise_util import ensure_bytes
 from sqlalchemy.orm import sessionmaker
 
 from .import_source import TableImportSource
@@ -236,6 +238,15 @@ class SqlAlchemyTableImportSource(TableImportSource):
             return self.db_type.adapter.all_v2_meta_items(
                 sess, self.db_schema, self.table, id_salt
             )
+
+    def attachments(self):
+        with sessionmaker(bind=self.engine)() as sess:
+            metadata_xml = self.db_type.adapter.get_metadata_xml(
+                sess, self.db_schema, self.table
+            )
+
+        if metadata_xml and not isinstance(metadata_xml, ListOfConflicts):
+            yield "metadata.xml", ensure_bytes(metadata_xml)
 
     def align_schema_to_existing_schema(self, existing_schema):
         aligned_schema = existing_schema.align_to_self(self.schema)

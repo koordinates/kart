@@ -567,6 +567,13 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
     with data_working_copy("table") as (repo_path, wc_path):
         table_wc = KartRepo(repo_path).working_copy.tabular
         with table_wc.session() as sess:
+            # Update title
+            sess.execute(
+                """
+                UPDATE gpkg_contents SET identifier='new title' WHERE table_name = 'countiestbl';
+                """
+            )
+            # Add metadata.
             sess.execute(
                 """
                 INSERT INTO gpkg_metadata (id, md_scope, md_standard_uri, mime_type, metadata)
@@ -580,7 +587,7 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
                 """
             )
 
-        r = cli_runner.invoke(["commit", "-m", "change xml metadata"])
+        r = cli_runner.invoke(["commit", "-m", "Update title"])
         assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
@@ -593,8 +600,9 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
                 ON m.id = r.md_file_id
                 WHERE r.table_name = 'countiestbl'
                 """
-            ).fetchone()
-            assert not xml_metadata
+            ).scalar()
+            # XML metadata isn't committed, stays the same.
+            assert xml_metadata == "<test metadata>"
 
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
@@ -608,6 +616,7 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
                 WHERE r.table_name = 'countiestbl'
                 """
             ).scalar()
+            # XML metadata isn't committed, stays the same.
             assert xml_metadata == "<test metadata>"
 
 

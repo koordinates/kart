@@ -295,6 +295,7 @@ def test_diff_json_lines_with_feature_count_estimate(
                 f"--output-format=json-lines",
                 "--add-feature-count-estimate=exact",
                 "HEAD^^?...",
+                "nz_pa_points_topo_150k:feature",  # suppress file diff
             ]
         )
 
@@ -1622,7 +1623,6 @@ def test_diff_wildcard_dataset_filters(data_archive, cli_runner):
         assert diff["second/dataset"].keys() == {"meta"}
         assert diff["second/dataset"]["meta"].keys() == {
             "title",
-            "metadata.xml",
             "crs/EPSG:4167.wkt",
             "schema.json",
             "description",
@@ -1969,11 +1969,13 @@ def test_attached_files_diff(output_format, data_archive, cli_runner):
         r = cli_runner.invoke(["show", f"--output-format={output_format}"])
         assert r.exit_code == 0, r.stderr
         if output_format == "text":
-            assert r.stdout.splitlines()[-4:] == [
+            assert r.stdout.splitlines()[-6:] == [
                 "+++ LICENSE.txt",
                 "+ (file 1674aa1)",
                 "+++ logo.png",
                 "+ (file f8555b6)",
+                "+++ nz_pa_points_topo_150k/metadata.xml",
+                "+ (file a39253e)",
             ]
         elif output_format == "json":
             jdict = json.loads(r.stdout)
@@ -1981,22 +1983,30 @@ def test_attached_files_diff(output_format, data_archive, cli_runner):
             assert files == {
                 "LICENSE.txt": {"+": "1674aa1"},
                 "logo.png": {"+": "f8555b6"},
+                "nz_pa_points_topo_150k/metadata.xml": {"+": "a39253e"},
             }
 
         elif output_format == "json-lines":
             lines = r.stdout.splitlines()
-            jdict = json.loads(lines[-2])
+            jdict = json.loads(lines[-3])
             assert jdict == {
                 "type": "file",
                 "path": "LICENSE.txt",
                 "change": {"+": "1674aa1"},
             }
 
-            jdict = json.loads(lines[-1])
+            jdict = json.loads(lines[-2])
             assert jdict == {
                 "type": "file",
                 "path": "logo.png",
                 "change": {"+": "f8555b6"},
+            }
+
+            jdict = json.loads(lines[-1])
+            assert jdict == {
+                "type": "file",
+                "path": "nz_pa_points_topo_150k/metadata.xml",
+                "change": {"+": "a39253e"},
             }
 
 
@@ -2007,7 +2017,13 @@ def test_attached_files_diff(output_format, data_archive, cli_runner):
 def test_full_attached_files_diff(output_format, data_archive, cli_runner):
     with data_archive("points-with-attached-files") as repo_path:
         r = cli_runner.invoke(
-            ["show", f"--output-format={output_format}", "--diff-files"]
+            [
+                "show",
+                f"--output-format={output_format}",
+                "--diff-files",
+                "LICENSE.txt",
+                "logo.png",
+            ]
         )
         assert r.exit_code == 0, r.stderr
         if output_format == "text":
@@ -2064,13 +2080,19 @@ def test_attached_files_patch(data_archive, cli_runner):
         assert r.exit_code == 0, r.stderr
         jdict = json.loads(r.stdout)
         files = jdict["kart.diff/v1+hexwkb"]["<files>"]
-        logo = files["logo.png"]
         # Check just the first 4 bytes of the binary file data...
+        logo = files["logo.png"]
         logo["+"] = b64decode_str(logo["+"])[:4]
+        # Check just the first 346 chars of the XML metadata.
+        metadata_xml = files["nz_pa_points_topo_150k/metadata.xml"]
+        metadata_xml["+"] = metadata_xml["+"][:346]
 
         assert files == {
             "LICENSE.txt": {
                 "+": "text:NZ Pa Points (Topo, 1:50k)\nhttps://data.linz.govt.nz/layer/50308-nz-pa-points-topo-150k/\nLand Information New Zealand\nCC-BY\n"
             },
             "logo.png": {"+": b"\x89PNG"},
+            "nz_pa_points_topo_150k/metadata.xml": {
+                "+": 'text:<gmd:MD_Metadata xmlns:gco="http://www.isotc211.org/2005/gco" xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:gml="http://www.opengis.net/gml" xmlns:gts="http://www.isotc211.org/2005/gts" xmlns:topo="http://www.linz.govt.nz/schemas/topo/data-dictionary" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.isotc211.org/2005/gmd">'
+            },
         }

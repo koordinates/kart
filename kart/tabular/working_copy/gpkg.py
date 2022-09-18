@@ -40,8 +40,6 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         meta_items.DESCRIPTION,
         meta_items.SCHEMA_JSON,
         meta_items.CRS_DEFINITIONS,
-        meta_items.METADATA_XML,
-        "metadata/dataset.json",
     )
 
     def __init__(self, repo, location):

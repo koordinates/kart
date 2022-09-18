@@ -609,7 +609,6 @@ class TableWorkingCopy(WorkingCopyPart):
                 self.db_schema,
                 dataset.table_name,
                 id_salt=id_salt,
-                include_legacy_items=True,
             )
 
     def diff_dataset_to_working_copy_feature(

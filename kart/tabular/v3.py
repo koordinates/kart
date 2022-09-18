@@ -4,7 +4,6 @@ import re
 
 import pygit2
 
-from kart.base_dataset import BaseDataset
 from kart.core import find_blobs_in_tree
 from kart.exceptions import (
     PATCH_DOES_NOT_APPLY,
@@ -17,9 +16,7 @@ from kart.schema import Legend, Schema
 from kart.serialise_util import (
     b64decode_str,
     ensure_bytes,
-    ensure_text,
     json_pack,
-    json_unpack,
     msg_pack,
     msg_unpack,
 )
@@ -70,7 +67,6 @@ class TableV3(RichTableDataset):
     TITLE = meta_items.TITLE
     DESCRIPTION = meta_items.DESCRIPTION
     TAGS_JSON = meta_items.TAGS_JSON
-    METADATA_XML = meta_items.METADATA_XML
     SCHEMA_JSON = meta_items.SCHEMA_JSON
     CRS_DEFINITIONS = meta_items.CRS_DEFINITIONS
 
@@ -94,31 +90,12 @@ class TableV3(RichTableDataset):
         TITLE,
         DESCRIPTION,
         TAGS_JSON,
-        METADATA_XML,
         SCHEMA_JSON,
         CRS_DEFINITIONS,
         GENERATED_PKS,
         PATH_STRUCTURE,
         LEGEND,
     )
-
-    # This meta-item is generally stored in the "attachment" area, alongside the dataset, rather than inside it.
-    # Storing it in this unusual location adds complexity without actually solving any problems, so any datasets
-    # designed after table.v3 don't do this.
-    ATTACHMENT_META_ITEMS = ("metadata.xml",)
-
-    @functools.lru_cache()
-    def get_meta_item(self, meta_item_path, missing_ok=True):
-        # Handle meta-items stored in the attachment area:
-        if (
-            meta_item_path in self.ATTACHMENT_META_ITEMS
-            and meta_item_path not in self.meta_tree
-            and self.tree is not None
-            and meta_item_path in self.tree
-        ):
-            return ensure_text(self.get_data_at(meta_item_path, from_tree=self.tree))
-
-        return super().get_meta_item(meta_item_path, missing_ok=missing_ok)
 
     @functools.lru_cache(maxsize=1)
     def crs_definitions(self):
@@ -298,16 +275,13 @@ class TableV3(RichTableDataset):
                 else:
                     content = ensure_bytes(content)
 
-            if rel_path in self.ATTACHMENT_META_ITEMS:
-                full_path = self.full_attachment_path(rel_path)
-            else:
-                if not rel_path.startswith(self.META_PATH):
-                    rel_path = self.META_PATH + rel_path
-                full_path = self.ensure_full_path(rel_path)
+            if not rel_path.startswith(self.META_PATH):
+                rel_path = self.META_PATH + rel_path
+            full_path = self.ensure_full_path(rel_path)
 
             yield full_path, content
 
-        for rel_path, content in source.attachment_items():
+        for rel_path, content in source.attachments():
             yield self.full_attachment_path(rel_path), content
 
     def iter_legend_blob_data(self):
@@ -387,27 +361,9 @@ class TableV3(RichTableDataset):
         # Apply diff to hidden meta items folder: <dataset>/.table-dataset/meta/<item-name>
         with object_builder.chdir(f"{self.inner_path}/{self.META_PATH}"):
             no_conflicts &= self._apply_meta_deltas_to_tree(
-                (
-                    d
-                    for d in meta_diff.values()
-                    if d.key not in self.ATTACHMENT_META_ITEMS
-                ),
+                meta_diff.values(),
                 object_builder,
                 self.meta_tree if self.inner_tree is not None else None,
-                resolve_missing_values_from_tree=resolve_missing_values_from_tree,
-            )
-
-        if resolve_missing_values_from_ds:
-            resolve_missing_values_from_tree = (
-                resolve_missing_values_from_ds.attachment_tree
-            )
-
-        # Apply diff to visible attachment meta items: <dataset>/<item-name>
-        with object_builder.chdir(self.path):
-            no_conflicts &= self._apply_meta_deltas_to_tree(
-                (d for d in meta_diff.values() if d.key in self.ATTACHMENT_META_ITEMS),
-                object_builder,
-                self.attachment_tree,
                 resolve_missing_values_from_tree=resolve_missing_values_from_tree,
             )
 

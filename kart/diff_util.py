@@ -1,7 +1,5 @@
-import functools
 import logging
 import re
-from pathlib import PurePosixPath
 import subprocess
 
 from kart.cli_util import tool_environment
@@ -218,8 +216,6 @@ def get_file_diff(
         old_sha, new_sha, path = parts[2], parts[3], parts[5]
         if not path_matches_repo_key_filter(path, repo_key_filter):
             continue
-        if is_dataset_metadata_xml(old_tree, new_tree, path):
-            continue
         old_half_delta = (path, old_sha) if not ZEROES.fullmatch(old_sha) else None
         new_half_delta = (path, new_sha) if not ZEROES.fullmatch(new_sha) else None
         attachment_deltas.add_delta(Delta(old_half_delta, new_half_delta))
@@ -243,22 +239,4 @@ def path_matches_repo_key_filter(path, repo_key_filter):
             return True
     # Don't return attachments inside a dataset / folder that we are only matching some of
     # ie, only matching certain features or meta items.
-    return False
-
-
-def is_dataset_metadata_xml(old_tree, new_tree, path):
-    # metadata.xml is sometimes stored in the "attachment" area, alongside the dataset, rather than inside it.
-    # Storing it in this unusual location adds complexity without actually solving any problems, so any datasets designed
-    # after table.v3 don't do this. Since this change already appears in meta-diffs, we suppress it from attachment diffs.
-    if not path.endswith("/metadata.xml"):
-        return False
-    parent_path = str(PurePosixPath(path).parent)
-    for tree in (old_tree, new_tree):
-        try:
-            parent_tree = tree / parent_path
-            for sibling in parent_tree:
-                if sibling.name.startswith(".table-dataset"):
-                    return True
-        except KeyError:
-            continue
     return False

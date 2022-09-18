@@ -1,16 +1,14 @@
-import binascii
 import functools
 import logging
-import re
 import sys
 
 import click
+import pygit2
 
 from kart.core import find_blobs_with_paths_in_tree
 from kart.dataset_mixins import DatasetDiffMixin
 from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION, PATCH_DOES_NOT_APPLY
 from kart.meta_items import MetaItemFileType, MetaItemVisibility
-from kart.serialise_util import ensure_bytes, json_pack
 
 
 class BaseDatasetMetaClass(type):
@@ -278,6 +276,16 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
             result.setdefault(definition, []).append(meta_item_path)
         return result
 
+    def attachments(self):
+        if self.tree is None:
+            return
+        for obj in self.tree:
+            if obj.type == pygit2.GIT_OBJ_BLOB:
+                yield obj.name, obj.data
+
+    def get_attachment(self, name, missing_ok=True):
+        return self.get_data_at(name, missing_ok=missing_ok, from_tree=self.tree)
+
     def apply_meta_diff(
         self, meta_diff, object_builder, *, resolve_missing_values_from_ds=None
     ):
@@ -422,6 +430,10 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
         else:
             # A path relative to the inner tree.
             return f"{self.inner_path}/{path}"
+
+    def full_attachment_path(self, rel_path):
+        """Given the path of an attachment relative to this dataset's attachment path, returns its full path from the repo root."""
+        return f"{self.path}/{rel_path}"
 
     def ensure_rel_path(self, path):
         """Given a full path to something in this dataset, returns its path relative to the dataset inner-path."""

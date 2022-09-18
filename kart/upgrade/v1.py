@@ -8,7 +8,7 @@ import pygit2
 
 from kart.geometry import Geometry, normalise_gpkg_geom
 from kart.meta_items import MetaItemDefinition, MetaItemFileType
-from kart.serialise_util import json_unpack
+from kart.serialise_util import json_unpack, ensure_bytes
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.tabular.table_dataset import TableDataset
 from kart.utils import ungenerator
@@ -73,6 +73,12 @@ class TableV1(TableDataset):
         return KartAdapter_GPKG.all_v2_meta_items_from_gpkg_meta_items(
             self.gpkg_meta_items()
         )
+
+    def attachments(self):
+        metadata_xml = KartAdapter_GPKG.gpkg_to_xml_metadata(self.gpkg_meta_items())
+        if metadata_xml:
+            yield "metadata.xml", ensure_bytes(metadata_xml)
+        yield from super().attachments()
 
     @functools.lru_cache(maxsize=1)
     def gpkg_meta_items(self):
