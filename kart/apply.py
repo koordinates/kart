@@ -246,8 +246,9 @@ def apply_patch(
     repo,
     do_commit,
     patch_file,
-    allow_empty,
     ref="HEAD",
+    allow_empty=False,
+    amend=False,
     **kwargs,
 ):
     try:
@@ -293,6 +294,9 @@ def apply_patch(
         except KeyError:
             raise NotFound(f"No such ref {ref}")
 
+    if amend and not do_commit:
+        raise click.UsageError("--no-commit and --amend are incompatible")
+
     allow_minimal_updates = bool(resolve_missing_values_from_rs)
 
     rs = repo.structure(ref)
@@ -335,9 +339,10 @@ def apply_patch(
     if do_commit:
         commit = rs.commit_diff(
             repo_diff,
-            metadata["message"],
+            metadata.get("message"),
             author=_build_signature(metadata, "author", repo),
             allow_empty=allow_empty,
+            amend=amend,
             resolve_missing_values_from_rs=resolve_missing_values_from_rs,
         )
         click.echo(f"Commit {commit.hex}")
@@ -380,6 +385,12 @@ def apply_patch(
     default="HEAD",
     help="Which ref to apply the patch onto.",
     shell_complete=ref_completer,
+)
+@click.option(
+    "--amend",
+    default=False,
+    is_flag=True,
+    help="Amend the previous commit instead of adding a new commit",
 )
 @click.argument("patch_file", type=click.File("r", encoding="utf-8"))
 def apply(ctx, **kwargs):

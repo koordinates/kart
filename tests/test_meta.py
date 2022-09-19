@@ -122,6 +122,31 @@ def test_meta_set(data_archive, cli_runner):
         assert meta["description"]["+"] == "newdescription"
 
 
+def test_meta_set_amend(data_archive, cli_runner):
+    with data_archive("points"):
+        r = cli_runner.invoke(
+            [
+                "meta",
+                "set",
+                "nz_pa_points_topo_150k",
+                "title=newtitle",
+                "description=newdescription",
+                "--amend",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["show", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        output = json.loads(r.stdout)
+        patch_info = output.pop("kart.show/v1")
+        assert patch_info["message"] == "Improve naming on Coromandel East coast"
+        feature = output["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
+        assert len(feature) == 5
+        meta = output["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+        assert meta["title"] == {"-": "NZ Pa Points (Topo, 1:50k)", "+": "newtitle"}
+        assert meta["description"]["+"] == "newdescription"
+
+
 def test_meta_set_custom_fields(data_archive, cli_runner):
     with data_archive("points"):
         # Make sure this works even when we have a working copy

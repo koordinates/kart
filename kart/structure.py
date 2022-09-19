@@ -365,6 +365,7 @@ class RepoStructure:
         author=None,
         committer=None,
         allow_empty=False,
+        amend=False,
         resolve_missing_values_from_rs: Optional["RepoStructure"] = None,
     ):
         """
@@ -391,22 +392,47 @@ class RepoStructure:
             if (not allow_empty) and new_tree == self.tree:
                 raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
-            L.info("Committing...")
-
             if self.ref == "HEAD":
                 parent_commit = self.repo.head_commit
             else:
                 parent_commit = self.repo.references[self.ref].peel(pygit2.Commit)
-            parents = [parent_commit.oid] if parent_commit is not None else []
 
-            # This will also update the ref (branch) to point to the new commit
+            if amend:
+                if not parent_commit:
+                    raise click.UsageError(
+                        "Cannot --amend - there is no previous commit to amend"
+                    )
+                parents = [gp.id for gp in parent_commit.parents]
+                if not message:
+                    message = parent_commit.message
+                commit_to_ref = None
+            else:
+                parents = [parent_commit.oid] if parent_commit is not None else []
+                commit_to_ref = self.ref
+
+            if not message:
+                raise click.UsageError("Aborting commit due to empty commit message.")
+
+            L.info("Committing...")
+
+            # This will also update commit_to_ref to point to the new commit, if it is not None.
             new_commit = object_builder.commit(
-                self.ref,
+                commit_to_ref,
                 author or self.repo.author_signature(),
                 committer or self.repo.committer_signature(),
                 message,
                 parents,
             )
+
+            if amend:
+                if self.ref == "HEAD" and self.repo.head_branch is None:
+                    self.repo.head.set_target(new_commit.id)
+                elif self.ref == "HEAD" and self.repo.head_branch is not None:
+                    self.repo.references[self.repo.head_branch].set_target(
+                        new_commit.id
+                    )
+                else:
+                    self.repo.references[self.ref].set_target(new_commit.id)
 
         L.info(f"Commit: {new_commit.id.hex}")
         return new_commit

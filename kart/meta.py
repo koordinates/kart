@@ -157,6 +157,12 @@ class KeyValueType(click.ParamType):
     help="Use the given message as the commit message",
     type=StringFromFile(encoding="utf-8"),
 )
+@click.option(
+    "--amend",
+    default=False,
+    is_flag=True,
+    help="Amend the previous commit instead of adding a new commit",
+)
 @click.argument("dataset")
 @click.argument(
     "items",
@@ -166,7 +172,7 @@ class KeyValueType(click.ParamType):
     metavar="KEY=VALUE [KEY=VALUE...]",
 )
 @click.pass_context
-def meta_set(ctx, message, dataset, items):
+def meta_set(ctx, message, amend, dataset, items):
     """
     Sets multiple meta items for a dataset, and creates a commit.
     """
@@ -177,7 +183,7 @@ def meta_set(ctx, message, dataset, items):
             "This repo doesn't support meta changes, use `kart upgrade`"
         )
 
-    if message is None:
+    if message is None and not amend:
         message = f"Update metadata for {dataset}"
 
     def _parse(key, value):
@@ -208,6 +214,7 @@ def meta_set(ctx, message, dataset, items):
         do_commit=True,
         patch_file=patch_file,
         allow_empty=False,
+        amend=amend,
     )
 
 
