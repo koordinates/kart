@@ -17,8 +17,9 @@ def run(*args, **kwargs):
     # the same FDs instead of creating new ones that are connected to the same place.
     # This is required for the Kart-Helper to work properly.
     kwargs.setdefault("stdin", sys.stdin)
-    kwargs.setdefault("stderr", sys.stderr)
-    kwargs.setdefault("stdout", sys.stdout)
+    if not kwargs.get("capture_output"):
+        kwargs.setdefault("stderr", sys.stderr)
+        kwargs.setdefault("stdout", sys.stdout)
     return s.run(*args, **kwargs)
 
 
