@@ -1,10 +1,11 @@
+import subprocess
 import sys
 import logging
 from datetime import datetime, timedelta, timezone
 
 import click
 
-from kart import diff_estimation, subprocess
+from kart import diff_estimation
 from kart.cli_util import (
     OutputFormatType,
     parse_output_format,
@@ -12,6 +13,7 @@ from kart.cli_util import (
 )
 from kart.completion_shared import path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
+from kart.exec import run_and_wait
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import dump_json_output
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
@@ -257,9 +259,8 @@ def log(
     if output_type == "text":
         if fmt:
             options.append(f"--format={fmt}")
-        cmd = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
-        r = subprocess.run(cmd, env=tool_environment())
-        sys.exit(r.returncode)
+        git_args = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
+        run_and_wait("git", git_args)
 
     elif output_type in ("json", "json-lines"):
         try:
