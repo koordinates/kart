@@ -13,7 +13,7 @@ from kart.cli_util import (
 )
 from kart.completion_shared import path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
-from kart.exec import run_and_wait
+from kart.subprocess_util import run
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import dump_json_output
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
@@ -260,7 +260,7 @@ def log(
         if fmt:
             options.append(f"--format={fmt}")
         git_args = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
-        run_and_wait("git", git_args)
+        run("git", git_args)
 
     elif output_type in ("json", "json-lines"):
         try:

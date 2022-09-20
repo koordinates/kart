@@ -22,7 +22,7 @@ from .cli_util import (
     KartGroup,
 )
 from .context import Context
-from .exec import run_and_wait
+from kart.subprocess_util import run
 
 MODULE_COMMANDS = {
     "annotations.cli": {"build-annotations"},
@@ -283,7 +283,7 @@ def git(ctx, args):
     params = ["git"]
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
-    run_and_wait("git", [*params, *args])
+    run("git", [*params, *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
@@ -298,7 +298,7 @@ def lfs(ctx, args):
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
     params += ["lfs"]
-    run_and_wait("git", [*params, *args])
+    run("git", [*params, *args])
 
 
 @cli.command(

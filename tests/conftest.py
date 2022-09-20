@@ -446,7 +446,7 @@ def cli_runner(request):
     """A wrapper round Click's test CliRunner to improve usefulness"""
     return KartCliRunner(
         # kart.cli._execvp() looks for this env var to prevent fork/exec in tests.
-        env={"_KART_NO_EXEC": "1"},
+        env={"_KART_RUN_WITH_CAPTURE": "1"},
         # workaround Click's environment isolation so debugging works.
         in_pdb=request.config.getoption("--pdb-trace"),
     )
