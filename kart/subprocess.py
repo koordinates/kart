@@ -12,12 +12,13 @@ from subprocess import *  # noqa
 def run(*args, **kwargs):
     if "_KART_TEST" in os.environ:
         return run_for_test(*args, **kwargs)
-    if "stdout" not in kwargs and "stderr" not in kwargs:
-        # This is what the caller actually intends - subtly different to the default, we reuse
-        # the same FDs instead of creating new ones that are connected to the same place.
-        # This is required for the Kart-Helper to work properly.
-        kwargs.update(stdout=sys.stdout, stderr=sys.stderr)
 
+    # This is what the caller actually intends - subtly different to the default, we reuse
+    # the same FDs instead of creating new ones that are connected to the same place.
+    # This is required for the Kart-Helper to work properly.
+    kwargs.setdefault("stdin", sys.stdin)
+    kwargs.setdefault("stderr", sys.stderr)
+    kwargs.setdefault("stdout", sys.stdout)
     return s.run(*args, **kwargs)
 
 
