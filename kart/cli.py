@@ -280,7 +280,7 @@ def git(ctx, args):
     """
     Run an arbitrary Git command, using kart's packaged Git
     """
-    params = ["git"]
+    params = []
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
     run("git", [*params, *args])
@@ -294,7 +294,7 @@ def lfs(ctx, args):
     Run an arbitrary Git LFS command, using Kart's packaged Git.
     Git LFS is not yet packaged with Kart so this will not work unless your Kart environment has Git LFS installed.
     """
-    params = ["git"]
+    params = []
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
     params += ["lfs"]

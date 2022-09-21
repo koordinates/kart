@@ -259,7 +259,7 @@ def log(
     if output_type == "text":
         if fmt:
             options.append(f"--format={fmt}")
-        git_args = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
+        git_args = ["-C", repo.path, "log", *options, *commits, "--", *paths]
         run("git", git_args)
 
     elif output_type in ("json", "json-lines"):

@@ -152,7 +152,7 @@ def run_with_capture(cmd, args, env):
     # io wrapper.
     # This io wrapper is not compatible with the stdin= kwarg to .run - in that case
     # it gets treated as a file like object and fails.
-    p = subprocess.run([cmd] + args[1:], capture_output=True, encoding="utf-8", env=env)
+    p = subprocess.run([cmd] + args, capture_output=True, encoding="utf-8", env=env)
     sys.stdout.write(p.stdout)
     sys.stdout.flush()
     sys.stderr.write(p.stderr)
@@ -176,7 +176,7 @@ def run(cmd, args):
         run_with_capture(cmd, args, env)
     else:
         p = subprocess.run(
-            [cmd] + args[1:],
+            [cmd] + args,
             encoding="utf-8",
             env=env,
             stdin=sys.stdin,

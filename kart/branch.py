@@ -42,7 +42,7 @@ def branch(ctx, output_format, args):
                 f"Cannot delete the branch '{branch}' which you are currently on."
             )
 
-    run("git", ["git", "-C", repo.path, "branch"] + list(args))
+    run("git", ["-C", repo.path, "branch"] + list(args))
 
 
 def list_branches_json(repo):
