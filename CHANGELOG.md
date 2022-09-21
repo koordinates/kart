@@ -15,7 +15,6 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - `diff`, `show`, `create-patch` and `apply` now handle attached files (as could already be created using `kart commit-files`) [#583](https://github.com/koordinates/kart/issues/583)
 - `metadata.xml` is now consistently treated as an attached file, rather than as a hidden "meta item". [#583](https://github.com/koordinates/kart/issues/583)
 - `apply` and `meta set` now support `--amend` to amend an existing commit
-- Refactor handling of subprocesses which don't have output captured [#715](https://github.com/koordinates/kart/pull/715)
 
 ## 0.11.5
 
