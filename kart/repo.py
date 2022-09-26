@@ -603,10 +603,10 @@ class KartRepo(pygit2.Repository):
             )
         return KartRepoState.MERGING if merge_head else KartRepoState.NORMAL
 
-    def structure(self, refish="HEAD"):
+    def structure(self, refish="HEAD", allow_unborn_head=True):
         """Get the structure of this Kart repository at a particular revision."""
         self.ensure_supported_version()
-        return RepoStructure(self, refish)
+        return RepoStructure(self, refish, allow_unborn_head=allow_unborn_head)
 
     def datasets(
         self,
