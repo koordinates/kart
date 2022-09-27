@@ -7,6 +7,7 @@ import platform
 import warnings
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import click
@@ -189,6 +190,14 @@ def tool_environment(env=None):
     """
     init_git_config()
     env = (env or os.environ).copy()
+
+    # Add kart bin directory to the start of the path:
+    kart_bin_path = str(Path(sys.executable).parents[0])
+    if "PATH" in env:
+        env["PATH"] = kart_bin_path + os.pathsep + env["PATH"]
+    else:
+        env["PATH"] = kart_bin_path
+
     if platform.system() == "Linux":
         # https://pyinstaller.readthedocs.io/en/stable/runtime-information.html#ld-library-path-libpath-considerations
         if "LD_LIBRARY_PATH_ORIG" in env:
