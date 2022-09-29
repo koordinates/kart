@@ -443,7 +443,7 @@ set(VENDOR_ARCHIVE
     PARENT_SCOPE)
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
-  DEPENDS vendor_wheels git ${VENDOR_CONFIG}
+  DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG}
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
