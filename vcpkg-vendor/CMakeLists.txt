@@ -441,6 +441,12 @@ set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
 set(VENDOR_ARCHIVE
     vcpkg-vendor/${VENDOR_ARCHIVE}
     PARENT_SCOPE)
+
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(SYMLINK_MOD_SPATIALITE_COMMAND "${CMAKE_COMMAND} -E create_symlink mod_spatialite.so env/lib/mod_spatialite.dylib")
+  separate_arguments(SYMLINK_MOD_SPATIALITE_COMMAND)
+endif()
+
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
   DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG}
@@ -448,6 +454,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
   COMMAND ${CMAKE_COMMAND} -E copy ${LIB_LIST} env/lib
+  COMMAND ${SYMLINK_MOD_SPATIALITE_COMMAND}
   COMMAND ${CMAKE_COMMAND} -E copy ${BIN_LIST} env/bin
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/data env/share/proj/data
