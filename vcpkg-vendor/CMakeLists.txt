@@ -298,8 +298,7 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.w
 # Proj
 #
 find_package(PROJ CONFIG REQUIRED)
-cmake_path(APPEND PROJ_DIR "data" OUTPUT_VARIABLE PROJ_DATADIR)
-file(GLOB PROJ_DATA_FILES RELATIVE ${CURRENT_PACKAGES_DIR} "share/proj/data/*")
+file(GLOB PROJ_DATA_FILES RELATIVE ${CURRENT_PACKAGES_DIR} "share/proj/*")
 list(APPEND ENV_FILE_LIST ${PROJ_DATA_FILES})
 
 
@@ -457,7 +456,7 @@ add_custom_command(
   COMMAND ${SYMLINK_MOD_SPATIALITE_COMMAND}
   COMMAND ${CMAKE_COMMAND} -E copy ${BIN_LIST} env/bin
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/data env/share/proj/data
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_STDLIB} env/lib/${Python3_STDLIB_DIR_NAME}
   COMMAND ${CMAKE_COMMAND} -E tar czf ${VENDOR_ARCHIVE} -- wheelhouse env ${VENDOR_CONFIG}
   COMMENT "Vendor dependency archive")
