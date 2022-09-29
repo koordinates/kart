@@ -352,7 +352,7 @@ print_target_properties(pdal_util)
 ExternalProject_Add(
   git-lfs
   GIT_REPOSITORY https://github.com/git-lfs/git-lfs
-  GIT_TAG c6497f8b1fe78b5cea7468581ef0fde3ca8056f9
+  GIT_TAG main
   GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
   EXCLUDE_FROM_ALL ON
