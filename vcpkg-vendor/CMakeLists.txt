@@ -367,9 +367,9 @@ list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
 # Note: we define the Git dependency last since it affects GIT_VERSION_STRING etc,
 # which can break other dependencies.
 #
-include(FindOpenSSL)
-pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
+find_package(OPENSSL REQUIRED)
 pkg_check_modules(OPENSSL REQUIRED openssl)
+pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
 list(JOIN LIBCURL_STATIC_CFLAGS " " GIT_BUILD_CURL_CFLAGS)
 list(JOIN LIBCURL_STATIC_LDFLAGS " " GIT_BUILD_CURL_LDFLAGS)
