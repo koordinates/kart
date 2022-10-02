@@ -191,24 +191,10 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         return result
 
     def create_and_initialise(self):
-        # GDAL: Create GeoPackage
-        # GDAL: Add metadata/etc
-        gdal_driver = gdal.GetDriverByName("GPKG")
-        gdal_ds = gdal_driver.Create(str(self.full_path), 0, 0, 0, gdal.GDT_Unknown)
-        del gdal_ds
-
         with self.session() as sess:
-            # Remove placeholder stuff GDAL creates
-            sess.execute(
-                "DELETE FROM gpkg_geometry_columns WHERE table_name='ogr_empty_table';"
-            )
-            sess.execute(
-                "DELETE FROM gpkg_contents WHERE table_name='ogr_empty_table';"
-            )
-            sess.execute("DROP TABLE IF EXISTS ogr_empty_table;")
-
-            # Create metadata tables
+            # Create standard GPKG tables:
             GpkgTables().create_all(sess)
+            # Create Kart-specific tables:
             self.kart_tables.create_all(sess)
 
     def _create_table_for_dataset(self, sess, dataset):
