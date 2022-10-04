@@ -458,7 +458,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_STDLIB} env/lib/${Python3_STDLIB_DIR_NAME}
-  COMMAND ${CMAKE_COMMAND} -E tar czf ${VENDOR_ARCHIVE} -- wheelhouse env ${VENDOR_CONFIG}
+  COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" . ${VENDOR_ARCHIVE}
   COMMENT "Vendor dependency archive")
 add_custom_target(
   vendor_archive
