@@ -472,6 +472,41 @@ def fix_rpaths(root_path, make_fatal=False, verbose=False):
     return MODIFIED
 
 
+check_codesigning = PlatformSpecific()
+
+
+def check_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
+    problems = []
+    for path_to_lib in lib_and_bin_paths(root_path):
+        try:
+            subprocess.check_output(
+                ["codesign", "-vvvv", path_to_lib], stderr=subprocess.STDOUT
+            )
+            continue
+        except subprocess.CalledProcessError as e:
+            problems.append(
+                {
+                    "lib": path_to_lib,
+                    "error": e.stdout,
+                }
+            )
+
+    if not problems:
+        checkmark("Checking code signing: no invalid signatures.")
+        return UNMODIFIED
+
+    detail = json_dumps(problems, root_path) if verbose else None
+    warn(
+        f"Checking code signing: found {len(problems)} libs with signature issues.",
+        make_fatal=make_fatal,
+        detail=detail,
+    )
+
+    raise NotImplementedError("Fixing codesigning issues")
+
+    return MODIFIED
+
+
 get_deps = PlatformSpecific()
 
 
@@ -724,6 +759,7 @@ def fix_everything(input_path, output_path):
         status |= fix_dep_linkage(root_path)
         status |= fix_names(root_path)
         status |= fix_rpaths(root_path)
+        status |= check_codesigning(root_path)
 
         if status == MODIFIED:
             checkmark("Finished fixing.\n")
@@ -733,6 +769,7 @@ def fix_everything(input_path, output_path):
             fix_dep_linkage(root_path, **kwargs)
             fix_names(root_path, **kwargs)
             fix_rpaths(root_path, **kwargs)
+            check_codesigning(root_path, **kwargs)
         else:
             checkmark("Nothing to change.\n")
 
