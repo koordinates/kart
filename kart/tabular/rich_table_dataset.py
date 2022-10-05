@@ -26,8 +26,6 @@ class RichTableDataset(TableDataset):
     this functionality isn't needed. For example, see Dataset0.
     """
 
-    RTREE_INDEX_EXTENSIONS = ("kart-idxd", "kart-idxi")
-
     def features_plus_blobs(self):
         for blob in self.feature_blobs():
             yield self.get_feature(path=blob.name, data=memoryview(blob)), blob
@@ -82,68 +80,6 @@ class RichTableDataset(TableDataset):
             if crs_id:
                 result[col.name] = crs_id
         return result
-
-    def build_spatial_index(self, path):
-        """
-        Internal proof-of-concept method for building a spatial index across the repository.
-
-        Uses Rtree (libspatialindex underneath): http://toblerity.org/rtree/index.html
-        """
-        import rtree
-
-        if not self.has_geometry:
-            raise ValueError("No geometry to index")
-
-        def _indexer():
-            t0 = time.monotonic()
-
-            c = 0
-            for feature in self.features():
-                c += 1
-                pk = feature[self.primary_key]
-                geom = feature[self.geom_column_name]
-
-                if geom is None:
-                    continue
-
-                e = geom.envelope(only_2d=True, calculate_if_missing=True)
-                yield (pk, e, None)
-
-                if c % 50000 == 0:
-                    print(f"  {c} features... @{time.monotonic()-t0:.1f}s")
-
-        p = rtree.index.Property()
-        p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
-        p.idx_extension = self.RTREE_INDEX_EXTENSIONS[1]
-        p.leaf_capacity = 1000
-        p.fill_factor = 0.9
-        p.overwrite = True
-        p.dimensionality = 2
-
-        t0 = time.monotonic()
-        idx = rtree.index.Index(path, _indexer(), properties=p, interleaved=False)
-        t1 = time.monotonic()
-        b = idx.bounds
-        c = idx.count(b)
-        del idx
-        t2 = time.monotonic()
-        print(f"Indexed {c} features ({b}) in {t1-t0:.1f}s; flushed in {t2-t1:.1f}s")
-
-    def get_spatial_index(self, path):
-        """
-        Retrieve a spatial index built with build_spatial_index().
-
-        Query with .nearest(coords), .intersection(coords), .count(coords)
-        http://toblerity.org/rtree/index.html
-        """
-        import rtree
-
-        p = rtree.index.Property()
-        p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
-        p.idx_extension = self.RTREE_INDEX_EXTENSIONS[1]
-
-        idx = rtree.index.Index(path, properties=p)
-        return idx
 
     @functools.lru_cache()
     def get_geometry_transform(self, target_crs):

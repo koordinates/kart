@@ -1,5 +1,3 @@
-brew "spatialindex"
-
 brew "libpq"
     brew "openssl@1.1"
     brew "krb5"

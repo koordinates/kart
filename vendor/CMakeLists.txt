@@ -59,7 +59,6 @@ endif()
 
 find_package(Git 2.31 REQUIRED)
 find_package(GDAL 3.3.2 REQUIRED)
-find_package(Spatialindex 1.9.3 REQUIRED)
 find_package(SpatiaLite 5.0.0 REQUIRED)
 message(VERBOSE "SpatiaLite extension: ${SpatiaLite_EXTENSION}")
 if(NOT SpatiaLite_EXTENSION)

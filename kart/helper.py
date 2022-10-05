@@ -57,7 +57,6 @@ def helper(ctx, socket_filename, timeout, args):
             "PATH",
             "LD_LIBRARY_PATH",
             "LD_LIBRARY_PATH_ORIG",
-            "SPATIALINDEX_C_LIBRARY",
             "GIT_CONFIG_NOSYSTEM",
             "GIT_EXEC_PATH",
             "GIT_TEMPLATE_DIR",
@@ -98,7 +97,6 @@ def helper(ctx, socket_filename, timeout, args):
     import osgeo
     import psycopg2
     import pysqlite3
-    import rtree
 
     import sqlalchemy
     from kart.sqlalchemy.gpkg import Db_GPKG
