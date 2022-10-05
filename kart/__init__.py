@@ -42,17 +42,6 @@ def _env_path(path):
     return path if os.path.isabs(path) else os.path.join(prefix, path)
 
 
-# Rtree / Libspatialindex
-if not is_windows:
-    if _kart_env:
-        os.environ["SPATIALINDEX_C_LIBRARY"] = _env_path(
-            _kart_env.SPATIALINDEX_C_LIBRARY
-        )
-    else:
-        os.environ["SPATIALINDEX_C_LIBRARY"] = os.path.join(
-            prefix, "" if is_frozen else "lib", f"libspatialindex_c.{libsuffix}"
-        )
-
 if _kart_env:
     spatialite_path = os.path.splitext(_env_path(_kart_env.SPATIALITE_EXTENSION))[0]
 else:

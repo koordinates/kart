@@ -81,8 +81,6 @@ py-install-docs = $(VIRTUAL_ENV)/.docs.installed
 py-install-test = $(VIRTUAL_ENV)/.test.installed
 py-install-tools = $(VIRTUAL_ENV)/.tools.installed
 
-$(PY_REQS) $(py-install-main): export SPATIALINDEX_C_LIBRARY:=$(abspath $(VIRTUAL_ENV)/lib/libspatialindex_c.$(LIBSUFFIX))
-
 $(py-install-main): requirements.txt $(vendor-install)
 $(py-install-test): requirements/test.txt $(py-install-main)
 $(py-install-docs): requirements/docs.txt $(py-install-main)

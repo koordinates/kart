@@ -4,7 +4,6 @@ cryptography
 msgpack~=0.6.1
 pymysql
 Pygments
-Rtree~=0.9.4
 sqlalchemy
 pyodbc ; os_name!="posix"
 shellingham
