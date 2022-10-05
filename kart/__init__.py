@@ -37,17 +37,24 @@ else:
 # sys.prefix is correctly set by virtualenv (development) & PyInstaller (release)
 prefix = os.path.abspath(sys.prefix)
 
+
+def _env_path(path):
+    return path if os.path.isabs(path) else os.path.join(prefix, path)
+
+
 # Rtree / Libspatialindex
 if not is_windows:
     if _kart_env:
-        os.environ["SPATIALINDEX_C_LIBRARY"] = _kart_env.SPATIALINDEX_C_LIBRARY
+        os.environ["SPATIALINDEX_C_LIBRARY"] = _env_path(
+            _kart_env.SPATIALINDEX_C_LIBRARY
+        )
     else:
         os.environ["SPATIALINDEX_C_LIBRARY"] = os.path.join(
             prefix, "" if is_frozen else "lib", f"libspatialindex_c.{libsuffix}"
         )
 
 if _kart_env:
-    spatialite_path = os.path.splitext(_kart_env.SPATIALITE_EXTENSION)[0]
+    spatialite_path = os.path.splitext(_env_path(_kart_env.SPATIALITE_EXTENSION))[0]
 else:
     spatialite_path = os.path.join(
         prefix, "" if (is_frozen or is_windows) else "lib", f"mod_spatialite"
@@ -64,7 +71,7 @@ path_extras = [prefix]
 os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 os.environ["XDG_CONFIG_HOME"] = prefix
 if _kart_env:
-    path_extras.append(os.path.split(_kart_env.GIT_EXECUTABLE)[0])
+    path_extras.append(os.path.split(_env_path(_kart_env.GIT_EXECUTABLE))[0])
 elif is_windows:
     path_extras.append(os.path.join(prefix, "git", "cmd"))
 else:
@@ -77,8 +84,8 @@ os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
 # GDAL Data
 if _kart_env:
-    os.environ["GDAL_DATA"] = _kart_env.GDAL_DATA
-    os.environ["PROJ_LIB"] = _kart_env.PROJ_LIB
+    os.environ["GDAL_DATA"] = _env_path(_kart_env.GDAL_DATA)
+    os.environ["PROJ_LIB"] = _env_path(_kart_env.PROJ_LIB)
 else:
     if is_windows:
         if prefix.endswith("venv"):
@@ -113,7 +120,8 @@ osr.UseExceptions()
 
 if is_linux:
     import certifi
-    os.environ['SSL_CERT_FILE'] = certifi.where()
+
+    os.environ["SSL_CERT_FILE"] = certifi.where()
 
 # Libgit2 options
 import pygit2

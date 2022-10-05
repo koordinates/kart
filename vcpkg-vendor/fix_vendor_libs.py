@@ -55,6 +55,8 @@ SITE_PACKAGES_PREFIX = "env/lib/python3.x/site-packages/"
 
 # The sole directories allowed at the top level of vendor-Darwin.tar.gz
 TOP_LEVEL_DIRECTORIES = ["env", "wheelhouse"]
+# The sole files allowed at the top level of vendor-Darwin.tar.gz
+TOP_LEVEL_FILES = ["_kart_env.py"]
 
 PLATFORM = platform.system()
 
@@ -157,8 +159,15 @@ def unpack_all(input_path, root_path):
             assert (input_path / d).is_dir()
             shutil.copytree(input_path / d, contents_path / d, symlinks=True)
 
+        for f in TOP_LEVEL_FILES:
+            assert (input_path / f).is_file()
+            shutil.copy(input_path / f, contents_path / f, follow_symlinks=True)
+
     for d in TOP_LEVEL_DIRECTORIES:
         assert (contents_path / d).is_dir()
+
+    for f in TOP_LEVEL_FILES:
+        assert (contents_path / f).is_file()
 
     for path_to_wheel in wheel_paths(contents_path):
         unpack_wheel(path_to_wheel, root_path)
