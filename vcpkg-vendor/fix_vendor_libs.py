@@ -509,6 +509,10 @@ def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
     return MODIFIED
 
 
+def fix_codesigning_Linux(root_path, make_fatal=False, verbose=False):
+    return UNMODIFIED
+
+
 get_deps = PlatformSpecific()
 
 
@@ -773,7 +777,6 @@ def fix_everything(input_path, output_path):
         status |= fix_dep_linkage(root_path)
         status |= fix_names(root_path)
         status |= fix_rpaths(root_path)
-        status |= fix_codesigning(root_path)
         status |= fix_libffi(root_path)
 
         if status == MODIFIED:
