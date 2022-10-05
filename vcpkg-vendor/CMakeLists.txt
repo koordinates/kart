@@ -358,10 +358,11 @@ list(JOIN LIBCURL_STATIC_LDFLAGS " " GIT_BUILD_CURL_LDFLAGS)
 
 cmake_path(SET GIT_SPATIAL_FILTER_EXT "../vendor/spatial-filter/spatial.a")
 cmake_path(ABSOLUTE_PATH GIT_SPATIAL_FILTER_EXT)
-set(GIT_BUILD_LDFLAGS "-L${SQLITE3_LIB_DIR} -lsqlite3 -lstdc++")
+set(GIT_BUILD_LDFLAGS "-L${SQLITE3_LIB_DIR} -lsqlite3")
 
 set(gitBuildConfig
     "V=1"
+    "CC=${CMAKE_C_COMPILER}"
     "NO_GETTEXT=YesPlease"
     "INSTALL_SYMLINKS=1"
     "USE_LIBPCRE=1"
@@ -371,6 +372,7 @@ set(gitBuildConfig
     "LIBPCREDIR=${PCRE2_PREFIX}"
     "OPENSSLDIR=${OPENSSL_PREFIX}"
     # stuff for building the spatial partial clone filter extension
+    "CXX=${CMAKE_CXX_COMPILER}"
     "LINK=${CMAKE_CXX_COMPILER}"
     "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}")
 
