@@ -472,24 +472,25 @@ def fix_rpaths(root_path, make_fatal=False, verbose=False):
     return MODIFIED
 
 
-check_codesigning = PlatformSpecific()
+fix_codesigning = PlatformSpecific()
 
 
-def check_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
+def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
         try:
             subprocess.check_output(
-                ["codesign", "-vvvv", path_to_lib], stderr=subprocess.STDOUT
+                ["codesign", "-vvvv", path_to_lib], stderr=subprocess.STDOUT, text=True
             )
             continue
         except subprocess.CalledProcessError as e:
-            problems.append(
-                {
-                    "lib": path_to_lib,
-                    "error": e.stdout,
-                }
-            )
+            if "code object is not signed at all" not in e.stdout:
+                problems.append(
+                    {
+                        "lib": path_to_lib,
+                        "error": e.stdout,
+                    }
+                )
 
     if not problems:
         checkmark("Checking code signing: no invalid signatures.")
@@ -502,7 +503,8 @@ def check_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
         detail=detail,
     )
 
-    raise NotImplementedError("Fixing codesigning issues")
+    for problem in problems:
+        subprocess.check_call(["codesign", "--remove-signature", path_to_lib])
 
     return MODIFIED
 
@@ -755,21 +757,22 @@ def fix_everything(input_path, output_path):
         unpack_all(input_path, root_path)
 
         status = UNMODIFIED
+        status |= fix_codesigning(root_path)
         status |= fix_unsatisfied_deps(root_path)
         status |= fix_dep_linkage(root_path)
         status |= fix_names(root_path)
         status |= fix_rpaths(root_path)
-        status |= check_codesigning(root_path)
+        status |= fix_codesigning(root_path)
 
         if status == MODIFIED:
             checkmark("Finished fixing.\n")
             info("Checking everything was fixed ...")
             kwargs = {"make_fatal": True, "verbose": True}
+            fix_codesigning(root_path, **kwargs)
             fix_unsatisfied_deps(root_path, **kwargs)
             fix_dep_linkage(root_path, **kwargs)
             fix_names(root_path, **kwargs)
             fix_rpaths(root_path, **kwargs)
-            check_codesigning(root_path, **kwargs)
         else:
             checkmark("Nothing to change.\n")
 
