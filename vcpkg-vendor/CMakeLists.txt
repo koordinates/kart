@@ -265,15 +265,6 @@ find_mod_spatialite()
 list(APPEND LIB_LIST ${SPATIALITE_EXTENSION})
 
 #
-# libspatialindex
-#
-find_package(libspatialindex CONFIG REQUIRED)
-get_target_property(SIDX_C_LIBRARY spatialindex_c LOCATION)
-get_target_property(SIDX_CPP_LIBRARY spatialindex LOCATION)
-list(APPEND LIB_LIST ${SIDX_C_LIBRARY} ${SIDX_CPP_LIBRARY})
-cmake_path(GET SIDX_C_LIBRARY FILENAME SIDX_C_LIBRARY_NAME)
-
-#
 # PDAL
 #
 

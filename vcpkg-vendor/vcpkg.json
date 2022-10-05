@@ -48,9 +48,6 @@
             "name": "python3"
         },
         {
-            "name": "libspatialindex"
-        },
-        {
             "name": "pdal",
             "default-features": false
         },
