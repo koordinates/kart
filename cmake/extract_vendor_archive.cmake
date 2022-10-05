@@ -23,14 +23,6 @@ execute_process(
 message(STATUS "Extracting vendor archive...")
 file(ARCHIVE_EXTRACT INPUT ${VENDOR_ARCHIVE} DESTINATION vendor-tmp)
 
-# install wheels
-file(
-  GLOB wheels
-  LIST_DIRECTORIES false
-  "vendor-tmp/wheelhouse/*.whl")
-execute_process(COMMAND ${PY} -m pip install --isolated --disable-pip-version-check
-                        --force-reinstall --no-deps ${wheels} COMMAND_ERROR_IS_FATAL ANY)
-
 # install other env files (libraries, binaries, data)
 message(STATUS "Installing environment files...")
 # FIXME: why is this different between platforms?
@@ -40,6 +32,18 @@ if (WIN32)
 else()
   file(COPY vendor-tmp/env/ DESTINATION venv)
 endif()
+
+# Upgrade the venv using python from the vendor-archive (if included):
+message(STATUS "Upgrading venv...")
+execute_process(COMMAND ${PY} -m venv --upgrade venv)
+
+# install wheels
+file(
+  GLOB wheels
+  LIST_DIRECTORIES false
+  "vendor-tmp/wheelhouse/*.whl")
+execute_process(COMMAND ${PY} -m pip install --isolated --disable-pip-version-check
+                        --force-reinstall --no-deps ${wheels} COMMAND_ERROR_IS_FATAL ANY)
 
 # install a _kart_env.py configuration file
 if(EXISTS vendor-tmp/_kart_env.py)
