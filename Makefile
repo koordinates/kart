@@ -154,7 +154,7 @@ kart-cli-helper = cli_helper/kart_cli_helper
 $(kart-cli-helper): cli_helper/kart.c.o cli_helper/cJSON.c.o  | $(VIRTUAL_ENV)
 	$(CC) -o $@ cli_helper/kart.c.o cli_helper/cJSON.c.o
 
-cli_helper/kart.c.o: cli_helper/kart.c 
+cli_helper/kart.c.o: cli_helper/kart.c
 	$(CC) -Wall -o $@ -g  -c $<
 
 cli_helper/cJSON.c.o: cli_helper/cJSON.c

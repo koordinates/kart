@@ -109,6 +109,30 @@ ExternalProject_Get_Property(psycopg2 INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
+# cffi
+#
+find_package(libffi REQUIRED)
+set(CFFI_WHEEL_VER 1.15.1)
+ExternalProject_Add(
+  cffi
+  URL https://files.pythonhosted.org/packages/2b/a8/050ab4f0c3d4c1b8aaa805f70e26e84d0e27004907c5b8ecc1d31815f92a/cffi-1.15.1.tar.gz
+  BUILD_IN_SOURCE ON
+  DEPENDS wheelBuildEnv libffi
+  EXCLUDE_FROM_ALL ON
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND
+    ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --include-dirs
+    $<JOIN:$<TARGET_PROPERTY:libffi,INTERFACE_INCLUDE_DIRECTORIES>,:> --library-dirs
+    $<JOIN:$<TARGET_PROPERTY:libffi,INTERFACE_LINK_DIRECTORIES>,:> --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
+          --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+ExternalProject_Get_Property(cffi INSTALL_DIR)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+
+#
 # pygit2
 #
 find_package(unofficial-git2 CONFIG REQUIRED)
@@ -335,7 +359,7 @@ set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
 #
 add_custom_target(
   vendor_wheels ALL
-  DEPENDS pygit2 psycopg2 pysqlite3 pyodbc gdal_py
+  DEPENDS pygit2 psycopg2 pysqlite3 pyodbc gdal_py cffi
   COMMENT "Python vendor wheels")
 
 set(VENDOR_CONFIG _kart_env.py)
