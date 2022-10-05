@@ -744,17 +744,6 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
     return MODIFIED
 
 
-def fix_libffi(root_path, make_fatal=False, verbose=False):
-    lib_ffi_path = root_path / VENDOR_ARCHIVE_CONTENTS / "env" / "lib" / "libffi.dylib"
-    if not lib_ffi_path.exists():
-        checkmark("Checking lib_ffi: all good")
-        return UNMODIFIED
-
-    warn("Checking lib_ffi: found lib to remove.", make_fatal=make_fatal)
-    lib_ffi_path.unlink()
-    return MODIFIED
-
-
 def fix_everything(input_path, output_path):
     if not input_path.resolve().exists():
         fatal(f"Path does not exist {input_path}")
@@ -762,8 +751,6 @@ def fix_everything(input_path, output_path):
     if output_path:
         if output_path.is_dir():
             output_path = output_path / VENDOR_ARCHIVE_NAME
-        if output_path.exists():
-            fatal(f"Cannot write vendor archive to {output_path} - already exists")
     else:
         print("(Running in dry-run mode since no OUTPUT_PATH was supplied.)")
 
@@ -772,23 +759,22 @@ def fix_everything(input_path, output_path):
         unpack_all(input_path, root_path)
 
         status = UNMODIFIED
-        status |= fix_codesigning(root_path)
         status |= fix_unsatisfied_deps(root_path)
         status |= fix_dep_linkage(root_path)
         status |= fix_names(root_path)
         status |= fix_rpaths(root_path)
-        status |= fix_libffi(root_path)
+        # last, so it checks/fixes the modified files
+        status |= fix_codesigning(root_path)
 
         if status == MODIFIED:
             checkmark("Finished fixing.\n")
             info("Checking everything was fixed ...")
             kwargs = {"make_fatal": True, "verbose": True}
-            fix_codesigning(root_path, **kwargs)
             fix_unsatisfied_deps(root_path, **kwargs)
             fix_dep_linkage(root_path, **kwargs)
             fix_names(root_path, **kwargs)
             fix_rpaths(root_path, **kwargs)
-            fix_libffi(root_path, **kwargs)
+            fix_codesigning(root_path, **kwargs)
 
         else:
             checkmark("Nothing to change.\n")

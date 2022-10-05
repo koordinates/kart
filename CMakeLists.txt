@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
 
+if(USE_VCPKG)
+  # this needs to be super-early, before the first project() call
+  include("vcpkg-vendor/vcpkg-toolchain-setup.cmake")
+endif()
+
 project(
   KART
   VERSION 0.11.6
@@ -43,7 +48,7 @@ endif()
 if(USE_VCPKG)
   message("Using VCPKG for vendor dependencies...")
   add_subdirectory(vcpkg-vendor)
-  set(VENDOR_TARGET vendor_vcpkg)
+  set(VENDOR_TARGET vendor)
 else()
   # OSX: prefer Homebrew over Frameworks
   set(Python3_FIND_IMPLEMENTATIONS "CPython")

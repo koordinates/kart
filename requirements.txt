@@ -45,7 +45,7 @@ pygments==2.13.0
     #   rst2txt
 pymysql==1.0.2
     # via -r requirements/requirements.in
-pyodbc==4.0.34 ; platform_system != "Linux"
+pyodbc==4.0.34 ; os_name != "posix"
     # via -r requirements/requirements.in
 pyrsistent==0.18.1
     # via jsonschema

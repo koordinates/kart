@@ -6,7 +6,7 @@ pymysql
 Pygments
 Rtree~=0.9.4
 sqlalchemy
-pyodbc ; platform_system!="Linux"
+pyodbc ; os_name!="posix"
 shellingham
 docutils<0.18
 rst2txt

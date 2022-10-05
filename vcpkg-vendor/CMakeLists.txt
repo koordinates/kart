@@ -1,14 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-set(CMAKE_TOOLCHAIN_FILE
-    "${CMAKE_CURRENT_LIST_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-    CACHE STRING "")
-set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_LIST_DIR}/vcpkg-overlay-ports")
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_LIST_DIR}/vcpkg-overlay-triplets")
-set(VCPKG_BUILD_TYPE release)
-
-# equivalent of 11.0 on arm64
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
+include(${CMAKE_CURRENT_LIST_DIR}/vcpkg-toolchain-setup.cmake)
 
 project(kart_vendor LANGUAGES C CXX)
 
@@ -34,71 +26,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 find_package(PkgConfig REQUIRED)
 
+cmake_policy(SET CMP0135 NEW)
 include(ExternalProject)
 
-# function(copy_lib_symlinks tgt output) if(NOT TARGET ${tgt}) message("There is no target named
-# '${tgt}'") return() endif()
-
-# get_target_property(location ${tgt} LOCATION)  # /path/to/libfoo.1.2.3.dylib / .so.1.2.3
-# cmake_path(GET ${location} FILENAME dir)  # /path/to cmake_path(GET ${location} FILENAME fullname)
-# # libfoo.1.2.3.dylib / libfoo.so.1.2.3 cmake_path(GET ${location} FILENAME name)  #
-# libfoo.1.2.3.dylib / libfoo.so.1.2.3 cmake_path(GET ${location} EXTENSION ext)  # .1.2.3.dylib /
-# .so.1.2.3 cmake_path(GET ${location} STEM stem)      # libfoo
-
-# add_custom_target(${name}_lib_symlinks)
-
-# if(CMAKE_SYSTEM_NAME STREQUAL "Darwin") # libfoo.1.2.3.dylib # libfoo.1.2.dylib ->
-# libfoo.1.2.3.dylib # libfoo.1.dylib -> libfoo.1.2.3.dylib
-# add_custom_target(${output}/${name}.dylib COMMAND ${CMAKE_COMMAND} -E create_symlink ${name}
-# ${out} )
-
-# elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux") # libfoo.so.1.2.3 # libfoo.so.1.2 -> libfoo.so.1.2.3 #
-# libfoo.so.1 -> libfoo.so.1.2.3 while(NOT STREQUAL(ext) ".so")
-# add_custom_target("${dir}/${stem}${ext}" COMMAND ${CMAKE_COMMAND} -E create_symlink "${fullname}"
-# "${dir}/${stem}${ext}" )
-
-# cmake_path(GET "${stem}${ext}" EXTENSION ext) endwhile() else() return() endif()
-# endfunction(copy_lib_symlinks)
-
-# -----------------------------------------------------------------------------
-# Debugging helpers
-# -----------------------------------------------------------------------------
-#
-# Print all properties of target
-#
-# https://stackoverflow.com/questions/32183975/how-to-print-all-the-properties-of-a-target-in-cmake/56738858#56738858
-# https://stackoverflow.com/a/56738858/3743145 Get all properties that cmake supports
-execute_process(COMMAND cmake --help-property-list OUTPUT_VARIABLE CMAKE_PROPERTY_LIST)
-# Convert command output into a CMake list
-string(REGEX REPLACE ";" "\\\\;" CMAKE_PROPERTY_LIST "${CMAKE_PROPERTY_LIST}")
-string(REGEX REPLACE "\n" ";" CMAKE_PROPERTY_LIST "${CMAKE_PROPERTY_LIST}")
-list(REMOVE_DUPLICATES CMAKE_PROPERTY_LIST)
-# Print all properties of target
-function(print_target_properties tgt)
-  if(NOT TARGET ${tgt})
-    message("There is no target named '${tgt}'")
-    return()
-  endif()
-
-  foreach(prop ${CMAKE_PROPERTY_LIST})
-    string(REPLACE "<CONFIG>" "${CMAKE_BUILD_TYPE}" prop ${prop})
-    get_target_property(propval ${tgt} ${prop})
-    if(propval)
-      message(STATUS "${tgt} ${prop} = ${propval}")
-    endif()
-  endforeach(prop)
-endfunction(print_target_properties)
-
-# Print all variables with PREFIX
-function(print_vars_prefix _prefix)
-  get_cmake_property(_vars VARIABLES)
-  string(REGEX MATCHALL "(^|;)${_prefix}[A-Za-z0-9_]*" _matchedVars "${_vars}")
-  foreach(_var IN LISTS _matchedVars)
-    message(STATUS "${_var}=${${_var}}")
-  endforeach()
-endfunction()
-#
-# -----------------------------------------------------------------------------
+include(debug_helpers)
 
 set(WHEEL_LIST "")
 set(LIB_LIST "")
@@ -113,6 +44,7 @@ find_package(
   COMPONENTS Development Interpreter
   REQUIRED)
 cmake_path(GET Python3_STDLIB FILENAME Python3_STDLIB_DIR_NAME)
+cmake_path(GET Python3_INCLUDE_DIRS FILENAME Python3_INCLUDE_DIR_NAME)
 
 list(APPEND BIN_LIST ${Python3_EXECUTABLE})
 
@@ -349,7 +281,7 @@ list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
 # Git Note: we define the Git dependency last since it affects GIT_VERSION_STRING etc, which can
 # break other dependencies.
 #
-find_package(OPENSSL REQUIRED)
+find_package(OpenSSL REQUIRED)
 pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
@@ -406,9 +338,11 @@ add_custom_target(
   COMMENT "Python vendor wheels")
 
 set(VENDOR_CONFIG _kart_env.py)
-set(VENDOR_CONFIG
-    vendor-vcpkg/_kart_env.py
-    PARENT_SCOPE)
+if(NOT PROJECT_IS_TOP_LEVEL)
+  set(VENDOR_CONFIG
+      vendor-vcpkg/_kart_env.py
+      PARENT_SCOPE)
+endif()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/template/_kart_env.py.in ${VENDOR_CONFIG}
                ESCAPE_QUOTES)
 
@@ -416,19 +350,21 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/template/_kart_env.py.in ${VEND
 # Vendor Dist Archive
 #
 set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
-set(VENDOR_ARCHIVE
-    vcpkg-vendor/${VENDOR_ARCHIVE}
-    PARENT_SCOPE)
+if(NOT PROJECT_IS_TOP_LEVEL)
+  set(VENDOR_ARCHIVE
+      vcpkg-vendor/${VENDOR_ARCHIVE}
+      PARENT_SCOPE)
+endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  set(SYMLINK_MOD_SPATIALITE_COMMAND
-      "${CMAKE_COMMAND} -E create_symlink mod_spatialite.so env/lib/mod_spatialite.dylib")
-  separate_arguments(SYMLINK_MOD_SPATIALITE_COMMAND)
+  separate_arguments(
+    SYMLINK_MOD_SPATIALITE_COMMAND UNIX_COMMAND
+    "${CMAKE_COMMAND} -E create_symlink mod_spatialite.so env/lib/mod_spatialite.dylib")
 endif()
 
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
-  DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG}
+  DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
@@ -438,9 +374,12 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_STDLIB} env/lib/${Python3_STDLIB_DIR_NAME}
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS}
+          env/include/${Python3_INCLUDE_DIR_NAME}
   COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" .
           ${VENDOR_ARCHIVE}
-  COMMENT "Vendor dependency archive")
+  COMMENT "Vendor dependency archive assembly")
+
 add_custom_target(
   vendor_archive
   DEPENDS ${VENDOR_ARCHIVE}
