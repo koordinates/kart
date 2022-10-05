@@ -22,9 +22,6 @@ rm -rf vendor/dist/env/
 tar xzf vendor/dist/vendor-Linux.tar.gz -C vendor/dist/ env
 tar xzf vendor/dist/vendor-Linux.tar.gz -C /venv --strip-components=1 env/lib/
 
-# get the Rtree installer working successfully
-export SPATIALINDEX_C_LIBRARY="/venv/lib/libspatialindex_c.so"
-
 pip install --no-deps --ignore-installed -r requirements.txt
 pip install --no-deps \
     /tmp/wheelhouse/*.whl
@@ -49,14 +46,14 @@ pyinstaller \
 # # fix up .so files which should be symlinks
 VENDOR_LIB=/src/vendor/dist/env/lib/
 (cd platforms/linux/dist/kart/ \
-    && for library in `ls *.so*`; do 
-    if [ -e $VENDOR_LIB/$library ] ; then 
-        if [ -L $VENDOR_LIB/$library ]; then 
+    && for library in `ls *.so*`; do
+    if [ -e $VENDOR_LIB/$library ] ; then
+        if [ -L $VENDOR_LIB/$library ]; then
             ln -sf `readlink $VENDOR_LIB/$library` $library
-        else 
-            strip $library; 
-        fi; 
-    fi; 
+        else
+            strip $library;
+        fi;
+    fi;
 done)
 
 { echo ">> Post-bundle Smoke Test ..."; } 2> /dev/null
