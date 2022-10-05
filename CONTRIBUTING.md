@@ -18,7 +18,6 @@ Requirements for macOS & Linux:
 * OpenSSL >= v1.1
 * PostgreSQL client library (libpq)
 * Python >= 3.7
-* Spatialindex >= v1.9.3
 * SpatiaLite >= v5.0.1
 * SQLite3 >= v3.31.1
 * SWIG
@@ -49,7 +48,7 @@ If you're a Homebrew user, you can get all of those via:
 
 ```console
 $ brew install cmake gdal git openssl@1.1 libpq python@3.7 \
-    spatialindex libspatialite sqlite3 swig unixodbc
+    libspatialite sqlite3 swig unixodbc
 ```
 
 Then configure Kart:
@@ -69,7 +68,7 @@ $ sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
 $ sudo add-apt-repository ppa:git-core/ppa
 $ sudo apt-get install build-essential cmake ccache libgdal-dev gdal-data git \
     libssl-dev libpq-dev python3.8-dev python3.8-venv \
-    libspatialindex-dev libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
+    libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
 ```
 
 Then configure Kart:
@@ -176,7 +175,6 @@ Kart v0.9.1.dev0, Copyright (c) Kart Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
-» SpatialIndex v1.8.5
 ```
 
 ### Linux
@@ -196,7 +194,6 @@ Kart v0.9.1.dev0, Copyright (c) Kart Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
-» SpatialIndex v1.8.5
 ```
 
 ### Windows
@@ -222,7 +219,6 @@ Kart v0.9.1.dev0, Copyright (c) Kart Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
-» SpatialIndex v1.8.5
 ```
 
 ## CI

@@ -47,7 +47,6 @@ MODULE_COMMANDS = {
     "show": {"create-patch", "show"},
     "spatial_filter": {"spatial-filter"},
     "status": {"status"},
-    "query": {"query"},
     "upgrade": {"upgrade"},
     "tabular.import_": {"import"},
     "point_cloud.import_": {"point-cloud-import"},
@@ -89,7 +88,6 @@ def print_version(ctx):
     import osgeo
     import psycopg2
     import pysqlite3
-    import rtree
 
     import sqlalchemy
     from kart.sqlalchemy.gpkg import Db_GPKG
@@ -102,8 +100,6 @@ def print_version(ctx):
         .strip()
         .split()[-1]
     )
-
-    sidx_version = rtree.index.__c_api_version__.decode("ascii")
 
     engine = Db_GPKG.create_engine(":memory:")
     with engine.connect() as conn:
@@ -130,8 +126,7 @@ def print_version(ctx):
             f"» SQLAlchemy v{sqlalchemy.__version__}; "
             f"pysqlite3 v{pysqlite3.version}/v{pysqlite3.sqlite_version}; "
             f"SpatiaLite v{spatialite_version}; "
-            f"Libpq v{pq_version}\n"
-            f"» SpatialIndex v{sidx_version}"
+            f"Libpq v{pq_version}"
         )
     )
 

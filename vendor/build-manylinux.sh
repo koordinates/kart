@@ -65,9 +65,6 @@ else
     echo ">>> Building spatialite ..."
     make lib-spatialite
 
-    echo ">>> Building spatialindex ..."
-    make lib-spatialindex
-
     echo ">>> Building pysqlite3 ..."
     make lib-pysqlite3
     cp -fav pysqlite3/wheel/pysqlite3-*.whl "$OUTPUT/wheelhouse"

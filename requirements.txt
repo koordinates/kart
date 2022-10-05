@@ -51,8 +51,6 @@ pyrsistent==0.18.1
     # via jsonschema
 rst2txt==1.1.0
     # via -r requirements/requirements.in
-rtree==0.9.7
-    # via -r requirements/requirements.in
 shellingham==1.5.0
     # via -r requirements/requirements.in
 sqlalchemy==1.4.40

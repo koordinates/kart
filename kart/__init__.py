@@ -37,15 +37,6 @@ else:
 # sys.prefix is correctly set by virtualenv (development) & PyInstaller (release)
 prefix = os.path.abspath(sys.prefix)
 
-# Rtree / Libspatialindex
-if not is_windows:
-    if _kart_env:
-        os.environ["SPATIALINDEX_C_LIBRARY"] = _kart_env.SPATIALINDEX_C_LIBRARY
-    else:
-        os.environ["SPATIALINDEX_C_LIBRARY"] = os.path.join(
-            prefix, "" if is_frozen else "lib", f"libspatialindex_c.{libsuffix}"
-        )
-
 if _kart_env:
     spatialite_path = os.path.splitext(_kart_env.SPATIALITE_EXTENSION)[0]
 else:
@@ -113,7 +104,8 @@ osr.UseExceptions()
 
 if is_linux:
     import certifi
-    os.environ['SSL_CERT_FILE'] = certifi.where()
+
+    os.environ["SSL_CERT_FILE"] = certifi.where()
 
 # Libgit2 options
 import pygit2
