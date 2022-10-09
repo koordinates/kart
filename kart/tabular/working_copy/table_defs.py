@@ -13,15 +13,18 @@ from sqlalchemy.types import NVARCHAR, VARCHAR
 
 
 class TinyInt(Integer):
-    __visit_name__ = "TINYINT"
+    def visit(self):
+        return "TINYINT"
 
 
 class Double(Float):
-    __visit_name__ = "DOUBLE"
+    def visit(self):
+        return "DOUBLE"
 
 
 class DateTime(Text):
-    __visit_name__ = "DATETIME"
+    def visit(self):
+        return "DATETIME"
 
 
 STATE = "state"
@@ -183,7 +186,7 @@ class GpkgTables(TableSet):
             Column(
                 "srs_id",
                 Integer,
-                ForeignKey("gpkg_spatial_ref_sys.srd_id", name="fk_gc_r_srs_id"),
+                ForeignKey("gpkg_spatial_ref_sys.srs_id", name="fk_gc_r_srs_id"),
             ),
         )
 

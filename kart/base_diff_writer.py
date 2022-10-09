@@ -155,8 +155,10 @@ class BaseDiffWriter:
 
         if len(commit_parts) == 3:
             # Two commits specified - base and target. We diff base<>target.
-            base_rs = repo.structure(commit_parts[0] or "HEAD")
-            target_rs = repo.structure(commit_parts[2] or "HEAD")
+            base_rs = repo.structure(commit_parts[0] or "HEAD", allow_unborn_head=False)
+            target_rs = repo.structure(
+                commit_parts[2] or "HEAD", allow_unborn_head=False
+            )
             if commit_parts[1] == "..":
                 # A   C    A...C is A<>C
                 #  \ /     A..C  is B<>C
@@ -175,7 +177,7 @@ class BaseDiffWriter:
                 # of a working-copy diff (instead of HEAD).
                 target_rs = repo.structure("MERGED_TREE")
             else:
-                target_rs = repo.structure("HEAD")
+                target_rs = repo.structure("HEAD", allow_unborn_head=False)
 
             repo.working_copy.assert_exists("Cannot generate working copy diff")
             repo.working_copy.assert_matches_tree(target_rs.tree)

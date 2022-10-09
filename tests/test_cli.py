@@ -84,6 +84,7 @@ def test_cli_tool_environment():
     env_exec = tool_environment()
     assert len(env_exec)
     assert env_exec is not os.environ
+    assert sys.executable.startswith(env_exec["PATH"].split(os.pathsep)[0])
 
     if platform.system() == "Linux":
         env_in = {"LD_LIBRARY_PATH": "bob", "LD_LIBRARY_PATH_ORIG": "alex", "my": "me"}
@@ -99,6 +100,7 @@ def test_cli_tool_environment():
         env_in = {"my": "me"}
         env_exec = tool_environment(env_in)
         assert env_exec is not env_in
+        env_exec.pop("PATH", None)
         assert env_exec == env_in
 
 

@@ -35,26 +35,12 @@ packaging==21.3
     #   pytest-sugar
 pluggy==1.0.0
     # via pytest
-py-cpuinfo==8.0.0
-    # via pytest-benchmark
 py==1.11.0
     # via pytest
+py-cpuinfo==8.0.0
+    # via pytest-benchmark
 pyparsing==3.0.9
     # via packaging
-pytest-benchmark[aspect]==3.4.1
-    # via -r requirements/test.in
-pytest-cov==3.0.0
-    # via -r requirements/test.in
-pytest-helpers-namespace==2021.12.29
-    # via -r requirements/test.in
-pytest-mock==3.8.2
-    # via -r requirements/test.in
-pytest-profiling==1.7.0
-    # via -r requirements/test.in
-pytest-shard==0.1.2
-    # via -r requirements/test.in
-pytest-sugar==0.9.5
-    # via -r requirements/test.in
 pytest==7.1.2
     # via
     #   -r requirements/test.in
@@ -65,6 +51,20 @@ pytest==7.1.2
     #   pytest-profiling
     #   pytest-shard
     #   pytest-sugar
+pytest-benchmark[aspect]==3.4.1
+    # via -r requirements/test.in
+pytest-cov==3.0.0
+    # via -r requirements/test.in
+pytest-helpers-namespace==2021.12.29
+    # via -r requirements/test.in
+pytest-mock==3.9.0
+    # via -r requirements/test.in
+pytest-profiling==1.7.0
+    # via -r requirements/test.in
+pytest-shard==0.1.2
+    # via -r requirements/test.in
+pytest-sugar==0.9.5
+    # via -r requirements/test.in
 six==1.16.0
     # via
     #   html5lib

@@ -50,15 +50,11 @@ class RepoStructure:
     """
 
     @staticmethod
-    def resolve_refish(repo, refish="HEAD"):
+    def resolve_refish(repo, refish="HEAD", allow_unborn_head=True):
         """
         Given a ref / refish / commit / tree / OID, returns as many as possible of the following:
         >>> (ref, commit, tree)
         """
-        if refish is None:
-            refish = "[EMPTY]"
-        if refish == "HEAD":
-            return "HEAD", repo.head_commit, repo.head_tree
 
         # We support X^?  - meaning X^ if X^ exists otherwise [EMPTY]
         if isinstance(refish, str) and refish.endswith("^?"):
@@ -73,9 +69,13 @@ class RepoStructure:
                 # This is okay if this is the first commit of a shallow clone (how to tell?)
                 refish = "[EMPTY]"
 
-        # We support [EMPTY] meaning the empty tree.
-        if refish == "[EMPTY]":
+        # We support [EMPTY] meaning the empty tree:
+        if refish is None or refish == "[EMPTY]":
             return "[EMPTY]", None, repo.empty_tree
+
+        # We can allow "HEAD" to point to the empty tree:
+        if refish == "HEAD" and repo.head_commit is None and allow_unborn_head:
+            return "HEAD", None, repo.empty_tree
 
         if isinstance(refish, pygit2.Oid):
             refish = refish.hex
@@ -129,11 +129,13 @@ class RepoStructure:
                 f"Can't build RepoStructure from {obj!r} - can't peel to a commit or a tree"
             )
 
-    def __init__(self, repo, refish="HEAD"):
+    def __init__(self, repo, refish="HEAD", allow_unborn_head=True):
         self.L = logging.getLogger(self.__class__.__qualname__)
         self.repo = repo
 
-        self.ref, self.commit, self.tree = RepoStructure.resolve_refish(repo, refish)
+        self.ref, self.commit, self.tree = RepoStructure.resolve_refish(
+            repo, refish, allow_unborn_head=allow_unborn_head
+        )
 
     def __eq__(self, other):
         return other and (self.repo is other.repo) and (self.id == other.id)
