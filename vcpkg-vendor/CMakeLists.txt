@@ -87,6 +87,18 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3
 # psycopg2
 #
 find_package(PostgreSQL REQUIRED)
+
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include-dirs=$<JOIN:$<TARGET_PROPERTY:PostgreSQL::PostgreSQL,INTERFACE_INCLUDE_DIRECTORIES>,:>
+library-dirs=${PostgreSQL_LIBRARY_DIRS}
+pg-config=${CURRENT_PACKAGES_DIR}/tools/libpq/bin/pg_config
+define=,
+")
+
 set(PYSCOPG2_WHEEL_VER 2.8.5)
 ExternalProject_Add(
   psycopg2
@@ -95,10 +107,10 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND
-    ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --include-dirs
-    $<JOIN:$<TARGET_PROPERTY:PostgreSQL::PostgreSQL,INTERFACE_INCLUDE_DIRECTORIES>,:> --library-dirs
-    ${PostgreSQL_LIBRARY_DIRS} --build-temp <TMP_DIR>/build
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
+                <SOURCE_DIR>
+  COMMAND ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
+          --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
@@ -213,9 +225,13 @@ file(
 list(APPEND ENV_FILE_LIST ${GDAL_DATA_FILES})
 
 message(STATUS "GDAL: Will download & build Python bindings for v${GDAL_VERSION}")
-set(PYGDAL_BUILD_GDAL_CONFIG "${VCPKG_IMPORT_PREFIX}/tools/gdal/gdal-config")
+set(PYGDAL_BUILD_GDAL_CONFIG "${CURRENT_PACKAGES_DIR}/tools/gdal/gdal-config")
 
-file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg CONTENT "[build_ext]
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
 include-dirs=$<JOIN:$<TARGET_PROPERTY:GDAL::GDAL,INTERFACE_INCLUDE_DIRECTORIES>,:>
 library-dirs=${GDAL_LIBRARY_PATH}
 gdal-config=${PYGDAL_BUILD_GDAL_CONFIG}
@@ -227,9 +243,11 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv GDAL::GDAL
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/gdal_py/setup.cfg <SOURCE_DIR>
-  BUILD_COMMAND ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
-    --build-temp <TMP_DIR>/build
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
+                <SOURCE_DIR>
+  COMMAND ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
+          --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <INSTALL_DIR>
           --bdist-dir <TMP_DIR>/bdist
@@ -279,12 +297,13 @@ pkg_check_modules(PDAL REQUIRED pdal)
 
 get_target_property(PDALUTIL_LIBRARY pdal_util LOCATION)
 if(MACOS)
-    get_target_property(PDALCPP_LIBRARY pdalcpp LOCATION)
-    list(APPEND LIB_LIST ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
+  get_target_property(PDALCPP_LIBRARY pdalcpp LOCATION)
+  list(APPEND LIB_LIST ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
 else()
-    get_target_property(PDALBASE_LIBRARY pdal_base LOCATION)
-    set(PDALCPP_LIBRARY ${PDAL_LINK_LIBRARIES})  # why is this different on macOS vs Linux? And why isn't it a target?
-    list(APPEND LIB_LIST ${PDALBASE_LIBRARY} ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
+  get_target_property(PDALBASE_LIBRARY pdal_base LOCATION)
+  set(PDALCPP_LIBRARY ${PDAL_LINK_LIBRARIES}) # why is this different on macOS vs Linux? And why
+                                              # isn't it a target?
+  list(APPEND LIB_LIST ${PDALBASE_LIBRARY} ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
 endif()
 
 #
