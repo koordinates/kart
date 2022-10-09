@@ -133,9 +133,8 @@ ExternalProject_Add(
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
   BUILD_COMMAND
-    ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON}
-    PKG_CONFIG_PATH=${CURRENT_PACKAGES_DIR}/lib/pkgconfig/libffi.pc setup.py --no-user-cfg build_ext
-    --build-temp <TMP_DIR>/build
+    ${CMAKE_COMMAND} -E env PKG_CONFIG_PATH=${CURRENT_PACKAGES_DIR}/lib/pkgconfig/libffi.pc
+    ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
