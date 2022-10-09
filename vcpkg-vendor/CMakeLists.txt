@@ -299,9 +299,9 @@ if(MACOS)
   list(APPEND LIB_LIST ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
 else()
   get_target_property(PDALBASE_LIBRARY pdal_base LOCATION)
-  set(PDALCPP_LIBRARY ${PDAL_LINK_LIBRARIES}) # why is this different on macOS vs Linux? And why
-                                              # isn't it a target?
-  list(APPEND LIB_LIST ${PDALBASE_LIBRARY} ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
+  # set(PDALCPP_LIBRARY ${PDAL_LINK_LIBRARIES}) # why is this different on macOS vs Linux? And why #
+  # isn't it a target?
+  list(APPEND LIB_LIST ${PDALBASE_LIBRARY} ${PDALUTIL_LIBRARY})
 endif()
 
 #
