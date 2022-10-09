@@ -213,7 +213,13 @@ file(
 list(APPEND ENV_FILE_LIST ${GDAL_DATA_FILES})
 
 message(STATUS "GDAL: Will download & build Python bindings for v${GDAL_VERSION}")
-set(PYGDAL_BUILD_GDAL_CONFIG "${VCPKG_IMPORT_PREFIX}/tools/gdal/bin/gdal-config")
+set(PYGDAL_BUILD_GDAL_CONFIG "${VCPKG_IMPORT_PREFIX}/tools/gdal/gdal-config")
+
+file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg CONTENT "[build_ext]
+include-dirs=$<JOIN:$<TARGET_PROPERTY:GDAL::GDAL,INTERFACE_INCLUDE_DIRECTORIES>,:>
+library-dirs=${GDAL_LIBRARY_PATH}
+gdal-config=${PYGDAL_BUILD_GDAL_CONFIG}
+")
 
 ExternalProject_Add(
   gdal_py
@@ -221,9 +227,9 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv GDAL::GDAL
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/gdal_py/setup.cfg <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
-                --gdal-config ${PYGDAL_BUILD_GDAL_CONFIG} --build-temp <TMP_DIR>/build
+    --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <INSTALL_DIR>
           --bdist-dir <TMP_DIR>/bdist
@@ -272,9 +278,14 @@ find_package(PDAL CONFIG REQUIRED)
 pkg_check_modules(PDAL REQUIRED pdal)
 
 get_target_property(PDALUTIL_LIBRARY pdal_util LOCATION)
-get_target_property(PDALCPP_LIBRARY pdalcpp LOCATION)
-list(APPEND LIB_LIST ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
-list(APPEND BIN_LIST "${VCPKG_IMPORT_PREFIX}/tools/pdal/pdal")
+if(MACOS)
+    get_target_property(PDALCPP_LIBRARY pdalcpp LOCATION)
+    list(APPEND LIB_LIST ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
+else()
+    get_target_property(PDALBASE_LIBRARY pdal_base LOCATION)
+    set(PDALCPP_LIBRARY ${PDAL_LINK_LIBRARIES})  # why is this different on macOS vs Linux? And why isn't it a target?
+    list(APPEND LIB_LIST ${PDALBASE_LIBRARY} ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
+endif()
 
 #
 # Git-LFS
