@@ -329,14 +329,12 @@ find_package(OpenSSL REQUIRED)
 pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
-list(JOIN LIBCURL_STATIC_CFLAGS " " GIT_BUILD_CURL_CFLAGS)
-list(JOIN LIBCURL_STATIC_LDFLAGS " " GIT_BUILD_CURL_LDFLAGS)
 
 cmake_path(SET GIT_SPATIAL_FILTER_EXT "../vendor/spatial-filter/spatial.a")
 cmake_path(ABSOLUTE_PATH GIT_SPATIAL_FILTER_EXT)
-set(GIT_BUILD_LDFLAGS "-L${SQLITE3_LIB_DIR} -lsqlite3")
 
 set(gitBuildConfig
+    "prefix=/"
     "V=1"
     "CC=${CMAKE_C_COMPILER}"
     "NO_GETTEXT=YesPlease"
@@ -347,29 +345,26 @@ set(gitBuildConfig
     "RUNTIME_PREFIX=1"
     "LIBPCREDIR=${PCRE2_PREFIX}"
     "OPENSSLDIR=${OPENSSL_PREFIX}"
+    "CURL_CONFIG=${CURRENT_PACKAGES_DIR}/tools/curl/bin/curl-config"
     # stuff for building the spatial partial clone filter extension
     "CXX=${CMAKE_CXX_COMPILER}"
     "LINK=${CMAKE_CXX_COMPILER}"
-    "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}")
+    "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}"
+    "LDFLAGS=-L${SQLITE3_LIB_DIR}"
+    "EXTENSION_LIBS=-lsqlite3")
 
 ExternalProject_Add(
   git
   GIT_REPOSITORY https://github.com/koordinates/git
-  GIT_TAG kart-v0.11.0
+  GIT_TAG kx-latest
   GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
   DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
   INSTALL_DIR env
-  BUILD_COMMAND
-    make prefix=/ "DESTDIR=<INSTALL_DIR>" ${gitBuildConfig} "CFLAGS=-I<SOURCE_DIR>"
-    "LDFLAGS=${GIT_BUILD_LDFLAGS}" "CURL_CFLAGS=${GIT_BUILD_CURL_CFLAGS}"
-    "CURL_LDFLAGS=${GIT_BUILD_CURL_LDFLAGS}" all strip
-  INSTALL_COMMAND
-    make prefix=/ "DESTDIR=<INSTALL_DIR>" ${gitBuildConfig} "CFLAGS=-I<SOURCE_DIR>"
-    "LDFLAGS=${GIT_BUILD_LDFLAGS}" "CURL_CFLAGS=${GIT_BUILD_CURL_CFLAGS}"
-    "CURL_LDFLAGS=${GIT_BUILD_CURL_LDFLAGS}" install
+  BUILD_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> all strip
+  INSTALL_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> install
   COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk)
 set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
 
