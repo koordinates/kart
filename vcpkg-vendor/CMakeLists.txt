@@ -124,6 +124,16 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_W
 # cffi
 #
 find_package(libffi REQUIRED)
+
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include_dirs=$<JOIN:$<TARGET_PROPERTY:libffi,INTERFACE_INCLUDE_DIRECTORIES>,:>
+library_dirs=$<JOIN:$<TARGET_PROPERTY:libffi,INTERFACE_LINK_DIRECTORIES>,:>
+")
+
 set(CFFI_WHEEL_VER 1.15.1)
 ExternalProject_Add(
   cffi
@@ -132,10 +142,10 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv libffi
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND
-    ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --include-dirs
-    $<JOIN:$<TARGET_PROPERTY:libffi,INTERFACE_INCLUDE_DIRECTORIES>,:> --library-dirs
-    $<JOIN:$<TARGET_PROPERTY:libffi,INTERFACE_LINK_DIRECTORIES>,:> --build-temp <TMP_DIR>/build
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
+                <SOURCE_DIR>
+  COMMAND ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
+          --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
@@ -225,7 +235,6 @@ file(
 list(APPEND ENV_FILE_LIST ${GDAL_DATA_FILES})
 
 message(STATUS "GDAL: Will download & build Python bindings for v${GDAL_VERSION}")
-set(PYGDAL_BUILD_GDAL_CONFIG "${CURRENT_PACKAGES_DIR}/tools/gdal/gdal-config")
 
 file(
   GENERATE
@@ -234,7 +243,7 @@ file(
     "[build_ext]
 include_dirs=$<JOIN:$<TARGET_PROPERTY:GDAL::GDAL,INTERFACE_INCLUDE_DIRECTORIES>,:>
 library_dirs=${GDAL_LIBRARY_PATH}
-gdal_config=${PYGDAL_BUILD_GDAL_CONFIG}
+gdal_config=${CURRENT_PACKAGES_DIR}/tools/gdal/gdal-config
 ")
 
 ExternalProject_Add(
