@@ -93,10 +93,10 @@ file(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include-dirs=$<JOIN:$<TARGET_PROPERTY:PostgreSQL::PostgreSQL,INTERFACE_INCLUDE_DIRECTORIES>,:>
-library-dirs=${PostgreSQL_LIBRARY_DIRS}
-pg-config=${CURRENT_PACKAGES_DIR}/tools/libpq/bin/pg_config
-define=,
+include_dirs=$<JOIN:$<TARGET_PROPERTY:PostgreSQL::PostgreSQL,INTERFACE_INCLUDE_DIRECTORIES>,:>
+library_dirs=${PostgreSQL_LIBRARY_DIRS}
+pg_config=${CURRENT_PACKAGES_DIR}/tools/libpq/bin/pg_config
+define=
 ")
 
 set(PYSCOPG2_WHEEL_VER 2.8.5)
@@ -232,9 +232,9 @@ file(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include-dirs=$<JOIN:$<TARGET_PROPERTY:GDAL::GDAL,INTERFACE_INCLUDE_DIRECTORIES>,:>
-library-dirs=${GDAL_LIBRARY_PATH}
-gdal-config=${PYGDAL_BUILD_GDAL_CONFIG}
+include_dirs=$<JOIN:$<TARGET_PROPERTY:GDAL::GDAL,INTERFACE_INCLUDE_DIRECTORIES>,:>
+library_dirs=${GDAL_LIBRARY_PATH}
+gdal_config=${PYGDAL_BUILD_GDAL_CONFIG}
 ")
 
 ExternalProject_Add(
