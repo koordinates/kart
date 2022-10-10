@@ -1,10 +1,13 @@
 import asyncio
+import os
+import subprocess
 import sys
 from asyncio import IncompleteReadError, LimitOverrunError
 from asyncio.subprocess import PIPE
 from functools import partial
 
 from . import is_windows
+from .cli_util import tool_environment
 
 
 async def read_stream_and_display(stream, display):
@@ -138,3 +141,46 @@ def subprocess_tee(cmd, **kwargs):
         read_and_display(cmd, **kwargs)
     )
     return return_code, stdout, stderr
+
+
+def run_with_capture(cmd, args, env):
+    # In testing, .run must be set to capture_output and so use PIPEs to communicate
+    # with the process to run whereas in normal operation the standard streams of
+    # this process are passed into subprocess.run.
+    # Capturing the output in a PIPE and then writing to sys.stdout is compatible
+    # with click.testing which sets sys.stdout and sys.stderr to a custom
+    # io wrapper.
+    # This io wrapper is not compatible with the stdin= kwarg to .run - in that case
+    # it gets treated as a file like object and fails.
+    p = subprocess.run([cmd] + args, capture_output=True, encoding="utf-8", env=env)
+    sys.stdout.write(p.stdout)
+    sys.stdout.flush()
+    sys.stderr.write(p.stderr)
+    sys.stderr.flush()
+    sys.exit(p.returncode)
+
+
+def run(cmd, args):
+    """
+    Run a process and wait for it to exit, this is required
+    when in helper mode as using execvpe overwrites the process so
+    the caller can't be notified when the command is complete.
+
+    The subprocess uses this processes standard streams.
+
+    If called in test then use capture mode rather than passing in 'real' standard
+    streams.
+    """
+    env = tool_environment(os.environ)
+    if "_KART_RUN_WITH_CAPTURE" in os.environ:
+        run_with_capture(cmd, args, env)
+    else:
+        p = subprocess.run(
+            [cmd] + args,
+            encoding="utf-8",
+            env=env,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
+        sys.exit(p.returncode)
