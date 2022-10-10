@@ -23,4 +23,4 @@ cffi==1.15.1
 
 # workaround weird import error with pyinstaller
 # https://github.com/pypa/setuptools/issues/1963#issuecomment-656811086
-setuptools~=49.1.1
+#setuptools~=49.1.1
