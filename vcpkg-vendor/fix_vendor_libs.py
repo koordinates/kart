@@ -683,6 +683,9 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
             if dep == install_name:
                 continue
             result, found_path = find_dep(dep, search_paths)
+            if verbose:
+                info(f"  {dep} -> {result!s} @ {found_path or ''}")
+
             if found_path and found_path not in lib_paths_list:
                 lib_paths_list.append(found_path)
                 vendor_deps_found_outside.append(found_path)
