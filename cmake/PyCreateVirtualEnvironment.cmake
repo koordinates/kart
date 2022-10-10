@@ -114,7 +114,7 @@ function(CreateVirtualEnvironment TARGET)
   set(CFG_FILE ${VENV}/pyvenv.cfg)
   add_custom_command(
     OUTPUT ${CFG_FILE}
-    COMMAND ${Python3_EXECUTABLE} -m venv --clear ${VENV}
+    COMMAND ${Python3_EXECUTABLE} -m venv --clear --upgrade-deps ${VENV}
     DEPENDS Python3::Python
     COMMENT "${ARG_ENV_NAME}: creating virtualenv at ${VENV}...")
   set(OUTPUT_FILE ${VENV}/.requirements)

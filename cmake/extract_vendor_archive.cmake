@@ -26,7 +26,7 @@ file(ARCHIVE_EXTRACT INPUT ${VENDOR_ARCHIVE} DESTINATION vendor-tmp)
 # install other env files (libraries, binaries, data)
 message(STATUS "Installing environment files...")
 # FIXME: why is this different between platforms?
-if (WIN32)
+if(WIN32)
   file(COPY vendor-tmp/env/lib/ DESTINATION venv)
   file(COPY vendor-tmp/git/ DESTINATION venv/git/)
 else()
@@ -35,7 +35,7 @@ endif()
 
 # Upgrade the venv using python from the vendor-archive (if included):
 message(STATUS "Upgrading venv...")
-execute_process(COMMAND ${PY} -m venv --upgrade venv)
+execute_process(COMMAND ${PY} -m venv --upgrade --upgrade-deps venv)
 
 # install wheels
 file(
