@@ -76,6 +76,7 @@ elif PLATFORM == "Linux":
 
 VENDOR_ARCHIVE_CONTENTS = f"{VENDOR_ARCHIVE_NAME}-contents"
 
+EXTRA_SEARCH_PATHS = []
 
 if PLATFORM == "Darwin":
     SYSTEM_DEPS_ALLOW_LIST = [
@@ -672,6 +673,7 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
             env_lib_path,
             path_to_lib.parents[0],
             *[Path(rpath) for rpath in get_rpaths(path_to_lib)],
+            *EXTRA_SEARCH_PATHS,
         ]
 
         if verbose:
@@ -848,10 +850,20 @@ def main():
     parser.add_argument(
         "-v", "--verbose", default=0, action="count", help="Increase verbosity"
     )
+    parser.add_argument(
+        "-s",
+        "--search-path",
+        type=Path,
+        action="append",
+        help="Additional library search paths",
+    )
     args = parser.parse_args()
 
     if args.verbose >= 2:
         sys.addaudithook(log_subprocess)
+
+    if args.search_path:
+        EXTRA_SEARCH_PATHS.extend([p.resolve() for p in args.search_path])
 
     fix_everything(args.input_path, args.output_path, verbose=args.verbose)
 
