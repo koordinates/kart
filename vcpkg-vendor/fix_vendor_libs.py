@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 
-from enum import Enum
+import argparse
 import json
 import os
-from pathlib import Path
 import platform
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from enum import Enum
+from pathlib import Path
 
 # Checks / fixes every lib in a vendor-PLATFORM.tar.gz archive according to the following rules.
 # This includes the libraries that are currently embedded inside wheels.
@@ -112,9 +113,17 @@ elif PLATFORM == "Linux":
 
 SYSTEM_DEPS_ALLOW_SET = set(SYSTEM_DEPS_ALLOW_LIST)
 
+verbosity = 0
+
 
 class PlatformSpecific:
     """Marker for functions that vary by platform."""
+
+
+def log_subprocess(event, event_args):
+    if event == "subprocess.Popen":
+        executable, args, cwd, env = event_args
+        print("> invoke:", args)
 
 
 def info(message):
@@ -200,9 +209,18 @@ def unpack_wheel(path_to_wheel, root_path):
     wheel_name = path_to_wheel.name
 
     info(f"Unpacking {wheel_name} ...")
-    subprocess.check_output(
-        [sys.executable, "-m", "wheel", "unpack", "--dest", root_path, path_to_wheel]
-    )
+    cmdline = [
+        sys.executable,
+        "-m",
+        "wheel",
+        "unpack",
+        "--dest",
+        root_path,
+        path_to_wheel,
+    ]
+    if verbosity >= 2:
+        print(cmdline)
+    subprocess.check_output(cmdline)
 
     parts = wheel_name.split("-")
     wheel_id = f"{parts[0]}-{parts[1]}"
@@ -221,17 +239,18 @@ def pack_wheel(path_to_wheel, root_path):
     assert wheel_contents_path.is_dir()
 
     info(f"Re-packing {wheel_name} ...")
-    subprocess.check_output(
-        [
-            sys.executable,
-            "-m",
-            "wheel",
-            "pack",
-            "--dest-dir",
-            dest_dir,
-            wheel_contents_path,
-        ]
-    )
+    cmdline = [
+        sys.executable,
+        "-m",
+        "wheel",
+        "pack",
+        "--dest-dir",
+        dest_dir,
+        wheel_contents_path,
+    ]
+    if verbosity >= 2:
+        print(cmdline)
+    subprocess.check_output(cmdline)
 
 
 def read_cmd_lines(cmd):
@@ -347,6 +366,8 @@ def set_install_name_Linux(path_to_lib, install_name):
 def fix_names(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_paths(root_path):
+        if verbose:
+            info(path_to_lib)
         install_name = get_install_name(path_to_lib)
         proposed_name = path_to_lib.name
         if install_name and install_name != proposed_name:
@@ -451,6 +472,8 @@ def propose_rpaths(eventual_lib_path):
 def fix_rpaths(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
+        if verbose:
+            info(path_to_lib)
         actual_rpaths = get_rpaths(path_to_lib)
         eventual_path = get_eventual_path(path_to_lib)
         proposed_rpaths = propose_rpaths(eventual_path)
@@ -487,6 +510,8 @@ fix_codesigning = PlatformSpecific()
 def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
+        if verbose:
+            info(path_to_lib)
         try:
             subprocess.check_output(
                 ["codesign", "-vvvv", path_to_lib], stderr=subprocess.STDOUT, text=True
@@ -645,6 +670,8 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
         yield from lib_paths_list
 
     for path_to_lib in bin_and_lib_paths():
+        if verbose:
+            info(path_to_lib)
         install_name = get_install_name(path_to_lib)
         search_paths = [
             env_lib_path,
@@ -708,6 +735,8 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
 
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
+        if verbose:
+            info(path_to_lib)
         install_name = get_install_name(path_to_lib)
         search_paths = [
             env_lib_path,
@@ -753,7 +782,7 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
     return MODIFIED
 
 
-def fix_everything(input_path, output_path):
+def fix_everything(input_path, output_path, verbose=0):
     if not input_path.resolve().exists():
         fatal(f"Path does not exist {input_path}")
 
@@ -767,18 +796,21 @@ def fix_everything(input_path, output_path):
         root_path = Path(root_path)
         unpack_all(input_path, root_path)
 
+        kwargs = {"make_fatal": False, "verbose": bool(verbose)}
+
         status = UNMODIFIED
-        status |= fix_unsatisfied_deps(root_path)
-        status |= fix_dep_linkage(root_path)
-        status |= fix_names(root_path)
-        status |= fix_rpaths(root_path)
+        status |= fix_unsatisfied_deps(root_path, **kwargs)
+        status |= fix_dep_linkage(root_path, **kwargs)
+        status |= fix_names(root_path, **kwargs)
+        status |= fix_rpaths(root_path, **kwargs)
         # last, so it checks/fixes the modified files
-        status |= fix_codesigning(root_path)
+        status |= fix_codesigning(root_path, **kwargs)
 
         if status == MODIFIED:
             checkmark("Finished fixing.\n")
             info("Checking everything was fixed ...")
             kwargs = {"make_fatal": True, "verbose": True}
+
             fix_unsatisfied_deps(root_path, **kwargs)
             fix_dep_linkage(root_path, **kwargs)
             fix_names(root_path, **kwargs)
@@ -793,7 +825,7 @@ def fix_everything(input_path, output_path):
             checkmark(f"Wrote fixed archive to {output_path}")
         elif status == MODIFIED:
             warn("Archive was fixed, but not writing anywhere due to dry-run mode.")
-            sys.exit(1)
+            sys.exit(3)
 
 
 # Make foo_{PLATFORM} functions work:
@@ -802,12 +834,25 @@ for symbol in list(globals().keys()):
         globals()[symbol] = globals()[f"{symbol}_{PLATFORM}"]
 
 
-args = sys.argv[1:]
-if len(args) not in (1, 2):
-    print(USAGE.strip(), file=sys.stderr)
-    sys.exit(1)
+def main():
+    parser = argparse.ArgumentParser(usage=USAGE)
+    parser.add_argument("input_path", type=Path, help="Path to vendor archive/dir")
+    parser.add_argument(
+        "output_path",
+        type=Path,
+        nargs="?",
+        help="Path to output. If not specified, perform a dry-run",
+    )
+    parser.add_argument(
+        "-v", "--verbose", default=0, action="count", help="Increase verbosity"
+    )
+    args = parser.parse_args()
 
-input_path = Path(args[0])
-output_path = Path(args[1]) if len(args) == 2 else None
+    if args.verbose >= 2:
+        sys.addaudithook(log_subprocess)
 
-fix_everything(input_path, output_path)
+    fix_everything(args.input_path, args.output_path, verbose=args.verbose)
+
+
+if __name__ == "__main__":
+    main()
