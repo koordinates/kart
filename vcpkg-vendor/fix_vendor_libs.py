@@ -84,6 +84,7 @@ if PLATFORM == "Darwin":
         "/usr/lib/libcharset.1.dylib",
         "/usr/lib/libiconv.2.dylib",
         "/usr/lib/libncurses.5.4.dylib",
+        "/usr/lib/libobjc.A.dylib",
         "/usr/lib/libpanel.5.4.dylib",
         "/usr/lib/libresolv.9.dylib",
         "/usr/lib/libsasl2.2.dylib",
@@ -112,8 +113,6 @@ elif PLATFORM == "Linux":
 
 
 SYSTEM_DEPS_ALLOW_SET = set(SYSTEM_DEPS_ALLOW_LIST)
-
-verbosity = 0
 
 
 class PlatformSpecific:
@@ -209,18 +208,17 @@ def unpack_wheel(path_to_wheel, root_path):
     wheel_name = path_to_wheel.name
 
     info(f"Unpacking {wheel_name} ...")
-    cmdline = [
-        sys.executable,
-        "-m",
-        "wheel",
-        "unpack",
-        "--dest",
-        root_path,
-        path_to_wheel,
-    ]
-    if verbosity >= 2:
-        print(cmdline)
-    subprocess.check_output(cmdline)
+    subprocess.check_output(
+        [
+            sys.executable,
+            "-m",
+            "wheel",
+            "unpack",
+            "--dest",
+            root_path,
+            path_to_wheel,
+        ]
+    )
 
     parts = wheel_name.split("-")
     wheel_id = f"{parts[0]}-{parts[1]}"
@@ -239,18 +237,17 @@ def pack_wheel(path_to_wheel, root_path):
     assert wheel_contents_path.is_dir()
 
     info(f"Re-packing {wheel_name} ...")
-    cmdline = [
-        sys.executable,
-        "-m",
-        "wheel",
-        "pack",
-        "--dest-dir",
-        dest_dir,
-        wheel_contents_path,
-    ]
-    if verbosity >= 2:
-        print(cmdline)
-    subprocess.check_output(cmdline)
+    subprocess.check_output(
+        [
+            sys.executable,
+            "-m",
+            "wheel",
+            "pack",
+            "--dest-dir",
+            dest_dir,
+            wheel_contents_path,
+        ]
+    )
 
 
 def read_cmd_lines(cmd):
@@ -367,7 +364,7 @@ def fix_names(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_paths(root_path):
         if verbose:
-            info(path_to_lib)
+            info(f"👀 {path_to_lib}")
         install_name = get_install_name(path_to_lib)
         proposed_name = path_to_lib.name
         if install_name and install_name != proposed_name:
@@ -473,7 +470,7 @@ def fix_rpaths(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
         if verbose:
-            info(path_to_lib)
+            info(f"👀 {path_to_lib}")
         actual_rpaths = get_rpaths(path_to_lib)
         eventual_path = get_eventual_path(path_to_lib)
         proposed_rpaths = propose_rpaths(eventual_path)
@@ -511,7 +508,7 @@ def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
         if verbose:
-            info(path_to_lib)
+            info(f"👀 {path_to_lib}")
         try:
             subprocess.check_output(
                 ["codesign", "-vvvv", path_to_lib], stderr=subprocess.STDOUT, text=True
@@ -670,14 +667,15 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
         yield from lib_paths_list
 
     for path_to_lib in bin_and_lib_paths():
-        if verbose:
-            info(path_to_lib)
         install_name = get_install_name(path_to_lib)
         search_paths = [
             env_lib_path,
             path_to_lib.parents[0],
             *[Path(rpath) for rpath in get_rpaths(path_to_lib)],
         ]
+
+        if verbose:
+            info(f"👀 {path_to_lib}\n  (searching: {search_paths})")
 
         for dep in get_deps(path_to_lib):
             if dep == install_name:
@@ -686,6 +684,7 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
             if verbose:
                 info(f"  {dep} -> {result!s} @ {found_path or ''}")
 
+            deps_by_result[result].add(dep)
             if found_path and found_path not in lib_paths_list:
                 lib_paths_list.append(found_path)
                 vendor_deps_found_outside.append(found_path)
@@ -739,7 +738,7 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
         if verbose:
-            info(path_to_lib)
+            info(f"👀 {path_to_lib}")
         install_name = get_install_name(path_to_lib)
         search_paths = [
             env_lib_path,
