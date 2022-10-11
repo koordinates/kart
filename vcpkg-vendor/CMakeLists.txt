@@ -402,7 +402,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  set(VENDOR_FIX_SEARCH_PATHS "${CURRENT_PACKAGES_DIR}/lib")
+  set(VENDOR_FIX_EXTRA -s "${CURRENT_PACKAGES_DIR}/lib")
 endif()
 
 add_custom_command(
@@ -420,7 +420,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS}
           env/include/${Python3_INCLUDE_DIR_NAME}
   COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" .
-          ${VENDOR_ARCHIVE} -s ${VENDOR_FIX_SEARCH_PATHS}
+          ${VENDOR_ARCHIVE} ${VENDOR_FIX_EXTRA}
   COMMENT "Vendor dependency archive assembly")
 
 add_custom_target(
