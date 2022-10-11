@@ -401,9 +401,13 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     "${CMAKE_COMMAND} -E create_symlink mod_spatialite.so env/lib/mod_spatialite.dylib")
 endif()
 
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  set(VENDOR_FIX_SEARCH_PATHS "${CURRENT_PACKAGES_DIR}/lib")
+endif()
+
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
-  DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
+  DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py ${VENDOR_FIX_SEARCH_PATHS}
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
