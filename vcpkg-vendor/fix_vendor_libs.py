@@ -110,6 +110,10 @@ elif PLATFORM == "Linux":
         "libssl.so.10",
         "libstdc++.so.6",
         "libz.so.1",
+        # ??? dunno about these
+        "libcrypt.so.1",
+        "libnsl.so.2",
+        "libtirpc.so.3",
     ]
 
 
