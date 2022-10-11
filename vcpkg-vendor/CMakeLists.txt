@@ -407,7 +407,7 @@ endif()
 
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
-  DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py ${VENDOR_FIX_SEARCH_PATHS}
+  DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
@@ -420,7 +420,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS}
           env/include/${Python3_INCLUDE_DIR_NAME}
   COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" .
-          ${VENDOR_ARCHIVE}
+          ${VENDOR_ARCHIVE} -s ${VENDOR_FIX_SEARCH_PATHS}
   COMMENT "Vendor dependency archive assembly")
 
 add_custom_target(
