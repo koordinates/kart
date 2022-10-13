@@ -308,6 +308,7 @@ endif()
 # Git-LFS
 #
 
+set(GIT_LFS_MAKE_TARGET "bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
 ExternalProject_Add(
   git-lfs
   GIT_REPOSITORY https://github.com/git-lfs/git-lfs
@@ -316,9 +317,9 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND make "VERSION=v3.2.0-46-gc6497f8b"
+  BUILD_COMMAND make "VENDOR=Kart" ${GIT_LFS_MAKE_TARGET}
   INSTALL_COMMAND "")
-set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
+set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/${GIT_LFS_MAKE_TARGET}")
 list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
 
 #
