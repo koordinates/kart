@@ -119,6 +119,7 @@ elif PLATFORM == "Linux":
         "libtirpc.so.3",
     ]
 
+IGNORE_LIST = ['git-lfs']
 
 SYSTEM_DEPS_ALLOW_SET = set(SYSTEM_DEPS_ALLOW_LIST)
 
@@ -356,6 +357,10 @@ def fix_names(root_path, make_fatal=False, verbose=False):
     for path_to_lib in lib_paths(root_path):
         L.info(f"👀 {path_to_lib}")
 
+        if path_to_lib.name in IGNORE_LIST:
+            L.debug("  ignoring")
+            continue
+
         install_name = get_install_name(path_to_lib)
         proposed_name = path_to_lib.name
         if install_name and install_name != proposed_name:
@@ -462,6 +467,10 @@ def fix_rpaths(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
         L.info(f"👀 {path_to_lib}")
+
+        if path_to_lib.name in IGNORE_LIST:
+            L.debug("  ignoring")
+            continue
 
         actual_rpaths = get_rpaths(path_to_lib)
         eventual_path = get_eventual_path(path_to_lib)
@@ -775,6 +784,12 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
 
     for problem in problems:
         path_to_lib = problem["lib"]
+
+        if path_to_lib.name in IGNORE_LIST:
+            L.error("  %s in IGNORE_LIST, but we need to change a dep: %s",
+            path_to_lib, problem['deps_to_change'])
+            sys.exit(1)
+
         for dep, proposed_dep in problem["deps_to_change"]:
             change_dep(path_to_lib, dep, proposed_dep)
 
