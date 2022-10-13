@@ -97,6 +97,7 @@ if PLATFORM == "Darwin":
 elif PLATFORM == "Linux":
     SYSTEM_DEPS_ALLOW_LIST = [
         "ld-linux-x86-64.so.2",
+        "ld-linux-aarch64.so.1",
         "libc.so.6",
         "libcrypto.so.10",
         "libdl.so.2",
@@ -115,11 +116,13 @@ elif PLATFORM == "Linux":
         "libz.so.1",
         # ??? dunno about these
         "libcrypt.so.1",
+        "libnsl.so.1",
         "libnsl.so.2",
         "libtirpc.so.3",
+        "libutil.so.1",
     ]
 
-IGNORE_LIST = ['git-lfs']
+IGNORE_LIST = ["git-lfs"]
 
 SYSTEM_DEPS_ALLOW_SET = set(SYSTEM_DEPS_ALLOW_LIST)
 
@@ -379,7 +382,8 @@ def fix_names(root_path, make_fatal=False, verbose=False):
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
         "⚠️  Checking names: found %s libs with name issues: %s",
-        len(problems), detail,
+        len(problems),
+        detail,
     )
     if make_fatal:
         sys.exit(1)
@@ -492,7 +496,8 @@ def fix_rpaths(root_path, make_fatal=False, verbose=False):
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
         "⚠️  Checking rpaths: found %s libs with rpath issues.\n%s",
-        len(problems), detail,
+        len(problems),
+        detail,
     )
     if make_fatal:
         sys.exit(1)
@@ -531,7 +536,8 @@ def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
         "⚠️  Checking code signing: found %s libs with signature issues.",
-        len(problems), detail
+        len(problems),
+        detail,
     )
     if make_fatal:
         sys.exit(1)
@@ -701,7 +707,8 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
         count = len(deps_by_result[ALLOWED_SYSTEM_DEP])
         L.error(
             "❌ Checking deps: Found %s system deps that have not been explicitly allowed.\n%s",
-            count, detail
+            count,
+            detail,
         )
         sys.exit(1)
 
@@ -713,19 +720,23 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
         count = len(deps_by_result[VENDOR_DEP_NOT_FOUND])
         L.error(
             "❌ Checking deps: Found %s vendor deps where the library to satisfy the dep could not be found.\n%s",
-            count, detail,
+            count,
+            detail,
         )
         sys.exit(1)
 
     if not vendor_deps_found_outside:
-        print("✅ Checking deps: all vendor deps are satisfied with libraries inside the vendor archive.")
+        print(
+            "✅ Checking deps: all vendor deps are satisfied with libraries inside the vendor archive."
+        )
         return UNMODIFIED
 
     count = len(vendor_deps_found_outside)
     detail = "\n".join(str(p) for p in vendor_deps_found_outside) if verbose else None
     L.warning(
         "⚠️  Checking deps: found %s deps satisfied with a library outside the vendor archive.\n%s",
-        count, detail,
+        count,
+        detail,
     )
     if make_fatal:
         sys.exit(1)
@@ -777,7 +788,8 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
         "⚠️  Checking dep linkage: found %s libs with linkage issues.\n%s",
-        len(problems), detail,
+        len(problems),
+        detail,
     )
     if make_fatal:
         sys.exit(1)
@@ -786,8 +798,11 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
         path_to_lib = problem["lib"]
 
         if path_to_lib.name in IGNORE_LIST:
-            L.error("  %s in IGNORE_LIST, but we need to change a dep: %s",
-            path_to_lib, problem['deps_to_change'])
+            L.error(
+                "  %s in IGNORE_LIST, but we need to change a dep: %s",
+                path_to_lib,
+                problem["deps_to_change"],
+            )
             sys.exit(1)
 
         for dep, proposed_dep in problem["deps_to_change"]:
@@ -839,7 +854,9 @@ def fix_everything(input_path, output_path, verbose=0):
             pack_all(root_path, output_path)
             print(f"✅ Wrote fixed archive to {output_path}")
         elif status == MODIFIED:
-            L.warning("⚠️  Archive was fixed, but not writing anywhere due to dry-run mode.")
+            L.warning(
+                "⚠️  Archive was fixed, but not writing anywhere due to dry-run mode."
+            )
             sys.exit(3)
 
 
@@ -870,7 +887,10 @@ def main():
     )
     args = parser.parse_args()
 
-    logging.basicConfig(format="%(funcName)-20s [%(levelname)s]:\t%(message)s", level=min(10, 30-(args.verbose * 10)))
+    logging.basicConfig(
+        format="%(funcName)-20s [%(levelname)s]:\t%(message)s",
+        level=min(10, 30 - (args.verbose * 10)),
+    )
     if args.verbose >= 2:
         sys.addaudithook(log_subprocess)
 

@@ -350,6 +350,7 @@ set(gitBuildConfig
     "USE_LIBPCRE=1"
     "NO_EXPAT=1"
     "NO_PERL=1"
+    "NO_TCLTK=1"
     "RUNTIME_PREFIX=1"
     "LIBPCREDIR=${PCRE2_PREFIX}"
     "OPENSSLDIR=${OPENSSL_PREFIX}"
