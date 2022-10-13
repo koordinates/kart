@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.24)
 
 include(${CMAKE_CURRENT_LIST_DIR}/vcpkg-toolchain-setup.cmake)
 
@@ -308,7 +308,14 @@ endif()
 # Git-LFS
 #
 
-set(GIT_LFS_MAKE_TARGET "bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
+set(GIT_LFS_OUTPUT "bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
+if(WIN32)
+  set(GIT_LFS_BUILD
+      go build "-ldflags=\"-s -w -X 'github.com/git-lfs/git-lfs/v3/config.Vendor=Kart'\"" -trimpath
+      -o ${GIT_LFS_OUTPUT})
+else()
+  set(GIT_LFS_BUILD make VENDOR=Kart ${GIT_LFS_OUTPUT})
+endif()
 ExternalProject_Add(
   git-lfs
   GIT_REPOSITORY https://github.com/git-lfs/git-lfs
@@ -317,9 +324,9 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND make "VENDOR=Kart" ${GIT_LFS_MAKE_TARGET}
+  BUILD_COMMAND ${GIT_LFS_BUILD}
   INSTALL_COMMAND "")
-set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/${GIT_LFS_MAKE_TARGET}")
+set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/${GIT_LFS_OUTPUT}")
 list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
 
 #
