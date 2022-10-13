@@ -280,16 +280,30 @@ list(APPEND BIN_LIST "${VCPKG_IMPORT_PREFIX}/tools/pdal/pdal")
 # Git-LFS
 #
 
-ExternalProject_Add(
-  git-lfs
-  GIT_REPOSITORY https://github.com/git-lfs/git-lfs
-  GIT_TAG main
-  GIT_SHALLOW ON
-  BUILD_IN_SOURCE ON
-  EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND make "VERSION=v3.2.0-46-gc6497f8b"
-  INSTALL_COMMAND "")
+if(WIN32)
+  # TODO - remove some repetition here.
+  ExternalProject_Add(
+    git-lfs
+    GIT_REPOSITORY https://github.com/git-lfs/git-lfs
+    GIT_TAG main
+    GIT_SHALLOW ON
+    BUILD_IN_SOURCE ON
+    EXCLUDE_FROM_ALL ON
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND go build -trimpath -o ./bin/git-lfs.exe
+    INSTALL_COMMAND "")
+else()
+  ExternalProject_Add(
+    git-lfs
+    GIT_REPOSITORY https://github.com/git-lfs/git-lfs
+    GIT_TAG main
+    GIT_SHALLOW ON
+    BUILD_IN_SOURCE ON
+    EXCLUDE_FROM_ALL ON
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND make "VERSION=v3.2.0-46-gc6497f8b"
+    INSTALL_COMMAND "")
+endif()
 set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
 list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
 
