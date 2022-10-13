@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 import platform
 import re
@@ -44,9 +45,11 @@ from pathlib import Path
 
 USAGE = """
 
-Usage: fix_vendor_libs INPUT_PATH [OUTPUT_PATH]")
+Usage: fix_vendor_libs [OPTIONS] INPUT_PATH [OUTPUT_PATH]
+
     INPUT_PATH is the path to a vendor archive (eg vendor-Darwin.tar.gz),
         or a path to the uncompressed contents of a vendor archive.
+
     OUTPUT_PATH the path to which the fixed vendor archive is written.
         If not supplied, fix_vendor_libs runs in a dry-run mode where it fixes
         the archive in a temp directory, but doesn't output it anywhere.
@@ -124,31 +127,13 @@ class PlatformSpecific:
     """Marker for functions that vary by platform."""
 
 
+L = logging.getLogger("fix_vendor_libs")
+
+
 def log_subprocess(event, event_args):
     if event == "subprocess.Popen":
         executable, args, cwd, env = event_args
-        print("> invoke:", args)
-
-
-def info(message):
-    print(message)
-
-
-def checkmark(message):
-    print(f"✅  {message}")
-
-
-def warn(message, make_fatal=False, detail=None):
-    if make_fatal:
-        fatal(message, detail)
-    message = "\n".join([message, detail]) if detail else message
-    print(f"⚠️  {message}", file=sys.stderr)
-
-
-def fatal(message, detail=None):
-    message = "\n".join([message, detail]) if detail else message
-    print(f"❌  {message}", file=sys.stderr)
-    sys.exit(1)
+        L.debug("invoking: %s", " ".join(map(str, args)))
 
 
 def json_dumps(json_obj, root_path):
@@ -164,10 +149,10 @@ def unpack_all(input_path, root_path):
     contents_path = root_path / VENDOR_ARCHIVE_CONTENTS
     contents_path.mkdir()
     if input_path.is_file():
-        info(f"Extracting {input_path} to {root_path} ...")
+        print(f"Extracting {input_path} to {root_path} ...")
         subprocess.check_call(["tar", "-xzf", input_path, "--directory", contents_path])
     else:
-        info(f"Copying from {input_path} to {root_path} ...")
+        print(f"Copying from {input_path} to {root_path} ...")
         for d in TOP_LEVEL_DIRECTORIES:
             assert (input_path / d).is_dir()
             shutil.copytree(input_path / d, contents_path / d, symlinks=True)
@@ -190,7 +175,7 @@ def pack_all(root_path, output_path):
     for path_to_wheel in wheel_paths(root_path):
         pack_wheel(path_to_wheel, root_path)
 
-    info(f"Writing {output_path} ...")
+    print(f"Writing {output_path} ...")
     contents_path = root_path / VENDOR_ARCHIVE_CONTENTS
     assert contents_path.is_dir()
     subprocess.check_call(
@@ -212,7 +197,7 @@ def wheel_paths(root_path):
 def unpack_wheel(path_to_wheel, root_path):
     wheel_name = path_to_wheel.name
 
-    info(f"Unpacking {wheel_name} ...")
+    print(f"Unpacking {wheel_name} ...")
     subprocess.check_output(
         [
             sys.executable,
@@ -230,7 +215,8 @@ def unpack_wheel(path_to_wheel, root_path):
 
     wheel_contents_path = root_path / wheel_id
     if not wheel_contents_path.is_dir():
-        fatal(f"Unpacking {wheel_name} didn't work as expected")
+        L.error(f"❌ Unpacking {wheel_name} didn't work as expected")
+        sys.exit(1)
 
     wheel_contents_path.rename(root_path / f"{wheel_name}-contents")
 
@@ -241,7 +227,7 @@ def pack_wheel(path_to_wheel, root_path):
     wheel_contents_path = root_path / f"{wheel_name}-contents"
     assert wheel_contents_path.is_dir()
 
-    info(f"Re-packing {wheel_name} ...")
+    print(f"Re-packing {wheel_name} ...")
     subprocess.check_output(
         [
             sys.executable,
@@ -368,8 +354,8 @@ def set_install_name_Linux(path_to_lib, install_name):
 def fix_names(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_paths(root_path):
-        if verbose:
-            info(f"👀 {path_to_lib}")
+        L.info(f"👀 {path_to_lib}")
+
         install_name = get_install_name(path_to_lib)
         proposed_name = path_to_lib.name
         if install_name and install_name != proposed_name:
@@ -382,15 +368,16 @@ def fix_names(root_path, make_fatal=False, verbose=False):
             )
 
     if not problems:
-        checkmark("Checking names: all libs are well named.")
+        print("✅ Checking names: all libs are well named.")
         return UNMODIFIED
 
     detail = json_dumps(problems, root_path) if verbose else None
-    warn(
-        f"Checking names: found {len(problems)} libs with name issues.",
-        make_fatal=make_fatal,
-        detail=detail,
+    L.warning(
+        "⚠️  Checking names: found %s libs with name issues: %s",
+        len(problems), detail,
     )
+    if make_fatal:
+        sys.exit(1)
 
     for problem in problems:
         path_to_lib = problem["lib"]
@@ -474,8 +461,8 @@ def propose_rpaths(eventual_lib_path):
 def fix_rpaths(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
-        if verbose:
-            info(f"👀 {path_to_lib}")
+        L.info(f"👀 {path_to_lib}")
+
         actual_rpaths = get_rpaths(path_to_lib)
         eventual_path = get_eventual_path(path_to_lib)
         proposed_rpaths = propose_rpaths(eventual_path)
@@ -490,15 +477,16 @@ def fix_rpaths(root_path, make_fatal=False, verbose=False):
             )
 
     if not problems:
-        checkmark("Checking rpaths: all libs have good rpaths.")
+        print("✅ Checking rpaths: all libs have good rpaths.")
         return UNMODIFIED
 
     detail = json_dumps(problems, root_path) if verbose else None
-    warn(
-        f"Checking rpaths: found {len(problems)} libs with rpath issues.",
-        make_fatal=make_fatal,
-        detail=detail,
+    L.warning(
+        "⚠️  Checking rpaths: found %s libs with rpath issues.\n%s",
+        len(problems), detail,
     )
+    if make_fatal:
+        sys.exit(1)
 
     for problem in problems:
         set_sole_rpaths(problem["lib"], problem["proposed_rpaths"])
@@ -512,8 +500,7 @@ fix_codesigning = PlatformSpecific()
 def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
-        if verbose:
-            info(f"👀 {path_to_lib}")
+        L.info(f"👀 {path_to_lib}")
         try:
             subprocess.check_output(
                 ["codesign", "-vvvv", path_to_lib], stderr=subprocess.STDOUT, text=True
@@ -529,15 +516,16 @@ def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
                 )
 
     if not problems:
-        checkmark("Checking code signing: no invalid signatures.")
+        print("✅ Checking code signing: no invalid signatures.")
         return UNMODIFIED
 
     detail = json_dumps(problems, root_path) if verbose else None
-    warn(
-        f"Checking code signing: found {len(problems)} libs with signature issues.",
-        make_fatal=make_fatal,
-        detail=detail,
+    L.warning(
+        "⚠️  Checking code signing: found %s libs with signature issues.",
+        len(problems), detail
     )
+    if make_fatal:
+        sys.exit(1)
 
     for problem in problems:
         subprocess.check_call(["codesign", "--remove-signature", path_to_lib])
@@ -672,6 +660,7 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
         yield from lib_paths_list
 
     for path_to_lib in bin_and_lib_paths():
+        L.info(f"👀 {path_to_lib}")
         install_name = get_install_name(path_to_lib)
         search_paths = [
             env_lib_path,
@@ -681,14 +670,14 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
         ]
 
         if verbose:
-            info(f"👀 {path_to_lib}\n  (searching: {search_paths})")
+            L.debug("  searching: %s)", search_paths)
 
         for dep in get_deps(path_to_lib):
             if dep == install_name:
                 continue
             result, found_path = find_dep(dep, search_paths)
             if verbose:
-                info(f"  {dep} -> {result!s} @ {found_path or ''}")
+                L.debug(f"  {dep} -> {result!s} @ {found_path or ''}")
 
             deps_by_result[result].add(dep)
             if found_path and found_path not in lib_paths_list:
@@ -701,10 +690,11 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
             deps_by_result[UNEXPECTED_SYSTEM_DEP],
         )
         count = len(deps_by_result[ALLOWED_SYSTEM_DEP])
-        fatal(
-            f"Checking deps: Found {count} system deps that have not been explicitly allowed.",
-            detail=detail,
+        L.error(
+            "❌ Checking deps: Found %s system deps that have not been explicitly allowed.\n%s",
+            count, detail
         )
+        sys.exit(1)
 
     if deps_by_result[VENDOR_DEP_NOT_FOUND]:
         detail = sorted_good_and_bad_deps(
@@ -712,24 +702,25 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
             deps_by_result[VENDOR_DEP_NOT_FOUND],
         )
         count = len(deps_by_result[VENDOR_DEP_NOT_FOUND])
-        fatal(
-            f"Checking deps: Found {count} vendor deps where the library to satisfy the dep could not be found.",
-            detail=detail,
+        L.error(
+            "❌ Checking deps: Found %s vendor deps where the library to satisfy the dep could not be found.\n%s",
+            count, detail,
         )
+        sys.exit(1)
 
     if not vendor_deps_found_outside:
-        checkmark(
-            "Checking deps: all vendor deps are satisfied with libraries inside the vendor archive."
-        )
+        print("✅ Checking deps: all vendor deps are satisfied with libraries inside the vendor archive.")
         return UNMODIFIED
 
     count = len(vendor_deps_found_outside)
     detail = "\n".join(str(p) for p in vendor_deps_found_outside) if verbose else None
-    warn(
-        f"Checking deps: found {count} deps satisfied with a library outside the vendor archive.",
-        make_fatal=make_fatal,
-        detail=detail,
+    L.warning(
+        "⚠️  Checking deps: found %s deps satisfied with a library outside the vendor archive.\n%s",
+        count, detail,
     )
+    if make_fatal:
+        sys.exit(1)
+
     for src_path in vendor_deps_found_outside:
         dest_path = env_lib_path / src_path.name
         if not dest_path.exists():
@@ -743,8 +734,7 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
 
     problems = []
     for path_to_lib in lib_and_bin_paths(root_path):
-        if verbose:
-            info(f"👀 {path_to_lib}")
+        L.info(f"👀 {path_to_lib}")
         install_name = get_install_name(path_to_lib)
         search_paths = [
             env_lib_path,
@@ -772,15 +762,16 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
             )
 
     if not problems:
-        checkmark("Checking dep linkage: all vendor deps are properly linked.")
+        print("✅ Checking dep linkage: all vendor deps are properly linked.")
         return UNMODIFIED
 
     detail = json_dumps(problems, root_path) if verbose else None
-    warn(
-        f"Checking dep linkage: found {len(problems)} libs with linkage issues.",
-        make_fatal=make_fatal,
-        detail=detail,
+    L.warning(
+        "⚠️  Checking dep linkage: found %s libs with linkage issues.\n%s",
+        len(problems), detail,
     )
+    if make_fatal:
+        sys.exit(1)
 
     for problem in problems:
         path_to_lib = problem["lib"]
@@ -792,7 +783,8 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
 
 def fix_everything(input_path, output_path, verbose=0):
     if not input_path.resolve().exists():
-        fatal(f"Path does not exist {input_path}")
+        L.error("Path does not exist: %s", input_path)
+        sys.exit(2)
 
     if output_path:
         if output_path.is_dir():
@@ -815,8 +807,8 @@ def fix_everything(input_path, output_path, verbose=0):
         status |= fix_codesigning(root_path, **kwargs)
 
         if status == MODIFIED:
-            checkmark("Finished fixing.\n")
-            info("Checking everything was fixed ...")
+            print("✅ Finished fixing.\n")
+            print("\nChecking everything was fixed ...")
             kwargs = {"make_fatal": True, "verbose": True}
 
             fix_unsatisfied_deps(root_path, **kwargs)
@@ -826,13 +818,13 @@ def fix_everything(input_path, output_path, verbose=0):
             fix_codesigning(root_path, **kwargs)
 
         else:
-            checkmark("Nothing to change.\n")
+            print("✅ Nothing to change.\n")
 
         if output_path:
             pack_all(root_path, output_path)
-            checkmark(f"Wrote fixed archive to {output_path}")
+            print(f"✅ Wrote fixed archive to {output_path}")
         elif status == MODIFIED:
-            warn("Archive was fixed, but not writing anywhere due to dry-run mode.")
+            L.warning("⚠️  Archive was fixed, but not writing anywhere due to dry-run mode.")
             sys.exit(3)
 
 
@@ -844,13 +836,6 @@ for symbol in list(globals().keys()):
 
 def main():
     parser = argparse.ArgumentParser(usage=USAGE)
-    parser.add_argument("input_path", type=Path, help="Path to vendor archive/dir")
-    parser.add_argument(
-        "output_path",
-        type=Path,
-        nargs="?",
-        help="Path to output. If not specified, perform a dry-run",
-    )
     parser.add_argument(
         "-v", "--verbose", default=0, action="count", help="Increase verbosity"
     )
@@ -861,8 +846,16 @@ def main():
         action="append",
         help="Additional library search paths",
     )
+    parser.add_argument("input_path", type=Path, help="Path to vendor archive/dir")
+    parser.add_argument(
+        "output_path",
+        type=Path,
+        nargs="?",
+        help="Path to output. If not specified, perform a dry-run",
+    )
     args = parser.parse_args()
 
+    logging.basicConfig(format="%(funcName)-20s [%(levelname)s]:\t%(message)s", level=min(10, 30-(args.verbose * 10)))
     if args.verbose >= 2:
         sys.addaudithook(log_subprocess)
 
