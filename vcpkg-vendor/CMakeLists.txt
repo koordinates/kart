@@ -294,7 +294,7 @@ find_package(PDAL CONFIG REQUIRED)
 pkg_check_modules(PDAL REQUIRED pdal)
 
 get_target_property(PDALUTIL_LIBRARY pdal_util LOCATION)
-if(MACOS)
+if(APPLE)
   get_target_property(PDALCPP_LIBRARY pdalcpp LOCATION)
   list(APPEND LIB_LIST ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
 else()
