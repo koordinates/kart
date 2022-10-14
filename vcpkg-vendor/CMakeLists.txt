@@ -429,8 +429,8 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_STDLIB} env/lib/${Python3_STDLIB_DIR_NAME}
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS}
           env/include/${Python3_INCLUDE_DIR_NAME}
-  COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" .
-          ${VENDOR_ARCHIVE} ${VENDOR_FIX_EXTRA}
+  COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
+          $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} ${VENDOR_FIX_EXTRA}
   COMMENT "Vendor dependency archive assembly")
 
 add_custom_target(

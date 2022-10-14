@@ -1,10 +1,10 @@
 #!/bin/bash
-set -eu
+set -euo pipefail
 
 #
 # invoke via
-#   myhost $ docker run -v $(pwd):/src -w /src --name kart-vcpkg-linux -it ubuntu:focal
-#   kart-vcpkg-linux $ vcpkg-vendor/cmake-vcpkg-build-linux.sh
+#   myhost $ docker run -v /tmp -v $(pwd):/src -w /src --rm -it ubuntu:focal
+#   mycontainer $ vcpkg-vendor/cmake-vcpkg-build-linux.sh [--verbose]
 
 APT_DEPENDS=(
     autoconf
@@ -47,6 +47,9 @@ for P in "${PY_DEPENDS[@]}"; do
     if ! pip show --quiet "$P" >/dev/null 2>&1; then
         echo "🌀  installing python build tools..."
         $SUDO pip install "${PY_DEPENDS[@]}"
+        # why are these needed? maybe if tmpfs is noexec?
+        $SUDO chmod +x /usr/local/lib/python3.*/dist-packages/cmake/data/bin/cmake || true
+        $SUDO chmod +x /usr/local/lib/python3.*/dist-packages/ninja/data/bin/ninja || true
         break
     fi
 done
