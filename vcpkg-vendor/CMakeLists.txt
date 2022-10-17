@@ -310,9 +310,8 @@ endif()
 
 set(GIT_LFS_OUTPUT "bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
 if(WIN32)
-  set(GIT_LFS_BUILD
-      go build "-ldflags=\"-s -w -X 'github.com/git-lfs/git-lfs/v3/config.Vendor=Kart'\"" -trimpath
-      -o ${GIT_LFS_OUTPUT})
+  set(GIT_LFS_LDFLAGS "-s -w -X 'github.com/git-lfs/git-lfs/v3/config.Vendor=Kart'")
+  set(GIT_LFS_BUILD go build -ldflags=${GIT_LFS_LDFLAGS} -trimpath -o ${GIT_LFS_OUTPUT})
 else()
   set(GIT_LFS_BUILD make VENDOR=Kart ${GIT_LFS_OUTPUT})
 endif()
