@@ -205,15 +205,29 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL
 #
 # pyodbc
 #
-if(NOT WIN32)
+if(WIN32)
+  # TODO - setuptools can't find the python lib, even though sysconfig can.
+  set(PYODBC_BUILD_LIBRARY_DIRS "{CURRENT_PACKAGES_DIR}/tools/python3/Lib")
+
+else()
   find_package(unixodbc CONFIG REQUIRED)
   get_target_property(ODBC_INCLUDE_DIRS UNIX::odbc INTERFACE_INCLUDE_DIRECTORIES)
-  get_target_property(ODBC_LIBRARIES UNIX::odbc LOCATION)
-  cmake_path(GET ODBC_LIBRARIES PARENT_PATH ODBC_LIB_DIR)
+  get_target_property(ODBC_LIBRARY UNIX::odbc LOCATION)
+  cmake_path(GET ODBC_LIBRARY PARENT_PATH ODBC_LIBRARY_DIR)
 
-  set(PYODBC_BUILD_ENV "CFLAGS=-I${ODBC_INCLUDE_DIRS}" "LDFLAGS=-L${ODBC_LIB_DIR} -lodbc")
-  set(ODBC_DEPENDS UNIX::odbc)
+  set(PYODBC_BUILD_INCLUDE_DIRS ${ODBC_INCLUDE_DIRS})
+  set(PYODBC_BUILD_LIBRARY_DIRS ${ODBC_LIBRARY_DIR})
+  set(PYODBC_BUILD_DEPENDS UNIX::odbc)
 endif()
+
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include_dirs=${PYODBC_BUILD_INCLUDE_DIRS}
+library_dirs=${PYODBC_BUILD_LIBRARY_DIRS}
+")
 
 set(PYODBC_WHEEL_VER 4.0.32)
 ExternalProject_Add(
@@ -221,11 +235,13 @@ ExternalProject_Add(
   # if you build from a git repository, pyodbc adds +commit0c0ffee to the wheel version
   URL https://files.pythonhosted.org/packages/d1/21/755f5fa373d01d1803d992c7611799dc4e9fcbb5db7d0852990d6ab3c9ad/pyodbc-4.0.32.tar.gz
   BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv ${ODBC_DEPENDS}
+  DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E env ${PYODBC_BUILD_ENV} ${wheelBuildEnv_PYTHON} setup.py
-                --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg <SOURCE_DIR>
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
