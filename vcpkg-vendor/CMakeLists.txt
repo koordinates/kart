@@ -252,9 +252,17 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL
 # vcpkg/FindGDAL
 #
 find_package(GDAL REQUIRED)
-pkg_check_modules(GDAL REQUIRED gdal)
-get_target_property(GDAL_LIBRARY_PATH GDAL::GDAL LOCATION)
-list(APPEND LIB_LIST ${GDAL_LIBRARY_PATH})
+get_target_property(GDAL_INCLUDE_DIRS unofficial::sqlite3::sqlite3 INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(GDAL_LIBRARY GDAL::GDAL LOCATION)
+cmake_path(GET GDAL_LIBRARY PARENT_PATH GDAL_LIBRARY_DIR)
+
+if(WIN32)
+  # GDAL_LIBRARY points to the .dll - we seem to need the .lib as well
+  # TODO - should we need both? Is it linking to the wrong one?
+  set(GDAL_LIBRARY_DIRS "${GDAL_LIBRARY_DIR}" "${GDAL_LIBRARY_DIR}/../lib")
+else()
+  set(GDAL_LIBRARY_DIRS "${GDAL_LIBRARY_DIR}")
+endif()
 
 file(
   GLOB GDAL_DATA_FILES
@@ -269,8 +277,9 @@ file(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include_dirs=$<JOIN:$<TARGET_PROPERTY:GDAL::GDAL,INTERFACE_INCLUDE_DIRECTORIES>,:>
-library_dirs=${GDAL_LIBRARY_PATH}
+include_dirs=${GDAL_INCLUDE_DIRS}
+library_dirs=${GDAL_LIBRARY_DIRS}
+libraries=gdal
 gdal_config=${CURRENT_PACKAGES_DIR}/tools/gdal/gdal-config
 ")
 
@@ -283,12 +292,12 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
                 <SOURCE_DIR>
-  COMMAND ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
-          --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <INSTALL_DIR>
-          --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND "")
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND
+    ${CMAKE_COMMAND} -E copy
+    <TMP_DIR>/dist/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl)
 
