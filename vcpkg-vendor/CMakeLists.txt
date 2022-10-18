@@ -104,14 +104,21 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3
 #
 find_package(PostgreSQL REQUIRED)
 
+if(WIN32)
+  set(PostgreSQL_BINARY_DIR "${PostgreSQL_LIBRARY_DIR}/../tools/libpq")
+else()
+  set(PostgreSQL_BINARY_DIR "${PostgreSQL_LIBRARY_DIR}/../tools/libpq/bin")
+  string(REPLACE ";" ":" PostgreSQL_INCLUDE_DIRS "${PostgreSQL_INCLUDE_DIRS}")
+endif()
+
 file(
   GENERATE
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include_dirs=$<JOIN:$<TARGET_PROPERTY:PostgreSQL::PostgreSQL,INTERFACE_INCLUDE_DIRECTORIES>,:>
+include_dirs=${PostgreSQL_INCLUDE_DIRS}
 library_dirs=${PostgreSQL_LIBRARY_DIRS}
-pg_config=${CURRENT_PACKAGES_DIR}/tools/libpq/bin/pg_config
+pg_config=${PostgreSQL_BINARY_DIR}/pg_config${CMAKE_EXECUTABLE_SUFFIX}
 define=
 ")
 
@@ -125,7 +132,7 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
                 <SOURCE_DIR>
-  COMMAND ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
           --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
