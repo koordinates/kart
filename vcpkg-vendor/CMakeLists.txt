@@ -59,8 +59,24 @@ createvirtualenvironment(wheelBuildEnv REQUIREMENTS "wheel")
 #
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 get_target_property(SQLite3_INCLUDE_DIRS unofficial::sqlite3::sqlite3 INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(SQLite3_LIBRARIES unofficial::sqlite3::sqlite3 LOCATION)
-cmake_path(GET SQLite3_LIBRARIES PARENT_PATH SQLITE3_LIB_DIR)
+get_target_property(SQLite3_LIBRARY unofficial::sqlite3::sqlite3 LOCATION)
+cmake_path(GET SQLite3_LIBRARY PARENT_PATH SQLite3_LIBRARY_DIR)
+if(WIN32)
+  # SQLite3_LIBRARY points to the .dll - we seem to need the .lib as well
+  # TODO - should we need both? Is it linking to the wrong one?
+  set(SQLite3_LIBRARY_DIRS "${SQLite3_LIBRARY_DIR}" "${SQLite3_LIBRARY_DIR}/../lib")
+else()
+  set(SQLite3_LIBRARY_DIRS "${SQLite3_LIBRARY_DIR}")
+endif()
+
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include_dirs=${SQLite3_INCLUDE_DIRS}
+library_dirs=${SQLite3_LIBRARY_DIRS}
+")
 
 set(PYSQLITE3_WHEEL_VER 0.4.5)
 ExternalProject_Add(
@@ -71,9 +87,9 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv unofficial::sqlite3::sqlite3
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND
-    ${CMAKE_COMMAND} -E env ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --include-dirs
-    ${SQLite3_INCLUDE_DIRS} --library-dirs ${SQLITE3_LIB_DIR} --build-temp <TMP_DIR>/build
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
+                <SOURCE_DIR>
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
