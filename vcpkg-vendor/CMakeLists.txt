@@ -147,6 +147,29 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_W
 # cffi
 #
 find_package(libffi REQUIRED)
+get_target_property(LIBFFI_LIBRARY libffi LOCATION)
+cmake_path(GET LIBFFI_LIBRARY PARENT_PATH LIBFFI_LIBRARY_DIR)
+set(LIBFFI_INCLUDE_DIRS "${LIBFFI_LIBRARY_DIR}/../include")
+
+if(WIN32)
+  # LIBFFI_LIBRARY points to the .dll - we seem to need the .lib as well
+  # TODO - should we need both? Is it linking to the wrong one?
+  set(LIBFFI_LIBRARY_DIRS "${LIBFFI_LIBRARY_DIR}" "${LIBFFI_LIBRARY_DIR}/../lib")
+  # TODO - setuptools can't find the python lib, even though sysconfig can.
+  set(CFFI_BUILD_LIBRARY_DIRS ${LIBFFI_LIBRARY_DIRS} "{CURRENT_PACKAGES_DIR}/tools/python3/Lib")
+else()
+  set(CFFI_BUILD_LIBRARY_DIRS "${LIBFFI_LIBRARY_DIR}")
+endif()
+
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include_dirs=${LIBFFI_INCLUDE_DIRS}
+library_dirs=${LIBFFI_LIBRARY_DIRS}
+")
+
 set(CFFI_WHEEL_VER 1.15.1)
 ExternalProject_Add(
   cffi
@@ -155,12 +178,10 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv libffi
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND
-    ${CMAKE_COMMAND} -E env PKG_CONFIG_PATH=${CURRENT_PACKAGES_DIR}/lib/pkgconfig
-    ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg <SOURCE_DIR>
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
-          --bdist-dir <TMP_DIR>/bdist
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(cffi INSTALL_DIR)
