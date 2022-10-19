@@ -61,6 +61,7 @@ find_package(unofficial-sqlite3 CONFIG REQUIRED)
 get_target_property(SQLite3_INCLUDE_DIRS unofficial::sqlite3::sqlite3 INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(SQLite3_LIBRARY unofficial::sqlite3::sqlite3 LOCATION)
 cmake_path(GET SQLite3_LIBRARY PARENT_PATH SQLite3_LIBRARY_DIR)
+
 if(WIN32)
   # SQLite3_LIBRARY points to the .dll - we seem to need the .lib as well
   # TODO - should we need both? Is it linking to the wrong one?
@@ -87,15 +88,12 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv unofficial::sqlite3::sqlite3
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
-                <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg <SOURCE_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
-          --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy
-    <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pysqlite3 INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
@@ -130,16 +128,12 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
-                <SOURCE_DIR>
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext
-          --build-temp <TMP_DIR>/build
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg <SOURCE_DIR>
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
-          --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl
-    <INSTALL_DIR>)
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(psycopg2 INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
@@ -311,14 +305,12 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv GDAL::GDAL
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
-                <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg <SOURCE_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy
-    <TMP_DIR>/dist/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl)
 
