@@ -54,91 +54,12 @@ pythongetabiinfo()
 include(PyCreateVirtualEnvironment)
 createvirtualenvironment(wheelBuildEnv REQUIREMENTS "wheel")
 
-#
-# pysqlite3
-#
-find_package(unofficial-sqlite3 CONFIG REQUIRED)
-get_target_property(SQLite3_INCLUDE_DIRS unofficial::sqlite3::sqlite3 INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(SQLite3_LIBRARY unofficial::sqlite3::sqlite3 LOCATION)
-cmake_path(GET SQLite3_LIBRARY PARENT_PATH SQLite3_LIBRARY_DIR)
-
-if(WIN32)
-  # SQLite3_LIBRARY points to the .dll - we seem to need the .lib as well
-  # TODO - should we need both? Is it linking to the wrong one?
-  set(SQLite3_LIBRARY_DIRS "${SQLite3_LIBRARY_DIR}" "${SQLite3_LIBRARY_DIR}/../lib")
-else()
-  set(SQLite3_LIBRARY_DIRS "${SQLite3_LIBRARY_DIR}")
-endif()
-
-file(
-  GENERATE
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
-  CONTENT
-    "[build_ext]
-include_dirs=${SQLite3_INCLUDE_DIRS}
-library_dirs=${SQLite3_LIBRARY_DIRS}
-")
-
-set(PYSQLITE3_WHEEL_VER 0.4.5)
-ExternalProject_Add(
-  pysqlite3
-  GIT_REPOSITORY https://github.com/coleifer/pysqlite3.git
-  GIT_TAG ${PYSQLITE3_WHEEL_VER}
-  BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv unofficial::sqlite3::sqlite3
-  EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg <SOURCE_DIR>
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
-ExternalProject_Get_Property(pysqlite3 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+###############################
+#        PYTHON WHEELS        #
+###############################
 
 #
-# psycopg2
-#
-find_package(PostgreSQL REQUIRED)
-
-if(WIN32)
-  set(PostgreSQL_BINARY_DIR "${PostgreSQL_LIBRARY_DIR}/../tools/libpq")
-else()
-  set(PostgreSQL_BINARY_DIR "${PostgreSQL_LIBRARY_DIR}/../tools/libpq/bin")
-  string(REPLACE ";" ":" PostgreSQL_INCLUDE_DIRS "${PostgreSQL_INCLUDE_DIRS}")
-endif()
-
-file(
-  GENERATE
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
-  CONTENT
-    "[build_ext]
-include_dirs=${PostgreSQL_INCLUDE_DIRS}
-library_dirs=${PostgreSQL_LIBRARY_DIRS}
-pg_config=${PostgreSQL_BINARY_DIR}/pg_config${CMAKE_EXECUTABLE_SUFFIX}
-define=
-")
-
-set(PYSCOPG2_WHEEL_VER 2.8.5)
-ExternalProject_Add(
-  psycopg2
-  URL https://files.pythonhosted.org/packages/a8/8f/1c5690eebf148d1d1554fc00ccf9101e134636553dbb75bdfef4f85d7647/psycopg2-2.8.5.tar.gz
-  BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
-  EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg <SOURCE_DIR>
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
-ExternalProject_Get_Property(psycopg2 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
-
-#
-# cffi
+# cffi wheel
 #
 find_package(libffi REQUIRED)
 get_target_property(LIBFFI_LIBRARY libffi LOCATION)
@@ -182,89 +103,8 @@ ExternalProject_Get_Property(cffi INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
-# pygit2
-#
-find_package(unofficial-git2 CONFIG REQUIRED)
-get_target_property(Git2_LIBRARIES unofficial::git2::git2 LOCATION)
-cmake_path(GET Git2_LIBRARIES PARENT_PATH Git2_LIB_DIR)
-
-pkg_check_modules(LIBGIT2 REQUIRED libgit2)
-
-list(JOIN VCPKG_IMPORT_PREFIX " " PYGIT2_BUILD_ENV_LIBGIT2)
-list(JOIN LIBGIT2_LIBDIR " " PYGIT2_BUILD_ENV_LIBGIT2_LIB)
-list(JOIN LIBGIT2_STATIC_CFLAGS " " PYGIT2_BUILD_ENV_CFLAGS)
-list(JOIN LIBGIT2_STATIC_LDFLAGS " " PYGIT2_BUILD_ENV_LDFLAGS)
-
-set(PYGIT2_BUILD_ENV
-    "LIBGIT2=${PYGIT2_BUILD_ENV_LIBGIT2}" "LIBGIT2_LIB=${PYGIT2_BUILD_ENV_LIBGIT2_LIB}"
-    "CFLAGS=${PYGIT2_BUILD_ENV_CFLAGS}" "LDFLAGS=${PYGIT2_BUILD_ENV_LDFLAGS}")
-
-set(PYGIT2_WHEEL_VER 1.9.0)
-ExternalProject_Add(
-  pygit2
-  GIT_REPOSITORY https://github.com/koordinates/pygit2.git
-  GIT_TAG kart-v0.11.1
-  BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv unofficial::git2::git2
-  EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
-  BUILD_BYPRODUCTS "<SOURCE_DIR>/.eggs/" "<SOURCE_DIR>/pygit2.egg-info/" "<SOURCE_DIR>/build/"
-  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
-  COMMAND ${CMAKE_COMMAND} -E env ${PYGIT2_BUILD_ENV} ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg
-          bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
-ExternalProject_Get_Property(pygit2 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
-
-#
-# pyodbc
-#
-if(WIN32)
-  # TODO - setuptools can't find the python lib, even though sysconfig can.
-  set(PYODBC_BUILD_LIBRARY_DIRS "{CURRENT_PACKAGES_DIR}/tools/python3/Lib")
-
-else()
-  find_package(unixodbc CONFIG REQUIRED)
-  get_target_property(ODBC_INCLUDE_DIRS UNIX::odbc INTERFACE_INCLUDE_DIRECTORIES)
-  get_target_property(ODBC_LIBRARY UNIX::odbc LOCATION)
-  cmake_path(GET ODBC_LIBRARY PARENT_PATH ODBC_LIBRARY_DIR)
-
-  set(PYODBC_BUILD_INCLUDE_DIRS ${ODBC_INCLUDE_DIRS})
-  set(PYODBC_BUILD_LIBRARY_DIRS ${ODBC_LIBRARY_DIR})
-  set(PYODBC_BUILD_DEPENDS UNIX::odbc)
-endif()
-
-file(
-  GENERATE
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
-  CONTENT
-    "[build_ext]
-include_dirs=${PYODBC_BUILD_INCLUDE_DIRS}
-library_dirs=${PYODBC_BUILD_LIBRARY_DIRS}
-")
-
-set(PYODBC_WHEEL_VER 4.0.32)
-ExternalProject_Add(
-  pyodbc
-  # if you build from a git repository, pyodbc adds +commit0c0ffee to the wheel version
-  URL https://files.pythonhosted.org/packages/d1/21/755f5fa373d01d1803d992c7611799dc4e9fcbb5db7d0852990d6ab3c9ad/pyodbc-4.0.32.tar.gz
-  BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
-  EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg <SOURCE_DIR>
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
-ExternalProject_Get_Property(pyodbc INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
-
-#
-# GDAL Python module We download the bindings associated with the version we picked up via
-# vcpkg/FindGDAL
+# gdal_py wheel
+# We download the bindings associated with the version we picked up via vcpkg/FindGDAL
 #
 find_package(GDAL REQUIRED)
 get_target_property(GDAL_INCLUDE_DIRS GDAL::GDAL INTERFACE_INCLUDE_DIRECTORIES)
@@ -313,6 +153,174 @@ ExternalProject_Add(
                   <TMP_DIR>/dist/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl)
+
+#
+# psycopg2 wheel
+#
+find_package(PostgreSQL REQUIRED)
+
+if(WIN32)
+  set(PostgreSQL_BINARY_DIR "${PostgreSQL_LIBRARY_DIR}/../tools/libpq")
+else()
+  set(PostgreSQL_BINARY_DIR "${PostgreSQL_LIBRARY_DIR}/../tools/libpq/bin")
+  string(REPLACE ";" ":" PostgreSQL_INCLUDE_DIRS "${PostgreSQL_INCLUDE_DIRS}")
+endif()
+
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include_dirs=${PostgreSQL_INCLUDE_DIRS}
+library_dirs=${PostgreSQL_LIBRARY_DIRS}
+pg_config=${PostgreSQL_BINARY_DIR}/pg_config${CMAKE_EXECUTABLE_SUFFIX}
+define=
+")
+
+set(PYSCOPG2_WHEEL_VER 2.8.5)
+ExternalProject_Add(
+  psycopg2
+  URL https://files.pythonhosted.org/packages/a8/8f/1c5690eebf148d1d1554fc00ccf9101e134636553dbb75bdfef4f85d7647/psycopg2-2.8.5.tar.gz
+  BUILD_IN_SOURCE ON
+  DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
+  EXCLUDE_FROM_ALL ON
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg <SOURCE_DIR>
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+ExternalProject_Get_Property(psycopg2 INSTALL_DIR)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+
+#
+# pygit2 wheel
+#
+find_package(unofficial-git2 CONFIG REQUIRED)
+get_target_property(Git2_LIBRARIES unofficial::git2::git2 LOCATION)
+cmake_path(GET Git2_LIBRARIES PARENT_PATH Git2_LIB_DIR)
+
+pkg_check_modules(LIBGIT2 REQUIRED libgit2)
+
+list(JOIN VCPKG_IMPORT_PREFIX " " PYGIT2_BUILD_ENV_LIBGIT2)
+list(JOIN LIBGIT2_LIBDIR " " PYGIT2_BUILD_ENV_LIBGIT2_LIB)
+list(JOIN LIBGIT2_STATIC_CFLAGS " " PYGIT2_BUILD_ENV_CFLAGS)
+list(JOIN LIBGIT2_STATIC_LDFLAGS " " PYGIT2_BUILD_ENV_LDFLAGS)
+
+set(PYGIT2_BUILD_ENV
+    "LIBGIT2=${PYGIT2_BUILD_ENV_LIBGIT2}" "LIBGIT2_LIB=${PYGIT2_BUILD_ENV_LIBGIT2_LIB}"
+    "CFLAGS=${PYGIT2_BUILD_ENV_CFLAGS}" "LDFLAGS=${PYGIT2_BUILD_ENV_LDFLAGS}")
+
+set(PYGIT2_WHEEL_VER 1.9.0)
+ExternalProject_Add(
+  pygit2
+  GIT_REPOSITORY https://github.com/koordinates/pygit2.git
+  GIT_TAG kart-v0.11.1
+  BUILD_IN_SOURCE ON
+  DEPENDS wheelBuildEnv unofficial::git2::git2
+  EXCLUDE_FROM_ALL ON
+  CONFIGURE_COMMAND ""
+  BUILD_BYPRODUCTS "<SOURCE_DIR>/.eggs/" "<SOURCE_DIR>/pygit2.egg-info/" "<SOURCE_DIR>/build/"
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
+  COMMAND ${CMAKE_COMMAND} -E env ${PYGIT2_BUILD_ENV} ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg
+          bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+ExternalProject_Get_Property(pygit2 INSTALL_DIR)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+
+#
+# pyodbc wheel
+#
+if(WIN32)
+  # TODO - setuptools can't find the python lib, even though sysconfig can.
+  set(PYODBC_BUILD_LIBRARY_DIRS "{CURRENT_PACKAGES_DIR}/tools/python3/Lib")
+
+else()
+  find_package(unixodbc CONFIG REQUIRED)
+  get_target_property(ODBC_INCLUDE_DIRS UNIX::odbc INTERFACE_INCLUDE_DIRECTORIES)
+  get_target_property(ODBC_LIBRARY UNIX::odbc LOCATION)
+  cmake_path(GET ODBC_LIBRARY PARENT_PATH ODBC_LIBRARY_DIR)
+
+  set(PYODBC_BUILD_INCLUDE_DIRS ${ODBC_INCLUDE_DIRS})
+  set(PYODBC_BUILD_LIBRARY_DIRS ${ODBC_LIBRARY_DIR})
+  set(PYODBC_BUILD_DEPENDS UNIX::odbc)
+endif()
+
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include_dirs=${PYODBC_BUILD_INCLUDE_DIRS}
+library_dirs=${PYODBC_BUILD_LIBRARY_DIRS}
+")
+
+set(PYODBC_WHEEL_VER 4.0.32)
+ExternalProject_Add(
+  pyodbc
+  # if you build from a git repository, pyodbc adds +commit0c0ffee to the wheel version
+  URL https://files.pythonhosted.org/packages/d1/21/755f5fa373d01d1803d992c7611799dc4e9fcbb5db7d0852990d6ab3c9ad/pyodbc-4.0.32.tar.gz
+  BUILD_IN_SOURCE ON
+  DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
+  EXCLUDE_FROM_ALL ON
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg <SOURCE_DIR>
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+ExternalProject_Get_Property(pyodbc INSTALL_DIR)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+
+#
+# pysqlite3 wheel
+#
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
+get_target_property(SQLite3_INCLUDE_DIRS unofficial::sqlite3::sqlite3 INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(SQLite3_LIBRARY unofficial::sqlite3::sqlite3 LOCATION)
+cmake_path(GET SQLite3_LIBRARY PARENT_PATH SQLite3_LIBRARY_DIR)
+
+if(WIN32)
+  # SQLite3_LIBRARY points to the .dll - we seem to need the .lib as well
+  # TODO - should we need both? Is it linking to the wrong one?
+  set(SQLite3_LIBRARY_DIRS "${SQLite3_LIBRARY_DIR}" "${SQLite3_LIBRARY_DIR}/../lib")
+else()
+  set(SQLite3_LIBRARY_DIRS "${SQLite3_LIBRARY_DIR}")
+endif()
+
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include_dirs=${SQLite3_INCLUDE_DIRS}
+library_dirs=${SQLite3_LIBRARY_DIRS}
+")
+
+set(PYSQLITE3_WHEEL_VER 0.4.5)
+ExternalProject_Add(
+  pysqlite3
+  GIT_REPOSITORY https://github.com/coleifer/pysqlite3.git
+  GIT_TAG ${PYSQLITE3_WHEEL_VER}
+  BUILD_IN_SOURCE ON
+  DEPENDS wheelBuildEnv unofficial::sqlite3::sqlite3
+  EXCLUDE_FROM_ALL ON
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg <SOURCE_DIR>
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+ExternalProject_Get_Property(pysqlite3 INSTALL_DIR)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+
+#####################################
+#        OTHER LIBS AND BINS        #
+#####################################
 
 #
 # Proj
@@ -443,7 +451,7 @@ set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
 #
 add_custom_target(
   vendor_wheels ALL
-  DEPENDS pygit2 psycopg2 pysqlite3 pyodbc gdal_py cffi
+  DEPENDS cffi gdal_py psycopg2 pygit2 pyodbc pysqlite3
   COMMENT "Python vendor wheels")
 
 set(VENDOR_CONFIG _kart_env.py)
