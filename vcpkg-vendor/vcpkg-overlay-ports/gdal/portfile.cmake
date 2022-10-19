@@ -103,6 +103,10 @@ get_filename_component(vcpkg_host_prefix \"\${CMAKE_CURRENT_LIST_DIR}/../../../$
 list(APPEND CMAKE_PROGRAM_PATH \"\${vcpkg_host_prefix}/tools/pkgconf\")"
 )
 
+if (NOT WIN32)
+  set(GDAL_SHELL_SCRIPTS gdal-config)
+endif()
+
 if (BUILD_APPS)
     vcpkg_copy_tools(
         TOOL_NAMES
@@ -134,7 +138,7 @@ if (BUILD_APPS)
             gdalmdimtranslate
             gnmanalyse
             gnmmanage
-            gdal-config
+            ${GDAL_SHELL_SCRIPTS}
         AUTO_CLEAN
     )
 endif()
