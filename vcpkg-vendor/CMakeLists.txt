@@ -427,7 +427,7 @@ set(gitBuildConfig
     "LINK=${CMAKE_CXX_COMPILER}"
     "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}"
     "CFLAGS=-I<SOURCE_DIR>"
-    "LDFLAGS=-L${SQLITE3_LIB_DIR}"
+    "LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib"
     "EXTENSION_LIBS=-lsqlite3")
 
 ExternalProject_Add(
