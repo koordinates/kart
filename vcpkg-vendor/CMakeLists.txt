@@ -59,30 +59,56 @@ createvirtualenvironment(wheelBuildEnv REQUIREMENTS "wheel")
 ###############################
 
 #
+# Wheel build environment
+#
+
+# Note that the vcpkg_installed include and library dirs can also be found by directly querying the location
+# of a library eg `get_target_property(GDAL_LIBRARY GDAL::GDAL LOCATION)` but in practice they all resolve to the
+# same place. Setting it up just once for all the wheels saves us some complexity.
+
+# Get the Python include dir:
+# TODO - find out why setuptools doesn't add the python include dir to the include path automatically
+execute_process(COMMAND ${wheelBuildEnv_PYTHON} -c "import sysconfig; print(sysconfig.get_path('include'))"
+                OUTPUT_VARIABLE BUILD_WHEEL_INCLUDE_DIRS OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(WIN32)
+  # Workaround - VCPKG python3.10 issue that means the python include dir from sysconfig doesn't match with reality on Windows:
+  # https://github.com/microsoft/vcpkg/issues/21335
+  list(APPEND BUILD_WHEEL_INCLUDE_DIRS "${CURRENT_PACKAGES_DIR}/include/python3.10")
+endif()
+
+# Add the vcpkg_installed include dir:
+list(APPEND BUILD_WHEEL_INCLUDE_DIRS "${CURRENT_PACKAGES_DIR}/include")
+
+# Get the Python stdlib dir:
+# TODO - find out why setuptools doesn't add the python library dir to the library path automatically
+execute_process(COMMAND ${wheelBuildEnv_PYTHON} -c "import sysconfig; print(sysconfig.get_path('stdlib'))"
+                OUTPUT_VARIABLE BUILD_WHEEL_LIBRARY_DIRS OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# Add the vcpkg_installed library dir:
+list(APPEND BUILD_WHEEL_LIBRARY_DIRS "${CURRENT_PACKAGES_DIR}/lib")
+if(WIN32)
+  # On Windows, the DLLs are found in the bin dir:
+  list(APPEND BUILD_WHEEL_LIBRARY_DIRS "${CURRENT_PACKAGES_DIR}/bin")
+endif()
+
+# Different path-list separators on different platforms:
+if(NOT WIN32)
+  string(REPLACE ";" ":" BUILD_WHEEL_INCLUDE_DIRS "${BUILD_WHEEL_INCLUDE_DIRS}")
+  string(REPLACE ";" ":" BUILD_WHEEL_LIBRARY_DIRS "${BUILD_WHEEL_LIBRARY_DIRS}")
+endif()
+
+#
 # cffi wheel
 #
 find_package(libffi REQUIRED)
-get_target_property(LIBFFI_LIBRARY libffi LOCATION)
-cmake_path(GET LIBFFI_LIBRARY PARENT_PATH LIBFFI_LIBRARY_DIR)
-set(LIBFFI_INCLUDE_DIRS "${LIBFFI_LIBRARY_DIR}/../include")
-
-if(WIN32)
-  # LIBFFI_LIBRARY points to the .dll - we seem to need the .lib as well
-  # TODO - should we need both? Is it linking to the wrong one?
-  set(LIBFFI_LIBRARY_DIRS "${LIBFFI_LIBRARY_DIR}" "${LIBFFI_LIBRARY_DIR}/../lib")
-  # TODO - setuptools can't find the python lib, even though sysconfig can.
-  set(CFFI_BUILD_LIBRARY_DIRS ${LIBFFI_LIBRARY_DIRS} "{CURRENT_PACKAGES_DIR}/tools/python3/Lib")
-else()
-  set(CFFI_BUILD_LIBRARY_DIRS "${LIBFFI_LIBRARY_DIR}")
-endif()
 
 file(
   GENERATE
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include_dirs=${LIBFFI_INCLUDE_DIRS}
-library_dirs=${LIBFFI_LIBRARY_DIRS}
+include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
+library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
 set(CFFI_WHEEL_VER 1.15.1)
@@ -107,17 +133,6 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}
 # We download the bindings associated with the version we picked up via vcpkg/FindGDAL
 #
 find_package(GDAL REQUIRED)
-get_target_property(GDAL_INCLUDE_DIRS GDAL::GDAL INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(GDAL_LIBRARY GDAL::GDAL LOCATION)
-cmake_path(GET GDAL_LIBRARY PARENT_PATH GDAL_LIBRARY_DIR)
-
-if(WIN32)
-  # GDAL_LIBRARY points to the .dll - we seem to need the .lib as well
-  # TODO - should we need both? Is it linking to the wrong one?
-  set(GDAL_LIBRARY_DIRS "${GDAL_LIBRARY_DIR}" "${GDAL_LIBRARY_DIR}/../lib")
-else()
-  set(GDAL_LIBRARY_DIRS "${GDAL_LIBRARY_DIR}")
-endif()
 
 file(
   GLOB GDAL_DATA_FILES
@@ -125,18 +140,24 @@ file(
   "share/gdal/*")
 list(APPEND ENV_FILE_LIST ${GDAL_DATA_FILES})
 
-message(STATUS "GDAL: Will download & build Python bindings for v${GDAL_VERSION}")
+if(WIN32)
+  set(GDAL_CONFIG_EXE "")
+else()
+  set(GDAL_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/gdal/gdal-config")
+endif()
 
 file(
   GENERATE
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include_dirs=${GDAL_INCLUDE_DIRS}
-library_dirs=${GDAL_LIBRARY_DIRS}
+include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
+library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 libraries=gdal
 gdal_config=${CURRENT_PACKAGES_DIR}/tools/gdal/gdal-config
 ")
+
+message(STATUS "GDAL: Will download & build Python bindings for v${GDAL_VERSION}")
 
 ExternalProject_Add(
   gdal_py
@@ -160,10 +181,9 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.w
 find_package(PostgreSQL REQUIRED)
 
 if(WIN32)
-  set(PostgreSQL_BINARY_DIR "${PostgreSQL_LIBRARY_DIR}/../tools/libpq")
+  set(PG_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/libpq/pg_config.exe")
 else()
-  set(PostgreSQL_BINARY_DIR "${PostgreSQL_LIBRARY_DIR}/../tools/libpq/bin")
-  string(REPLACE ";" ":" PostgreSQL_INCLUDE_DIRS "${PostgreSQL_INCLUDE_DIRS}")
+  set(PG_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/libpq/bin/pg_config")
 endif()
 
 file(
@@ -171,9 +191,9 @@ file(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include_dirs=${PostgreSQL_INCLUDE_DIRS}
-library_dirs=${PostgreSQL_LIBRARY_DIRS}
-pg_config=${PostgreSQL_BINARY_DIR}/pg_config${CMAKE_EXECUTABLE_SUFFIX}
+include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
+library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
+pg_config=${PG_CONFIG_EXE}
 define=
 ")
 
@@ -198,19 +218,15 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_W
 # pygit2 wheel
 #
 find_package(unofficial-git2 CONFIG REQUIRED)
-get_target_property(Git2_LIBRARIES unofficial::git2::git2 LOCATION)
-cmake_path(GET Git2_LIBRARIES PARENT_PATH Git2_LIB_DIR)
 
-pkg_check_modules(LIBGIT2 REQUIRED libgit2)
-
-list(JOIN VCPKG_IMPORT_PREFIX " " PYGIT2_BUILD_ENV_LIBGIT2)
-list(JOIN LIBGIT2_LIBDIR " " PYGIT2_BUILD_ENV_LIBGIT2_LIB)
-list(JOIN LIBGIT2_STATIC_CFLAGS " " PYGIT2_BUILD_ENV_CFLAGS)
-list(JOIN LIBGIT2_STATIC_LDFLAGS " " PYGIT2_BUILD_ENV_LDFLAGS)
-
-set(PYGIT2_BUILD_ENV
-    "LIBGIT2=${PYGIT2_BUILD_ENV_LIBGIT2}" "LIBGIT2_LIB=${PYGIT2_BUILD_ENV_LIBGIT2_LIB}"
-    "CFLAGS=${PYGIT2_BUILD_ENV_CFLAGS}" "LDFLAGS=${PYGIT2_BUILD_ENV_LDFLAGS}")
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
+  CONTENT
+    "[build_ext]
+include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
+library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
+")
 
 set(PYGIT2_WHEEL_VER 1.9.0)
 ExternalProject_Add(
@@ -222,9 +238,13 @@ ExternalProject_Add(
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
   BUILD_BYPRODUCTS "<SOURCE_DIR>/.eggs/" "<SOURCE_DIR>/pygit2.egg-info/" "<SOURCE_DIR>/build/"
-  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
-  COMMAND ${CMAKE_COMMAND} -E env ${PYGIT2_BUILD_ENV} ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg
-          bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg <SOURCE_DIR>
+  COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
+  COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
+  COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pygit2 INSTALL_DIR)
@@ -233,18 +253,8 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL
 #
 # pyodbc wheel
 #
-if(WIN32)
-  # TODO - setuptools can't find the python lib, even though sysconfig can.
-  set(PYODBC_BUILD_LIBRARY_DIRS "{CURRENT_PACKAGES_DIR}/tools/python3/Lib")
-
-else()
+if(NOT WIN32)
   find_package(unixodbc CONFIG REQUIRED)
-  get_target_property(ODBC_INCLUDE_DIRS UNIX::odbc INTERFACE_INCLUDE_DIRECTORIES)
-  get_target_property(ODBC_LIBRARY UNIX::odbc LOCATION)
-  cmake_path(GET ODBC_LIBRARY PARENT_PATH ODBC_LIBRARY_DIR)
-
-  set(PYODBC_BUILD_INCLUDE_DIRS ${ODBC_INCLUDE_DIRS})
-  set(PYODBC_BUILD_LIBRARY_DIRS ${ODBC_LIBRARY_DIR})
   set(PYODBC_BUILD_DEPENDS UNIX::odbc)
 endif()
 
@@ -253,8 +263,8 @@ file(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include_dirs=${PYODBC_BUILD_INCLUDE_DIRS}
-library_dirs=${PYODBC_BUILD_LIBRARY_DIRS}
+include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
+library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
 set(PYODBC_WHEEL_VER 4.0.32)
@@ -266,7 +276,7 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg <SOURCE_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
@@ -279,25 +289,14 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL
 # pysqlite3 wheel
 #
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
-get_target_property(SQLite3_INCLUDE_DIRS unofficial::sqlite3::sqlite3 INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(SQLite3_LIBRARY unofficial::sqlite3::sqlite3 LOCATION)
-cmake_path(GET SQLite3_LIBRARY PARENT_PATH SQLite3_LIBRARY_DIR)
-
-if(WIN32)
-  # SQLite3_LIBRARY points to the .dll - we seem to need the .lib as well
-  # TODO - should we need both? Is it linking to the wrong one?
-  set(SQLite3_LIBRARY_DIRS "${SQLite3_LIBRARY_DIR}" "${SQLite3_LIBRARY_DIR}/../lib")
-else()
-  set(SQLite3_LIBRARY_DIRS "${SQLite3_LIBRARY_DIR}")
-endif()
 
 file(
   GENERATE
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
   CONTENT
     "[build_ext]
-include_dirs=${SQLite3_INCLUDE_DIRS}
-library_dirs=${SQLite3_LIBRARY_DIRS}
+include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
+library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
 set(PYSQLITE3_WHEEL_VER 0.4.5)
