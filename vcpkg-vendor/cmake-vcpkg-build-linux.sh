@@ -21,10 +21,11 @@ APT_DEPENDS=(
     zip
 )
 PY_DEPENDS=(
-    cmake
+    # cmake
     ninja
 )
 MIN_GOLANG_VERSION=1.17
+CMAKE_VERSION=3.25.0-rc2
 
 ARCH=$(dpkg --print-architecture)
 
@@ -53,6 +54,12 @@ for P in "${PY_DEPENDS[@]}"; do
         break
     fi
 done
+
+if ! command -v cmake >/dev/null; then
+    echo "🌀  installing newer cmake..."
+    curl -fL https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(arch).sh > /tmp/cmake-install-linux.sh
+    $SUDO bash /tmp/cmake-install-linux.sh --skip-license --prefix=/usr/local
+fi
 
 GOLANG_VERSION=$(go version | grep -oP "(\d+\.\d+\.\d+)")
 if dpkg --compare-versions "$GOLANG_VERSION" lt "$MIN_GOLANG_VERSION"; then
