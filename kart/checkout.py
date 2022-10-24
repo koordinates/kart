@@ -145,7 +145,7 @@ def checkout(
             f"Fetching missing but required features for new spatial filter using {spec_desc}"
         )
         promisor_remote = get_promisor_remote(repo)
-        repo.invoke_git("fetch", promisor_remote, "--repair", spec)
+        repo.invoke_git("fetch", promisor_remote, "--refetch", spec)
 
     if new_branch:
         if _is_in_branches(refish, repo.branches.remote):

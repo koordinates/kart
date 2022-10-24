@@ -433,7 +433,7 @@ set(gitBuildConfig
 ExternalProject_Add(
   git
   GIT_REPOSITORY https://github.com/koordinates/git
-  GIT_TAG kx-latest
+  GIT_TAG git-with-filter-extensions
   GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
   DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3
