@@ -51,7 +51,7 @@ pytest==7.1.2
     #   pytest-profiling
     #   pytest-shard
     #   pytest-sugar
-pytest-benchmark[aspect]==3.4.1
+pytest-benchmark[aspect]==4.0.0
     # via -r requirements/test.in
 pytest-cov==3.0.0
     # via -r requirements/test.in
