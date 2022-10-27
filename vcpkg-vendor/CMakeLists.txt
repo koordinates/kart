@@ -401,49 +401,67 @@ list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
 # Note: we define the Git dependency last since it affects GIT_VERSION_STRING etc, which can
 # break other dependencies.
 #
-find_package(OpenSSL REQUIRED)
-pkg_check_modules(OPENSSL REQUIRED openssl)
-pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
-pkg_check_modules(LIBCURL REQUIRED libcurl)
 
-cmake_path(SET GIT_SPATIAL_FILTER_EXT contrib/filter-extensions/spatial/spatial.a)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  # Download a prebuilt Git with spatial-filter extension on Windows.
+  # TODO: Use a more recent tag and build inline.
 
-set(gitBuildConfig
-    "prefix=/"
-    "V=1"
-    "CC=${CMAKE_C_COMPILER}"
-    "NO_GETTEXT=YesPlease"
-    "INSTALL_SYMLINKS=1"
-    "USE_LIBPCRE=1"
-    "NO_EXPAT=1"
-    "NO_PERL=1"
-    "NO_TCLTK=1"
-    "RUNTIME_PREFIX=1"
-    "LIBPCREDIR=${PCRE2_PREFIX}"
-    "OPENSSLDIR=${OPENSSL_PREFIX}"
-    "CURL_CONFIG=${CURRENT_PACKAGES_DIR}/tools/curl/bin/curl-config"
-    # stuff for building the spatial partial clone filter extension
-    "CXX=${CMAKE_CXX_COMPILER}"
-    "LINK=${CMAKE_CXX_COMPILER}"
-    "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}"
-    "CFLAGS=-I<SOURCE_DIR>"
-    "LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib"
-    "EXTENSION_LIBS=-lsqlite3")
+  include(FetchContent)
 
-ExternalProject_Add(
-  git
-  GIT_REPOSITORY https://github.com/koordinates/git
-  GIT_TAG kart-v0.12.0-rc1
-  GIT_SHALLOW ON
-  BUILD_IN_SOURCE ON
-  DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3
-  EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
-  INSTALL_DIR env
-  BUILD_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> all strip
-  INSTALL_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> install
-  COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk)
-set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
+  FetchContent_Declare(
+    git
+    URL https://github.com/koordinates/git/releases/download/kart-0.11.0-windows/MinGit-v2.34.0.windows.1.13-64-bit.zip
+    URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a
+  )
+  FetchContent_MakeAvailable(git)
+
+else()
+  # Build Git with spatial-filter extension on macOS and Linux
+  find_package(OpenSSL REQUIRED)
+  pkg_check_modules(OPENSSL REQUIRED openssl)
+  pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
+  pkg_check_modules(LIBCURL REQUIRED libcurl)
+
+  cmake_path(SET GIT_SPATIAL_FILTER_EXT contrib/filter-extensions/spatial/spatial.a)
+
+  set(gitBuildConfig
+      "prefix=/"
+      "V=1"
+      "CC=${CMAKE_C_COMPILER}"
+      "NO_GETTEXT=YesPlease"
+      "INSTALL_SYMLINKS=1"
+      "USE_LIBPCRE=1"
+      "NO_EXPAT=1"
+      "NO_PERL=1"
+      "NO_TCLTK=1"
+      "RUNTIME_PREFIX=1"
+      "LIBPCREDIR=${PCRE2_PREFIX}"
+      "OPENSSLDIR=${OPENSSL_PREFIX}"
+      "CURL_CONFIG=${CURRENT_PACKAGES_DIR}/tools/curl/bin/curl-config"
+      # stuff for building the spatial partial clone filter extension
+      "CXX=${CMAKE_CXX_COMPILER}"
+      "LINK=${CMAKE_CXX_COMPILER}"
+      "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}"
+      "CFLAGS=-I<SOURCE_DIR>"
+      "LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib"
+      "EXTENSION_LIBS=-lsqlite3")
+
+  ExternalProject_Add(
+    git
+    GIT_REPOSITORY https://github.com/koordinates/git
+    GIT_TAG kart-v0.12.0-rc1
+    GIT_SHALLOW ON
+    BUILD_IN_SOURCE ON
+    DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3
+    EXCLUDE_FROM_ALL ON
+    CONFIGURE_COMMAND ""
+    INSTALL_DIR env
+    BUILD_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> all strip
+    INSTALL_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> install
+    COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk)
+  set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
+
+endif()
 
 #
 # General target
@@ -465,17 +483,29 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/template/_kart_env.py.in ${VEND
 #
 # Vendor Dist Archive
 #
-set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.zip)
+else()
+  set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
+endif()
+
 if(NOT PROJECT_IS_TOP_LEVEL)
   set(VENDOR_ARCHIVE
       vcpkg-vendor/${VENDOR_ARCHIVE}
       PARENT_SCOPE)
 endif()
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  separate_arguments(
-    SYMLINK_MOD_SPATIALITE_COMMAND UNIX_COMMAND
-    "${CMAKE_COMMAND} -E create_symlink mod_spatialite.so env/lib/mod_spatialite.dylib")
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  set(EXTRA_COPY_COMMAND ${CMAKE_COMMAND} -E copy_directory ${git_SOURCE_DIR} git)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(EXTRA_COPY_COMMAND ${CMAKE_COMMAND} -E create_symlink mod_spatialite.so env/lib/mod_spatialite.dylib)
+endif()
+
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  set(MAKE_ARCHIVE_COMMAND 7z a ${VENDOR_ARCHIVE} env wheelhouse git)
+else()
+  set(MAKE_ARCHIVE_COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
+          $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} -s "${CURRENT_PACKAGES_DIR}/lib")
 endif()
 
 add_custom_command(
@@ -485,15 +515,13 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
   COMMAND ${CMAKE_COMMAND} -E copy ${LIB_LIST} env/lib
-  COMMAND ${SYMLINK_MOD_SPATIALITE_COMMAND}
   COMMAND ${CMAKE_COMMAND} -E copy ${BIN_LIST} env/bin
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_STDLIB} env/lib/${Python3_STDLIB_DIR_NAME}
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS}
-          env/include/${Python3_INCLUDE_DIR_NAME}
-  COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
-          $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} -s "${CURRENT_PACKAGES_DIR}/lib"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS} env/include/${Python3_INCLUDE_DIR_NAME}
+  COMMAND ${EXTRA_COPY_COMMAND}
+  COMMAND ${MAKE_ARCHIVE_COMMAND}
   COMMENT "Vendor dependency archive assembly")
 
 add_custom_target(
