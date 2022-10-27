@@ -1,7 +1,10 @@
+import subprocess
+
 import click
 import pygit2
 from .completion_shared import ref_completer
 
+from .cli_util import tool_environment
 from .exceptions import (
     NO_BRANCH,
     NO_COMMIT,
@@ -145,7 +148,7 @@ def checkout(
             f"Fetching missing but required features for new spatial filter using {spec_desc}"
         )
         promisor_remote = get_promisor_remote(repo)
-        repo.invoke_git("fetch", promisor_remote, "--refetch", spec)
+        git_refetch(repo, promisor_remote, spec)
 
     if new_branch:
         if _is_in_branches(refish, repo.branches.remote):
@@ -182,6 +185,29 @@ def checkout(
         # Possibly we needn't auto-create any working copy here at all, but lots of tests currently depend on it.
         repo.working_copy.create_parts_if_missing(
             parts_to_create, reset_to=repo.head_commit
+        )
+
+
+def _git_fetch_supports_flag(repo, flag):
+    r = subprocess.run(
+        ["git", "fetch", "?", f"--{flag}"],
+        env=tool_environment(),
+        cwd=repo.workdir_path,
+        capture_output=True,
+        text=True,
+    )
+    return f"unknown option `{flag}'" not in r.stderr
+
+
+def git_refetch(repo, promisor_remote, spec):
+    # This flag was renamed. It's not too hard to avoid any assumptions and check which one is supported.
+    if _git_fetch_supports_flag(repo, "refetch"):
+        repo.invoke_git("fetch", promisor_remote, "--refetch", spec)
+    elif _git_fetch_supports_flag(repo, "repair"):
+        repo.invoke_git("fetch", promisor_remote, "--repair", spec)
+    else:
+        raise RuntimeError(
+            "Cannot fetch missing but required features - Git is missing --refetch functionality"
         )
 
 

@@ -397,7 +397,8 @@ set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/${GIT_LFS_OUTPUT}")
 list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
 
 #
-# Git Note: we define the Git dependency last since it affects GIT_VERSION_STRING etc, which can
+# Git
+# Note: we define the Git dependency last since it affects GIT_VERSION_STRING etc, which can
 # break other dependencies.
 #
 find_package(OpenSSL REQUIRED)
@@ -405,8 +406,7 @@ pkg_check_modules(OPENSSL REQUIRED openssl)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
 
-cmake_path(SET GIT_SPATIAL_FILTER_EXT "../vendor/spatial-filter/spatial.a")
-cmake_path(ABSOLUTE_PATH GIT_SPATIAL_FILTER_EXT)
+cmake_path(SET GIT_SPATIAL_FILTER_EXT contrib/filter-extensions/spatial/spatial.a)
 
 set(gitBuildConfig
     "prefix=/"
@@ -433,7 +433,7 @@ set(gitBuildConfig
 ExternalProject_Add(
   git
   GIT_REPOSITORY https://github.com/koordinates/git
-  GIT_TAG git-with-filter-extensions
+  GIT_TAG kart-v0.12.0-rc1
   GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
   DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3
@@ -478,10 +478,6 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     "${CMAKE_COMMAND} -E create_symlink mod_spatialite.so env/lib/mod_spatialite.dylib")
 endif()
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  set(VENDOR_FIX_EXTRA -s "${CURRENT_PACKAGES_DIR}/lib")
-endif()
-
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
   DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
@@ -497,7 +493,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS}
           env/include/${Python3_INCLUDE_DIR_NAME}
   COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
-          $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} ${VENDOR_FIX_EXTRA}
+          $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} -s "${CURRENT_PACKAGES_DIR}/lib"
   COMMENT "Vendor dependency archive assembly")
 
 add_custom_target(
