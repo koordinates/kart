@@ -8,8 +8,10 @@ file(MAKE_DIRECTORY vendor-tmp/)
 
 if(WIN32)
   set(PY "venv/Scripts/Python.exe")
+  set(PIP "venv/Scripts/pip.exe")
 else()
   set(PY "venv/bin/python")
+  set(PIP "venv/bin/pip")
 endif()
 
 # get the path to the site-packages directory
@@ -35,14 +37,15 @@ endif()
 
 # Upgrade the venv using python from the vendor-archive (if included):
 message(STATUS "Upgrading venv...")
-execute_process(COMMAND ${PY} -m venv --upgrade --upgrade-deps venv)
+execute_process(COMMAND ${PY} -m venv --upgrade venv)
+execute_process(COMMAND ${PIP} install --isolated --quiet --disable-pip-version-check --upgrade pip setuptools)
 
 # install wheels
 file(
   GLOB wheels
   LIST_DIRECTORIES false
   "vendor-tmp/wheelhouse/*.whl")
-execute_process(COMMAND ${PY} -m pip install --isolated --disable-pip-version-check
+execute_process(COMMAND ${PIP} install --isolated --disable-pip-version-check
                         --force-reinstall --no-deps ${wheels} COMMAND_ERROR_IS_FATAL ANY)
 
 # install a _kart_env.py configuration file

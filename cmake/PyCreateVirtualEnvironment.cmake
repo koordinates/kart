@@ -27,8 +27,6 @@ Optional Arguments:
     ENV_NAME (string)
         The name of the virtual environment. Unless otherwise specified, this
         is the same as TARGET.
-    NO_UPGRADE_PIP (bool)
-        Don't upgrade pip inside the virtualenv to the latest.
 
 
 Output Variables TARGET:
@@ -51,7 +49,6 @@ Output Variables TARGET:
 # Create a Python virtual environment with specific requirements.
 function(CreateVirtualEnvironment TARGET)
   # cmake-lint: disable=R0915
-  set(SINGLE_ARGS NO_UPGRADE_PIP)
   set(KEYWORD_ARGS REQUIREMENTS_TXT PREFIX ENV_NAME)
   set(MULTI_ARGS SOURCES REQUIREMENTS)
 
@@ -92,12 +89,6 @@ function(CreateVirtualEnvironment TARGET)
   set(PIP ${EXEC} ${PIP_EXE})
   set(PIP_INSTALL ${PIP} install --isolated --quiet --disable-pip-version-check)
 
-  if(ARG_NO_UPGRADE_PIP)
-    set(PIP_UPGRADE "")
-  else()
-    set(PIP_UPGRADE ${PIP_INSTALL} --upgrade pip)
-  endif()
-
   if(ARG_REQUIREMENTS_TXT)
     set(REQUIREMENTS -r ${ARG_REQUIREMENTS_TXT})
   endif()
@@ -113,14 +104,14 @@ function(CreateVirtualEnvironment TARGET)
   set(CFG_FILE ${VENV}/pyvenv.cfg)
   add_custom_command(
     OUTPUT ${CFG_FILE}
-    COMMAND ${Python3_EXECUTABLE} -m venv --clear --upgrade-deps ${VENV}
+    COMMAND ${Python3_EXECUTABLE} -m venv --clear ${VENV}
     DEPENDS Python3::Python
     COMMENT "${ARG_ENV_NAME}: creating virtualenv at ${VENV}...")
   set(OUTPUT_FILE ${VENV}/.requirements)
   add_custom_command(
     OUTPUT ${OUTPUT_FILE}
     DEPENDS ${CFG_FILE} ${ARG_SOURCES} ${ARG_REQUIREMENTS_TXT}
-    COMMAND ${PIP_UPGRADE}
+    COMMAND ${PIP_INSTALL} --upgrade pip setuptools
     COMMAND ${DEPS_INSTALL}
     COMMAND ${PIP} freeze > "${OUTPUT_FILE}"
     COMMENT "${ARG_ENV_NAME}: installing requirements...")

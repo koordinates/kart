@@ -26,7 +26,8 @@ cmake_path(NATIVE_PATH VENV_PYTEST VENV_PYTEST)
 add_custom_command(
   OUTPUT venv.stamp
   BYPRODUCTS venv
-  COMMAND ${Python3_EXECUTABLE} -m venv --clear --upgrade-deps venv
+  COMMAND ${Python3_EXECUTABLE} -m venv --clear venv
+  COMMAND ${VENV_PIP_INSTALL} --quiet --upgrade pip setuptools
   COMMAND ${CMAKE_COMMAND} -E touch venv.stamp
   COMMENT "Creating Kart virtualenv...")
 
