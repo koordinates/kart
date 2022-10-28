@@ -64,24 +64,79 @@ TOP_LEVEL_FILES = ["_kart_env.py"]
 
 PLATFORM = platform.system()
 
-if PLATFORM == "Darwin":
+if PLATFORM == "Windows":
+    VENDOR_ARCHIVE_NAME = "vendor-Windows.zip"
+    RPATH_PREFIX = ""
+    LIB_EXTENSIONS = [".lib", ".dll"]
+    SYSTEM_PREFIXES = []
+    EXE_PATHS = ["env/scripts"]
+    EXE_EXTENSION = ".exe"
+elif PLATFORM == "Darwin":
     VENDOR_ARCHIVE_NAME = "vendor-Darwin.tar.gz"
     LOADER_PATH = "@loader_path"
     RPATH_PREFIX = "@rpath/"
     LIB_EXTENSIONS = [".dylib", ".so"]
     SYSTEM_PREFIXES = ["/usr/lib/"]
+    EXE_PATHS = ["env/bin", "env/libexec/git-core"]
+    EXE_EXTENSION = ""
 elif PLATFORM == "Linux":
     VENDOR_ARCHIVE_NAME = "vendor-Linux.tar.gz"
     LOADER_PATH = "$ORIGIN"
     RPATH_PREFIX = ""
     LIB_EXTENSIONS = [".so", ".so.*"]
     SYSTEM_PREFIXES = []
+    EXE_PATHS = ["env/bin", "env/libexec/git-core"]
+    EXE_EXTENSION = ""
+
+if PLATFORM == "Windows":
+    OK, LOOK, WARN, ERR = ":ok:", ":look:", ":warn:", ":err:"
+else:
+    OK, LOOK, WARN, ERR = "✅", "👀", "⚠️", "❌"
+
 
 VENDOR_ARCHIVE_CONTENTS = f"{VENDOR_ARCHIVE_NAME}-contents"
 
 EXTRA_SEARCH_PATHS = []
 
-if PLATFORM == "Darwin":
+if PLATFORM == "Windows":
+    SYSTEM_DEPS_ALLOW_LIST = [
+        "advapi32.dll",
+        "api-ms-win-core-path-l1-1-0.dll",
+        "api-ms-win-crt-conio-l1-1-0.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-environment-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-process-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "bcrypt.dll",
+        "crypt32.dll",
+        "kernel32.dll",
+        "kernel32.dll",
+        "msvcp140.dll",
+        "ntdll.dll",
+        "ole32.dll",
+        "oleaut32.dll",
+        "rpcrt4.dll",
+        "secur32.dll",
+        "shell32.dll",
+        "shlwapi.dll",
+        "ucrtbased.dll",
+        "user32.dll",
+        "vcruntime140.dll",
+        "vcruntime140_1.dll",
+        "vcruntime140d.dll",
+        "version.dll",
+        "winhttp.dll",
+        "ws2_32.dll",
+    ]
+elif PLATFORM == "Darwin":
     SYSTEM_DEPS_ALLOW_LIST = [
         "/usr/lib/libSystem.B.dylib",
         "/usr/lib/libc++.1.dylib",
@@ -182,16 +237,30 @@ def pack_all(root_path, output_path):
     print(f"Writing {output_path} ...")
     contents_path = root_path / VENDOR_ARCHIVE_CONTENTS
     assert contents_path.is_dir()
-    subprocess.check_call(
-        [
-            "tar",
-            "-czf",
-            output_path,
-            "--directory",
-            contents_path,
-            *[f.name for f in contents_path.glob("*")],
-        ]
-    )
+    name = output_path.name
+    if name.endswith(".zip"):
+        subprocess.check_call(
+            [
+                "7z",
+                "a",
+                output_path.resolve(),
+                *[f.name for f in contents_path.glob("*")],
+            ],
+            cwd=contents_path,
+        )
+    elif name.endswith(".tar.gz") or name.endswith(".tgz"):
+        subprocess.check_call(
+            [
+                "tar",
+                "-czf",
+                output_path,
+                "--directory",
+                contents_path,
+                *[f.name for f in contents_path.glob("*")],
+            ]
+        )
+    else:
+        raise RuntimeError(f"Bad output path: {output_path}")
 
 
 def wheel_paths(root_path):
@@ -219,7 +288,7 @@ def unpack_wheel(path_to_wheel, root_path):
 
     wheel_contents_path = root_path / wheel_id
     if not wheel_contents_path.is_dir():
-        L.error(f"❌ Unpacking {wheel_name} didn't work as expected")
+        L.error(f"{ERR} Unpacking {wheel_name} didn't work as expected")
         sys.exit(1)
 
     wheel_contents_path.rename(root_path / f"{wheel_name}-contents")
@@ -268,6 +337,11 @@ def lib_paths(root_path, is_symlink=False):
 is_binary = PlatformSpecific()
 
 
+def is_binary_Windows(path_to_bin):
+    name = path_to_bin.name
+    return name.endswith(".dll") or name.endswith(".lib") or name.endswith(".exe")
+
+
 def is_binary_Darwin(path_to_bin):
     output = subprocess.check_output(["otool", "-D", path_to_bin], text=True)
     return "is not an object file" not in output
@@ -281,22 +355,21 @@ def is_binary_Linux(path_to_bin):
         return False
 
 
-def bin_paths(root_path, is_symlink=False):
-    env_bin_path = root_path / VENDOR_ARCHIVE_CONTENTS / "env" / "bin"
-    git_core_path = root_path / VENDOR_ARCHIVE_CONTENTS / "env" / "libexec" / "git-core"
+def exe_paths(root_path, is_symlink=False):
+    exe_dirs = [root_path / VENDOR_ARCHIVE_CONTENTS / p for p in EXE_PATHS]
 
-    assert env_bin_path.is_dir()
-    assert git_core_path.is_dir()
+    for exe_dir in exe_dirs:
+        assert exe_dir.is_dir()
 
-    for bin_dir in (env_bin_path, git_core_path):
-        for path_to_bin in bin_dir.glob("*"):
-            if path_to_bin.is_file() and path_to_bin.is_symlink() == is_symlink:
-                if is_binary(path_to_bin):
-                    yield path_to_bin
+    for exe_dir in exe_dirs:
+        for path_to_exe in exe_dir.glob(f"*{EXE_EXTENSION}"):
+            if path_to_exe.is_file() and path_to_exe.is_symlink() == is_symlink:
+                if is_binary(path_to_exe):
+                    yield path_to_exe
 
 
-def lib_and_bin_paths(root_path, is_symlink=False):
-    yield from bin_paths(root_path, is_symlink=is_symlink)
+def lib_and_exe_paths(root_path, is_symlink=False):
+    yield from exe_paths(root_path, is_symlink=is_symlink)
     yield from lib_paths(root_path, is_symlink=is_symlink)
 
 
@@ -332,6 +405,10 @@ MODIFIED = 1
 get_install_name = PlatformSpecific()
 
 
+def get_install_name_Windows(path_to_lib):
+    return path_to_lib.name
+
+
 def get_install_name_Darwin(path_to_lib):
     lines = read_cmd_lines(["otool", "-D", path_to_lib])
     result = lines[1].strip() if len(lines) == 2 else None
@@ -347,6 +424,10 @@ def get_install_name_Linux(path_to_lib):
 set_install_name = PlatformSpecific()
 
 
+def set_install_name_Windows(path_to_lib, install_name):
+    raise NotImplementedError()
+
+
 def set_install_name_Darwin(path_to_lib, install_name):
     subprocess.check_call(["install_name_tool", "-id", install_name, path_to_lib])
 
@@ -356,9 +437,12 @@ def set_install_name_Linux(path_to_lib, install_name):
 
 
 def fix_names(root_path, make_fatal=False, verbose=False):
+    if PLATFORM == "Windows":
+        return UNMODIFIED
+
     problems = []
     for path_to_lib in lib_paths(root_path):
-        L.info(f"👀 {path_to_lib}")
+        L.info(f"{LOOK} {path_to_lib}")
 
         if path_to_lib.name in IGNORE_LIST:
             L.debug("  ignoring")
@@ -376,12 +460,12 @@ def fix_names(root_path, make_fatal=False, verbose=False):
             )
 
     if not problems:
-        print("✅ Checking names: all libs are well named.")
+        print(f"{OK} Checking names: all libs are well named.")
         return UNMODIFIED
 
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
-        "⚠️  Checking names: found %s libs with name issues: %s",
+        f"{WARN} Checking names: found %s libs with name issues: %s",
         len(problems),
         detail,
     )
@@ -407,6 +491,10 @@ def fix_names(root_path, make_fatal=False, verbose=False):
 get_rpaths = PlatformSpecific()
 
 
+def get_rpaths_Windows(path_to_lib):
+    return []
+
+
 def get_rpaths_Darwin(path_to_lib):
     rpaths = []
     lines = read_cmd_lines(["otool", "-l", path_to_lib])
@@ -426,6 +514,10 @@ def get_rpaths_Linux(path_to_lib):
 set_sole_rpaths = PlatformSpecific()
 
 
+def set_sole_rpaths_Windows(path_to_lib, rpaths):
+    raise NotImplementedError()
+
+
 def set_sole_rpaths_Darwin(path_to_lib, rpaths):
     remove_all_rpaths_Darwin(path_to_lib)
     for rpath in rpaths:
@@ -438,6 +530,10 @@ def set_sole_rpaths_Linux(path_to_lib, rpaths):
 
 
 remove_all_rpaths = PlatformSpecific()
+
+
+def remove_all_rpaths_Windows(path_to_lib):
+    raise NotImplementedError()
 
 
 def remove_all_rpaths_Darwin(path_to_lib):
@@ -453,7 +549,7 @@ def remove_all_rpaths_Linux(path_to_lib):
 
 def get_eventual_path(path_to_lib):
     path_to_lib = str(path_to_lib)
-    path_within_contents = path_to_lib.split("-contents/", maxsplit=1)[1]
+    path_within_contents = path_to_lib.split(f"-contents{os.sep}", maxsplit=1)[1]
     if ".whl-contents/" in path_to_lib:
         return SITE_PACKAGES_PREFIX + path_within_contents
     return path_within_contents
@@ -468,9 +564,12 @@ def propose_rpaths(eventual_lib_path):
 
 
 def fix_rpaths(root_path, make_fatal=False, verbose=False):
+    if PLATFORM == "Windows":
+        return UNMODIFIED
+
     problems = []
-    for path_to_lib in lib_and_bin_paths(root_path):
-        L.info(f"👀 {path_to_lib}")
+    for path_to_lib in lib_and_exe_paths(root_path):
+        L.info(f"{LOOK} {path_to_lib}")
 
         if path_to_lib.name in IGNORE_LIST:
             L.debug("  ignoring")
@@ -490,12 +589,12 @@ def fix_rpaths(root_path, make_fatal=False, verbose=False):
             )
 
     if not problems:
-        print("✅ Checking rpaths: all libs have good rpaths.")
+        print(f"{OK} Checking rpaths: all libs have good rpaths.")
         return UNMODIFIED
 
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
-        "⚠️  Checking rpaths: found %s libs with rpath issues.\n%s",
+        f"{WARN} Checking rpaths: found %s libs with rpath issues.\n%s",
         len(problems),
         detail,
     )
@@ -508,13 +607,13 @@ def fix_rpaths(root_path, make_fatal=False, verbose=False):
     return MODIFIED
 
 
-fix_codesigning = PlatformSpecific()
+def fix_codesigning(root_path, make_fatal=False, verbose=False):
+    if PLATFORM != "Darwin":
+        return UNMODIFIED
 
-
-def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
     problems = []
-    for path_to_lib in lib_and_bin_paths(root_path):
-        L.info(f"👀 {path_to_lib}")
+    for path_to_lib in lib_and_exe_paths(root_path):
+        L.info(f"{LOOK} {path_to_lib}")
         try:
             subprocess.check_output(
                 ["codesign", "-vvvv", path_to_lib], stderr=subprocess.STDOUT, text=True
@@ -530,12 +629,12 @@ def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
                 )
 
     if not problems:
-        print("✅ Checking code signing: no invalid signatures.")
+        print(f"{OK} Checking code signing: no invalid signatures.")
         return UNMODIFIED
 
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
-        "⚠️  Checking code signing: found %s libs with signature issues.",
+        f"{WARN}  Checking code signing: found %s libs with signature issues.",
         len(problems),
         detail,
     )
@@ -548,11 +647,17 @@ def fix_codesigning_Darwin(root_path, make_fatal=False, verbose=False):
     return MODIFIED
 
 
-def fix_codesigning_Linux(root_path, make_fatal=False, verbose=False):
-    return UNMODIFIED
-
-
 get_deps = PlatformSpecific()
+
+
+def get_deps_Windows(path_to_lib):
+    deps = []
+    lines = read_cmd_lines(["dumpbin", "/dependents", path_to_lib])
+    for line in lines:
+        dep = line.strip()
+        if any(dep.endswith(ext) for ext in LIB_EXTENSIONS):
+            deps.append(dep)
+    return deps
 
 
 def get_deps_Darwin(path_to_lib):
@@ -572,12 +677,16 @@ def get_deps_Linux(path_to_lib):
 def sorted_good_and_bad_deps(good_deps, bad_deps):
     output = []
     for dep in sorted(good_deps | bad_deps, key=lambda dep: Path(dep).name):
-        prefix = "🆗  " if dep in good_deps else "❌  "
+        prefix = f"{OK} " if dep in good_deps else f"{ERR} "
         output.append(prefix + dep)
     return "\n".join(output)
 
 
 change_dep = PlatformSpecific()
+
+
+def change_dep_Windows(path_to_lib, old_dep, new_dep):
+    raise NotImplementedError()
 
 
 def change_dep_Darwin(path_to_lib, old_dep, new_dep):
@@ -634,6 +743,9 @@ def find_dep(dep_str, search_paths):
     if dep_str in SYSTEM_DEPS_ALLOW_SET:
         return ALLOWED_SYSTEM_DEP, None
 
+    if PLATFORM == "Windows" and dep_str.lower() in SYSTEM_DEPS_ALLOW_SET:
+        return ALLOWED_SYSTEM_DEP, None
+
     for system_prefix in SYSTEM_PREFIXES:
         if dep_str.startswith(system_prefix):
             return UNEXPECTED_SYSTEM_DEP, None
@@ -664,18 +776,18 @@ def find_dep(dep_str, search_paths):
 def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
     env_lib_path = root_path / VENDOR_ARCHIVE_CONTENTS / "env" / "lib"
 
-    bin_paths_list = list(bin_paths(root_path))
+    exe_paths_list = list(exe_paths(root_path))
     lib_paths_list = list(lib_paths(root_path))
 
     deps_by_result = {key: set() for key in FindDepResult}
     vendor_deps_found_outside = []
 
-    def bin_and_lib_paths():
-        yield from bin_paths_list
+    def exe_and_lib_paths():
+        yield from exe_paths_list
         yield from lib_paths_list
 
-    for path_to_lib in bin_and_lib_paths():
-        L.info(f"👀 {path_to_lib}")
+    for path_to_lib in exe_and_lib_paths():
+        L.info(f"{LOOK} {path_to_lib}")
         install_name = get_install_name(path_to_lib)
         search_paths = [
             env_lib_path,
@@ -706,7 +818,7 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
         )
         count = len(deps_by_result[ALLOWED_SYSTEM_DEP])
         L.error(
-            "❌ Checking deps: Found %s system deps that have not been explicitly allowed.\n%s",
+            f"{ERR} Checking deps: Found %s system deps that have not been explicitly allowed.\n%s",
             count,
             detail,
         )
@@ -719,7 +831,7 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
         )
         count = len(deps_by_result[VENDOR_DEP_NOT_FOUND])
         L.error(
-            "❌ Checking deps: Found %s vendor deps where the library to satisfy the dep could not be found.\n%s",
+            f"{ERR} Checking deps: Found %s vendor deps where the library to satisfy the dep could not be found.\n%s",
             count,
             detail,
         )
@@ -727,14 +839,14 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
 
     if not vendor_deps_found_outside:
         print(
-            "✅ Checking deps: all vendor deps are satisfied with libraries inside the vendor archive."
+            f"{OK} Checking deps: all vendor deps are satisfied with libraries inside the vendor archive."
         )
         return UNMODIFIED
 
     count = len(vendor_deps_found_outside)
     detail = "\n".join(str(p) for p in vendor_deps_found_outside) if verbose else None
     L.warning(
-        "⚠️  Checking deps: found %s deps satisfied with a library outside the vendor archive.\n%s",
+        f"{WARN}  Checking deps: found %s deps satisfied with a library outside the vendor archive.\n%s",
         count,
         detail,
     )
@@ -750,11 +862,14 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
 
 
 def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
+    if PLATFORM == "Windows":
+        return UNMODIFIED
+
     env_lib_path = root_path / VENDOR_ARCHIVE_CONTENTS / "env" / "lib"
 
     problems = []
-    for path_to_lib in lib_and_bin_paths(root_path):
-        L.info(f"👀 {path_to_lib}")
+    for path_to_lib in lib_and_exe_paths(root_path):
+        L.info(f"{LOOK} {path_to_lib}")
         install_name = get_install_name(path_to_lib)
         search_paths = [
             env_lib_path,
@@ -782,12 +897,12 @@ def fix_dep_linkage(root_path, make_fatal=False, verbose=False):
             )
 
     if not problems:
-        print("✅ Checking dep linkage: all vendor deps are properly linked.")
+        print(f"{OK} Checking dep linkage: all vendor deps are properly linked.")
         return UNMODIFIED
 
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
-        "⚠️  Checking dep linkage: found %s libs with linkage issues.\n%s",
+        f"{WARN}  Checking dep linkage: found %s libs with linkage issues.\n%s",
         len(problems),
         detail,
     )
@@ -837,7 +952,7 @@ def fix_everything(input_path, output_path, verbose=0):
         status |= fix_codesigning(root_path, **kwargs)
 
         if status == MODIFIED:
-            print("✅ Finished fixing.\n")
+            print(f"{OK} Finished fixing.\n")
             print("\nChecking everything was fixed ...")
             kwargs = {"make_fatal": True, "verbose": True}
 
@@ -848,14 +963,14 @@ def fix_everything(input_path, output_path, verbose=0):
             fix_codesigning(root_path, **kwargs)
 
         else:
-            print("✅ Nothing to change.\n")
+            print(f"{OK} Nothing to change.\n")
 
         if output_path:
             pack_all(root_path, output_path)
-            print(f"✅ Wrote fixed archive to {output_path}")
+            print(f"{OK} Wrote fixed archive to {output_path}")
         elif status == MODIFIED:
             L.warning(
-                "⚠️  Archive was fixed, but not writing anywhere due to dry-run mode."
+                f"{WARN}  Archive was fixed, but not writing anywhere due to dry-run mode."
             )
             sys.exit(3)
 

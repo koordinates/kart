@@ -502,26 +502,28 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  set(MAKE_ARCHIVE_COMMAND 7z a ${VENDOR_ARCHIVE} env wheelhouse git)
+  set(EXE_DIR scripts)
+  set(LIB_SEARCH_DIR "${CURRENT_PACKAGES_DIR}/bin")
 else()
-  set(MAKE_ARCHIVE_COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
-          $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} -s "${CURRENT_PACKAGES_DIR}/lib")
+  set(EXE_DIR bin)
+  set(LIB_SEARCH_DIR "${CURRENT_PACKAGES_DIR}/lib")
 endif()
 
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
   DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
-  COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share
+  COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
   COMMAND ${CMAKE_COMMAND} -E copy ${LIB_LIST} env/lib
-  COMMAND ${CMAKE_COMMAND} -E copy ${BIN_LIST} env/bin
+  COMMAND ${CMAKE_COMMAND} -E copy ${BIN_LIST} env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_STDLIB} env/lib/${Python3_STDLIB_DIR_NAME}
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS} env/include/${Python3_INCLUDE_DIR_NAME}
   COMMAND ${EXTRA_COPY_COMMAND}
-  COMMAND ${MAKE_ARCHIVE_COMMAND}
+  COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
+          $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
   COMMENT "Vendor dependency archive assembly")
 
 add_custom_target(
