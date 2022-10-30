@@ -65,26 +65,6 @@ else()
         FATAL_ERROR
           "${VENDOR_ARCHIVE} not found. Download from https://github.com/koordinates/kart/actions")
     endif()
-    # CI artifacts are zips: extract it to get the inner vendor archive
-    cmake_path(GET VENDOR_ARCHIVE EXTENSION LAST_ONLY vendor_ext)
-    if(vendor_ext STREQUAL ".zip" AND NOT (WIN32 AND DEFINED ENV{CI}))
-      message("Extracting CI artifact ${VENDOR_ARCHIVE}...")
-      # cmake-lint: disable=E1126
-      file(
-        ARCHIVE_EXTRACT
-        INPUT
-        ${VENDOR_ARCHIVE}
-        DESTINATION
-        ${CMAKE_CURRENT_BINARY_DIR}
-        PATTERNS
-        vendor-${CMAKE_SYSTEM_NAME}.*
-        VERBOSE)
-      if(WIN32)
-        set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.zip)
-      else()
-        set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
-      endif()
-    endif()
     set(VENDOR_TARGET ${VENDOR_ARCHIVE})
   else()
     message("Using local vendor dependencies...")

@@ -25,6 +25,17 @@ execute_process(
 message(STATUS "Extracting vendor archive...")
 file(ARCHIVE_EXTRACT INPUT ${VENDOR_ARCHIVE} DESTINATION vendor-tmp)
 
+# Maybe need to extract again if the archive has been zipped again by GitHub
+file(GLOB NESTED_ARCHIVE vendor-tmp/*.zip vendor-tmp/*.tgz vendor-tmp/*.tar.gz)
+if(NOT "${NESTED_ARCHIVE}" STREQUAL "")
+  message(STATUS "Extracting nested vendor archive...")
+  file(REMOVE_RECURSE vendor-tmp-intermediate)
+  file(RENAME vendor-tmp vendor-tmp-intermediate)
+  file(GLOB NESTED_ARCHIVE vendor-tmp-intermediate/*.zip vendor-tmp-intermediate/*.tgz vendor-tmp-intermediate/*.tar.gz)
+  list(GET NESTED_ARCHIVE 0 NESTED_ARCHIVE)
+  file(ARCHIVE_EXTRACT INPUT ${NESTED_ARCHIVE} DESTINATION vendor-tmp)
+endif()
+
 # install other env files (libraries, binaries, data)
 message(STATUS "Installing environment files...")
 # FIXME: why is this different between platforms?
