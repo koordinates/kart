@@ -33,7 +33,7 @@ include(debug_helpers)
 
 set(WHEEL_LIST "")
 set(LIB_LIST "")
-set(BIN_LIST "")
+set(EXE_LIST "")
 
 #
 # Python
@@ -46,7 +46,7 @@ find_package(
 cmake_path(GET Python3_STDLIB FILENAME Python3_STDLIB_DIR_NAME)
 cmake_path(GET Python3_INCLUDE_DIRS FILENAME Python3_INCLUDE_DIR_NAME)
 
-list(APPEND BIN_LIST ${Python3_EXECUTABLE})
+list(APPEND EXE_LIST ${Python3_EXECUTABLE})
 
 include(PythonGetABIInfo)
 pythongetabiinfo()
@@ -394,7 +394,7 @@ ExternalProject_Add(
   BUILD_COMMAND ${GIT_LFS_BUILD}
   INSTALL_COMMAND "")
 set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/${GIT_LFS_OUTPUT}")
-list(APPEND BIN_LIST "${GIT_LFS_EXECUTABLE}")
+list(APPEND EXE_LIST "${GIT_LFS_EXECUTABLE}")
 
 #
 # Git
@@ -516,7 +516,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
   COMMAND ${CMAKE_COMMAND} -E copy ${LIB_LIST} env/lib
-  COMMAND ${CMAKE_COMMAND} -E copy ${BIN_LIST} env/${EXE_DIR}
+  COMMAND ${CMAKE_COMMAND} -E copy ${EXE_LIST} env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_STDLIB} env/lib/${Python3_STDLIB_DIR_NAME}
