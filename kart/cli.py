@@ -4,7 +4,6 @@ import importlib.util
 import inspect
 import logging
 import os
-import io
 import pathlib
 import re
 import subprocess
@@ -22,6 +21,7 @@ from .cli_util import (
     KartGroup,
 )
 from .context import Context
+from kart.parse_args import PreserveDoubleDash
 from kart.subprocess_util import run
 
 MODULE_COMMANDS = {
@@ -268,7 +268,11 @@ def gc(ctx, args):
     ctx.invoke(git, args=["gc", *args])
 
 
-@cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
+@cli.command(
+    context_settings=dict(ignore_unknown_options=True),
+    hidden=True,
+    cls=PreserveDoubleDash,
+)
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def git(ctx, args):
