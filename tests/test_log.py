@@ -8,7 +8,6 @@ H = pytest.helpers.helpers()
 
 @pytest.mark.parametrize("output_format", ["text", "json", "json-lines"])
 def test_log(output_format, data_archive_readonly, cli_runner):
-    """review commit history"""
     with data_archive_readonly("points"):
         extra_args = ["--dataset-changes"] if output_format.startswith("json") else []
         r = cli_runner.invoke(["log", f"--output-format={output_format}"] + extra_args)
@@ -104,7 +103,6 @@ def test_log_arg_parsing_with_range(data_archive_readonly, cli_runner):
 def test_log_shallow_clone(
     output_format, data_archive_readonly, cli_runner, tmp_path, chdir
 ):
-    """review commit history"""
     with data_archive_readonly("points") as path:
 
         clone_path = tmp_path / "shallow.clone"
@@ -146,8 +144,7 @@ def test_log_shallow_clone(
             ]
 
 
-def test_log_with_feature_count(data_archive, cli_runner):
-    """review commit history"""
+def test_log_with_feature_count_tabular(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(
             ["log", "--output-format=json", "--with-feature-count=exact"]
@@ -183,10 +180,20 @@ def test_log_with_feature_count(data_archive, cli_runner):
         ]
 
 
+def test_log_with_feature_count_pointcloud(data_archive, cli_runner):
+    with data_archive("point-cloud/auckland.tgz"):
+        # for pointclouds, accuracy arg is currently ignored; it's always treated as 'exact'
+        r = cli_runner.invoke(
+            ["log", "--output-format=json", "--with-feature-count=veryfast"]
+        )
+        assert r.exit_code == 0, r
+        result = json.loads(r.stdout)
+        result = [c["featureChanges"] for c in result]
+        assert result == [{"auckland": 16}]
+
+
 @pytest.mark.parametrize("output_format", ["text", "json"])
 def test_log_arg_handling(data_archive, cli_runner, output_format):
-    """review commit history"""
-
     def num_commits(r):
         if output_format == "text":
             return len(re.findall(r"(?m)^commit [0-9a-f]{40}$", r.stdout))
