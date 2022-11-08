@@ -63,7 +63,7 @@ pytest-profiling==1.7.0
     # via -r requirements/test.in
 pytest-shard==0.1.2
     # via -r requirements/test.in
-pytest-sugar==0.9.5
+pytest-sugar==0.9.6
     # via -r requirements/test.in
 six==1.16.0
     # via
