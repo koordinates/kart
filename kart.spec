@@ -36,7 +36,7 @@ if is_win:
             vr.write(vr_doc)
 
 if is_linux:
-    # TODO - these don't actually exclude these files as the check is run in 
+    # TODO - these don't actually exclude these files as the check is run in
     #  a separate process
     # This needs to match the OS dependencies in platforms/linux/fpm.sh
     # We want to treat libstdc++ as a system dependency
@@ -55,7 +55,7 @@ if is_linux:
 
 
 if is_linux or is_darwin:
-    # TODO - these don't actually exclude these files as the check is run in 
+    # TODO - these don't actually exclude these files as the check is run in
     #  a separate process
     # We want to treat unixODBC (libodbc) as a system dependency, since the MSSQL
     # drivers depend on it, and we don't want two different versions imported
@@ -98,7 +98,7 @@ pyi_analysis = Analysis(
     # only set kart_cli_helper as a binary for Linux or MacOS, need to
     # do here as modifying after the Analysis instance is created fails
     binaries=[
-        binary for binary in 
+        binary for binary in
         (
             ('vendor/dist/env/lib/*', '.'),
             ('cli_helper/kart_cli_helper', '.')
@@ -115,6 +115,8 @@ pyi_analysis = Analysis(
         '_cffi_backend',
         # via a cython module ???
         'csv',
+        # `logging.config` is useful for ext-run modules
+        *collect_submodules("logging"),
         'shellingham.posix',
         'shellingham.nt',
         *collect_submodules('kart'),
