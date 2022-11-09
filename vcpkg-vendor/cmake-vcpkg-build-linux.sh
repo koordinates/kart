@@ -3,7 +3,7 @@ set -euo pipefail
 
 #
 # invoke via
-#   myhost $ docker run -v /tmp -v $(pwd):/src -w /src --rm -it ubuntu:focal
+#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it ubuntu:focal
 #   mycontainer $ vcpkg-vendor/cmake-vcpkg-build-linux.sh [--verbose]
 
 APT_DEPENDS=(
@@ -81,7 +81,9 @@ if [ "$ARCH" == "arm64" ]; then
     export VCPKG_FORCE_SYSTEM_BINARIES=1
 fi
 
-CC=gcc CXX=g++ \
+export CC=gcc
+export CXX=g++
+
 cmake -B /build -S . -DUSE_VCPKG=ON
 
 echo "🌀  running kart cmake build..."
