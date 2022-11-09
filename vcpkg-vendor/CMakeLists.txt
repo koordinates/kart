@@ -446,13 +446,12 @@ else()
       "LINK=${CMAKE_CXX_COMPILER}"
       "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}"
       "CFLAGS=-I<SOURCE_DIR>"
-      "LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib"
-      "EXTENSION_LIBS=-lsqlite3")
+      "EXTENSION_LIBS=-L${CURRENT_PACKAGES_DIR}/lib -lsqlite3")
 
   ExternalProject_Add(
     git
     GIT_REPOSITORY https://github.com/koordinates/git
-    GIT_TAG kart-v0.12.0-rc1
+    GIT_TAG kart-v0.12.0-rc3
     GIT_SHALLOW ON
     BUILD_IN_SOURCE ON
     DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3
@@ -461,7 +460,7 @@ else()
     INSTALL_DIR env
     BUILD_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> all strip
     INSTALL_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> install
-    COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk)
+    COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk <INSTALL_DIR>/bin/scalar <INSTALL_DIR>/bin/git-cvsserver <INSTALL_DIR>/bin/git-shell)
   set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
 
 endif()
