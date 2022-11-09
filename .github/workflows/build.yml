@@ -1110,8 +1110,8 @@ jobs:
   Linux-cmake-vcpkg:
     strategy:
       matrix:
-        os: [ubuntu-20.04, ubuntu-22.04]
-        python: ["3.7", "3.8", "3.9", "3.10"]
+        os: [ubuntu-22.04]
+        python: ["3.10"]
     runs-on: ${{ matrix.os }}
     continue-on-error: true
 
@@ -1163,7 +1163,9 @@ jobs:
           - 3306:3306
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       #
       # setup
@@ -1228,8 +1230,8 @@ jobs:
   macOS-cmake-vcpkg:
     strategy:
       matrix:
-        os: [macos-11, macos-12]
-        python: ["3.7", "3.8", "3.9", "3.10"]
+        os: [macos-12]
+        python: ["3.10"]
     runs-on: ${{ matrix.os }}
     continue-on-error: true
 
@@ -1256,7 +1258,9 @@ jobs:
       FORCE_COLOR: "YES"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       #
       # setup
