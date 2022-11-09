@@ -45,16 +45,16 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(MACOS ON)
 endif()
 
+# OSX: prefer Homebrew over Frameworks
+set(Python3_FIND_IMPLEMENTATIONS "CPython")
+find_package(Python3 3.7 REQUIRED COMPONENTS Development Interpreter)
+pythongetabiinfo()
+
 if(USE_VCPKG)
   message("Using VCPKG for vendor dependencies...")
   add_subdirectory(vcpkg-vendor)
   set(VENDOR_TARGET vendor)
 else()
-  # OSX: prefer Homebrew over Frameworks
-  set(Python3_FIND_IMPLEMENTATIONS "CPython")
-  find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
-  pythongetabiinfo()
-
   #
   # dependencies
   #

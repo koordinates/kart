@@ -40,13 +40,11 @@ set(EXE_LIST "")
 #
 # Need Development here or VcPkg falls back to the system interpreter
 find_package(
-  Python3 3.10
+  Python3 3.7
   COMPONENTS Development Interpreter
   REQUIRED)
 cmake_path(GET Python3_STDLIB FILENAME Python3_STDLIB_DIR_NAME)
 cmake_path(GET Python3_INCLUDE_DIRS FILENAME Python3_INCLUDE_DIR_NAME)
-
-list(APPEND EXE_LIST ${Python3_EXECUTABLE})
 
 include(PythonGetABIInfo)
 pythongetabiinfo()
@@ -70,11 +68,6 @@ createvirtualenvironment(wheelBuildEnv REQUIREMENTS "wheel")
 # TODO - find out why setuptools doesn't add the python include dir to the include path automatically
 execute_process(COMMAND ${wheelBuildEnv_PYTHON} -c "import sysconfig; print(sysconfig.get_path('include'))"
                 OUTPUT_VARIABLE BUILD_WHEEL_INCLUDE_DIRS OUTPUT_STRIP_TRAILING_WHITESPACE)
-if(WIN32)
-  # Workaround - VCPKG python3.10 issue that means the python include dir from sysconfig doesn't match with reality on Windows:
-  # https://github.com/microsoft/vcpkg/issues/21335
-  list(APPEND BUILD_WHEEL_INCLUDE_DIRS "${CURRENT_PACKAGES_DIR}/include/python3.10")
-endif()
 
 # Add the vcpkg_installed include dir:
 list(APPEND BUILD_WHEEL_INCLUDE_DIRS "${CURRENT_PACKAGES_DIR}/include")
@@ -486,9 +479,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/template/_kart_env.py.in ${VEND
 # Vendor Dist Archive
 #
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.zip)
+  set(VENDOR_ARCHIVE kart-vendor.${Python3_WHEEL_ID}.zip)
 else()
-  set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
+  set(VENDOR_ARCHIVE kart-vendor.${Python3_WHEEL_ID}.tar.gz)
 endif()
 
 if(NOT PROJECT_IS_TOP_LEVEL)
@@ -521,8 +514,6 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy ${EXE_LIST} env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_STDLIB} env/lib/${Python3_STDLIB_DIR_NAME}
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${Python3_INCLUDE_DIRS} env/include/${Python3_INCLUDE_DIR_NAME}
   COMMAND ${EXTRA_COPY_COMMAND}
   COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
           $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"

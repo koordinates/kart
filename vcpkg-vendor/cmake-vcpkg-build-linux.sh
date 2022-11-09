@@ -16,6 +16,7 @@ APT_DEPENDS=(
     libtool
     patchelf
     python3-pip
+    python3-venv
     tar
     unzip
     zip

@@ -634,7 +634,7 @@ def fix_codesigning(root_path, make_fatal=False, verbose=False):
 
     detail = json_dumps(problems, root_path) if verbose else None
     L.warning(
-        f"{WARN}  Checking code signing: found %s libs with signature issues.",
+        f"{WARN}  Checking code signing: found %s libs with signature issues: %s",
         len(problems),
         detail,
     )
