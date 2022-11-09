@@ -52,30 +52,35 @@ pythongetabiinfo()
 include(PyCreateVirtualEnvironment)
 createvirtualenvironment(wheelBuildEnv REQUIREMENTS "wheel")
 
-###############################
-#        PYTHON WHEELS        #
-###############################
+# ##################################################################################################
+# PYTHON WHEELS
+# ##################################################################################################
 
 #
 # Wheel build environment
 #
 
-# Note that the vcpkg_installed include and library dirs can also be found by directly querying the location
-# of a library eg `get_target_property(GDAL_LIBRARY GDAL::GDAL LOCATION)` but in practice they all resolve to the
-# same place. Setting it up just once for all the wheels saves us some complexity.
+# Note that the vcpkg_installed include and library dirs can also be found by directly querying the
+# location of a library eg `get_target_property(GDAL_LIBRARY GDAL::GDAL LOCATION)` but in practice
+# they all resolve to the same place. Setting it up just once for all the wheels saves us some
+# complexity.
 
-# Get the Python include dir:
-# TODO - find out why setuptools doesn't add the python include dir to the include path automatically
-execute_process(COMMAND ${wheelBuildEnv_PYTHON} -c "import sysconfig; print(sysconfig.get_path('include'))"
-                OUTPUT_VARIABLE BUILD_WHEEL_INCLUDE_DIRS OUTPUT_STRIP_TRAILING_WHITESPACE)
+# Get the Python include dir: TODO - find out why setuptools doesn't add the python include dir to
+# the include path automatically
+execute_process(
+  COMMAND ${wheelBuildEnv_PYTHON} -c "import sysconfig; print(sysconfig.get_path('include'))"
+  OUTPUT_VARIABLE BUILD_WHEEL_INCLUDE_DIRS
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # Add the vcpkg_installed include dir:
 list(APPEND BUILD_WHEEL_INCLUDE_DIRS "${CURRENT_PACKAGES_DIR}/include")
 
-# Get the Python stdlib dir:
-# TODO - find out why setuptools doesn't add the python library dir to the library path automatically
-execute_process(COMMAND ${wheelBuildEnv_PYTHON} -c "import sysconfig; print(sysconfig.get_path('stdlib'))"
-                OUTPUT_VARIABLE BUILD_WHEEL_LIBRARY_DIRS OUTPUT_STRIP_TRAILING_WHITESPACE)
+# Get the Python stdlib dir: TODO - find out why setuptools doesn't add the python library dir to
+# the library path automatically
+execute_process(
+  COMMAND ${wheelBuildEnv_PYTHON} -c "import sysconfig; print(sysconfig.get_path('stdlib'))"
+  OUTPUT_VARIABLE BUILD_WHEEL_LIBRARY_DIRS
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # Add the vcpkg_installed library dir:
 list(APPEND BUILD_WHEEL_LIBRARY_DIRS "${CURRENT_PACKAGES_DIR}/lib")
@@ -112,18 +117,19 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv libffi
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
+                <SOURCE_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
+          --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(cffi INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
-# gdal_py wheel
-# We download the bindings associated with the version we picked up via vcpkg/FindGDAL
+# gdal_py wheel We download the bindings associated with the version we picked up via vcpkg/FindGDAL
 #
 find_package(GDAL REQUIRED)
 
@@ -159,10 +165,12 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv GDAL::GDAL
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
+                <SOURCE_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
+          --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
@@ -198,12 +206,15 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
+                <SOURCE_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
+          --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND
+    ${CMAKE_COMMAND} -E copy <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl
+    <INSTALL_DIR>)
 ExternalProject_Get_Property(psycopg2 INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
@@ -231,13 +242,15 @@ ExternalProject_Add(
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
   BUILD_BYPRODUCTS "<SOURCE_DIR>/.eggs/" "<SOURCE_DIR>/pygit2.egg-info/" "<SOURCE_DIR>/build/"
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
+                <SOURCE_DIR>
   COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
+          --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pygit2 INSTALL_DIR)
@@ -269,10 +282,12 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
+                <SOURCE_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
+          --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
@@ -301,18 +316,21 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv unofficial::sqlite3::sqlite3
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
+                <SOURCE_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
+          --bdist-dir <TMP_DIR>/bdist
+  INSTALL_COMMAND
+    ${CMAKE_COMMAND} -E copy
+    <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pysqlite3 INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
-#####################################
-#        OTHER LIBS AND BINS        #
-#####################################
+# ##################################################################################################
+# OTHER LIBS AND BINS
+# ##################################################################################################
 
 #
 # Proj
@@ -393,22 +411,20 @@ set(GIT_LFS_EXECUTABLE "git-lfs-prefix/src/git-lfs/${GIT_LFS_OUTPUT}")
 list(APPEND EXE_LIST "${GIT_LFS_EXECUTABLE}")
 
 #
-# Git
-# Note: we define the Git dependency last since it affects GIT_VERSION_STRING etc, which can
+# Git Note: we define the Git dependency last since it affects GIT_VERSION_STRING etc, which can
 # break other dependencies.
 #
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  # Download a prebuilt Git with spatial-filter extension on Windows.
-  # TODO: Use a more recent tag and build inline.
+  # Download a prebuilt Git with spatial-filter extension on Windows. TODO: Use a more recent tag
+  # and build inline.
 
   include(FetchContent)
 
   FetchContent_Declare(
     git
     URL https://github.com/koordinates/git/releases/download/kart-0.11.0-windows/MinGit-v2.34.0.windows.1.13-64-bit.zip
-    URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a
-  )
+    URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a)
   FetchContent_MakeAvailable(git)
 
 else()
@@ -453,7 +469,8 @@ else()
     INSTALL_DIR env
     BUILD_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> all strip
     INSTALL_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> install
-    COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk <INSTALL_DIR>/bin/scalar <INSTALL_DIR>/bin/git-cvsserver <INSTALL_DIR>/bin/git-shell)
+    COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk
+            <INSTALL_DIR>/bin/scalar <INSTALL_DIR>/bin/git-cvsserver <INSTALL_DIR>/bin/git-shell)
   set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
 
 endif()
@@ -493,7 +510,8 @@ endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   set(EXTRA_COPY_COMMAND ${CMAKE_COMMAND} -E copy_directory ${git_SOURCE_DIR} git)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  set(EXTRA_COPY_COMMAND ${CMAKE_COMMAND} -E create_symlink mod_spatialite.so env/lib/mod_spatialite.dylib)
+  set(EXTRA_COPY_COMMAND ${CMAKE_COMMAND} -E create_symlink mod_spatialite.so
+                         env/lib/mod_spatialite.dylib)
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
