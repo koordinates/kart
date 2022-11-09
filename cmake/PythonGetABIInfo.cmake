@@ -61,7 +61,10 @@ function(PythonGetABIInfo)
             CACHE STRING "Python3 macOS deployment target")
         message(STATUS "Python3 macOS Deployment target: ${Python3_MACOS_DEPLOYMENT_TARGET}")
       endif()
-      # turn 10.9 into 10_9
+      # turn 10.9 into 10_9, and 13 into 13_0
+      if(NOT Python3_MACOS_DEPLOYMENT_TARGET MATCHES "\\.\\d+$")
+        string(APPEND Python3_MACOS_DEPLOYMENT_TARGET ".0")
+      endif()
       string(REPLACE "." "_" py_deployment_target_id ${Python3_MACOS_DEPLOYMENT_TARGET})
       set(py_wheelid "${py_ver_code}-macosx_${py_deployment_target_id}_${CMAKE_SYSTEM_PROCESSOR}")
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
