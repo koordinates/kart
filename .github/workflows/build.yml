@@ -846,7 +846,7 @@ jobs:
       - name: "build dependencies"
         run: |
           sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-          sudo apt-get install -q -y --no-"install-recommends ccache \
+          sudo apt-get install -q -y --no-install-recommends ccache \
             libgdal-dev gdal-data libssl-dev libpq-dev libspatialindex-dev \
             libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
           mkdir -p ${{ env.CCACHE_DIR }}
@@ -939,7 +939,7 @@ jobs:
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: "11.7"
 
       - name: "python"
         uses: actions/setup-python@v4
@@ -1231,7 +1231,7 @@ jobs:
       - name: "app: build"
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: ""
+          configurePreset: ci-linux
           buildPreset: ci-linux
 
       #
@@ -1252,7 +1252,7 @@ jobs:
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: ""
+          configurePreset: ci-linux
           testPreset: ci-linux
 
   #
@@ -1349,7 +1349,7 @@ jobs:
       - name: "app: build"
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: ""
+          configurePreset: ci-macos
           buildPreset: ci-macos
 
       #
@@ -1363,5 +1363,5 @@ jobs:
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: ""
+          configurePreset: ci-macos
           testPreset: ci-macos
