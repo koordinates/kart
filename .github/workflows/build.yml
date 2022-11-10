@@ -837,7 +837,7 @@ jobs:
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "{{ env.CMAKE_VERSION }}"
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       #
       # Dependencies
@@ -846,7 +846,7 @@ jobs:
       - name: "build dependencies"
         run: |
           sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-          sudo apt-get install -q -y --no-install-recommends ccache \
+          sudo apt-get install -q -y --no-"install-recommends ccache \"
             libgdal-dev gdal-data libssl-dev libpq-dev libspatialindex-dev \
             libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
           mkdir -p ${{ env.CCACHE_DIR }}
@@ -975,7 +975,7 @@ jobs:
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "{{ env.CMAKE_VERSION }}"
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       - name: "build dependencies"
         run: |
@@ -1054,7 +1054,7 @@ jobs:
       - name: "setup: cmake"
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "{{ env.CMAKE_VERSION }}"
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       #
       # python distribution
@@ -1063,7 +1063,7 @@ jobs:
       - name: "python"
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ env.PY_VER }}
+          python-version: "${{ env.PY_VER }}"
           architecture: x64
 
       - name: "python: pip cache"
@@ -1195,7 +1195,7 @@ jobs:
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "{{ env.CMAKE_VERSION }}"
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       - name: "setup: ccache"
         uses: actions/cache@v3
@@ -1306,7 +1306,7 @@ jobs:
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "{{ env.CMAKE_VERSION }}"
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       - name: "setup: ccache"
         uses: actions/cache@v3
