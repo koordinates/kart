@@ -1176,11 +1176,20 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      - name: "cmake"
+        uses: lukka/get-cmake@v3.25
+
       - name: "ccache"
         uses: actions/cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-${{ runner.os }}-cmake-vcpkg
+
+      - name: "vcpkg"
+        uses: lukka/run-vcpkg@v10
+        with:
+          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
+          vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
 
       #
       # Dependencies
@@ -1188,10 +1197,9 @@ jobs:
 
       - name: "build dependencies"
         run: |
-          sudo apt-get install -y --no-install-recommends ccache
+          sudo apt-get install -q -y --no-install-recommends ccache
           pip install ninja
           mkdir -p ${{ env.CCACHE_DIR }}
-          vcpkg-vendor/vcpkg/bootstrap-vcpkg.sh
 
       #
       # App Build
@@ -1278,6 +1286,9 @@ jobs:
           path: .cache/brew
           key: brew-cmake-${{ runner.os }}-vcpkg
 
+      - name: "cmake"
+        uses: lukka/get-cmake@v3.25
+
       - name: "vendor: ccache"
         uses: actions/cache@v2
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
@@ -1293,7 +1304,6 @@ jobs:
         run: |
           brew install ccache ninja
           mkdir -p ${{ env.CCACHE_DIR }}
-          vcpkg-vendor/vcpkg/bootstrap-vcpkg.sh
 
       #
       # App Build
