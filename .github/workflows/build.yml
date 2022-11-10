@@ -1171,42 +1171,39 @@ jobs:
       # setup
       #
 
-      - name: "python"
+      - name: "setup: python"
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
 
-      - name: "cmake & ninja"
+      - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "3.25.0-rc4"
 
-      - name: "ccache"
+      - name: "setup: ccache"
         uses: actions/cache@v2
         with:
           path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-${{ runner.os }}-cmake-vcpkg
 
-      - name: "vcpkg"
+      - name: "setup: misc"
+        run: |
+          sudo apt-get install -q -y --no-install-recommends ccache
+          mkdir -p ${{ env.CCACHE_DIR }}
+          echo "/usr/lib/ccache" >> $GITHUB_PATH
+
+      - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v10
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
 
       #
-      # Dependencies
-      #
-
-      - name: "build dependencies"
-        run: |
-          sudo apt-get install -q -y --no-install-recommends ccache
-          mkdir -p ${{ env.CCACHE_DIR }}
-
-      #
       # App Build
       #
 
-      - name: "app: configure"
+      - name: "app: dependencies & configure"
         env:
           CXX: g++
           CC: gcc
@@ -1275,43 +1272,47 @@ jobs:
       # setup
       #
 
-      - name: "python"
+      - name: "setup: python"
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
 
-      - name: "homebrew cache"
+      - name: "setup: homebrew cache"
         id: cache-brew
         uses: actions/cache@v2
         with:
           path: .cache/brew
           key: brew-cmake-${{ runner.os }}-vcpkg
 
-      - name: "cmake & ninja"
+      - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "3.25.0-rc4"
 
-      - name: "vendor: ccache"
+      - name: "setup: ccache"
         uses: actions/cache@v2
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-${{ runner.os }}-vcpkg
 
-      #
-      # Dependencies
-      #
-
-      - name: "build dependencies"
+      - name: "setup: misc"
         run: |
+          brew install -q autoconf ccache
           mkdir -p ${{ env.CCACHE_DIR }}
+          echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
+
+      - name: "setup: vcpkg"
+        uses: lukka/run-vcpkg@v10
+        with:
+          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
+          vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
 
       #
       # App Build
       #
 
-      - name: "app: configure"
+      - name: "app: dependencies & configure"
         run: |
           cmake -B build -S . -DUSE_VCPKG=ON
 
