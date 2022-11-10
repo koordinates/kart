@@ -925,7 +925,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      PY_VER: "3.7"
+      PY_VER: "3.10"
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
       FORCE_COLOR: "YES"
@@ -936,10 +936,6 @@ jobs:
       #
       # setup
       #
-
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: "11.7"
 
       - name: "python"
         uses: actions/setup-python@v4
