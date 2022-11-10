@@ -1177,7 +1177,9 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: "cmake & ninja"
-        uses: lukka/get-cmake@v3.25.0-rc4
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "3.25.0-rc4"
 
       - name: "ccache"
         uses: actions/cache@v2
@@ -1286,7 +1288,9 @@ jobs:
           key: brew-cmake-${{ runner.os }}-vcpkg
 
       - name: "cmake & ninja"
-        uses: lukka/get-cmake@v3.25.0-rc4
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "3.25.0-rc4"
 
       - name: "vendor: ccache"
         uses: actions/cache@v2
