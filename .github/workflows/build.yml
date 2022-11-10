@@ -1214,6 +1214,7 @@ jobs:
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
+          prependedCacheKey: "20221110a"
 
       #
       # App Build
@@ -1223,6 +1224,11 @@ jobs:
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-linux
+
+      - name: "check for vcpkg errors"
+        if: ${{ failure() || cancelled() }}
+        run: |
+          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
         uses: lukka/run-cmake@v10
@@ -1332,6 +1338,7 @@ jobs:
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
+          prependedCacheKey: "20221110a"
 
       #
       # App Build
@@ -1341,6 +1348,11 @@ jobs:
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-macos
+
+      - name: "check for vcpkg errors"
+        if: ${{ failure() || cancelled() }}
+        run: |
+          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
         uses: lukka/run-cmake@v10
