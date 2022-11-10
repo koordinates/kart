@@ -125,8 +125,8 @@ ifeq ($(PLATFORM),Darwin)
 		-change $(PREFIX)/lib/libproj.15.dylib @rpath/libproj.15.dylib \
 		-change libsqlite3.0.dylib @rpath/libsqlite3.0.dylib \
 		-change libgeos_c.1.dylib @rpath/libgeos_c.1.dylib \
-		-change libgeos_c.1.16.dylib @rpath/libgeos_c.1.16.dylib \
-		-change libgeos_c.1.16.0.dylib @rpath/libgeos_c.1.16.0.dylib \
+		-change libgeos_c.1.17.dylib @rpath/libgeos_c.1.17.dylib \
+		-change libgeos_c.1.17.0.dylib @rpath/libgeos_c.1.17.0.dylib \
 		-id mod_spatialite.7.so \
 		$(build-spatialite)
 endif
