@@ -4,7 +4,7 @@ import click
 import pygit2
 
 from .exceptions import InvalidOperation
-from .exec import run_and_wait
+from .subprocess_util import run
 from .output_util import dump_json_output
 from kart.cli_util import KartCommand
 
@@ -42,7 +42,7 @@ def branch(ctx, output_format, args):
                 f"Cannot delete the branch '{branch}' which you are currently on."
             )
 
-    run_and_wait("git", ["git", "-C", repo.path, "branch"] + list(args))
+    run("git", ["-C", repo.path, "branch"] + list(args))
 
 
 def list_branches_json(repo):

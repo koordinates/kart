@@ -4,7 +4,6 @@ import importlib.util
 import inspect
 import logging
 import os
-import io
 import pathlib
 import re
 import subprocess
@@ -22,7 +21,8 @@ from .cli_util import (
     KartGroup,
 )
 from .context import Context
-from .exec import run_and_wait
+from kart.parse_args import PreserveDoubleDash
+from kart.subprocess_util import run
 
 MODULE_COMMANDS = {
     "annotations.cli": {"build-annotations"},
@@ -268,17 +268,21 @@ def gc(ctx, args):
     ctx.invoke(git, args=["gc", *args])
 
 
-@cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
+@cli.command(
+    context_settings=dict(ignore_unknown_options=True),
+    hidden=True,
+    cls=PreserveDoubleDash,
+)
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def git(ctx, args):
     """
     Run an arbitrary Git command, using kart's packaged Git
     """
-    params = ["git"]
+    params = []
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
-    run_and_wait("git", [*params, *args])
+    run("git", [*params, *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
@@ -289,11 +293,11 @@ def lfs(ctx, args):
     Run an arbitrary Git LFS command, using Kart's packaged Git.
     Git LFS is not yet packaged with Kart so this will not work unless your Kart environment has Git LFS installed.
     """
-    params = ["git"]
+    params = []
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
     params += ["lfs"]
-    run_and_wait("git", [*params, *args])
+    run("git", [*params, *args])
 
 
 @cli.command(
