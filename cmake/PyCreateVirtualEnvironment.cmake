@@ -85,8 +85,7 @@ function(CreateVirtualEnvironment TARGET)
   set(PYTHON_EXE "${BIN_DIR}/python${CMAKE_EXECUTABLE_SUFFIX}")
   set(PYTHON ${EXEC} ${PYTHON_EXE})
 
-  set(PIP_EXE "${BIN_DIR}/pip${CMAKE_EXECUTABLE_SUFFIX}")
-  set(PIP ${EXEC} ${PIP_EXE})
+  set(PIP ${PYTHON} -m pip -v)
   set(PIP_INSTALL ${PIP} install --isolated --quiet --disable-pip-version-check)
 
   if(ARG_REQUIREMENTS_TXT)
