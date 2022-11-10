@@ -62,7 +62,7 @@ function(PythonGetABIInfo)
         message(STATUS "Python3 macOS Deployment target: ${Python3_MACOS_DEPLOYMENT_TARGET}")
       endif()
       # turn 10.9 into 10_9, and 13 into 13_0
-      if(NOT Python3_MACOS_DEPLOYMENT_TARGET MATCHES "\\.\\d+$")
+      if(NOT Python3_MACOS_DEPLOYMENT_TARGET MATCHES "\\.[0-9]+$")
         string(APPEND Python3_MACOS_DEPLOYMENT_TARGET ".0")
       endif()
       string(REPLACE "." "_" py_deployment_target_id ${Python3_MACOS_DEPLOYMENT_TARGET})
