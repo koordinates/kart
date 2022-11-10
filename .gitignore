@@ -76,6 +76,7 @@ pytest.xml
 docs/_build/
 *.code-workspace
 .vscode/
+CMakeUserPresets.json
 
 *.p12
 kart/_env.py

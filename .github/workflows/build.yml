@@ -63,19 +63,19 @@ jobs:
           - 3306:3306
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       #
       # python distribution
       #
 
       - name: "python"
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PY_VER }}
 
       - name: "python: pip cache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/pip
           key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
@@ -91,14 +91,14 @@ jobs:
 
       - name: "vendor: dist cache"
         id: cache-vendor-dist
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: vendor/dist/vendor-Linux.tar.gz
           key: vendor-dist1-${{ runner.os }}-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile', 'vendor/Makefile', 'vendor/build-manylinux.sh') }}
 
       - name: "vendor: source cache"
         id: cache-vendor-source
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: .cache/vendor-source
@@ -114,7 +114,7 @@ jobs:
           tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
 
       - name: "vendor: ccache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
@@ -130,7 +130,7 @@ jobs:
           make -C vendor build-Linux
 
       - name: "vendor: save library bundle"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: vendor-Linux
           path: vendor/dist/vendor-Linux.tar.gz
@@ -201,7 +201,7 @@ jobs:
           make ci-test
 
       - name: "app: save test coverage"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: test-results-Linux
           path: test-results/
@@ -220,19 +220,19 @@ jobs:
       #
 
       - name: "package: save deb"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: Linux-deb
           path: platforms/linux/dist/*.deb
 
       - name: "package: save rpm"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: Linux-rpm
           path: platforms/linux/dist/*.rpm
 
       - name: "package: save packaging logs"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: packaging-logs-Linux
           path: |
@@ -293,20 +293,20 @@ jobs:
           arch: x64
           toolset: 14.0
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       #
       # python distribution
       #
 
       - name: "python"
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PY_VER }}
           architecture: x64
 
       - name: "python: pip cache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/pip
           key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'makefile.vc') }}
@@ -327,7 +327,7 @@ jobs:
 
       - name: "vendor-dist: cache"
         id: cache-dist
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: vendor/dist/
           key: vendor-dist2-${{ runner.os }}-${{ hashFiles('vendor/makefile.vc') }}
@@ -342,7 +342,7 @@ jobs:
           nmake /D /NoLogo /F makefile.vc
 
       - name: "vendor: save library bundle"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: vendor-Windows
           path: vendor/dist/vendor-Windows.zip
@@ -402,7 +402,7 @@ jobs:
           & nmake /D /NoLogo /F makefile.vc ci-test
 
       - name: "app: save test coverage"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: test-results-Windows
           path: test-results/
@@ -438,13 +438,13 @@ jobs:
       #
 
       - name: "package: save msi"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: Windows-msi
           path: ${{ steps.package.outputs.msi }}
 
       - name: "package: save packaging logs"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: packaging-logs-Windows
           path: |
@@ -511,18 +511,18 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
       FORCE_COLOR: "YES"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       #
       # python distribution
       #
       - name: "python"
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PY_VER }}
 
       - name: "python: pip cache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/pip
           key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
@@ -535,7 +535,7 @@ jobs:
 
       - name: "homebrew cache"
         id: cache-brew
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/brew
           key: brew-${{ runner.os }}
@@ -558,14 +558,14 @@ jobs:
 
       - name: "vendor: dist cache"
         id: cache-vendor-dist
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: vendor/dist/vendor-Darwin.tar.gz
           key: vendor-dist1-${{ runner.os }}-${{ env.PY_VER }}-${{ hashfiles('vendor/Brewfile.lock', 'vendor/**/Makefile', 'vendor/Makefile') }}
 
       - name: "vendor: source cache"
         id: cache-vendor-source
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: .cache/vendor-source
@@ -581,7 +581,7 @@ jobs:
           tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
 
       - name: "vendor: ccache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
@@ -596,7 +596,7 @@ jobs:
           make -C vendor build-Darwin
 
       - name: "vendor: save library bundle"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: vendor-Darwin
           path: vendor/dist/vendor-Darwin.tar.gz
@@ -662,7 +662,7 @@ jobs:
           make ci-test
 
       - name: "app: save test coverage"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: test-results-macOS
           path: test-results/
@@ -714,13 +714,13 @@ jobs:
       #
 
       - name: "package: save pkg"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: macos-pkg
           path: ${{ steps.package-Darwin.outputs.file }}
 
       - name: "package: save packaging logs"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: packaging-logs-macOS
           path: |
@@ -808,19 +808,19 @@ jobs:
           - 3306:3306
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       #
       # setup
       #
 
       - name: "python"
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PY_VER }}
 
       - name: "python: pip cache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/pip
           key: pip-${{ runner.os }}-cmake-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
@@ -828,7 +828,7 @@ jobs:
             pip-Linux-cmake
 
       - name: "ccache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-${{ runner.os }}-cmake
@@ -925,26 +925,26 @@ jobs:
       FORCE_COLOR: "YES"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       #
       # setup
       #
 
       - name: "python"
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PY_VER }}
 
       - name: "homebrew cache"
         id: cache-brew
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/brew
           key: brew-cmake-${{ runner.os }}
 
       - name: "vendor: ccache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
@@ -955,7 +955,7 @@ jobs:
       #
 
       - name: "python: pip cache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/pip
           key: pip-${{ runner.os }}-cmake-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
@@ -1038,20 +1038,20 @@ jobs:
         || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       #
       # python distribution
       #
 
       - name: "python"
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PY_VER }}
           architecture: x64
 
       - name: "python: pip cache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/pip
           key: pip-${{ runner.os }}-cmake-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'makefile.vc') }}
@@ -1063,7 +1063,7 @@ jobs:
       #
 
       - name: "vendor-dist: download"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: vendor-Windows
           path: vendor/dist/
@@ -1172,7 +1172,7 @@ jobs:
       #
 
       - name: "setup: python"
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
 
@@ -1182,7 +1182,7 @@ jobs:
           cmakeVersion: "3.25.0-rc4"
 
       - name: "setup: ccache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-${{ runner.os }}-cmake-vcpkg
@@ -1204,31 +1204,34 @@ jobs:
       #
 
       - name: "app: dependencies & configure"
-        env:
-          CXX: g++
-          CC: gcc
-        run: |
-          cmake -B build -S . -DUSE_VCPKG=ON
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-linux
 
       - name: "app: build"
-        run: |
-          cmake --build build --verbose
+        uses: lukka/run-cmake@v10
+        with:
+          buildPreset: ci-linux
 
       #
       # App tests & checks
       #
 
-      - name: "app: install database drivers for tests"
+      - name: "test: smoke test"
+        run: |
+          ./build/kart --version
+
+      - name: "test: install database drivers for tests"
         run: |
           curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
           curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
           sudo apt-get update -q -y
           sudo ACCEPT_EULA=Y apt-get install -q -y msodbcsql17
 
-      - name: "app: unit tests"
-        working-directory: build
-        run: |
-          ctest -V
+      - name: "test: unit tests"
+        uses: lukka/run-cmake@v10
+        with:
+          testPreset: ci-linux
 
   #
   # macOS via CMake
@@ -1273,13 +1276,13 @@ jobs:
       #
 
       - name: "setup: python"
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
 
       - name: "setup: homebrew cache"
         id: cache-brew
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .cache/brew
           key: brew-cmake-${{ runner.os }}-vcpkg
@@ -1290,7 +1293,7 @@ jobs:
           cmakeVersion: "3.25.0-rc4"
 
       - name: "setup: ccache"
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
@@ -1313,21 +1316,24 @@ jobs:
       #
 
       - name: "app: dependencies & configure"
-        run: |
-          cmake -B build -S . -DUSE_VCPKG=ON
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-macos
 
       - name: "app: build"
-        run: |
-          cmake --build build --verbose
-          ./build/kart --version
+        uses: lukka/run-cmake@v10
+        with:
+          buildPreset: ci-macos
 
       #
       # App tests & checks
       #
 
-      - name: "app: unit tests"
-        env:
-          KART_EXPECT_MSSQLDRIVER: 0
-        working-directory: build
+      - name: "test: smoke test"
         run: |
-          ctest -V
+          ./build/kart --version
+
+      - name: "test: unit tests"
+        uses: lukka/run-cmake@v10
+        with:
+          testPreset: ci-macos

@@ -1,0 +1,79 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "ci-base",
+            "hidden": true,
+            "binaryDir": "build",
+            "cacheVariables": {
+                "USE_VCPKG": "ON",
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "ci-linux",
+            "displayName": "CI: Linux",
+            "inherits": "ci-base",
+            "generator": "Unix Makefiles",
+            "environment": {
+                "CC": "gcc",
+                "CXX": "g++"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "CI: macOS",
+            "inherits": "ci-base",
+            "generator": "Unix Makefiles",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "ci-linux",
+            "configurePreset": "ci-linux"
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "CI: macOS",
+            "configurePreset": "ci-macos"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "ci-base",
+            "hidden": true,
+            "output": {
+                "verbosity": "verbose"
+            }
+        },
+        {
+            "name": "ci-linux",
+            "inherits": "ci-base",
+            "configurePreset": "ci-linux"
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "CI: macOS",
+            "inherits": "ci-base",
+            "configurePreset": "ci-macos",
+            "environment": {
+                "KART_EXPECT_MSSQLDRIVER": "0"
+            }
+        }
+    ]
+}
