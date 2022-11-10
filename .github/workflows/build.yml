@@ -1176,8 +1176,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: "cmake"
-        uses: lukka/get-cmake@v3.25
+      - name: "cmake & ninja"
+        uses: lukka/get-cmake@v3.25.0-rc4
 
       - name: "ccache"
         uses: actions/cache@v2
@@ -1198,7 +1198,6 @@ jobs:
       - name: "build dependencies"
         run: |
           sudo apt-get install -q -y --no-install-recommends ccache
-          pip install ninja
           mkdir -p ${{ env.CCACHE_DIR }}
 
       #
@@ -1286,8 +1285,8 @@ jobs:
           path: .cache/brew
           key: brew-cmake-${{ runner.os }}-vcpkg
 
-      - name: "cmake"
-        uses: lukka/get-cmake@v3.25
+      - name: "cmake & ninja"
+        uses: lukka/get-cmake@v3.25.0-rc4
 
       - name: "vendor: ccache"
         uses: actions/cache@v2
@@ -1302,7 +1301,6 @@ jobs:
 
       - name: "build dependencies"
         run: |
-          brew install ccache ninja
           mkdir -p ${{ env.CCACHE_DIR }}
 
       #
