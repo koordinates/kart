@@ -846,7 +846,7 @@ jobs:
       - name: "build dependencies"
         run: |
           sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-          sudo apt-get install -q -y --no-"install-recommends ccache \"
+          sudo apt-get install -q -y --no-"install-recommends ccache \
             libgdal-dev gdal-data libssl-dev libpq-dev libspatialindex-dev \
             libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
           mkdir -p ${{ env.CCACHE_DIR }}
@@ -936,6 +936,10 @@ jobs:
       #
       # setup
       #
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
 
       - name: "python"
         uses: actions/setup-python@v4
@@ -1219,7 +1223,7 @@ jobs:
       # App Build
       #
 
-      - name: "app: dependencies & configure"
+      - name: "app: vendor dependencies"
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-linux
@@ -1227,6 +1231,7 @@ jobs:
       - name: "app: build"
         uses: lukka/run-cmake@v10
         with:
+          configurePreset: ""
           buildPreset: ci-linux
 
       #
@@ -1247,6 +1252,7 @@ jobs:
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
         with:
+          configurePreset: ""
           testPreset: ci-linux
 
   #
@@ -1291,6 +1297,10 @@ jobs:
       # setup
       #
 
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
       - name: "setup: python"
         uses: actions/setup-python@v4
         with:
@@ -1317,7 +1327,7 @@ jobs:
 
       - name: "setup: misc"
         run: |
-          brew install -q autoconf ccache
+          brew install -q autoconf automake ccache
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
@@ -1331,7 +1341,7 @@ jobs:
       # App Build
       #
 
-      - name: "app: dependencies & configure"
+      - name: "app: vendor dependencies"
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-macos
@@ -1339,6 +1349,7 @@ jobs:
       - name: "app: build"
         uses: lukka/run-cmake@v10
         with:
+          configurePreset: ""
           buildPreset: ci-macos
 
       #
@@ -1352,4 +1363,5 @@ jobs:
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
         with:
+          configurePreset: ""
           testPreset: ci-macos
