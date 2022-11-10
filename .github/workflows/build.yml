@@ -7,6 +7,7 @@ env:
   PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
   LIBGIT2_REPO: koordinates/libgit2
   LIBGIT2_TAG: kart-v0.11.1
+  CMAKE_VERSION: "3.25.0-rc4"
 
 jobs:
   #
@@ -833,6 +834,11 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-${{ runner.os }}-cmake
 
+      - name: "setup: cmake & ninja"
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "{{ env.CMAKE_VERSION }}"
+
       #
       # Dependencies
       #
@@ -966,9 +972,14 @@ jobs:
       # Dependencies
       #
 
+      - name: "setup: cmake & ninja"
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "{{ env.CMAKE_VERSION }}"
+
       - name: "build dependencies"
         run: |
-          brew install cmake ccache gdal openssl@1.1 libpq \
+          brew install ccache gdal openssl@1.1 libpq \
             spatialindex libspatialite sqlite3 swig unixodbc
           mkdir -p ${{ env.CCACHE_DIR }}
 
@@ -1039,6 +1050,11 @@ jobs:
       )
     steps:
       - uses: actions/checkout@v3
+
+      - name: "setup: cmake"
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "{{ env.CMAKE_VERSION }}"
 
       #
       # python distribution
@@ -1179,7 +1195,7 @@ jobs:
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "3.25.0-rc4"
+          cmakeVersion: "{{ env.CMAKE_VERSION }}"
 
       - name: "setup: ccache"
         uses: actions/cache@v3
@@ -1290,7 +1306,7 @@ jobs:
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "3.25.0-rc4"
+          cmakeVersion: "{{ env.CMAKE_VERSION }}"
 
       - name: "setup: ccache"
         uses: actions/cache@v3
