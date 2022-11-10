@@ -31,7 +31,8 @@ if(NOT "${NESTED_ARCHIVE}" STREQUAL "")
   message(STATUS "Extracting nested vendor archive...")
   file(REMOVE_RECURSE vendor-tmp-intermediate)
   file(RENAME vendor-tmp vendor-tmp-intermediate)
-  file(GLOB NESTED_ARCHIVE vendor-tmp-intermediate/*.zip vendor-tmp-intermediate/*.tgz vendor-tmp-intermediate/*.tar.gz)
+  file(GLOB NESTED_ARCHIVE vendor-tmp-intermediate/*.zip vendor-tmp-intermediate/*.tgz
+       vendor-tmp-intermediate/*.tar.gz)
   list(GET NESTED_ARCHIVE 0 NESTED_ARCHIVE)
   file(ARCHIVE_EXTRACT INPUT ${NESTED_ARCHIVE} DESTINATION vendor-tmp)
 endif()
@@ -46,18 +47,13 @@ else()
   file(COPY vendor-tmp/env/ DESTINATION venv)
 endif()
 
-# Upgrade the venv using python from the vendor-archive (if included):
-message(STATUS "Upgrading venv...")
-execute_process(COMMAND ${PY} -m venv --upgrade venv)
-execute_process(COMMAND ${PIP} install --isolated --quiet --disable-pip-version-check --upgrade pip setuptools)
-
 # install wheels
 file(
   GLOB wheels
   LIST_DIRECTORIES false
   "vendor-tmp/wheelhouse/*.whl")
-execute_process(COMMAND ${PIP} install --isolated --disable-pip-version-check
-                        --force-reinstall --no-deps ${wheels} COMMAND_ERROR_IS_FATAL ANY)
+execute_process(COMMAND ${PIP} install --isolated --disable-pip-version-check --force-reinstall
+                        --no-deps ${wheels} COMMAND_ERROR_IS_FATAL ANY)
 
 # install a _kart_env.py configuration file
 if(EXISTS vendor-tmp/_kart_env.py)
