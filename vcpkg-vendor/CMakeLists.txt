@@ -40,7 +40,7 @@ set(EXE_LIST "")
 #
 # Need Development here or VcPkg falls back to the system interpreter
 find_package(
-  Python3 3.7
+  Python3 3.9
   COMPONENTS Development Interpreter
   REQUIRED)
 cmake_path(GET Python3_STDLIB FILENAME Python3_STDLIB_DIR_NAME)

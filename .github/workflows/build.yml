@@ -33,7 +33,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      PY_VER: "3.7"
+      PY_VER: "3.9"
       KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
       KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
       KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
@@ -271,7 +271,7 @@ jobs:
     name: Windows
     runs-on: windows-2019
     env:
-      PY_VER: "3.7"
+      PY_VER: "3.9"
       FORCE_COLOR: "YES"
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
@@ -507,7 +507,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      PY_VER: "3.7"
+      PY_VER: "3.9"
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
       FORCE_COLOR: "YES"
@@ -778,7 +778,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      PY_VER: "3.7"
+      PY_VER: "3.9"
       KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
       KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
       KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
@@ -1032,7 +1032,7 @@ jobs:
     runs-on: windows-2019
     continue-on-error: true
     env:
-      PY_VER: "3.7" # needs to match the Windows job since we use its vendor archive.
+      PY_VER: "3.9" # needs to match the Windows job since we use its vendor archive.
       FORCE_COLOR: "YES"
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run

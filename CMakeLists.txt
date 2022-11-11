@@ -47,7 +47,7 @@ endif()
 
 # OSX: prefer Homebrew over Frameworks
 set(Python3_FIND_IMPLEMENTATIONS "CPython")
-find_package(Python3 3.7 REQUIRED COMPONENTS Development Interpreter)
+find_package(Python3 3.9 REQUIRED COMPONENTS Development Interpreter)
 pythongetabiinfo()
 
 if(USE_VCPKG)
