@@ -57,7 +57,7 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
 
     lfs_oids = set()
     for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
-        repo, start_commits, stop_commits
+        repo, start_commits, [f"--remotes={remote_name}", *stop_commits]
     ):
         # Because of the way a Kart repo is laid out, we know that:
         # All LFS pointer files are blobs inside **/.point-cloud-dataset.v?/tile/**
