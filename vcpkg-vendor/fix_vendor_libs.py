@@ -243,7 +243,7 @@ def pack_all(root_path, output_path):
             [
                 "7z",
                 "a",
-                output_path.resolve(),
+                output_path.absolute(),
                 *[f.name for f in contents_path.glob("*")],
             ],
             cwd=contents_path,
