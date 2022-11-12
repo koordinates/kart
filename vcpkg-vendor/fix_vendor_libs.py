@@ -61,16 +61,19 @@ SITE_PACKAGES_PREFIX = "env/lib/python3.x/site-packages/"
 TOP_LEVEL_DIRECTORIES = ["env", "wheelhouse"]
 # The sole files allowed at the top level of vendor-Darwin.tar.gz
 TOP_LEVEL_FILES = ["_kart_env.py"]
+NOFIX_PATHS = []
 
 PLATFORM = platform.system()
 
 if PLATFORM == "Windows":
     VENDOR_ARCHIVE_NAME = "vendor-Windows.zip"
     RPATH_PREFIX = ""
-    LIB_EXTENSIONS = [".lib", ".dll"]
+    LIB_EXTENSIONS = [".lib", ".dll", ".pyd"]
     SYSTEM_PREFIXES = []
     EXE_PATHS = ["env/scripts"]
     EXE_EXTENSION = ".exe"
+    TOP_LEVEL_DIRECTORIES += ["git"]
+    NOFIX_PATHS = ["git"]
 elif PLATFORM == "Darwin":
     VENDOR_ARCHIVE_NAME = "vendor-Darwin.tar.gz"
     LOADER_PATH = "@loader_path"
@@ -135,6 +138,10 @@ if PLATFORM == "Windows":
         "version.dll",
         "winhttp.dll",
         "ws2_32.dll",
+
+        "odbc32.dll",
+        "python3.dll",
+        "python310.dll",
     ]
 elif PLATFORM == "Darwin":
     SYSTEM_DEPS_ALLOW_LIST = [
@@ -239,11 +246,14 @@ def pack_all(root_path, output_path):
     assert contents_path.is_dir()
     name = output_path.name
     if name.endswith(".zip"):
+        # CMake can make zips, means we don't need to depend on 7z/etc
+        cmake_cmd = os.environ.get("CMAKE_COMMAND", "cmake")
         subprocess.check_call(
             [
-                "7z",
-                "a",
+                cmake_cmd,
+                "-E", "tar", "cf",
                 output_path.absolute(),
+                "--format=zip",
                 *[f.name for f in contents_path.glob("*")],
             ],
             cwd=contents_path,
@@ -330,6 +340,9 @@ def read_elf_cmd_lines(path_to_lib, pattern_to_read):
 def lib_paths(root_path, is_symlink=False):
     for ext in LIB_EXTENSIONS:
         for path_to_lib in root_path.glob(f"**/*{ext}"):
+            if any(path_to_lib.is_relative_to(root_path / VENDOR_ARCHIVE_CONTENTS / p) for p in NOFIX_PATHS):
+                continue
+
             if path_to_lib.is_symlink() == is_symlink:
                 yield path_to_lib
 

@@ -244,12 +244,12 @@ ExternalProject_Add(
   BUILD_BYPRODUCTS "<SOURCE_DIR>/.eggs/" "<SOURCE_DIR>/pygit2.egg-info/" "<SOURCE_DIR>/build/"
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
                 <SOURCE_DIR>
+  # COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
+  # COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
+  # COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
+  # COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
@@ -348,12 +348,21 @@ list(APPEND ENV_FILE_LIST ${PROJ_DATA_FILES})
 pkg_check_modules(SPATIALITE REQUIRED spatialite)
 # Helper for finding mod_spatialite. Modifies some global state, so keep it contained in a function
 function(find_mod_spatialite)
-  set(CMAKE_FIND_LIBRARY_PREFIXES "") # otherwise it looks for `libmod_spatialite`
-  find_library(
-    SPATIALITE_EXTENSION
-    NAMES mod_spatialite REQUIRED
-    HINTS ${SPATIALITE_LIBDIR}
-    NO_DEFAULT_PATH)
+  if(WIN32)
+    # We need the .dll, not the .lib
+    find_file(
+      SPATIALITE_EXTENSION
+      NAMES mod_spatialite.dll REQUIRED
+      PATHS "${CURRENT_PACKAGES_DIR}/bin"
+      NO_DEFAULT_PATH)
+  else()
+    set(CMAKE_FIND_LIBRARY_PREFIXES "") # otherwise it looks for `libmod_spatialite`
+    find_library(
+      SPATIALITE_EXTENSION
+      NAMES mod_spatialite REQUIRED
+      HINTS ${SPATIALITE_LIBDIR}
+      NO_DEFAULT_PATH)
+  endif()
   cmake_path(GET SPATIALITE_EXTENSION FILENAME SPATIALITE_EXTENSION_NAME)
   set(SPATIALITE_EXTENSION
       "${SPATIALITE_EXTENSION}"
@@ -426,6 +435,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     URL https://github.com/koordinates/git/releases/download/kart-0.11.0-windows/MinGit-v2.34.0.windows.1.13-64-bit.zip
     URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a)
   FetchContent_MakeAvailable(git)
+  set(GIT_VENV_EXE "git/cmd/git.exe")
 
 else()
   # Build Git with spatial-filter extension on macOS and Linux
@@ -472,7 +482,17 @@ else()
     COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk
             <INSTALL_DIR>/bin/scalar <INSTALL_DIR>/bin/git-cvsserver <INSTALL_DIR>/bin/git-shell)
   set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
+  set(GIT_VENV_EXE "bin/git")
+endif()
 
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  set(EXE_DIR scripts)
+  set(LIB_DIR "")
+  set(LIB_SEARCH_DIR "${CURRENT_PACKAGES_DIR}/bin")
+else()
+  set(EXE_DIR bin)
+  set(LIB_DIR "lib/")
+  set(LIB_SEARCH_DIR "${CURRENT_PACKAGES_DIR}/lib")
 endif()
 
 #
@@ -514,14 +534,6 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
                          env/lib/mod_spatialite.dylib)
 endif()
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  set(EXE_DIR scripts)
-  set(LIB_SEARCH_DIR "${CURRENT_PACKAGES_DIR}/bin")
-else()
-  set(EXE_DIR bin)
-  set(LIB_SEARCH_DIR "${CURRENT_PACKAGES_DIR}/lib")
-endif()
-
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
   DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
@@ -533,7 +545,8 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${EXTRA_COPY_COMMAND}
-  COMMAND ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
+  COMMAND ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} -- ${wheelBuildEnv_PYTHON}
+          "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
           $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
   COMMENT "Vendor dependency archive assembly")
 
