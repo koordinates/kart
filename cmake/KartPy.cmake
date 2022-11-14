@@ -34,7 +34,7 @@ add_custom_command(
 add_custom_command(
   OUTPUT vendor.stamp
   BYPRODUCTS vendor-tmp
-  DEPENDS venv.stamp ${VENDOR_ARCHIVE} ${VENDOR_TARGET}
+  DEPENDS venv.stamp ${VENDOR_ARCHIVE} ${VENDOR_TARGET} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/extract_vendor_archive.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND} "-DVENDOR_ARCHIVE=${VENDOR_ARCHIVE}" -P
           ${CMAKE_CURRENT_SOURCE_DIR}/cmake/extract_vendor_archive.cmake
