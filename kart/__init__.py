@@ -99,6 +99,13 @@ if "OGR_SQLITE_PRAGMA" not in os.environ:
 os.environ["PATH"] = (
     os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
 )
+if is_windows:
+    for _p in path_extras:
+        print(f"adding {_p} to dll_directories")
+        os.add_dll_directory(_p)
+
+# Make sure our SQLite3 build is loaded before Python stdlib one
+import pysqlite3
 
 # GDAL Error Handling
 from osgeo import gdal, ogr, osr
