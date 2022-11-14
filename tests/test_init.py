@@ -945,8 +945,9 @@ def test_init_import_home_resolve(
     with data_archive("gpkg-points") as source_path:
         with chdir(repo_path):
             monkeypatch.setenv("HOME", str(source_path))
+            monkeypatch.setenv("USERPROFILE", str(source_path))
 
-            # make sure we have a .gitconfig file in HOME,
+            # make sure we have a .gitconfig file in $HOME,
             # otherwise kart can't find the user information for the commit
             orig_home = git_user_config[2]
             shutil.copy2(orig_home / ".gitconfig", source_path)
