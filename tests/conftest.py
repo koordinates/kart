@@ -17,6 +17,8 @@ from datetime import datetime
 from pathlib import Path
 import pytest
 
+# this sets up a bunch of package/lib/venv-related stuff
+import kart
 
 import click
 from click.testing import CliRunner
