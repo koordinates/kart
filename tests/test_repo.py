@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 from kart.repo import KartRepo, LOCKED_GIT_INDEX_CONTENTS
@@ -36,18 +37,21 @@ def test_git_disabled(tmp_path, cli_runner, chdir):
     repo = KartRepo(repo_path)
 
     with chdir(repo_path):
-        # env={} means we don't inherit the environment of this process,
-        # so it behaves as it would if the user typed it at the command line.
-        r = subprocess.run(["git", "gc"], capture_output=True, encoding="utf-8", env={})
+        # env={} means don't inherit the environment of this process so it behaves as it would if
+        # the user typed git at the command line without our GIT_* settings in place.
+        from kart import git_bin_path
+        git_bin = os.path.join(git_bin_path, "git")
+
+        r = subprocess.run([git_bin, "gc"], capture_output=True, encoding="utf-8", env={})
         assert r.returncode != 0
         assert "index uses kart extension, which we do not understand" in r.stderr
         assert "fatal:" in r.stderr
 
         # Whereas this runs with our custom environment, including GIT_INDEX_FILE
-        r = subprocess.run(["git", "gc"], capture_output=True, encoding="utf-8")
+        r = subprocess.run([git_bin, "gc"], capture_output=True, encoding="utf-8")
         assert r.returncode == 0, r.stderr
 
-        r = subprocess.run(["git", "gc"], capture_output=True, encoding="utf-8", env={})
+        r = subprocess.run([git_bin, "gc"], capture_output=True, encoding="utf-8", env={})
         assert r.returncode != 0
         assert "index uses kart extension, which we do not understand" in r.stderr
         assert "fatal:" in r.stderr

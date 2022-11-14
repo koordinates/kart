@@ -60,11 +60,12 @@ path_extras = [prefix]
 os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 os.environ["XDG_CONFIG_HOME"] = prefix
 if _kart_env:
-    path_extras.append(os.path.split(_env_path(_kart_env.GIT_EXECUTABLE))[0])
+    git_bin_path = os.path.split(_env_path(_kart_env.GIT_EXECUTABLE))[0]
 elif is_windows:
-    path_extras.append(os.path.join(prefix, "git", "cmd"))
+    git_bin_path = os.path.join(prefix, "git", "cmd")
 else:
-    path_extras.append(os.path.join(prefix, "bin"))
+    git_bin_path = os.path.join(prefix, "bin")
+path_extras.append(git_bin_path)
 
 os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
 os.environ["GIT_TEMPLATE_DIR"] = os.path.join(prefix, "share", "git-core", "templates")
