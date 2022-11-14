@@ -1258,7 +1258,7 @@ jobs:
           testPreset: ci-linux
 
   #
-  # macOS via CMake
+  # macOS via CMake+VCPKG
   #
   macOS-cmake-vcpkg:
     strategy:
@@ -1373,3 +1373,95 @@ jobs:
         with:
           configurePreset: ci-macos
           testPreset: ci-macos
+
+  #
+  # Windows via CMake+VCPKG
+  #
+  Windows-cmake-vcpkg:
+    needs: Windows
+    strategy:
+      matrix:
+        os: [windows-2019]
+        python: ["3.10"]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    env:
+      PY_VER: ${{ matrix.python }}
+      FORCE_COLOR: "YES"
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    # Skip Windows builds with eg: `[ci only linux]` unless it's master or a release tag.
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      ) && (
+        startsWith(github.ref, 'refs/tags/v')
+        || github.ref == 'refs/heads/master'
+        || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
+      )
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: "setup: cmake"
+        uses: lukka/get-cmake@v3.24.3
+        with:
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
+
+      - name: "setup: python"
+        uses: actions/setup-python@v4
+        with:
+          python-version: "${{ env.PY_VER }}"
+          architecture: x64
+
+      - name: "setup: pip cache"
+        uses: actions/cache@v3
+        with:
+          path: .cache/pip
+          key: pip-${{ runner.os }}-cmakevcpkg-${{ hashFiles('requirements.txt', 'requirements/*.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-cmakevcpkg-
+
+      - name: "setup: vcpkg"
+        uses: lukka/run-vcpkg@v10
+        with:
+          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
+          vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
+          prependedCacheKey: "20221110a"
+
+      #
+      # App Build
+      #
+
+      - name: "app: vendor dependencies"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-windows
+
+      - name: "check for vcpkg errors"
+        if: ${{ failure() || cancelled() }}
+        run: |
+          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
+
+      - name: "app: build"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-windows
+          buildPreset: ci-windows
+
+      #
+      # App tests & checks
+      #
+
+      - name: "test: smoke test"
+        shell: bash
+        run: |
+          ./build/kart --version
+
+      - name: "test: unit tests"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-windows
+          testPreset: ci-windows
