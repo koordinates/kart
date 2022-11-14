@@ -1403,6 +1403,10 @@ jobs:
       )
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      # Setup
 
       - name: "setup: cmake"
         uses: lukka/get-cmake@v3.24.3
