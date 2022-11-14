@@ -27,6 +27,8 @@ endif()
 find_package(PkgConfig REQUIRED)
 
 cmake_policy(SET CMP0135 NEW)
+set(CMAKE_TLS_VERIFY TRUE)
+
 include(ExternalProject)
 
 include(debug_helpers)
@@ -117,10 +119,9 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv libffi
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
+  BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
                 <SOURCE_DIR>
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
@@ -165,10 +166,9 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv GDAL::GDAL
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
+  BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
                 <SOURCE_DIR>
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
@@ -206,10 +206,9 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
+  BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
                 <SOURCE_DIR>
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND
@@ -240,15 +239,10 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv unofficial::git2::git2
   EXCLUDE_FROM_ALL ON
+  BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   CONFIGURE_COMMAND ""
-  BUILD_BYPRODUCTS "<SOURCE_DIR>/.eggs/" "<SOURCE_DIR>/pygit2.egg-info/" "<SOURCE_DIR>/build/"
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
                 <SOURCE_DIR>
-  # COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
-  # COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  # COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
-  # COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
-  COMMAND ${CMAKE_COMMAND} -E rm -rf "<SOURCE_DIR>/.eggs/"
   COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
@@ -281,11 +275,10 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
   EXCLUDE_FROM_ALL ON
+  BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
                 <SOURCE_DIR>
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
-  COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
@@ -428,13 +421,15 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   # Download a prebuilt Git with spatial-filter extension on Windows. TODO: Use a more recent tag
   # and build inline.
 
-  include(FetchContent)
-
-  FetchContent_Declare(
-    git
+  ExternalProject_Add(git
     URL https://github.com/koordinates/git/releases/download/kart-0.11.0-windows/MinGit-v2.34.0.windows.1.13-64-bit.zip
-    URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a)
-  FetchContent_MakeAvailable(git)
+    URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a
+    BUILD_IN_SOURCE 1 # avoid creation of a build directory
+    INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/git
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> <INSTALL_DIR>
+  )
   set(GIT_VENV_EXE "git/cmd/git.exe")
 
 else()
@@ -527,9 +522,7 @@ if(NOT PROJECT_IS_TOP_LEVEL)
       PARENT_SCOPE)
 endif()
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  set(EXTRA_COPY_COMMAND ${CMAKE_COMMAND} -E copy_directory ${git_SOURCE_DIR} git)
-elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(EXTRA_COPY_COMMAND ${CMAKE_COMMAND} -E create_symlink mod_spatialite.so
                          env/lib/mod_spatialite.dylib)
 endif()

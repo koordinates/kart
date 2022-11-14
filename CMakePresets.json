@@ -40,6 +40,21 @@
                 "lhs": "${hostSystemName}",
                 "rhs": "Darwin"
             }
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI: Windows",
+            "inherits": "ci-base",
+            "generator": "Ninja",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
         }
     ],
     "buildPresets": [
@@ -51,6 +66,11 @@
             "name": "ci-macos",
             "displayName": "CI: macOS",
             "configurePreset": "ci-macos"
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI: Windows",
+            "configurePreset": "ci-windows"
         }
     ],
     "testPresets": [
@@ -59,6 +79,9 @@
             "hidden": true,
             "output": {
                 "verbosity": "verbose"
+            },
+            "environment": {
+                "CI": "true"
             }
         },
         {
@@ -74,6 +97,12 @@
             "environment": {
                 "KART_EXPECT_MSSQLDRIVER": "0"
             }
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI: Windows",
+            "inherits": "ci-base",
+            "configurePreset": "ci-windows"
         }
     ]
 }

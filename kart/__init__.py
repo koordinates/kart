@@ -5,8 +5,10 @@ __all__ = (
     "is_windows",
     "spatialite_path",
     "prefix",
+    "git_bin_path"
 )
 
+import importlib
 import logging
 import os
 import platform
@@ -102,8 +104,11 @@ os.environ["PATH"] = (
 )
 if is_windows:
     for _p in path_extras:
-        print(f"adding {_p} to dll_directories")
         os.add_dll_directory(_p)
+
+    # FIXME: git2.dll is in the package directory, but isn't setup for ctypes to use
+    _pygit2_spec = importlib.util.find_spec("pygit2")
+    os.add_dll_directory(_pygit2_spec.submodule_search_locations[0])
 
 # Make sure our SQLite3 build is loaded before Python stdlib one
 import pysqlite3
