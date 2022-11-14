@@ -835,7 +835,7 @@ jobs:
           key: vendor-ccache-${{ runner.os }}-cmake
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@latest
+        uses: lukka/get-cmake@v3.24.3
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -973,7 +973,7 @@ jobs:
       #
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@latest
+        uses: lukka/get-cmake@v3.24.3
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -1052,7 +1052,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: "setup: cmake"
-        uses: lukka/get-cmake@latest
+        uses: lukka/get-cmake@v3.24.3
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -1193,7 +1193,7 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@latest
+        uses: lukka/get-cmake@v3.24.3
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -1316,7 +1316,7 @@ jobs:
           key: brew-cmake-${{ runner.os }}-vcpkg
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@latest
+        uses: lukka/get-cmake@v3.24.3
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
