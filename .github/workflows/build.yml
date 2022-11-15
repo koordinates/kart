@@ -1236,6 +1236,12 @@ jobs:
           configurePreset: ci-linux
           buildPreset: ci-linux
 
+      - name: "vendor: save archive"
+        uses: actions/upload-artifact@v3
+        with:
+          name: vendor-linux-${{ runner.arch }}-${{ matrix.python }}
+          path: build/vcpkg-vendor/kart-vendor.*.tar.gz
+
       #
       # App tests & checks
       #
@@ -1360,6 +1366,12 @@ jobs:
           configurePreset: ci-macos
           buildPreset: ci-macos
 
+      - name: "vendor: save archive"
+        uses: actions/upload-artifact@v3
+        with:
+          name: vendor-macos-${{ runner.arch }}-${{ matrix.python }}
+          path: build/vcpkg-vendor/kart-vendor.*.tar.gz
+
       #
       # App tests & checks
       #
@@ -1453,6 +1465,12 @@ jobs:
         with:
           configurePreset: ci-windows
           buildPreset: ci-windows
+
+      - name: "vendor: save archive"
+        uses: actions/upload-artifact@v3
+        with:
+          name: vendor-windows-${{ runner.arch }}-${{ matrix.python }}
+          path: build/vcpkg-vendor/kart-vendor.*.zip
 
       #
       # App tests & checks
