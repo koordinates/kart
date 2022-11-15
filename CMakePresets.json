@@ -13,6 +13,9 @@
             "cacheVariables": {
                 "USE_VCPKG": "ON",
                 "CMAKE_BUILD_TYPE": "Release"
+            },
+            "environment": {
+                "CI": "true"
             }
         },
         {
@@ -60,6 +63,7 @@
     "buildPresets": [
         {
             "name": "ci-linux",
+            "displayName": "CI: Linux",
             "configurePreset": "ci-linux"
         },
         {
@@ -81,7 +85,9 @@
                 "verbosity": "verbose"
             },
             "environment": {
-                "CI": "true"
+                "CI": "true",
+                "KART_EXPECT_PDAL": "1",
+                "X_KART_POINT_CLOUDS": "1"
             }
         },
         {
