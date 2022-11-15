@@ -429,7 +429,7 @@ list(APPEND EXE_LIST "${PDAL_EXECUTABLE}")
 #
 
 include(FindGo)
-find_package(Go 1.18 REQUIRED)
+find_package(Go 1.17 REQUIRED)
 
 set(GIT_LFS_OUTPUT "bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
 if(WIN32)
