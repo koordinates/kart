@@ -243,8 +243,8 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
                 <SOURCE_DIR>
-  COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
-          --bdist-dir <TMP_DIR>/bdist
+  COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${wheelBuildEnv_PYTHON}
+          setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pygit2 INSTALL_DIR)
@@ -392,12 +392,16 @@ list(APPEND EXE_LIST "${PDAL_EXECUTABLE}")
 # Git-LFS
 #
 
+include(FindGo)
+find_package(Go 1.18 REQUIRED)
+
 set(GIT_LFS_OUTPUT "bin/git-lfs${CMAKE_EXECUTABLE_SUFFIX}")
 if(WIN32)
   set(GIT_LFS_LDFLAGS "-s -w -X 'github.com/git-lfs/git-lfs/v3/config.Vendor=Kart'")
-  set(GIT_LFS_BUILD go build -ldflags=${GIT_LFS_LDFLAGS} -trimpath -o ${GIT_LFS_OUTPUT})
+  set(GIT_LFS_BUILD ${GO_EXECUTABLE} build -ldflags=${GIT_LFS_LDFLAGS} -trimpath -o
+                    ${GIT_LFS_OUTPUT})
 else()
-  set(GIT_LFS_BUILD make VENDOR=Kart ${GIT_LFS_OUTPUT})
+  set(GIT_LFS_BUILD make GO=${GO_EXECUTABLE} VENDOR=Kart ${GIT_LFS_OUTPUT})
 endif()
 ExternalProject_Add(
   git-lfs
@@ -421,15 +425,15 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   # Download a prebuilt Git with spatial-filter extension on Windows. TODO: Use a more recent tag
   # and build inline.
 
-  ExternalProject_Add(git
+  ExternalProject_Add(
+    git
     URL https://github.com/koordinates/git/releases/download/kart-0.11.0-windows/MinGit-v2.34.0.windows.1.13-64-bit.zip
     URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a
     BUILD_IN_SOURCE 1 # avoid creation of a build directory
     INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/git
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
-    INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> <INSTALL_DIR>
-  )
+    INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> <INSTALL_DIR>)
   set(GIT_VENV_EXE "git/cmd/git.exe")
 
 else()
@@ -538,9 +542,10 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${EXTRA_COPY_COMMAND}
-  COMMAND ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} -- ${wheelBuildEnv_PYTHON}
-          "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py"
-          $<$<BOOL:$ENV{VERBOSE}>:-vv> . ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
+  COMMAND
+    ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} -- ${wheelBuildEnv_PYTHON}
+    "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<$<BOOL:$ENV{VERBOSE}>:-vv> .
+    ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
   COMMENT "Vendor dependency archive assembly")
 
 add_custom_target(
