@@ -1129,7 +1129,6 @@ jobs:
         os: [ubuntu-22.04]
         python: ["3.10"]
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -1272,7 +1271,6 @@ jobs:
         os: [macos-12]
         python: ["3.10"]
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -1395,7 +1393,6 @@ jobs:
         os: [windows-2019]
         python: ["3.10"]
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
     env:
       PY_VER: ${{ matrix.python }}
       FORCE_COLOR: "YES"
