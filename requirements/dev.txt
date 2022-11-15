@@ -85,7 +85,7 @@ pyparsing==3.0.9
     #   packaging
 pytest-forked==1.4.0
     # via pytest-xdist
-pytest-xdist==2.5.0
+pytest-xdist==3.0.2
     # via -r requirements/dev.in
 pytest==7.1.2
     # via
