@@ -52,7 +52,6 @@ include(PythonGetABIInfo)
 pythongetabiinfo()
 
 include(PyCreateVirtualEnvironment)
-createvirtualenvironment(wheelBuildEnv REQUIREMENTS "wheel")
 
 # ##################################################################################################
 # PYTHON WHEELS
@@ -61,6 +60,8 @@ createvirtualenvironment(wheelBuildEnv REQUIREMENTS "wheel")
 #
 # Wheel build environment
 #
+
+createvirtualenvironment(wheelBuildEnv REQUIREMENTS "wheel")
 
 # Note that the vcpkg_installed include and library dirs can also be found by directly querying the
 # location of a library eg `get_target_property(GDAL_LIBRARY GDAL::GDAL LOCATION)` but in practice
@@ -109,6 +110,7 @@ file(
     "[build_ext]
 include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
+rpath=${CURRENT_PACKAGES_DIR}/lib
 ")
 
 set(CFFI_WHEEL_VER 1.15.1)
@@ -127,7 +129,8 @@ ExternalProject_Add(
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(cffi INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+set(CFFI_WHEEL ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+list(APPEND WHEEL_LIST ${CFFI_WHEEL})
 
 #
 # gdal_py wheel We download the bindings associated with the version we picked up via vcpkg/FindGDAL
@@ -321,6 +324,39 @@ ExternalProject_Add(
 ExternalProject_Get_Property(pysqlite3 INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
+#
+# cryptography wheel
+#
+
+createvirtualenvironment(cryptographyWheelBuildEnv REQUIREMENTS wheel ${CFFI_WHEEL} setuptools_rust)
+add_dependencies(cryptographyWheelBuildEnv cffi)
+
+include(FindRust)
+find_package(OpenSSL REQUIRED)
+find_package(Rust 1.41 REQUIRED)
+cmake_path(GET RUST_EXECUTABLE PARENT_PATH RUST_DIR)
+
+set(CRYPTOGRAPHY_WHEEL_VER 38.0.3)
+ExternalProject_Add(
+  cryptography
+  GIT_REPOSITORY https://github.com/pyca/cryptography.git
+  GIT_TAG ${CRYPTOGRAPHY_WHEEL_VER}
+  BUILD_IN_SOURCE ON
+  DEPENDS cryptographyWheelBuildEnv OpenSSL::SSL OpenSSL::Crypto
+  EXCLUDE_FROM_ALL ON
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND
+    ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${RUST_DIR}
+    CFLAGS=-I${CURRENT_PACKAGES_DIR}/include LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib --
+    ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all: --no-build-isolation --no-deps
+    --no-index --wheel-dir <TMP_DIR>/dist .
+  INSTALL_COMMAND
+    ${CMAKE_COMMAND} -E copy
+    <TMP_DIR>/dist/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+ExternalProject_Get_Property(cryptography INSTALL_DIR)
+list(APPEND WHEEL_LIST
+     ${INSTALL_DIR}/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+
 # ##################################################################################################
 # OTHER LIBS AND BINS
 # ##################################################################################################
@@ -499,7 +535,13 @@ endif()
 #
 add_custom_target(
   vendor_wheels ALL
-  DEPENDS cffi gdal_py psycopg2 pygit2 pyodbc pysqlite3
+  DEPENDS cffi
+          gdal_py
+          psycopg2
+          pygit2
+          pyodbc
+          pysqlite3
+          cryptography
   COMMENT "Python vendor wheels")
 
 set(VENDOR_CONFIG _kart_env.py)
