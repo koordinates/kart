@@ -53,7 +53,7 @@ pytest==7.1.2
     #   pytest-sugar
 pytest-benchmark[aspect]==4.0.0
     # via -r requirements/test.in
-pytest-cov==3.0.0
+pytest-cov==4.0.0
     # via -r requirements/test.in
 pytest-helpers-namespace==2021.12.29
     # via -r requirements/test.in
