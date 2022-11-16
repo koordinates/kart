@@ -33,6 +33,8 @@ include(ExternalProject)
 
 include(debug_helpers)
 
+find_package(Git REQUIRED)
+
 set(WHEEL_LIST "")
 set(LIB_LIST "")
 set(EXE_LIST "")
@@ -93,6 +95,7 @@ if(WIN32)
 endif()
 
 # Different path-list separators on different platforms:
+# TODO: can we use cmake_path(CONVERT ... TO_NATIVE_PATH_LIST ...) here?
 if(NOT WIN32)
   string(REPLACE ";" ":" BUILD_WHEEL_INCLUDE_DIRS "${BUILD_WHEEL_INCLUDE_DIRS}")
   string(REPLACE ";" ":" BUILD_WHEEL_LIBRARY_DIRS "${BUILD_WHEEL_LIBRARY_DIRS}")
@@ -110,7 +113,7 @@ file(
     "[build_ext]
 include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
-rpath=${CURRENT_PACKAGES_DIR}/lib
+$<$<NOT:$<PLATFORM_ID:Windows>>:rpath=${CURRENT_PACKAGES_DIR}/lib>
 ")
 
 set(CFFI_WHEEL_VER 1.15.1)
@@ -336,6 +339,15 @@ find_package(OpenSSL REQUIRED)
 find_package(Rust 1.41 REQUIRED)
 cmake_path(GET RUST_EXECUTABLE PARENT_PATH RUST_DIR)
 
+file(
+  GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cryptography-prefix/setup.cfg.inc
+  CONTENT "
+[build_ext]
+include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
+library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
+")
+
 set(CRYPTOGRAPHY_WHEEL_VER 38.0.3)
 ExternalProject_Add(
   cryptography
@@ -344,10 +356,10 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS cryptographyWheelBuildEnv OpenSSL::SSL OpenSSL::Crypto
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
+  CONFIGURE_COMMAND ${GIT_EXECUTABLE} restore setup.cfg
+  COMMAND ${CMAKE_COMMAND} -E cat <INSTALL_DIR>/setup.cfg.inc >> setup.cfg
   BUILD_COMMAND
     ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${RUST_DIR}
-    CFLAGS=-I${CURRENT_PACKAGES_DIR}/include LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib --
     ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all: --no-build-isolation --no-deps
     --no-index --wheel-dir <TMP_DIR>/dist .
   INSTALL_COMMAND
