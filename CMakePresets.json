@@ -87,7 +87,7 @@
             "environment": {
                 "CI": "true",
                 "KART_EXPECT_PDAL": "1",
-                "X_KART_POINT_CLOUDS": "1"
+                "KART_EXPECT_GIT_LFS": "1"
             }
         },
         {
