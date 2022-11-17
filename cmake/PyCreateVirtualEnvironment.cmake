@@ -116,7 +116,7 @@ function(CreateVirtualEnvironment TARGET)
   add_custom_command(
     OUTPUT ${OUTPUT_FILE}
     DEPENDS ${CFG_FILE} ${ARG_SOURCES} ${ARG_REQUIREMENTS_TXT}
-    COMMAND ${PIP_INSTALL} --upgrade pip setuptools
+    COMMAND ${PIP_INSTALL} --upgrade pip setuptools build
     COMMAND ${DEPS_INSTALL}
     COMMAND ${PIP} freeze > "${OUTPUT_FILE}"
     COMMENT "${ARG_ENV_NAME}: installing requirements...")
