@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 from enum import Enum
 from pathlib import Path
@@ -141,7 +142,8 @@ if PLATFORM == "Windows":
 
         "odbc32.dll",
         "python3.dll",
-        "python310.dll",
+        # python39.dll or similar:
+        f"python{sysconfig.get_config_var('py_version_nodot')}.dll",
     ]
 elif PLATFORM == "Darwin":
     SYSTEM_DEPS_ALLOW_LIST = [
