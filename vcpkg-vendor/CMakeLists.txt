@@ -580,6 +580,10 @@ if(NOT PROJECT_IS_TOP_LEVEL)
       PARENT_SCOPE)
 endif()
 
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+  set(TOOLS_PATH "$ENV{VCToolsInstallDir}/bin/Hostx64/x64")
+endif()
+
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(EXTRA_COPY_COMMAND ${CMAKE_COMMAND} -E create_symlink mod_spatialite.so
                          env/lib/mod_spatialite.dylib)
@@ -597,8 +601,8 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${EXTRA_COPY_COMMAND}
   COMMAND
-    ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} -- ${wheelBuildEnv_PYTHON}
-    "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<$<BOOL:$ENV{VERBOSE}>:-vv> .
+    ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} --modify PATH=path_list_prepend:${TOOLS_PATH} --
+    ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<$<BOOL:$ENV{VERBOSE}>:-vv> .
     ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
   COMMENT "Vendor dependency archive assembly")
 
