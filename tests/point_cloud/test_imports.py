@@ -3,6 +3,7 @@ import json
 import subprocess
 import pytest
 
+
 from kart.exceptions import (
     INVALID_FILE_FORMAT,
     WORKING_COPY_OR_IMPORT_CONFLICT,
@@ -11,6 +12,7 @@ from kart.exceptions import (
 )
 from kart.repo import KartRepo
 from .fixtures import requires_pdal, requires_git_lfs  # noqa
+from . import assert_lines_almost_equal
 
 DUMMY_REPO = "git@example.com/example.git"
 
@@ -89,16 +91,19 @@ def test_import_single_las(
             # The [4:-3] slice chops off:
             # * the commit hash and date, they change every time
             # * the sourceOid, oid and size; they're nondeterministic after conversion.
-            assert r.stdout.splitlines()[4:-3] == [
-                "    Importing 1 LAZ tiles as autzen",
-                "",
-                "+++ autzen:tile:autzen",
-                "+                                     name = autzen.copc.laz",
-                "+                              crs84Extent = -123.07486587848656,-123.06303511901734,44.049989810220765,44.062293063723445,407.35,536.84",
-                "+                                   format = laz-1.4/copc-1.0",
-                "+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84",
-                "+                               pointCount = 106",
-            ]
+            assert_lines_almost_equal(
+                r.stdout.splitlines()[4:-3],
+                [
+                    "    Importing 1 LAZ tiles as autzen",
+                    "",
+                    "+++ autzen:tile:autzen",
+                    "+                                     name = autzen.copc.laz",
+                    "+                              crs84Extent = -123.07486587848656,-123.06303511901734,44.049989810220765,44.062293063723445,407.35,536.84",
+                    "+                                   format = laz-1.4/copc-1.0",
+                    "+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84",
+                    "+                               pointCount = 106",
+                ],
+            )
 
             r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
             assert r.exit_code == 0, r.stderr
@@ -227,18 +232,21 @@ def test_import_single_laz_no_convert(
 
             r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
             assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines()[4:] == [
-                "    test_import_single_laz_no_convert",
-                "",
-                "+++ auckland:tile:auckland_0_0",
-                "+                                     name = auckland_0_0.laz",
-                "+                              crs84Extent = 174.73844833207193,174.74945404214898,-36.85123712200056,-36.84206322341377,-1.66,99.83",
-                "+                                   format = laz-1.2",
-                "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
-                "+                               pointCount = 4231",
-                "+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
-                "+                                     size = 51489",
-            ]
+            assert_lines_almost_equal(
+                r.stdout.splitlines()[4:],
+                [
+                    "    test_import_single_laz_no_convert",
+                    "",
+                    "+++ auckland:tile:auckland_0_0",
+                    "+                                     name = auckland_0_0.laz",
+                    "+                              crs84Extent = 174.73844833207193,174.74945404214898,-36.85123712200056,-36.84206322341377,-1.66,99.83",
+                    "+                                   format = laz-1.2",
+                    "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
+                    "+                               pointCount = 4231",
+                    "+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
+                    "+                                     size = 51489",
+                ],
+            )
 
 
 def test_import_replace_existing(
