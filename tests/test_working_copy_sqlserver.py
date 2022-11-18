@@ -12,8 +12,6 @@ from kart.tabular.working_copy.base import TableWorkingCopyStatus
 from test_working_copy import compute_approximated_types
 
 
-pytestmark = pytest.mark.xdist_group(name="mssql")
-
 H = pytest.helpers.helpers()
 
 
