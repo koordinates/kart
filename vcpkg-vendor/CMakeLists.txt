@@ -94,8 +94,8 @@ if(WIN32)
   list(APPEND BUILD_WHEEL_LIBRARY_DIRS "${CURRENT_PACKAGES_DIR}/bin")
 endif()
 
-# Different path-list separators on different platforms:
-# TODO: can we use cmake_path(CONVERT ... TO_NATIVE_PATH_LIST ...) here?
+# Different path-list separators on different platforms: TODO: can we use cmake_path(CONVERT ...
+# TO_NATIVE_PATH_LIST ...) here?
 if(NOT WIN32)
   string(REPLACE ";" ":" BUILD_WHEEL_INCLUDE_DIRS "${BUILD_WHEEL_INCLUDE_DIRS}")
   string(REPLACE ";" ":" BUILD_WHEEL_LIBRARY_DIRS "${BUILD_WHEEL_LIBRARY_DIRS}")
@@ -242,6 +242,7 @@ ExternalProject_Add(
   pygit2
   GIT_REPOSITORY https://github.com/koordinates/pygit2.git
   GIT_TAG kart-v0.11.1
+  GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv unofficial::git2::git2
   EXCLUDE_FROM_ALL ON
@@ -311,6 +312,7 @@ ExternalProject_Add(
   pysqlite3
   GIT_REPOSITORY https://github.com/coleifer/pysqlite3.git
   GIT_TAG ${PYSQLITE3_WHEEL_VER}
+  GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv unofficial::sqlite3::sqlite3
   EXCLUDE_FROM_ALL ON
@@ -342,7 +344,8 @@ cmake_path(GET RUST_EXECUTABLE PARENT_PATH RUST_DIR)
 file(
   GENERATE
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cryptography-prefix/setup.cfg.inc
-  CONTENT "
+  CONTENT
+    "
 [build_ext]
 include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
@@ -353,6 +356,7 @@ ExternalProject_Add(
   cryptography
   GIT_REPOSITORY https://github.com/pyca/cryptography.git
   GIT_TAG ${CRYPTOGRAPHY_WHEEL_VER}
+  GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
   DEPENDS cryptographyWheelBuildEnv OpenSSL::SSL OpenSSL::Crypto
   EXCLUDE_FROM_ALL ON
@@ -601,8 +605,9 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${EXTRA_COPY_COMMAND}
   COMMAND
-    ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} --modify PATH=path_list_prepend:${TOOLS_PATH} --
-    ${wheelBuildEnv_PYTHON} "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<$<BOOL:$ENV{VERBOSE}>:-vv> .
+    ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} --modify
+    PATH=path_list_prepend:${TOOLS_PATH} -- ${wheelBuildEnv_PYTHON}
+    "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<$<BOOL:$ENV{VERBOSE}>:-vv> .
     ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
   COMMENT "Vendor dependency archive assembly")
 
