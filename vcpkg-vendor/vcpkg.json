@@ -38,6 +38,7 @@
             "default-features": false,
             "version>=": "3.5.1",
             "features": [
+                "recommended-features",
                 "tools",
                 "postgresql",
                 "geos",
