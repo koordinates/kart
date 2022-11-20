@@ -1476,7 +1476,7 @@ jobs:
       - name: "test: smoke test"
         shell: bash
         run: |
-          ./build/kart --version
+          ./build/kart.cmd --version
 
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
