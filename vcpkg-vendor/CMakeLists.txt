@@ -585,7 +585,7 @@ if(NOT PROJECT_IS_TOP_LEVEL)
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  set(TOOLS_PATH "$ENV{VCToolsInstallDir}/bin/Hostx64/x64")
+  cmake_path(GET CMAKE_C_COMPILER PARENT_PATH TOOLS_PATH)
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
