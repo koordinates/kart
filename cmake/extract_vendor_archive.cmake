@@ -39,13 +39,9 @@ endif()
 
 # install other env files (libraries, binaries, data)
 message(STATUS "Installing environment files...")
-# FIXME: why is this different between platforms?
+file(COPY vendor-tmp/env/ DESTINATION venv)
 if(WIN32)
-  file(COPY vendor-tmp/env/lib/ DESTINATION venv/)
-  file(COPY vendor-tmp/env/share/ DESTINATION venv/share)
   file(COPY vendor-tmp/git/ DESTINATION venv/git/)
-else()
-  file(COPY vendor-tmp/env/ DESTINATION venv)
 endif()
 
 # install wheels

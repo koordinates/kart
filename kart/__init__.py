@@ -49,14 +49,14 @@ if _kart_env:
     spatialite_path = os.path.splitext(_env_path(_kart_env.SPATIALITE_EXTENSION))[0]
 else:
     spatialite_path = os.path.join(
-        prefix, "" if (is_frozen or is_windows) else "lib", f"mod_spatialite"
+        prefix, "" if is_frozen else "lib", f"mod_spatialite"
     )
 if is_windows:
     # sqlite doesn't appear to like backslashes
     spatialite_path = spatialite_path.replace("\\", "/")
 
 # $PATH is used for DLL lookups on Windows
-path_extras = [prefix]
+path_extras = [prefix, os.path.join(prefix, "scripts"), os.path.join(prefix, "lib")]
 
 # Git
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
@@ -70,6 +70,7 @@ else:
     git_bin_path = os.path.join(prefix, "bin")
 path_extras.append(os.path.normpath(git_bin_path))
 
+# TODO: where are these on Windows+MinGit?
 os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
 os.environ["GIT_TEMPLATE_DIR"] = os.path.join(prefix, "share", "git-core", "templates")
 # See locked_git_index in.repo.py:
@@ -104,7 +105,7 @@ os.environ["PATH"] = (
     os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
 )
 if is_windows:
-    os.add_dll_directory(prefix)
+    os.add_dll_directory(os.path.join(prefix, "lib"))
     # FIXME: git2.dll is in the package directory, but isn't setup for ctypes to use
     _pygit2_spec = importlib.util.find_spec("pygit2")
     os.add_dll_directory(_pygit2_spec.submodule_search_locations[0])
