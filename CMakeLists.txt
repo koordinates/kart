@@ -89,9 +89,9 @@ include(KartPy)
 #
 # Tests
 #
-if(LINUX AND $ENV{KART_SQLSERVER_URL})
-  # pytest-xdist causes some weird behaviour with pyodbc on Linux
-  # Split MSSQL tests out into a separate pytest run.
+if(DEFINED LINUX AND DEFINED ENV{KART_SQLSERVER_URL})
+  # pytest-xdist causes some weird behaviour with pyodbc on Linux Split MSSQL tests out into a
+  # separate pytest run.
   add_test(
     NAME pytest
     COMMAND ${VENV_PYTEST} -v -m "not\ mssql" ${PYTEST_ARGS}
@@ -99,7 +99,7 @@ if(LINUX AND $ENV{KART_SQLSERVER_URL})
 
   add_test(
     NAME pytest-mssql
-    COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS} 
+    COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 else()
   add_test(
