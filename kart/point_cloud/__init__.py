@@ -12,10 +12,6 @@ def pdal_execute_pipeline(pipeline, *, env_overrides=None):
     """
     with tempfile.NamedTemporaryFile() as f_metadata:
         env = tool_environment()
-        # Until we incorporate a vendored PDAL into our build, it might be built against a libproj that
-        # uses a different proj database than the one we're vendoring.
-        # So we carefully don't tell it where to look for the proj database.
-        env.pop("PROJ_LIB", None)
         # NOTE: Kart itself doesn't currently use env_overrides, but don't remove it.
         # PDAL uses environment variables for various purposes, and this is helpful for `kart ext-run` scripts.
         env.update(env_overrides or {})
