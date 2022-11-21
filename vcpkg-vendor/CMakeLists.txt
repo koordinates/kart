@@ -120,6 +120,7 @@ set(CFFI_WHEEL_VER 1.15.1)
 ExternalProject_Add(
   cffi
   URL https://files.pythonhosted.org/packages/2b/a8/050ab4f0c3d4c1b8aaa805f70e26e84d0e27004907c5b8ecc1d31815f92a/cffi-1.15.1.tar.gz
+  DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv libffi
   EXCLUDE_FROM_ALL ON
@@ -168,6 +169,7 @@ message(STATUS "GDAL: Will download & build Python bindings for v${GDAL_VERSION}
 ExternalProject_Add(
   gdal_py
   URL https://pypi.org/packages/source/G/GDAL/GDAL-${GDAL_VERSION}.tar.gz
+  DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv GDAL::GDAL
   EXCLUDE_FROM_ALL ON
@@ -208,6 +210,7 @@ set(PYSCOPG2_WHEEL_VER 2.8.5)
 ExternalProject_Add(
   psycopg2
   URL https://files.pythonhosted.org/packages/a8/8f/1c5690eebf148d1d1554fc00ccf9101e134636553dbb75bdfef4f85d7647/psycopg2-2.8.5.tar.gz
+  DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
   EXCLUDE_FROM_ALL ON
@@ -279,6 +282,7 @@ ExternalProject_Add(
   pyodbc
   # if you build from a git repository, pyodbc adds +commit0c0ffee to the wheel version
   URL https://files.pythonhosted.org/packages/d1/21/755f5fa373d01d1803d992c7611799dc4e9fcbb5db7d0852990d6ab3c9ad/pyodbc-4.0.32.tar.gz
+  DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
   EXCLUDE_FROM_ALL ON
@@ -481,6 +485,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     git
     URL https://github.com/koordinates/git/releases/download/kart-0.11.0-windows/MinGit-v2.34.0.windows.1.13-64-bit.zip
     URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a
+    DOWNLOAD_NO_PROGRESS ON
     BUILD_IN_SOURCE 1 # avoid creation of a build directory
     INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/git
     CONFIGURE_COMMAND ""
