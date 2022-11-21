@@ -101,6 +101,13 @@ def print_version(ctx):
         .split()[-1]
     )
 
+    pdal_version = (
+        subprocess.check_output(["pdal", "--version"], env=tool_environment())
+        .decode("ascii")
+        .strip()
+        .split()[2]
+    )
+
     engine = Db_GPKG.create_engine(":memory:")
     with engine.connect() as conn:
         spatialite_version = conn.scalar("SELECT spatialite_version();")
@@ -119,7 +126,8 @@ def print_version(ctx):
     click.echo(
         (
             f"» GDAL v{osgeo._gdal.__version__}; "
-            f"PROJ v{proj_version}\n"
+            f"PROJ v{proj_version}; "
+            f"PDAL v{pdal_version}\n"
             f"» PyGit2 v{pygit2.__version__}; "
             f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
             f"Git v{git_version}\n"
