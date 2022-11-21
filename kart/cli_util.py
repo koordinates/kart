@@ -161,6 +161,9 @@ def _git_sq_quote_buf(src):
     return f"'{dst}'"
 
 
+_ORIG_GIT_CONFIG_PARAMETERS = os.environ.get("GIT_CONFIG_PARAMETERS")
+
+
 @functools.lru_cache()
 def init_git_config():
     """
@@ -178,10 +181,9 @@ def init_git_config():
         new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
 
     if new_config_params:
-        existing = ""
-        if "GIT_CONFIG_PARAMETERS" in os.environ:
-            existing = f" {os.environ['GIT_CONFIG_PARAMETERS']}"
-        os.environ["GIT_CONFIG_PARAMETERS"] = f'{" ".join(new_config_params)}{existing}'
+        os.environ["GIT_CONFIG_PARAMETERS"] = " ".join(
+            filter(None, [*new_config_params, _ORIG_GIT_CONFIG_PARAMETERS])
+        )
 
 
 def tool_environment(env=None):
