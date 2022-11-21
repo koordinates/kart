@@ -11,6 +11,7 @@ from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
 from kart.tabular.working_copy.base import TableWorkingCopyStatus
 from test_working_copy import compute_approximated_types
 
+pytestmark = pytest.mark.mssql
 
 H = pytest.helpers.helpers()
 
