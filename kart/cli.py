@@ -101,6 +101,13 @@ def print_version(ctx):
         .split()[-1]
     )
 
+    gitlfs_version = (
+        re.match(
+            r'git-lfs/([^ ]+) \(',
+            subprocess.check_output(["git-lfs", "version"], env=tool_environment(), text=True)
+        ).group(1)
+    )
+
     pdal_version = (
         subprocess.check_output(["pdal", "--version"], env=tool_environment())
         .decode("ascii")
@@ -130,7 +137,8 @@ def print_version(ctx):
             f"PDAL v{pdal_version}\n"
             f"» PyGit2 v{pygit2.__version__}; "
             f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
-            f"Git v{git_version}\n"
+            f"Git v{git_version}; "
+            f"Git LFS v{gitlfs_version}\n"
             f"» SQLAlchemy v{sqlalchemy.__version__}; "
             f"pysqlite3 v{pysqlite3.version}/v{pysqlite3.sqlite_version}; "
             f"SpatiaLite v{spatialite_version}; "
