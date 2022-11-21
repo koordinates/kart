@@ -41,7 +41,8 @@ prefix = os.path.abspath(sys.prefix)
 
 
 def _env_path(path):
-    return path if os.path.isabs(path) else os.path.join(prefix, path)
+    p = os.path.normpath(path)
+    return p if os.path.isabs(p) else os.path.join(prefix, p)
 
 
 if _kart_env:
@@ -67,7 +68,7 @@ elif is_windows:
     git_bin_path = os.path.join(prefix, "git", "cmd")
 else:
     git_bin_path = os.path.join(prefix, "bin")
-path_extras.append(git_bin_path)
+path_extras.append(os.path.normpath(git_bin_path))
 
 os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
 os.environ["GIT_TEMPLATE_DIR"] = os.path.join(prefix, "share", "git-core", "templates")
@@ -103,9 +104,7 @@ os.environ["PATH"] = (
     os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
 )
 if is_windows:
-    for _p in path_extras:
-        os.add_dll_directory(_p)
-
+    os.add_dll_directory(prefix)
     # FIXME: git2.dll is in the package directory, but isn't setup for ctypes to use
     _pygit2_spec = importlib.util.find_spec("pygit2")
     os.add_dll_directory(_pygit2_spec.submodule_search_locations[0])
