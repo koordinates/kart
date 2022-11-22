@@ -975,7 +975,7 @@ def test_working_copy_mtime_updated(
 
         repo = KartRepo(repo_path)
         env = tool_environment()
-        env["GIT_INDEX_FILE"] = repo.working_copy.workdir.index_path
+        env["GIT_INDEX_FILE"] = str(repo.working_copy.workdir.index_path)
 
         def get_touched_files():
             # git diff-files never compares OIDs - it just lists files which appear
