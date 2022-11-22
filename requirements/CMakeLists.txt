@@ -1,6 +1,6 @@
 include(PyCreateVirtualEnvironment)
 
-createvirtualenvironment(requirementsEnv REQUIREMENTS "pip-tools" "pysed")
+createvirtualenvironment(requirementsEnv REQUIREMENTS "pip-tools" "pysed" "liccheck")
 
 set(REQUIREMENTS_FILES requirements.txt test.txt docs.txt dev.txt)
 set(REQUIREMENTS_DEPS "" requirements.txt test.txt docs.txt)
@@ -59,4 +59,17 @@ endforeach()
 add_custom_target(
   py-requirements
   DEPENDS ${REQUIREMENTS_FILES}
-  COMMENT "Compile Python dependency requirements")
+  COMMENT "Compiling Python dependency requirements")
+
+add_custom_target(
+  py-license-check
+  DEPENDS requirementsEnv py-dependencies
+  COMMAND
+    ${CMAKE_COMMAND} -E env PYTHONPATH=${requirementsEnv_PURELIB_DIR} -- ${VENV_PY} -m liccheck -l
+    CAUTIOUS -s ${CMAKE_CURRENT_SOURCE_DIR}/licenses.ini -r
+    ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt -R liccheck-report.txt
+  COMMAND ${CMAKE_COMMAND} -E echo "*** License Report ***"
+  COMMAND ${CMAKE_COMMAND} -E cat liccheck-report.txt
+  VERBATIM
+  BYPRODUCTS liccheck-report.txt
+  COMMENT "Checking Python dependency licenses")

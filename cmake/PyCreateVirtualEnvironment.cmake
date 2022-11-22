@@ -76,6 +76,16 @@ function(CreateVirtualEnvironment TARGET)
     set(BIN_DIR ${VENV}/bin)
   endif()
 
+  # Get the relative path between a Python venv root & the associated site-packages directory.
+  execute_process(
+    COMMAND
+      ${Python3_EXECUTABLE} -c
+      "import sysconfig,pathlib; print(pathlib.Path(sysconfig.get_path('purelib')).relative_to(sysconfig.get_path('data')))"
+      COMMAND_ERROR_IS_FATAL ANY
+    OUTPUT_VARIABLE PURELIB_REL_PATH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  set(PURELIB_DIR ${VENV}/${PURELIB_REL_PATH})
+
   set(EXEC ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${BIN_DIR})
   if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     message(STATUS "Python: Using OSX deployment target: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
@@ -137,5 +147,8 @@ function(CreateVirtualEnvironment TARGET)
       PARENT_SCOPE)
   set(${TARGET}_VENV_DIR
       ${VENV_DIR}
+      PARENT_SCOPE)
+  set(${TARGET}_PURELIB_DIR
+      ${PURELIB_DIR}
       PARENT_SCOPE)
 endfunction()
