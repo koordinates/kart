@@ -1,4 +1,4 @@
--c ../requirements.txt
+-c requirements.txt
 -c test.txt
 
 sphinx-autobuild
