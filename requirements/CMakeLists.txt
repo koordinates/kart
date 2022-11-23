@@ -11,8 +11,6 @@ set(REQUIREMENTS_DEPS
     "${REQUIREMENTS_DEPS}"
     PARENT_SCOPE)
 
-option(PY_REQUIREMENTS_UPGRADE "py-requirements: upgrade dependencies to latest versions" OFF)
-
 # fixme: use a list from somewhere else
 set(WHEEL_DEPS
     cryptography
@@ -28,43 +26,52 @@ set(PIP_COMPILE_COMMAND
     ${requirementsEnv_EXEC} pip-compile -v --annotate --no-emit-index-url --no-emit-trusted-host
     --allow-unsafe)
 
-if(PY_REQUIREMENTS_UPGRADE)
-  list(APPEND PIP_COMPILE_COMMAND "--upgrade")
-endif()
-
+# Strip out wheels we provide:
 string(JOIN "|" wheelDepRegex ${WHEEL_DEPS})
+set(WHEEL_STRIP_COMMAND ${CMAKE_COMMAND} "-DMATCH=^(${wheelDepRegex})=" "-DREPLACE=#\\1=")
 
-foreach(reqOutput reqDep IN ZIP_LISTS REQUIREMENTS_FILES REQUIREMENTS_DEPS)
+add_custom_command(
+  OUTPUT pip-compile.stamp
+  DEPENDS requirementsEnv
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND} -E true
+  VERBATIM
+  COMMENT "Compiling Python dependency requirements")
+
+add_custom_command(
+  OUTPUT pip-compile-upgrade.stamp
+  DEPENDS requirementsEnv
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${CMAKE_COMMAND} -E true
+  VERBATIM
+  COMMENT "Upgrading Python dependency requirements")
+
+foreach(reqOutput IN LISTS REQUIREMENTS_FILES)
   string(REPLACE ".txt" ".in" reqInput "${reqOutput}")
-
-  set(reqGen ${CMAKE_CURRENT_SOURCE_DIR}/${reqOutput})
-
-  if(PY_REQUIREMENTS_UPGRADE)
-    list(PREPEND reqGen ${reqOutput}.upgrade)
-    set_source_files_properties(${reqOutput}.upgrade PROPERTIES SYMBOLIC true)
-  endif()
-
-  set(reqDepends ${CMAKE_CURRENT_SOURCE_DIR}/${reqInput} requirementsEnv)
-  if(reqDep)
-    list(APPEND reqDepends ${CMAKE_CURRENT_SOURCE_DIR}/${reqDep})
-  endif()
+  add_custom_command(
+    OUTPUT pip-compile.stamp
+    APPEND
+    COMMAND ${PIP_COMPILE_COMMAND} --output-file ${reqOutput} ${reqInput}
+    COMMAND ${WHEEL_STRIP_COMMAND} "-DFILE=${reqOutput}" -P
+            ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/str_replace.cmake)
 
   add_custom_command(
-    OUTPUT ${reqGen}
-    DEPENDS ${reqDepends}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMAND ${PIP_COMPILE_COMMAND} --output-file ${reqOutput} ${reqInput}
-    # Strip out wheels we provide:
-    COMMAND ${CMAKE_COMMAND} "-DMATCH=^(${wheelDepRegex})=" "-DREPLACE=#\\1=" "-DFILE=${reqOutput}"
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/str_replace.cmake
-    VERBATIM
-    COMMENT "Compiling: ${reqInput} -> ${reqOutput}")
+    OUTPUT pip-compile-upgrade.stamp
+    APPEND
+    COMMAND ${PIP_COMPILE_COMMAND} --upgrade --output-file ${reqOutput} ${reqInput}
+    COMMAND ${WHEEL_STRIP_COMMAND} "-DFILE=${reqOutput}" -P
+            ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/str_replace.cmake)
 endforeach()
 
 add_custom_target(
   py-requirements
-  DEPENDS ${REQUIREMENTS_FILES}
-  COMMENT "Compiling Python dependency requirements")
+  DEPENDS pip-compile.stamp
+  COMMENT "Compile Python dependency requirements")
+
+add_custom_target(
+  py-requirements-upgrade
+  DEPENDS pip-compile-upgrade.stamp
+  COMMENT "Upgrade Python dependency requirements")
 
 add_custom_target(
   py-license-check
@@ -75,4 +82,4 @@ add_custom_target(
     ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt -R liccheck-report.txt
   VERBATIM
   BYPRODUCTS liccheck-report.txt
-  COMMENT "Checking Python dependency licenses")
+  COMMENT "Check Python dependency licenses")
