@@ -5,7 +5,10 @@ createvirtualenvironment(requirementsEnv REQUIREMENTS "pip-tools" "liccheck")
 set(REQUIREMENTS_FILES requirements.txt test.txt docs.txt dev.txt)
 set(REQUIREMENTS_DEPS "" requirements.txt test.txt docs.txt)
 set(REQUIREMENTS_FILES
-    ${REQUIREMENTS_FILES}
+    "${REQUIREMENTS_FILES}"
+    PARENT_SCOPE)
+set(REQUIREMENTS_DEPS
+    "${REQUIREMENTS_DEPS}"
     PARENT_SCOPE)
 
 option(PY_REQUIREMENTS_UPGRADE "py-requirements: upgrade dependencies to latest versions" OFF)
