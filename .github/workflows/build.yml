@@ -1263,6 +1263,10 @@ jobs:
           configurePreset: ci-linux
           testPreset: ci-linux
 
+      - name: "test: dependency license check"
+        run: |
+          cmake --build build --target py-license-check
+
   #
   # macOS via CMake+VCPKG
   #

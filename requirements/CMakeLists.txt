@@ -70,8 +70,6 @@ add_custom_target(
     ${CMAKE_COMMAND} -E env PYTHONPATH=${requirementsEnv_PURELIB_DIR} -- ${VENV_PY} -m liccheck -l
     CAUTIOUS -s ${CMAKE_CURRENT_SOURCE_DIR}/licenses.ini -r
     ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt -R liccheck-report.txt
-  COMMAND ${CMAKE_COMMAND} -E echo "*** License Report ***"
-  COMMAND ${CMAKE_COMMAND} -E cat liccheck-report.txt
   VERBATIM
   BYPRODUCTS liccheck-report.txt
   COMMENT "Checking Python dependency licenses")
