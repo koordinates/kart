@@ -1427,6 +1427,8 @@ jobs:
         uses: lukka/get-cmake@v3.24.3
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
+          # workaround for python logging output buffering noise
+          ninjaVersion: "1.10.2"
 
       - name: "setup: python"
         uses: actions/setup-python@v4
