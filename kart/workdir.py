@@ -129,7 +129,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             )
             raise NotFound(
                 f"File system working copy is corrupt - {missing_file} is missing",
-                NO_WORKING_COPY,
+                exit_code=NO_WORKING_COPY,
             )
 
     def create_and_initialise(self):

@@ -1,5 +1,6 @@
 from glob import glob
 import json
+import shutil
 import subprocess
 import pytest
 
@@ -412,8 +413,8 @@ def test_import_amend(cli_runner, data_archive):
 def test_import_update_existing(cli_runner, data_archive, requires_pdal):
     with data_archive("point-cloud/laz-auckland.tgz") as src:
         (src / "auckland_0_1.laz").unlink()
-        (src / "auckland_0_1.laz").symlink_to(src / "auckland_0_0.laz")
-        (src / "new_tile.laz").symlink_to(src / "auckland_0_0.laz")
+        shutil.copy(src / "auckland_0_0.laz", src / "auckland_0_1.laz")
+        shutil.copy(src / "auckland_0_0.laz", src / "new_tile.laz")
         with data_archive("point-cloud/auckland.tgz"):
             r = cli_runner.invoke(
                 [

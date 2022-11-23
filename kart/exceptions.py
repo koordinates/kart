@@ -120,6 +120,7 @@ class SubprocessError(BaseException):
     def __init__(
         self,
         message,
+        *,
         exit_code=None,
         param=None,
         param_hint=None,

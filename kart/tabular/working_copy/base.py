@@ -323,7 +323,7 @@ class TableWorkingCopy(WorkingCopyPart):
                 message.append(
                     f"But beware: {self} already seems to contain data, make sure it is backed up"
                 )
-            raise NotFound("\n".join(message), NO_WORKING_COPY)
+            raise NotFound("\n".join(message), exit_code=NO_WORKING_COPY)
 
     @classmethod
     def default_location(cls, repo):
