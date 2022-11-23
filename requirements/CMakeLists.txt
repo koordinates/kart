@@ -1,6 +1,6 @@
 include(PyCreateVirtualEnvironment)
 
-createvirtualenvironment(requirementsEnv REQUIREMENTS "pip-tools" "pysed" "liccheck")
+createvirtualenvironment(requirementsEnv REQUIREMENTS "pip-tools" "liccheck")
 
 set(REQUIREMENTS_FILES requirements.txt test.txt docs.txt dev.txt)
 set(REQUIREMENTS_DEPS "" requirements.txt test.txt docs.txt)
@@ -51,7 +51,9 @@ foreach(reqOutput reqDep IN ZIP_LISTS REQUIREMENTS_FILES REQUIREMENTS_DEPS)
     DEPENDS ${reqDepends}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND ${PIP_COMPILE_COMMAND} --output-file ${reqOutput} ${reqInput}
-    COMMAND ${requirementsEnv_EXEC} pysed -r "^(${wheelDepRegex})=" "#\\1=" ${reqOutput} --write
+    # Strip out wheels we provide:
+    COMMAND ${CMAKE_COMMAND} "-DMATCH=^(${wheelDepRegex})=" "-DREPLACE=#\\1=" "-DFILE=${reqOutput}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/str_replace.cmake
     VERBATIM
     COMMENT "Compiling: ${reqInput} -> ${reqOutput}")
 endforeach()
