@@ -18,7 +18,8 @@ Optional Arguments:
         Path to requirements.txt list to install with pip
     REQUIREMENTS (list of strings):
         Any additional requirements to install with pip that aren't part of
-        requirements.txt, e.g. local packages
+        requirements.txt, e.g. local packages. If you need to use additional
+        specifiers, use file(WRITE) to create a REQUIREMENTS_TXT file.
     SOURCES (list of string):
         Any sources that local packages depend on.
     PREFIX (string):
@@ -78,17 +79,7 @@ function(CreateVirtualEnvironment TARGET)
     set(BIN_DIR ${VENV}/bin)
   endif()
 
-  # Get the relative path between a Python venv root & the associated site-packages directory.
-  # We have to do this at configure-time, which means we can't use the *venv* sysconfig module,
-  # we need to use the system python. Which of course produces slightly different paths on Debian.
-  execute_process(
-    COMMAND
-      ${Python3_EXECUTABLE} -c
-      "import sysconfig,pathlib; print(pathlib.Path(sysconfig.get_path('purelib')).relative_to(sysconfig.get_path('data')).parent / 'site-packages')"
-      COMMAND_ERROR_IS_FATAL ANY
-    OUTPUT_VARIABLE PURELIB_REL_PATH
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  set(PURELIB_DIR ${VENV}/${PURELIB_REL_PATH})
+  set(PURELIB_DIR ${VENV}/${Python3_PURELIB_REL_PATH})
 
   set(EXEC ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${BIN_DIR})
   if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")

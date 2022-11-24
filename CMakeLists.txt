@@ -7,7 +7,7 @@ endif()
 
 project(
   KART
-  VERSION 0.11.6
+  VERSION 0.12.0
   DESCRIPTION "Version control for geospatial data"
   HOMEPAGE_URL "https://kartproject.org"
   LANGUAGES C CXX)
@@ -79,10 +79,12 @@ set(DOCS "docs/pages/commands")
 file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 set(DOCS "scripts")
 file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 #
 # main build targets
 #
 include(KartPy)
+include(KartBundle)
 
 # install
 

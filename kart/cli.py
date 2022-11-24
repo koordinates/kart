@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import traceback
+from pathlib import Path
 
 import click
 import pygit2
@@ -76,7 +77,7 @@ def load_all_commands():
 def get_version():
     import kart
 
-    with open(os.path.join(os.path.split(kart.__file__)[0], "VERSION")) as version_file:
+    with open(Path(kart.package_data_path) / "VERSION") as version_file:
         return version_file.read().strip()
 
 
@@ -101,12 +102,12 @@ def print_version(ctx):
         .split()[-1]
     )
 
-    gitlfs_version = (
-        re.match(
-            r'git-lfs/([^ ]+) \(',
-            subprocess.check_output(["git-lfs", "version"], env=tool_environment(), text=True)
-        ).group(1)
-    )
+    gitlfs_version = re.match(
+        r"git-lfs/([^ ]+) \(",
+        subprocess.check_output(
+            ["git-lfs", "version"], env=tool_environment(), text=True
+        ),
+    ).group(1)
 
     pdal_version = (
         subprocess.check_output(["pdal", "--version"], env=tool_environment())

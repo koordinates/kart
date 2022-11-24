@@ -6,6 +6,7 @@ __all__ = (
     "spatialite_path",
     "prefix",
     "git_bin_path",
+    "package_data_path",
 )
 
 import importlib
@@ -38,6 +39,11 @@ else:
 
 # sys.prefix is correctly set by virtualenv (development) & PyInstaller (release)
 prefix = os.path.abspath(sys.prefix)
+
+if is_frozen:
+    package_data_path = os.path.join(prefix, "share", "kart")
+else:
+    package_data_path = os.path.split(__file__)[0]
 
 
 def _env_path(path):
@@ -93,14 +99,7 @@ if _kart_env:
     os.environ["GDAL_DATA"] = _env_path(_kart_env.GDAL_DATA)
     os.environ["PROJ_LIB"] = _env_path(_kart_env.PROJ_LIB)
 else:
-    if is_windows:
-        if prefix.endswith("venv"):
-            data_prefix = os.path.join(prefix, "Lib", "site-packages", "osgeo", "data")
-        else:
-            data_prefix = os.path.join(prefix, "osgeo", "data")
-    else:
-        data_prefix = os.path.join(prefix, "share")
-
+    data_prefix = os.path.join(prefix, "share")
     os.environ["GDAL_DATA"] = os.path.join(data_prefix, "gdal")
     os.environ["PROJ_LIB"] = os.path.join(data_prefix, "proj")
 
