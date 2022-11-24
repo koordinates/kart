@@ -7,7 +7,7 @@ env:
   PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
   LIBGIT2_REPO: koordinates/libgit2
   LIBGIT2_TAG: kart-v0.11.1
-  CMAKE_VERSION: "3.25.0-rc4"
+  CMAKE_VERSION: "3.25.0"
 
 jobs:
   # #
@@ -1214,7 +1214,7 @@ jobs:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
           prependedCacheKey: "20221110a"
-          appendedCacheKey: "${{ matrix.os }}-${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       #
       # App Build
@@ -1348,7 +1348,7 @@ jobs:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
           prependedCacheKey: "20221110a"
-          appendedCacheKey: "${{ matrix.os }}-${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       #
       # App Build
@@ -1402,6 +1402,7 @@ jobs:
     env:
       PY_VER: ${{ matrix.python }}
       FORCE_COLOR: "YES"
+      NINJA_VERSION: "1.10.2"  # workaround for python logging output buffering noise
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -1427,8 +1428,7 @@ jobs:
         uses: lukka/get-cmake@v3.24.3
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
-          # workaround for python logging output buffering noise
-          ninjaVersion: "1.10.2"
+          ninjaVersion: "${{ env.NINJA_VERSION }}"
 
       - name: "setup: python"
         uses: actions/setup-python@v4
@@ -1450,7 +1450,7 @@ jobs:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
           prependedCacheKey: "20221110a"
-          appendedCacheKey: "${{ matrix.os }}-${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:N${{ env.NINJA_VERSION }}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       #
       # App Build

@@ -26,7 +26,7 @@ PY_DEPENDS=(
     ninja
 )
 MIN_GOLANG_VERSION=1.17
-CMAKE_VERSION=3.25.0-rc4
+CMAKE_VERSION=3.25.0
 
 ARCH=$(dpkg --print-architecture)
 
