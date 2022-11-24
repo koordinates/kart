@@ -833,6 +833,7 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     # empty dir
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
+    assert "templates not found" not in r.stderr
     assert (repo_path / ".kart" / "HEAD").exists()
 
     # makes dir tree

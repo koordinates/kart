@@ -70,12 +70,21 @@ else:
     git_bin_path = os.path.join(prefix, "bin")
 path_extras.append(os.path.normpath(git_bin_path))
 
+# TODO - consider adding more of this to _kart_env.
 if is_windows:
-    path_extras.append(os.path.normpath(os.path.join(prefix, "git", "usr", "bin")))
+    os.environ["GIT_EXEC_PATH"] = os.path.join(
+        prefix, "git", "mingw64", "libexec", "git-core"
+    )
+    os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
+        prefix, "git", "mingw64", "share", "git-core", "templates"
+    )
+    path_extras.append(os.path.join(prefix, "git", "usr", "bin"))
+else:
+    os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
+    os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
+        prefix, "share", "git-core", "templates"
+    )
 
-# TODO: where are these on Windows+MinGit?
-os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
-os.environ["GIT_TEMPLATE_DIR"] = os.path.join(prefix, "share", "git-core", "templates")
 # See locked_git_index in.repo.py:
 os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
