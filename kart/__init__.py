@@ -5,7 +5,7 @@ __all__ = (
     "is_windows",
     "spatialite_path",
     "prefix",
-    "git_bin_path"
+    "git_bin_path",
 )
 
 import importlib
@@ -69,6 +69,9 @@ elif is_windows:
 else:
     git_bin_path = os.path.join(prefix, "bin")
 path_extras.append(os.path.normpath(git_bin_path))
+
+if is_windows:
+    path_extras.append(os.path.normpath(os.path.join(prefix, "git", "usr", "bin")))
 
 # TODO: where are these on Windows+MinGit?
 os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
