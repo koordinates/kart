@@ -1489,6 +1489,8 @@ jobs:
 
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
+        env:
+          KART_EXPECT_GITSPATIALFILTER: 0
         with:
           configurePreset: ci-windows
           testPreset: ci-windows
