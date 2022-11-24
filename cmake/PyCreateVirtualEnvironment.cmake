@@ -43,6 +43,8 @@ Output Variables TARGET:
         Stores the command to use to run pip in the virtualenv.
     ${TARGET}_VENV_DIR:
         Stores the root path of the virtual environment.
+    ${TARGET}_PURELIB_DIR:
+        Stores the site-packages path of the virtual environment.
 
 #]=============================================================================]
 
@@ -77,10 +79,12 @@ function(CreateVirtualEnvironment TARGET)
   endif()
 
   # Get the relative path between a Python venv root & the associated site-packages directory.
+  # We have to do this at configure-time, which means we can't use the *venv* sysconfig module,
+  # we need to use the system python. Which of course produces slightly different paths on Debian.
   execute_process(
     COMMAND
       ${Python3_EXECUTABLE} -c
-      "import sysconfig,pathlib; print(pathlib.Path(sysconfig.get_path('purelib')).relative_to(sysconfig.get_path('data')))"
+      "import sysconfig,pathlib; print(pathlib.Path(sysconfig.get_path('purelib')).relative_to(sysconfig.get_path('data')).parent / 'site-packages')"
       COMMAND_ERROR_IS_FATAL ANY
     OUTPUT_VARIABLE PURELIB_REL_PATH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
