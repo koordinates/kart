@@ -5,7 +5,7 @@ import sys
 import click
 import pygit2
 
-from kart.core import find_blobs_with_paths_in_tree
+from kart.core import find_blobs_in_tree, find_blobs_with_paths_in_tree
 from kart.dataset_mixins import DatasetDiffMixin
 from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION, PATCH_DOES_NOT_APPLY
 from kart.meta_items import MetaItemFileType, MetaItemVisibility
@@ -146,6 +146,16 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
                 pass
         # Returning an empty tree makes it easier for callers to not have to handle None as a special case.
         return self._empty_tree
+
+    @functools.lru_cache()
+    def count_blobs_in_subtree(self, subtree_path):
+        if self.inner_tree is not None:
+            try:
+                subtree = self.inner_tree / subtree_path
+                return sum(1 for blob in find_blobs_in_tree(subtree))
+            except KeyError:
+                pass
+        return 0
 
     def get_blob_at(self, rel_path, missing_ok=False, from_tree=None):
         """

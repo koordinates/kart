@@ -1096,3 +1096,26 @@ def test_lfs_gc(cli_runner, data_archive, monkeypatch):
             "d380a98414ab209f36c7fba4734b02f67de519756e341837217716c5b4768339 (f866ac0ecf4326931d10aaa16140e2240eeada90)",
             "ec80af6cae31be5318f9380cd953b25469bd8ecda25086deca2b831bbb89168a (c76e89f23f512214063d31e7a9c85657f0cf8fb6)",
         ]
+
+
+def test_working_copy_progress_bar(
+    cli_runner, data_archive, monkeypatch, requires_pdal
+):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+        progress_output = r.stderr.splitlines()
+        assert progress_output == ["Writing tiles for dataset 1 of 1: auckland"]
+
+        # Since stderr is not atty during testing, we have to force progress to show using KART_SHOW_PROGRESS.
+        monkeypatch.setenv("KART_SHOW_PROGRESS", "1")
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+        progress_output = r.stderr.splitlines()
+        assert progress_output[0] == "Writing tiles for dataset 1 of 1: auckland"
+        assert re.fullmatch(
+            r"auckland: 100%\|█+\| 16/16 \[[0-9:<]+, [0-9\.]+tile/s\]",
+            progress_output[-1],
+        )

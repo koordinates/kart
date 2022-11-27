@@ -423,14 +423,21 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 yield pointer_blob
 
     def write_full_datasets_to_workdir(self, datasets, track_changes_as_dirty=False):
-        for dataset in datasets:
+        dataset_count = len(datasets)
+        for i, dataset in enumerate(datasets):
             assert isinstance(dataset, PointCloudV1)
+
+            click.echo(
+                f"Writing tiles for dataset {i+1} of {dataset_count}: {dataset.path}",
+                err=True,
+            )
 
             wc_tiles_dir = self.path / dataset.path
             (wc_tiles_dir).mkdir(parents=True, exist_ok=True)
 
             for tilename, lfs_path in dataset.tilenames_with_lfs_paths(
-                self.repo.spatial_filter
+                self.repo.spatial_filter,
+                show_progress=True,
             ):
                 if not lfs_path.is_file():
                     click.echo(
