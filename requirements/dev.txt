@@ -15,7 +15,7 @@ attrs==22.1.0
     #   pytest
 backcall==0.2.0
     # via ipython
-colorama==0.4.5
+colorama==0.4.6
     # via
     #   -c requirements/docs.txt
     #   -c requirements/test.txt
@@ -24,9 +24,13 @@ decorator==5.1.1
     # via
     #   ipdb
     #   ipython
+exceptiongroup==1.0.4
+    # via
+    #   -c requirements/test.txt
+    #   pytest
 execnet==1.9.0
     # via pytest-xdist
-importlib-metadata==4.12.0
+importlib-metadata==5.1.0
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/docs.txt
@@ -43,7 +47,7 @@ ipython==7.34.0
     # via
     #   -r requirements/dev.in
     #   ipdb
-jedi==0.18.1
+jedi==0.18.2
     # via ipython
 matplotlib-inline==0.1.6
     # via ipython
@@ -64,15 +68,10 @@ pluggy==1.0.0
     # via
     #   -c requirements/test.txt
     #   pytest
-prompt-toolkit==3.0.30
+prompt-toolkit==3.0.33
     # via ipython
 ptyprocess==0.7.0
     # via pexpect
-py==1.11.0
-    # via
-    #   -c requirements/test.txt
-    #   pytest
-    #   pytest-forked
 pygments==2.13.0
     # via
     #   -c requirements/../requirements.txt
@@ -83,14 +82,11 @@ pyparsing==3.0.9
     #   -c requirements/docs.txt
     #   -c requirements/test.txt
     #   packaging
-pytest-forked==1.4.0
-    # via pytest-xdist
-pytest-xdist==2.5.0
+pytest-xdist==3.0.2
     # via -r requirements/dev.in
-pytest==7.1.2
+pytest==7.2.0
     # via
     #   -c requirements/test.txt
-    #   pytest-forked
     #   pytest-xdist
 toml==0.10.2
     # via ipdb
@@ -98,11 +94,11 @@ tomli==2.0.1
     # via
     #   -c requirements/test.txt
     #   pytest
-traitlets==5.3.0
+traitlets==5.5.0
     # via
     #   ipython
     #   matplotlib-inline
-typing-extensions==4.3.0
+typing-extensions==4.4.0
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/docs.txt
@@ -110,7 +106,7 @@ typing-extensions==4.3.0
     #   importlib-metadata
 wcwidth==0.2.5
     # via prompt-toolkit
-zipp==3.8.1
+zipp==3.11.0
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/docs.txt

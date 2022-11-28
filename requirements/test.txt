@@ -4,7 +4,7 @@
 #
 #    make py-requirements
 #
-aspectlib==1.5.2
+aspectlib==2.0.0
     # via pytest-benchmark
 atomicwrites==1.4.1
     # via -r requirements/test.in
@@ -12,17 +12,19 @@ attrs==22.1.0
     # via
     #   -c requirements/../requirements.txt
     #   pytest
-colorama==0.4.5
+colorama==0.4.6
     # via -r requirements/test.in
-coverage[toml]==6.4.4
+coverage[toml]==6.5.0
     # via pytest-cov
+exceptiongroup==1.0.4
+    # via pytest
 fields==5.0.0
     # via aspectlib
 gprof2dot==2022.7.29
     # via pytest-profiling
 html5lib==1.1
     # via -r requirements/test.in
-importlib-metadata==4.12.0
+importlib-metadata==5.1.0
     # via
     #   -c requirements/../requirements.txt
     #   pluggy
@@ -35,25 +37,13 @@ packaging==21.3
     #   pytest-sugar
 pluggy==1.0.0
     # via pytest
-py==1.11.0
-    # via pytest
-py-cpuinfo==8.0.0
+py-cpuinfo==9.0.0
     # via pytest-benchmark
 pyparsing==3.0.9
     # via packaging
-pytest==7.1.2
-    # via
-    #   -r requirements/test.in
-    #   pytest-benchmark
-    #   pytest-cov
-    #   pytest-helpers-namespace
-    #   pytest-mock
-    #   pytest-profiling
-    #   pytest-shard
-    #   pytest-sugar
 pytest-benchmark[aspect]==4.0.0
     # via -r requirements/test.in
-pytest-cov==3.0.0
+pytest-cov==4.0.0
     # via -r requirements/test.in
 pytest-helpers-namespace==2021.12.29
     # via -r requirements/test.in
@@ -65,23 +55,33 @@ pytest-shard==0.1.2
     # via -r requirements/test.in
 pytest-sugar==0.9.6
     # via -r requirements/test.in
+pytest==7.2.0
+    # via
+    #   -r requirements/test.in
+    #   pytest-benchmark
+    #   pytest-cov
+    #   pytest-helpers-namespace
+    #   pytest-mock
+    #   pytest-profiling
+    #   pytest-shard
+    #   pytest-sugar
 six==1.16.0
     # via
     #   html5lib
     #   pytest-profiling
-termcolor==1.1.0
+termcolor==2.1.1
     # via pytest-sugar
 tomli==2.0.1
     # via
     #   coverage
     #   pytest
-typing-extensions==4.3.0
+typing-extensions==4.4.0
     # via
     #   -c requirements/../requirements.txt
     #   importlib-metadata
 webencodings==0.5.1
     # via html5lib
-zipp==3.8.1
+zipp==3.11.0
     # via
     #   -c requirements/../requirements.txt
     #   importlib-metadata

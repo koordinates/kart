@@ -1,14 +1,14 @@
 certifi
 Click~=8.1
 cryptography
-msgpack~=0.6.1
-pymysql
-Pygments
-sqlalchemy
-pyodbc ; platform_system!="Linux"
-shellingham
 docutils<0.18
+msgpack~=0.6.1
+Pygments
+pymysql
+pyodbc ; platform_system!="Linux"
 rst2txt
+shellingham
+sqlalchemy
 
 # jsonschema>=4.2 pulls in importlib_resources, which breaks PyInstaller<4.8
 # https://github.com/pyinstaller/pyinstaller/pull/6195
