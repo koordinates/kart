@@ -154,7 +154,8 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     help=(
         "Adds a 'feature_count' (the number of features modified in this diff) to JSON output."
         "If the value is 'exact', the feature count is exact (this may be slow.) "
-        "Otherwise, the feature count will be approximated with varying levels of accuracy."
+        "Otherwise, the feature count will be approximated with varying levels of accuracy. "
+        "For non-tabular datasets, the feature count is always exact, and refers to the number of tiles."
     ),
 )
 # Some standard git options

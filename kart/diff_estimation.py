@@ -69,6 +69,13 @@ class ThreadTerminated(RuntimeError):
     pass
 
 
+def get_data_tree(repo, ds):
+    if ds:
+        return ds.feature_tree if ds.DATASET_TYPE == "table" else ds.tile_tree
+    else:
+        return repo.empty_tree
+
+
 def estimate_diff_feature_counts(
     repo,
     base,
@@ -119,8 +126,11 @@ def estimate_diff_feature_counts(
         if not base_ds and not target_ds:
             continue
 
-        base_feature_tree = base_ds.feature_tree if base_ds else repo.empty_tree
-        target_feature_tree = target_ds.feature_tree if target_ds else repo.empty_tree
+        base_data_tree = get_data_tree(repo, base_ds)
+        target_data_tree = get_data_tree(repo, target_ds)
+        if (base_ds or target_ds).DATASET_TYPE != "table":
+            # point-cloud datasets have a small number of tiles, so we can just count them.
+            accuracy = "exact"
 
         if accuracy == "exact" and include_wc_diff:
             # can't really avoid this - to generate an exact count for this diff we have to generate the diff
@@ -136,9 +146,7 @@ def estimate_diff_feature_counts(
 
         elif accuracy == "exact":
             # nice, simple, no stats involved. but slow :/
-            ds_total = get_exact_diff_blob_count(
-                repo, base_feature_tree, target_feature_tree
-            )
+            ds_total = get_exact_diff_blob_count(repo, base_data_tree, target_data_tree)
         else:
             path_encoder = (
                 base_ds.feature_path_encoder
@@ -148,8 +156,8 @@ def estimate_diff_feature_counts(
             ds_total = get_approximate_diff_blob_count(
                 repo,
                 accuracy,
-                base_feature_tree,
-                target_feature_tree,
+                base_data_tree,
+                target_data_tree,
                 dataset_path,
                 path_encoder,
             )
