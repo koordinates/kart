@@ -38,7 +38,7 @@ else ifeq ($(PLATFORM),Linux)
 endif
 PY3 := $(or $(PY3),python3.7)
 
-PYDEPS := pip wheel $(WHEELTOOL) cmake==3.* certifi
+PYDEPS := pip wheel==0.37.0 $(WHEELTOOL) cmake==3.* certifi
 # if we export SSL_CERT_FILE it breaks wget under macos ¯\_(ツ)_/¯
 export CERTIFI_SSL_CERT_FILE=$(abspath $(PREFIX)/lib/python3.7/site-packages/certifi/cacert.pem)
 
