@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import stat
 import sys
 from pathlib import Path
 
@@ -104,31 +105,66 @@ if is_linux or is_darwin:
 
 VENV_BIN_DIR = "Scripts" if is_win else "bin"
 
+# Binaries: these are signed, and put in the correct place on macOS
 binaries = [
     (f'{BINARY_DIR}/venv/lib/*.{lib_suffix_glob}', '.'),
     (f'{BINARY_DIR}/venv/lib/mod_spatialite.{lib_suffix_glob}', '.'),
     (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs', '.'),
     (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/pdal', '.'),
 ]
-# if not is_win:
-#     binaries.append(('cli_helper/kart_cli_helper', '.'))
+if not is_win:
+    binaries += [
+        # ('cli_helper/kart_cli_helper', '.'),
+        (f'{BINARY_DIR}/venv/bin/git', '.'),
+        (f'{BINARY_DIR}/venv/bin/git-receive-pack', '.'),
+        (f'{BINARY_DIR}/venv/bin/git-upload-pack', '.'),
+        (f'{BINARY_DIR}/venv/bin/git-upload-archive', '.'),
+        (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs', '.'),
+    ]
+
+
+# Data files — these are copied in as-is
+datas=[
+    ('kart/VERSION', 'share/kart'),
+    ('kart/diff-view.html', 'share/kart'),
+    ('README.md', '.'),
+    ('COPYING', '.'),
+    (f'{BINARY_DIR}/venv/share/gdal', 'share/gdal'),
+    (f'{BINARY_DIR}/venv/share/proj', 'share/proj'),
+    (f'{BINARY_DIR}/venv/pyodbc.pyi', '.'),
+    (f'{BINARY_DIR}/venv/help', 'help'),
+]
+
+if is_win:
+    # entire MinGit folder
+    datas += [
+        (f'{BINARY_DIR}/venv/git', 'git'),
+    ]
+else:
+    # find git binaries
+    datas += [
+        (f'{BINARY_DIR}/venv/share/git-core', 'share/git-core'),
+    ]
+
+
+    # add non-links from git to binaries, and links to data
+    git_libexec_core_root = f'{BINARY_DIR}/venv/libexec/git-core'
+    for r, dl, fl in os.walk(git_libexec_core_root):
+        for fn in fl:
+            fp = Path(r) / fn
+            if not fp.is_symlink() and fp.stat().st_mode & stat.S_IXUSR:
+                binaries.append((str(fp), 'libexec/git-core/'))
+            # else:
+            #     datas.append((str(fp), 'libexec/git-core/'))
+
 
 pyi_analysis = Analysis(
-    [f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/kart'],
+    ['platforms/kart_cli.py'],
     pathex=[],
     # only set kart_cli_helper as a binary for Linux or MacOS, need to
     # do here as modifying after the Analysis instance is created fails
     binaries=binaries,
-    datas=[
-        ('kart/VERSION', 'share/kart'),
-        ('kart/diff-view.html', 'share/kart'),
-        ('README.md', '.'),
-        ('COPYING', '.'),
-        (f'{BINARY_DIR}/venv/share/gdal', 'share/gdal'),
-        (f'{BINARY_DIR}/venv/share/proj', 'share/proj'),
-        (f'{BINARY_DIR}/venv/pyodbc.pyi', '.'),
-        (f'{BINARY_DIR}/venv/help', 'help'),
-    ],
+    datas=datas,
     hiddenimports=[
         *collect_submodules('kart'),
         *collect_submodules('kart.annotations'),
@@ -162,21 +198,6 @@ pyi_analysis = Analysis(
 
 if is_linux or is_darwin:
     pyi_analysis.exclude_system_libraries(list_of_exceptions=['libffi*', 'libreadline*'])
-
-if is_win:
-    pyi_analysis.datas += Tree(f'{BINARY_DIR}/venv/git', prefix='git')
-    # GDAL/osgeo hook doesn't include Proj
-    # pyi_analysis.datas += Tree(
-    #     f'{BINARY_DIR}/venv/Lib/site-packages/osgeo/data/proj',
-    #     prefix=os.path.join('osgeo', 'data', 'proj'),
-    # )
-else:
-    pyi_analysis.binaries += [('git', f'{BINARY_DIR}/venv/bin/git', 'BINARY')]
-    libexec_root =  f'{BINARY_DIR}/venv/cxec'
-    pyi_analysis.datas += Tree(f'{BINARY_DIR}/venv/share/git-core', prefix='share/git-core')
-
-# if is_linux:
-#     pyi_analysis.binaries += [('libcrypt.so.2', '/usr/local/lib/libcrypt.so.2', 'BINARY')]
 
 pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
