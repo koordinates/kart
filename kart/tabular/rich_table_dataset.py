@@ -31,7 +31,7 @@ class RichTableDataset(TableDataset):
             yield self.get_feature(path=blob.name, data=memoryview(blob)), blob
 
     def features_with_crs_ids(
-        self, spatial_filter=SpatialFilter.MATCH_ALL, log_progress=False
+        self, spatial_filter=SpatialFilter.MATCH_ALL, show_progress=False
     ):
         """
         Same as table_dataset.features(), but includes the CRS ID from the schema in every Geometry object.
@@ -39,7 +39,7 @@ class RichTableDataset(TableDataset):
         so the schema must be consulted separately to learn about CRS IDs.
         """
         yield from self._add_crs_ids_to_features(
-            self.features(spatial_filter, log_progress=log_progress)
+            self.features(spatial_filter, show_progress=show_progress)
         )
 
     def get_features_with_crs_ids(

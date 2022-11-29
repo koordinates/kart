@@ -929,8 +929,9 @@ class TableWorkingCopy(WorkingCopyPart):
         with pause_refreshing(self.repo.odb), self.session() as sess:
             dataset_count = len(datasets)
             for i, dataset in enumerate(datasets):
-                L.info(
-                    "Writing dataset %d of %d: %s", i + 1, dataset_count, dataset.path
+                click.echo(
+                    f"Writing features for dataset {i+1} of {dataset_count}: {dataset.path}",
+                    err=True,
                 )
 
                 try:
@@ -956,7 +957,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
                 for row_dicts in chunk(
                     dataset.features_with_crs_ids(
-                        self.repo.spatial_filter, log_progress=L.info
+                        self.repo.spatial_filter, show_progress=True
                     ),
                     CHUNK_SIZE,
                 ):

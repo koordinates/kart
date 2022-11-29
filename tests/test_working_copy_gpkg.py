@@ -1,7 +1,8 @@
 import json
-import subprocess
 from pathlib import Path
 import pytest
+import re
+import subprocess
 
 import sqlalchemy
 
@@ -1207,3 +1208,27 @@ def test_checkout_and_status_with_no_crs(
             ]
         )
         assert r.exit_code == 0, r.stderr
+
+
+def test_working_copy_progress_bar(cli_runner, data_working_copy, monkeypatch):
+    with data_working_copy("points") as repo_path:
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+        progress_output = r.stderr.splitlines()
+        assert progress_output == [
+            "Writing features for dataset 1 of 1: nz_pa_points_topo_150k"
+        ]
+
+        # Since stderr is not atty during testing, we have to force progress to show using KART_SHOW_PROGRESS.
+        monkeypatch.setenv("KART_SHOW_PROGRESS", "1")
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+        progress_output = r.stderr.splitlines()
+        assert (
+            progress_output[0]
+            == "Writing features for dataset 1 of 1: nz_pa_points_topo_150k"
+        )
+        assert re.fullmatch(
+            r"nz_pa_points_topo_150k: 100%\|█+\| 2143/2143 \[[0-9:<]+, [0-9\.]+F/s\]",
+            progress_output[-1],
+        )

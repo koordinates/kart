@@ -1,14 +1,11 @@
 import functools
-import logging
-import time
 
 from kart.base_dataset import BaseDataset
 from kart.spatial_filter import SpatialFilter
 from kart.working_copy import PartType
+from kart.progress_util import progress_bar
 
 from .import_source import TableImportSource
-
-L = logging.getLogger("kart.tabular.table_dataset")
 
 
 class TableDataset(BaseDataset, TableImportSource):
@@ -116,7 +113,7 @@ class TableDataset(BaseDataset, TableImportSource):
         geom_columns = self.schema.geometry_columns
         return geom_columns[0].name if geom_columns else None
 
-    def features(self, spatial_filter=SpatialFilter.MATCH_ALL, log_progress=False):
+    def features(self, spatial_filter=SpatialFilter.MATCH_ALL, show_progress=False):
         """
         Yields a dict for every feature. Dicts contain key-value pairs for each feature property,
         and geometries use kart.geometry.Geometry objects, as in the following example::
@@ -132,77 +129,43 @@ class TableDataset(BaseDataset, TableImportSource):
         so that zip(schema.columns, feature.values()) matches each field with its column.
 
         spatial_filter - restricts the features yielded to those that are in a particular geographic area.
-        log_progress - can be set to True, or to a callable logger method eg L.info, to enable logging.
+        show_progress - enables tqdm progress bar to show progress as we iterate through the features.
         """
-        if log_progress:
-            plog = L.info if log_progress is True else log_progress
-            log_progress = bool(log_progress)
-
         spatial_filter = spatial_filter.transform_for_dataset(self)
 
         n_read = 0
-        n_chunk = 0
         n_matched = 0
-        n_total = self.feature_count
-        t0 = time.monotonic()
-        t0_chunk = t0
-
-        if log_progress:
-            plog("0.0%% 0/%d features... @0.0s", n_total)
-
-        for blob in self.feature_blobs():
-            n_read += 1
-            n_chunk += 1
-            try:
-                feature = self.get_feature_from_blob(blob)
-            except KeyError as e:
-                if spatial_filter.feature_is_prefiltered(e):
-                    feature = None
-                else:
-                    raise
-
-            if feature is not None and spatial_filter.matches(feature):
-                n_matched += 1
-                yield feature
-
-            if log_progress and n_chunk == self.NUM_FEATURES_PER_PROGRESS_LOG:
-                t = time.monotonic()
-                self._log_feature_progress(
-                    plog, n_read, n_chunk, n_matched, n_total, t0, t0_chunk, t
-                )
-                t0_chunk = t
-                n_chunk = 0
-
-        if log_progress and n_total:
-            t = time.monotonic()
-            self._log_feature_progress(
-                plog, n_read, n_chunk, n_matched, n_total, t0, t0_chunk, t
-            )
-            plog("Overall rate: %d features/s", (n_read / (t - t0 or 0.001)))
-
-    def _log_feature_progress(
-        self, plog, num_read, num_chunk, num_matched, num_total, t0, t0_chunk, t
-    ):
-        plog(
-            "%.1f%% %d/%d features... @%.1fs (+%.1fs, ~%d F/s)",
-            num_read / num_total * 100,
-            num_read,
-            num_total,
-            t - t0,
-            t - t0_chunk,
-            num_chunk / (t - t0_chunk or 0.001),
+        n_total = self.feature_count if show_progress else 0
+        progress = progress_bar(
+            show_progress=show_progress, total=n_total, unit="F", desc=self.path
         )
-        if num_matched != num_read:
-            plog(
-                "(of %d features read, wrote %d to the working copy that match the spatial filter)",
-                num_read,
-                num_matched,
+
+        with progress as p:
+            for blob in self.feature_blobs():
+                n_read += 1
+                try:
+                    feature = self.get_feature_from_blob(blob)
+                except KeyError as e:
+                    if spatial_filter.feature_is_prefiltered(e):
+                        feature = None
+                    else:
+                        raise
+
+                if feature is not None and spatial_filter.matches(feature):
+                    n_matched += 1
+                    yield feature
+
+                p.update(1)
+
+        if show_progress and not spatial_filter.match_all:
+            p.write(
+                f"(of {n_read} features read, wrote {n_matched} matching features to the working copy due to spatial filter)"
             )
 
     @property
     def feature_count(self):
         """The total number of features in this dataset."""
-        return sum(1 for blob in self.feature_blobs())
+        return self.count_blobs_in_subtree(self.FEATURE_PATH)
 
     def get_features(
         self, row_pks, *, ignore_missing=False, spatial_filter=SpatialFilter.MATCH_ALL
