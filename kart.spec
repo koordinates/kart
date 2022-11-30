@@ -25,10 +25,13 @@ BINARY_DIR = os.environ.get("BINARY_DIR", "build")
 
 if is_win:
     lib_suffix_glob = 'dll'
+    exe_suffix = '.exe'
 elif is_darwin:
     lib_suffix_glob = 'dylib'
+    exe_suffix = ''
 elif is_linux:
     lib_suffix_glob = 'so*'
+    exe_suffix = ''
 
 if 'KART_VERSION' in os.environ:
     kart_version = os.environ["KART_VERSION"]
@@ -116,14 +119,13 @@ symlinks = []
 binaries = [
     (f'{BINARY_DIR}/venv/lib/*.{lib_suffix_glob}', '.'),
     (f'{BINARY_DIR}/venv/lib/mod_spatialite.{lib_suffix_glob}', '.'),
-    (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs', '.'),
-    (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/pdal', '.'),
+    (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs{exe_suffix}', '.'),
+    (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/pdal{exe_suffix}', '.'),
 ]
 if not is_win:
     binaries += [
         # ('cli_helper/kart_cli_helper', '.'),
         (f'{BINARY_DIR}/venv/bin/git', '.'),
-        (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs', '.'),
     ]
 
 # Data files — these are copied in as-is

@@ -62,7 +62,9 @@ if is_windows:
     spatialite_path = spatialite_path.replace("\\", "/")
 
 # $PATH is used for DLL lookups on Windows
-path_extras = [prefix, os.path.join(prefix, "scripts"), os.path.join(prefix, "lib")]
+path_extras = [prefix]
+if not is_frozen:
+    path_extras += [os.path.join(prefix, "scripts"), os.path.join(prefix, "lib")]
 
 # Git
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
@@ -116,7 +118,7 @@ os.environ["PATH"] = (
     os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
 )
 if is_windows:
-    os.add_dll_directory(os.path.join(prefix, "lib"))
+    os.add_dll_directory(prefix if is_frozen else os.path.join(prefix, "lib"))
     # FIXME: git2.dll is in the package directory, but isn't setup for ctypes to use
     _pygit2_spec = importlib.util.find_spec("pygit2")
     os.add_dll_directory(_pygit2_spec.submodule_search_locations[0])
