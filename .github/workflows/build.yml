@@ -1267,6 +1267,21 @@ jobs:
         run: |
           cmake --build build --target py-license-check
 
+      #
+      # Packaging
+      #
+
+      - name: "bundle: assemble"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-linux
+          buildPreset: ci-bundle-linux
+
+      - name: "bundle: smoke test"
+        shell: bash
+        run: |
+          ./build/pyinstaller/dist/kart/kart --version
+
   #
   # macOS via CMake+VCPKG
   #
@@ -1390,6 +1405,21 @@ jobs:
           configurePreset: ci-macos
           testPreset: ci-macos
 
+      #
+      # Packaging
+      #
+
+      - name: "bundle: assemble"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-macos
+          buildPreset: ci-bundle-macos
+
+      - name: "bundle: smoke test"
+        shell: bash
+        run: |
+          ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
+
   #
   # Windows via CMake+VCPKG
   #
@@ -1494,3 +1524,18 @@ jobs:
         with:
           configurePreset: ci-windows
           testPreset: ci-windows
+
+      #
+      # Packaging
+      #
+
+      - name: "bundle: assemble"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-windows
+          buildPreset: ci-bundle-windows
+
+      - name: "bundle: smoke test"
+        shell: bash
+        run: |
+          ./build/pyinstaller/dist/kart/kart.exe --version
