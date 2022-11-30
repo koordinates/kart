@@ -131,10 +131,10 @@ ExternalProject_Add(
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-*.whl
-                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(cffi INSTALL_DIR)
-set(CFFI_WHEEL ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-*.whl)
+set(CFFI_WHEEL ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 list(APPEND WHEEL_LIST ${CFFI_WHEEL})
 
 #
@@ -180,10 +180,10 @@ ExternalProject_Add(
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/GDAL-${GDAL_VERSION}-*.whl
-                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-*.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl)
 
 #
 # psycopg2 wheel
@@ -221,10 +221,11 @@ ExternalProject_Add(
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-*.whl
-                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
+  INSTALL_COMMAND
+    ${CMAKE_COMMAND} -E copy <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl
+    <INSTALL_DIR>)
 ExternalProject_Get_Property(psycopg2 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-*.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # pygit2 wheel
@@ -255,10 +256,10 @@ ExternalProject_Add(
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl <TMP_DIR>/dist <SOURCE_DIR>/.eggs
   COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${wheelBuildEnv_PYTHON}
           setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-*.whl
-                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pygit2 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-*.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # pyodbc wheel
@@ -292,10 +293,10 @@ ExternalProject_Add(
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-*.whl
-                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-*.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # pysqlite3 wheel
@@ -327,10 +328,11 @@ ExternalProject_Add(
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-*.whl
-                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
+  INSTALL_COMMAND
+    ${CMAKE_COMMAND} -E copy
+    <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pysqlite3 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-*.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # cryptography wheel
@@ -370,6 +372,7 @@ ExternalProject_Add(
     ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${RUST_DIR}
     ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all: --no-build-isolation --no-deps
     --no-index --wheel-dir <TMP_DIR>/dist .
+  # Cryptography is too clever with wheel names no matter how forceful you are
   INSTALL_COMMAND
     ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-*.whl
     -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
