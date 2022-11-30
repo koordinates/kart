@@ -1,5 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+#
+# Run this via cmake --build build --target bundle
+#
+
 # pyinstaller injects globals into here
 # https://pyinstaller.readthedocs.io/en/stable/spec-files.html#globals-available-to-the-spec-file
 # flake8: noqa E13
@@ -105,6 +109,9 @@ if is_linux or is_darwin:
 
 VENV_BIN_DIR = "Scripts" if is_win else "bin"
 
+# Handled specially to avoid copies
+symlinks = []
+
 # Binaries: these are signed, and put in the correct place on macOS
 binaries = [
     (f'{BINARY_DIR}/venv/lib/*.{lib_suffix_glob}', '.'),
@@ -116,12 +123,8 @@ if not is_win:
     binaries += [
         # ('cli_helper/kart_cli_helper', '.'),
         (f'{BINARY_DIR}/venv/bin/git', '.'),
-        (f'{BINARY_DIR}/venv/bin/git-receive-pack', '.'),
-        (f'{BINARY_DIR}/venv/bin/git-upload-pack', '.'),
-        (f'{BINARY_DIR}/venv/bin/git-upload-archive', '.'),
         (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs', '.'),
     ]
-
 
 # Data files — these are copied in as-is
 datas=[
@@ -146,16 +149,20 @@ else:
         (f'{BINARY_DIR}/venv/share/git-core', 'share/git-core'),
     ]
 
-
-    # add non-links from git to binaries, and links to data
+    # add non-links from git to binaries, and symlinks to symlinks
     git_libexec_core_root = f'{BINARY_DIR}/venv/libexec/git-core'
     for r, dl, fl in os.walk(git_libexec_core_root):
         for fn in fl:
             fp = Path(r) / fn
-            if not fp.is_symlink() and fp.stat().st_mode & stat.S_IXUSR:
-                binaries.append((str(fp), 'libexec/git-core/'))
-            # else:
-            #     datas.append((str(fp), 'libexec/git-core/'))
+            rr = Path(r).relative_to(git_libexec_core_root)
+            dr = Path('libexec') / 'git-core' / rr
+            if fp.is_symlink():
+                fp.resolve(strict=True)
+                symlinks.append((str(fp), dr))
+            elif fp.stat().st_mode & stat.S_IXUSR:
+                binaries.append((str(fp), dr))
+            else:
+                datas.append((str(fp), dr))
 
 
 pyi_analysis = Analysis(
@@ -166,6 +173,7 @@ pyi_analysis = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=[
+        # TODO: improve this somehow
         *collect_submodules('kart'),
         *collect_submodules('kart.annotations'),
         *collect_submodules('kart.lfs_commands'),
@@ -243,99 +251,28 @@ pyi_app = BUNDLE(
     },
 )
 
-# PyInstaller by defaults dereferences symlinks in data directories
-# Git has about 200 so it's a big size loss
-# Fix it
-# if is_darwin:
+# Ideally we'd do this before BUNDLE so it could sign it on macOS, but we
+# can do that ourselves later.
+if symlinks:
+    if is_darwin:
+        dist_bin_root = Path(DISTPATH) / 'Kart.app' / 'Contents' / 'MacOS'
+    elif is_linux:
+        dist_bin_root = Path(DISTPATH) / 'kart'
+        print("⚠️⚠️⚠️⚠️ 'symlinks' haven't been tested on Linux")
+    else:
+        raise RuntimeError("Symlinks don't work well on Windows!")
 
-#     # fix symlinks/binaries in libexec/git-core/
-#     dist_bin_root = os.path.join(DISTPATH, 'Kart.app', 'Contents', 'MacOS')
-#     dist_resources_root = os.path.join(DISTPATH, 'Kart.app', 'Contents', 'Resources')
-#     dist_libexec_root = os.path.join(dist_resources_root, 'libexec')
+    for sl, td in symlinks:
+        sl, td = Path(sl), Path(td)
+        tp = dist_bin_root / td
 
-#     os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
-#     os.symlink('../Resources/libexec', os.path.join(dist_bin_root, 'libexec'))
-#     os.symlink('../../../MacOS/git', os.path.join(dist_libexec_root, 'git-core', 'git'))
+        st = sl.readlink()
 
-#     for (dir_, dirs, files) in os.walk(libexec_root):
-#         reldir = os.path.relpath(dir_, libexec_root)
-#         for f in files:
-#             fpath = os.path.join(dir_, f)
-#             relpath = os.path.join(reldir, f)
-#             if os.path.islink(fpath):
-#                 link_path = os.readlink(fpath)
-#                 if f == 'git':
-#                     continue  # we already created it
-#                 if os.path.split(link_path)[1] == 'git':
-#                     # this symlinks to git: rewrite it
-#                     os.symlink(
-#                         os.path.split(link_path)[1],
-#                         os.path.join(dist_libexec_root, relpath),
-#                     )
-#                     continue
-#                 if re.search(r'\.dylib$', f):
-#                     os.symlink(
-#                         os.path.join('../../../MacOS', os.path.split(link_path)[1]),
-#                         os.path.join(dist_libexec_root, relpath),
-#                     )
-#                     continue
-#                 if not os.path.exists(fpath) and not os.path.exists(
-#                     os.path.join(dist_bin_root, link_path)
-#                 ):
-#                     print(
-#                         f"🏎️  ignoring broken link {relpath} -> {link_path}",
-#                         file=sys.stderr,
-#                     )
-#                     # ignore broken symlinks (git-csvserver/git-shell)
-#                     continue
-#             elif subprocess.check_output(['file', '-b', fpath], text=True).startswith(
-#                 'Mach-O'
-#             ):
-#                 print(f"🏎️  relocating {relpath} to MacOS/", file=sys.stderr)
-#                 shutil.move(fpath, dist_bin_root)
-#                 os.symlink(
-#                     os.path.join('../../../MacOS', f),
-#                     os.path.join(dist_libexec_root, relpath),
-#                 )
-#                 continue
-
-#             os.makedirs(os.path.join(dist_libexec_root, reldir), exist_ok=True)
-#             # copy anything else (keeps symlinks too)
-#             shutil.copy(
-#                 fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False
-#             )
-
-# elif is_linux:
-#     # fix symlinks/binaries in libexec/git-core/
-#     dist_libexec_root = os.path.join(DISTPATH, 'kart', 'libexec')
-
-#     dist_bin_root = os.path.join(DISTPATH, 'kart')
-#     os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
-#     for (dir_, dirs, files) in os.walk(libexec_root):
-#         reldir = os.path.relpath(dir_, libexec_root)
-#         for f in files:
-#             fpath = os.path.join(dir_, f)
-#             relpath = os.path.join(reldir, f)
-#             if os.path.islink(fpath):
-#                 link_path = os.readlink(fpath)
-#                 if link_path == "../../bin/git":
-#                     os.symlink(
-#                         os.path.join('../../git'),
-#                         os.path.join(dist_libexec_root, relpath),
-#                     )
-#                     continue
-#                 if not os.path.exists(fpath) and not os.path.exists(
-#                     os.path.join(dist_bin_root, link_path)
-#                 ):
-#                     print(
-#                         f"🏎️  ignoring broken link {relpath} -> {link_path}",
-#                         file=sys.stderr,
-#                     )
-#                     # ignore broken symlinks (git-csvserver/git-shell)
-#                     continue
-
-#             os.makedirs(os.path.join(dist_libexec_root, reldir), exist_ok=True)
-#             # copy anything else (keeps symlinks too)
-#             shutil.copy(
-#                 fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False
-#             )
+        if sl.name == "git":  # git itself
+            (tp / sl.name).symlink_to("../../git")
+        elif str(st) == "../../bin/git":  # git-foo -> git
+            (tp / sl.name).symlink_to("../../git")
+        elif str(st) == st.name:  # git-foo -> git-bar
+            (tp / sl.name).symlink_to(st.name)
+        else:
+            raise ValueError("Found symlink I don't know how to handle: source={sl} -> {st}; dest={td}/{sl.name} -> ???")

@@ -534,8 +534,11 @@ else()
     INSTALL_DIR env
     BUILD_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> all strip
     INSTALL_COMMAND make ${gitBuildConfig} DESTDIR=<INSTALL_DIR> install
-    COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk
-            <INSTALL_DIR>/bin/scalar <INSTALL_DIR>/bin/git-cvsserver <INSTALL_DIR>/bin/git-shell)
+    COMMAND
+      ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/share/git-gui <INSTALL_DIR>/share/gitk
+      <INSTALL_DIR>/bin/scalar <INSTALL_DIR>/bin/git-cvsserver <INSTALL_DIR>/bin/git-shell
+      <INSTALL_DIR>/libexec/git-core/scalar <INSTALL_DIR>/libexec/git-core/git-cvsserver
+      <INSTALL_DIR>/libexec/git-core/git-shell)
   set(GIT_EXECUTABLE "git-prefix/dist/bin/git${CMAKE_EXECUTABLE_SUFFIX}")
   set(GIT_VENV_EXE "bin/git")
 endif()

@@ -7,6 +7,12 @@ createvirtualenvironment(bundleEnv REQUIREMENTS_TXT "bundleEnv.requirements.txt"
 
 set(PYINSTALLER_ENV "BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}" "PYTHONPATH=${bundleEnv_PURELIB_DIR}")
 
+if(MACOS)
+  list(APPEND PYINSTALLER_ENV "DYLD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/venv/lib")
+elseif(LINUX)
+  list(APPEND PYINSTALLER_ENV "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/venv/lib")
+endif()
+
 add_custom_command(
   OUTPUT pyinstaller.stamp
   DEPENDS bundleEnv kart.spec # cli
