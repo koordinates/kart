@@ -186,19 +186,31 @@ class TableV3(RichTableDataset):
     @property
     @functools.lru_cache(maxsize=1)
     def feature_path_encoder(self):
-        if not self.inner_tree:
+        if not self.inner_tree and self.schema is not None:
             # No meta tree; we must be still creating this dataset.
             # Figure out a sensible path encoder to use:
-            pks = self.schema.pk_columns
-            if len(pks) == 1 and pks[0].data_type == "integer":
-                return PathEncoder.INT_PK_ENCODER
-            else:
-                return PathEncoder.GENERAL_ENCODER
+            return self.feature_path_encoder_for_schema(self.schema)
         # Otherwise, load the path-structure meta-item.
         path_structure = self.get_meta_item("path-structure.json", missing_ok=True)
         if path_structure is not None:
             return PathEncoder.get(**path_structure)
         return PathEncoder.LEGACY_ENCODER
+
+    def feature_path_encoder_for_schema_delta(self, schema_delta):
+        if schema_delta is None or schema_delta.type == "delete":
+            return self.feature_path_encoder
+        return self.feature_path_encoder_for_schema(
+            Schema.from_column_dicts(schema_delta.new_value)
+        )
+
+    def feature_path_encoder_for_schema(self, schema):
+        if schema is None:
+            return self.feature_path_encoder
+        pks = schema.pk_columns
+        if len(pks) == 1 and pks[0].data_type == "integer":
+            return PathEncoder.INT_PK_ENCODER
+        else:
+            return PathEncoder.GENERAL_ENCODER
 
     def decode_path_to_pks(self, path):
         """Given a feature path, returns the pk values encoded in it."""
@@ -242,7 +254,7 @@ class TableV3(RichTableDataset):
         Given some pk values, returns the path the feature should be written to.
         pk_values should be a list or tuple of pk values.
         """
-        encoder = self.feature_path_encoder
+        encoder = self.feature_path_encoder_for_schema(schema)
         rel_path = f"{self.FEATURE_PATH}{encoder.encode_pks_to_path(pk_values)}"
         return rel_path if relative else self.ensure_full_path(rel_path)
 
@@ -250,7 +262,7 @@ class TableV3(RichTableDataset):
         """Given a feature's only pk value, returns the path the feature should be written to."""
         if isinstance(pk_value, (list, tuple)):
             raise ValueError(f"Expected a single pk value, got {pk_value}")
-        return self.encode_pks_to_path((pk_value,), relative=relative)
+        return self.encode_pks_to_path((pk_value,), relative=relative, schema=schema)
 
     def import_iter_meta_blobs(self, repo, source):
         # The source schema is a meta item.
@@ -416,29 +428,17 @@ class TableV3(RichTableDataset):
         *,
         resolve_missing_values_from_tree=False,
     ):
-        old_value = delta.old_value
         new_value = delta.new_value
-
-        old_schema = Schema.from_column_dicts(old_value) if old_value else None
         new_schema = Schema.from_column_dicts(new_value) if new_value else None
 
-        if old_schema and new_schema:
-            if not old_schema.is_pk_compatible(new_schema):
-                raise NotYetImplemented(
-                    "Schema changes that involve primary key changes are not yet supported"
-                )
         if new_schema:
             legend = new_schema.legend
             object_builder.insert(
                 f"{self.LEGEND_DIRNAME}/{legend.hexhash()}",
                 legend.dumps(),
             )
-        path_encoder = self.feature_path_encoder
-        if (
-            new_schema
-            and not existing_tree
-            and path_encoder is not PathEncoder.LEGACY_ENCODER
-        ):
+        path_encoder = self.feature_path_encoder_for_schema(new_schema)
+        if new_schema and path_encoder is not PathEncoder.LEGACY_ENCODER:
             object_builder.insert(
                 "path-structure.json", json_pack(path_encoder.to_dict())
             )

@@ -1,3 +1,4 @@
+import json
 import pytest
 
 import pygit2
@@ -39,7 +40,7 @@ def test_checkout_workingcopy(
     cli_runner,
     new_postgis_db_schema,
 ):
-    """ Checkout a working copy """
+    """Checkout a working copy"""
     with data_archive(archive) as repo_path:
         repo = KartRepo(repo_path)
         H.clear_working_copy()
@@ -87,7 +88,7 @@ def test_init_import(
     tmp_path,
     cli_runner,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
+    """Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository."""
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
@@ -157,7 +158,7 @@ def test_commit_edits(
     edit_polygons,
     edit_table,
 ):
-    """ Checkout a working copy and make some edits """
+    """Checkout a working copy and make some edits"""
     with data_archive(archive) as repo_path:
         repo = KartRepo(repo_path)
         H.clear_working_copy()
@@ -395,6 +396,80 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
             r = cli_runner.invoke(["checkout", "HEAD^"])
 
             assert repo.head.peel(pygit2.Commit).hex == orig_head
+
+
+@pytest.mark.parametrize(
+    "new_pk_type,new_pk_expression",
+    [
+        pytest.param("INTEGER", "id + 10", id="integer"),
+        pytest.param("TEXT", "'ID_' || id", id="text"),
+    ],
+)
+def test_edit_schema_primary_key(
+    new_pk_type, new_pk_expression, data_archive, cli_runner, new_postgis_db_schema
+):
+    with data_archive("polygons") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+
+        with new_postgis_db_schema() as (postgres_url, postgres_schema):
+            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+            assert r.exit_code == 0, r.stderr
+
+            table_wc = repo.working_copy.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
+
+            r = cli_runner.invoke(["diff", "--output-format=quiet"])
+            assert r.exit_code == 0, r.stderr
+
+            with table_wc.session() as sess:
+                sess.execute(
+                    f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" DROP CONSTRAINT {H.POLYGONS.LAYER}_pkey;"""
+                )
+                sess.execute(
+                    f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" ADD COLUMN new_id {new_pk_type};"""
+                )
+                sess.execute(
+                    f"""UPDATE "{postgres_schema}"."{H.POLYGONS.LAYER}" SET new_id = {new_pk_expression};"""
+                )
+                sess.execute(
+                    f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" ADD PRIMARY KEY (new_id);"""
+                )
+
+            r = cli_runner.invoke(["diff", "--output-format=json"])
+            assert r.exit_code == 0, r.stderr
+            ds_diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"][H.POLYGONS.LAYER]
+            new_schema_col = ds_diff["meta"]["schema.json"]["+"][-1]
+            assert new_schema_col["name"] == "new_id"
+            assert new_schema_col["dataType"].upper() == new_pk_type
+            assert new_schema_col["primaryKeyIndex"] == 0
+            assert len(ds_diff["feature"]) == 456
+
+            r = cli_runner.invoke(["commit", "-m", "replace id with new_id"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["show", "--output-format=json"])
+            assert r.exit_code == 0, r.stderr
+            committed_ds_diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
+                H.POLYGONS.LAYER
+            ]
+            assert committed_ds_diff == ds_diff
+
+            # Make sure that applying a patch to make the same change also works:
+            r = cli_runner.invoke(["create-patch", "HEAD", "--output=patch"])
+            assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["reset", "HEAD^"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["apply", "patch"])
+            assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["show", "--output-format=json"])
+            assert r.exit_code == 0, r.stderr
+            committed_ds_diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
+                H.POLYGONS.LAYER
+            ]
+            assert committed_ds_diff == ds_diff
 
 
 class SucceedAndRollback(Exception):

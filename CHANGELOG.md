@@ -17,6 +17,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - `apply` and `meta set` now support `--amend` to amend an existing commit
 - Bugfix: don't allow `kart diff` to diff to/from HEAD if HEAD does not yet point to a commit.
 - Improved progress reporting during working-copy checkout. [#738](https://github.com/koordinates/kart/pull/738)
+- Support for changing the primary key column of an existing dataset. [#238](https://github.com/koordinates/kart/issues/238)
 
 ## 0.11.5
 
