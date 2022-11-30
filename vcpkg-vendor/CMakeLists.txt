@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 include(${CMAKE_CURRENT_LIST_DIR}/vcpkg-toolchain-setup.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/osx-setup.cmake)
 
 project(kart_vendor LANGUAGES C CXX)
 
@@ -124,16 +125,16 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv libffi
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
-                <SOURCE_DIR>
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
+                    <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-*.whl
+                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
 ExternalProject_Get_Property(cffi INSTALL_DIR)
-set(CFFI_WHEEL ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+set(CFFI_WHEEL ${INSTALL_DIR}/cffi-${CFFI_WHEEL_VER}-*.whl)
 list(APPEND WHEEL_LIST ${CFFI_WHEEL})
 
 #
@@ -173,16 +174,16 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv GDAL::GDAL
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
-                <SOURCE_DIR>
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
+                    <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/GDAL-${GDAL_VERSION}-*.whl
+                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-*.whl)
 
 #
 # psycopg2 wheel
@@ -214,17 +215,16 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
-                <SOURCE_DIR>
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
+                    <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl
-    <INSTALL_DIR>)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-*.whl
+                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
 ExternalProject_Get_Property(psycopg2 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-*.whl)
 
 #
 # pygit2 wheel
@@ -250,15 +250,15 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv unofficial::git2::git2
   EXCLUDE_FROM_ALL ON
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
-                <SOURCE_DIR>
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
+                    <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl <TMP_DIR>/dist <SOURCE_DIR>/.eggs
   COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${wheelBuildEnv_PYTHON}
           setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-*.whl
+                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
 ExternalProject_Get_Property(pygit2 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-*.whl)
 
 #
 # pyodbc wheel
@@ -287,15 +287,15 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
   EXCLUDE_FROM_ALL ON
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
-                <SOURCE_DIR>
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
+                    <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-*.whl
+                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-*.whl)
 
 #
 # pysqlite3 wheel
@@ -320,18 +320,17 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv unofficial::sqlite3::sqlite3
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
-                <SOURCE_DIR>
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
+                    <SOURCE_DIR>
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>/build
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <TMP_DIR>/dist
           --bdist-dir <TMP_DIR>/bdist
-  INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy
-    <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+  INSTALL_COMMAND ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-*.whl
+                  -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
 ExternalProject_Get_Property(pysqlite3 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-*.whl)
 
 #
 # cryptography wheel
@@ -366,16 +365,16 @@ ExternalProject_Add(
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ${GIT_EXECUTABLE} restore setup.cfg
   COMMAND ${CMAKE_COMMAND} -E cat <INSTALL_DIR>/setup.cfg.inc >> setup.cfg
-  BUILD_COMMAND
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
+  COMMAND
     ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${RUST_DIR}
     ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all: --no-build-isolation --no-deps
     --no-index --wheel-dir <TMP_DIR>/dist .
   INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy
-    <TMP_DIR>/dist/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+    ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-*.whl
+    -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
 ExternalProject_Get_Property(cryptography INSTALL_DIR)
-list(APPEND WHEEL_LIST
-     ${INSTALL_DIR}/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-*.whl)
 
 # ##################################################################################################
 # OTHER LIBS AND BINS
@@ -602,7 +601,8 @@ add_custom_command(
   DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share env/${EXE_DIR}
-  COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
+  COMMAND ${CMAKE_COMMAND} "-DSOURCES=${WHEEL_LIST}" -DDEST=wheelhouse -P
+          ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake
   COMMAND ${CMAKE_COMMAND} -E copy ${LIB_LIST} env/lib
   COMMAND ${CMAKE_COMMAND} -E copy ${EXE_LIST} env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
@@ -611,8 +611,9 @@ add_custom_command(
   COMMAND
     ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} --modify
     PATH=path_list_prepend:${TOOLS_PATH} -- ${wheelBuildEnv_PYTHON}
-    "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<$<BOOL:$ENV{VERBOSE}>:-vv> .
+    "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<IF:$<BOOL:$ENV{VERBOSE}>,-vv,-v> .
     ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
+  VERBATIM
   COMMENT "Vendor dependency archive assembly")
 
 add_custom_target(

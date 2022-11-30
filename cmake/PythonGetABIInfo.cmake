@@ -34,65 +34,39 @@ function(PythonGetABIInfo)
       CACHE INTERNAL "Python3 ABI flags")
   message(STATUS "Python3 ABI flags: [${py_ABIFLAGS}]")
 
+  # Platform tag (win32_x64, linux_x86_64, macos_10_9_x86_64, macosx_10_9_universal2, etc)
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_platform())"
+            COMMAND_ERROR_IS_FATAL ANY
+    OUTPUT_VARIABLE py_PLATFORM_TAG
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  message(STATUS "Python3 interpreter platform tag: ${py_PLATFORM_TAG}")
+  set(Python3_INTERPRETER_PLATFORM_TAG
+      ${py_PLATFORM_TAG}
+      CACHE INTERNAL "Python3 original interpreter platform tag")
+
+  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+    message(STATUS "Overriding MacOS Deployment target to: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    string(REGEX REPLACE "^([^-]+)-([^-]+)-(.+)$" "\\1-${CMAKE_OSX_DEPLOYMENT_TARGET}-\\3"
+                         py_PLATFORM_TAG "${py_PLATFORM_TAG}")
+    # if(py_PLATFORM_TAG MATCHES "-universal2$") string(REGEX REPLACE "-universal2$"
+    # "-${CMAKE_HOST_SYSTEM_PROCESSOR}" py_PLATFORM_TAG "${py_PLATFORM_TAG}") message(STATUS
+    # "Overriding MacOS target architecture to: ${CMAKE_HOST_SYSTEM_PROCESSOR}") endif()
+  endif()
+  string(REGEX REPLACE "[-\.]+" "_" py_PLATFORM_TAG "${py_PLATFORM_TAG}")
+
+  set(Python3_PLATFORM_TAG
+      ${py_PLATFORM_TAG}
+      CACHE INTERNAL "Python3 platform tag")
+  message(STATUS "Final Python3 platform tag: ${py_PLATFORM_TAG}")
+
   # eg: cp37-cp37m
   set(py_ver_code
       "cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}-cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}${Python3_ABIFLAGS}"
   )
-  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    # find the macOS deployment target Python was built with. this determines the associated version
-    # of extension modules
-    if(NOT Python3_MACOS_DEPLOYMENT_TARGET)
-      execute_process(
-        COMMAND
-          ${Python3_EXECUTABLE} -c
-          "import sysconfig; print(sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET'))"
-          COMMAND_ERROR_IS_FATAL ANY
-        OUTPUT_VARIABLE Python3_MACOS_DEPLOYMENT_TARGET
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-      if((NOT ${RESULT_VARIABLE} EQUAL 0) OR (NOT ${Python3_MACOS_DEPLOYMENT_TARGET}))
-        message(
-          FATAL_ERROR
-            "Can't determine MacOS Deployment target for ${Python3_EXECUTABLE}. Set via Python3_MACOS_DEPLOYMENT_TARGET=X.Y"
-        )
-      endif()
-      set(Python3_MACOS_DEPLOYMENT_TARGET
-          ${Python3_MACOS_DEPLOYMENT_TARGET}
-          CACHE STRING "Python3 macOS deployment target")
-      message(STATUS "Python3 macOS Deployment target: ${Python3_MACOS_DEPLOYMENT_TARGET}")
-    endif()
-    # turn 10.9 into 10_9, and 13 into 13_0
-    if(NOT Python3_MACOS_DEPLOYMENT_TARGET MATCHES "\\.[0-9]+$")
-      string(APPEND Python3_MACOS_DEPLOYMENT_TARGET ".0")
-    endif()
-    string(REPLACE "." "_" py_deployment_target_id ${Python3_MACOS_DEPLOYMENT_TARGET})
-    set(py_wheelid "${py_ver_code}-macosx_${py_deployment_target_id}_${CMAKE_SYSTEM_PROCESSOR}")
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(py_wheelid "${py_ver_code}-linux_${CMAKE_SYSTEM_PROCESSOR}")
-  elseif(WIN32)
-    if(CMAKE_GENERATOR_PLATFORM)
-      set(win_platform ${CMAKE_GENERATOR_PLATFORM})
-    elseif(DEFINED CMAKE_VS_PLATFORM_NAME)
-      set(win_platform ${CMAKE_VS_PLATFORM_NAME})
-    elseif(DEFINED ENV{VSCMD_ARG_TGT_ARCH})
-      set(win_platform $ENV{VSCMD_ARG_TGT_ARCH})
-    else()
-      message(
-        FATAL_ERROR "Can't determine Windows arch. Set via CMAKE_GENERATOR_PLATFORM=x64|Win32")
-    endif()
 
-    if(win_platform STREQUAL "Win32")
-      set(py_wheelid "${py_ver_code}-win32")
-    elseif(win_platform STREQUAL "x64")
-      set(py_wheelid "${py_ver_code}-win_amd64")
-    else()
-      message(
-        FATAL_ERROR
-          "Invalid Windows arch: ${win_platform}. Set via CMAKE_GENERATOR_PLATFORM=x64|Win32")
-    endif()
-  else()
-    message(FATAL_ERROR "PythonGetABIInfo: Unknown OS")
-  endif()
-  # Python3_WHEEL_ID
+  # Full Wheel ABI ID
+  set(py_wheelid "${py_ver_code}-${py_PLATFORM_TAG}")
   set(Python3_WHEEL_ID
       ${py_wheelid}
       CACHE INTERNAL "Python3 wheel identifier")

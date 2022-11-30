@@ -16,6 +16,7 @@ enable_testing()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+include("vcpkg-vendor/osx-setup.cmake")
 include(PythonGetABIInfo)
 include(CCache)
 
