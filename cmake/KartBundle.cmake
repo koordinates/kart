@@ -9,16 +9,19 @@ set(PYINSTALLER_ENV "BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}" "PYTHONPATH=${bundl
 
 if(MACOS)
   list(APPEND PYINSTALLER_ENV "DYLD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/venv/lib")
-  set(PYINSTALLER_EXE ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/Kart.app/Contents/MacOS/kart)
+  set(BUNDLE_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/Kart.app/Contents/MacOS)
+  set(BUNDLE_EXE ${BUNDLE_DIR}/kart)
 elseif(LINUX)
   list(APPEND PYINSTALLER_ENV "LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/venv/lib")
-  set(PYINSTALLER_EXE ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/kart/kart)
+  set(BUNDLE_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/kart)
+  set(BUNDLE_EXE ${BUNDLE_DIR}/kart)
 elseif(WIN32)
-  set(PYINSTALLER_EXE ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/kart/kart.exe)
+  set(BUNDLE_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/kart)
+  set(BUNDLE_EXE ${BUNDLE_DIR}/kart.exe)
 endif()
 
 add_custom_command(
-  OUTPUT pyinstaller.stamp ${PYINSTALLER_EXE}
+  OUTPUT pyinstaller.stamp ${BUNDLE_EXE}
   DEPENDS bundleEnv kart.spec # ${KART_EXE_VENV}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/
@@ -55,7 +58,7 @@ elseif(MACOS AND NOT "$ENV{MACOS_CODESIGN_ID}" STREQUAL "")
   message(STATUS "Enabling macOS code-signing using identity: ${MACOS_CODESIGN_ID}")
   add_custom_command(
     OUTPUT pyinstaller/codesign.stamp
-    DEPENDS ${PYINSTALLER_EXE}
+    DEPENDS ${BUNDLE_EXE}
     COMMAND
       codesign --sign "${MACOS_CODESIGN_ID}" --verbose=3 --deep --timestamp --force --strict
       --entitlements ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/entitlements.plist -o runtime

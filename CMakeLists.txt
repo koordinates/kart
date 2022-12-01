@@ -12,13 +12,12 @@ project(
   HOMEPAGE_URL "https://kartproject.org"
   LANGUAGES C CXX)
 
-enable_testing()
-
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 include("vcpkg-vendor/osx-setup.cmake")
 include(PythonGetABIInfo)
 include(CCache)
+include(CTest)
 
 # find_package(Git REQUIRED) execute_process( COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
 # RESULT_VARIABLE result OUTPUT_VARIABLE KART_GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE )
@@ -87,27 +86,58 @@ file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 include(KartPy)
 include(KartBundle)
 
-# install
-
 #
 # Tests
 #
-if(DEFINED LINUX AND DEFINED ENV{KART_SQLSERVER_URL})
-  # pytest-xdist causes some weird behaviour with pyodbc on Linux Split MSSQL tests out into a
-  # separate pytest run.
-  add_test(
-    NAME pytest
-    COMMAND ${VENV_PYTEST} -v -m "not\ mssql" ${PYTEST_ARGS}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+if(BUILD_TESTING)
+  #
+  # Main unit tests (label=pytest)
+  #
+  if(DEFINED LINUX AND DEFINED ENV{KART_SQLSERVER_URL})
+    # pytest-xdist causes some weird behaviour with pyodbc on Linux. Split MSSQL tests out into a
+    # separate pytest run.
+    add_test(
+      NAME pytest
+      COMMAND ${VENV_PYTEST} -v -m "not\ mssql" ${PYTEST_ARGS}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_property(TEST pytest PROPERTY LABELS "pytest")
 
-  add_test(
-    NAME pytest-mssql
-    COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-else()
-  add_test(
-    NAME pytest
-    COMMAND ${VENV_PYTEST} -v ${PYTEST_ARGS}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(
+      NAME pytest-mssql
+      COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_property(TEST pytest-mssql PROPERTY LABELS "pytest")
+  else()
+    add_test(
+      NAME pytest
+      COMMAND ${VENV_PYTEST} -v ${PYTEST_ARGS}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_property(TEST pytest PROPERTY LABELS "pytest")
+  endif()
+
+  #
+  # E2E tests for bundles/packages (label=e2e)
+  #
+  find_program(
+    SQLite3_EXE
+    NAMES sqlite3
+    PATHS "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}"
+    PATH_SUFFIXES tools share)
+  cmake_path(GET SQLite3_EXE PARENT_PATH SQLite3_EXE_DIR)
+  if(WIN32)
+    add_test(
+      NAME e2e-1
+      COMMAND Powershell.exe -File "tests\\scripts\\e2e-1.ps1"
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  else()
+    add_test(
+      NAME e2e-1
+      COMMAND tests/scripts/e2e-1.sh
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  endif()
+  set_property(TEST e2e-1 PROPERTY LABELS "e2e")
+  set_property(
+    TEST e2e-1
+    PROPERTY ENVIRONMENT_MODIFICATION
+             "PATH=path_list_prepend:${SQLite3_EXE_DIR};PATH=path_list_prepend:${BUNDLE_DIR}")
 endif()
-# packaging

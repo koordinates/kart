@@ -102,6 +102,11 @@
             "output": {
                 "verbosity": "verbose"
             },
+            "filter": {
+                "include": {
+                    "label": "pytest"
+                }
+            },
             "environment": {
                 "CI": "true",
                 "KART_EXPECT_PDAL": "1",
@@ -126,6 +131,42 @@
             "name": "ci-windows",
             "displayName": "CI: Windows",
             "inherits": "ci-base",
+            "configurePreset": "ci-windows",
+            "environment": {
+                "KART_EXPECT_GITSPATIALFILTER": "0"
+            }
+        },
+        {
+            "name": "ci-e2e-base",
+            "hidden": true,
+            "output": {
+                "verbosity": "verbose"
+            },
+            "filter": {
+                "include": {
+                    "label": "e2e"
+                }
+            },
+            "environment": {
+                "CI": "true"
+            }
+        },
+        {
+            "name": "ci-e2e-linux",
+            "displayName": "CI E2E: Linux",
+            "inherits": "ci-e2e-base",
+            "configurePreset": "ci-linux"
+        },
+        {
+            "name": "ci-e2e-macos",
+            "displayName": "CI E2E: macOS",
+            "inherits": "ci-e2e-base",
+            "configurePreset": "ci-macos"
+        },
+        {
+            "name": "ci-e2e-windows",
+            "displayName": "CI E2E: Windows",
+            "inherits": "ci-e2e-base",
             "configurePreset": "ci-windows"
         }
     ]

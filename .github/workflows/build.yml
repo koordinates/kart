@@ -1299,6 +1299,12 @@ jobs:
         run: |
           ./build/pyinstaller/dist/kart/kart --version
 
+      - name: "bundle: e2e tests"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-windows
+          testPreset: ci-e2e-windows
+
   #
   # macOS via CMake+VCPKG
   #
@@ -1463,6 +1469,12 @@ jobs:
         run: |
           ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
 
+      - name: "bundle: e2e tests"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-windows
+          testPreset: ci-e2e-windows
+
   #
   # Windows via CMake+VCPKG
   #
@@ -1579,8 +1591,6 @@ jobs:
 
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
-        env:
-          KART_EXPECT_GITSPATIALFILTER: 0
         with:
           configurePreset: ci-windows
           testPreset: ci-windows
@@ -1605,3 +1615,9 @@ jobs:
         shell: bash
         run: |
           ./build/pyinstaller/dist/kart/kart.exe --version
+
+      - name: "bundle: e2e tests"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-windows
+          testPreset: ci-e2e-windows
