@@ -1451,7 +1451,9 @@ jobs:
       - name: "bundle: setup app signing certificate"
         id: keychain
         uses: apple-actions/import-codesign-certs@v1
-        if: secrets.MACOS_CODESIGN_ID
+        env:
+          MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
+        if: "${{ env.MACOS_CODESIGN_ID != '' }}"
         with:
           p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
           p12-password: ${{ secrets.MACOS_CERT_PW }}
