@@ -33,25 +33,38 @@ set(BUNDLE_DEPS pyinstaller.stamp)
 
 if(WIN32 AND NOT "$ENV{SIGN_AZURE_CERTIFICATE}" STREQUAL "")
   # Windows code-signing using AzureSignTool
-  find_program(AZURESIGNTOOL azuresigntool REQUIRED
-    PATHS "$ENV{USERPROFILE}/.dotnet/tools"
-  )
-  find_program(SIGNTOOL signtool REQUIRED
-    PATHS "$ENV{WindowsSdkVerBinPath}/x64"
-  )
+  find_program(AZURESIGNTOOL azuresigntool REQUIRED PATHS "$ENV{USERPROFILE}/.dotnet/tools")
+  find_program(SIGNTOOL signtool REQUIRED PATHS "$ENV{WindowsSdkVerBinPath}/x64")
   message(STATUS "Enabling Windows code-signing")
 
   add_custom_command(
     OUTPUT pyinstaller/codesign.stamp
     DEPENDS pyinstaller/dist/kart/kart.exe
-    COMMAND ${CMAKE_COMMAND} "-DSIGNTOOL=${SIGNTOOL}" "-DAZURESIGNTOOL=${AZURESIGNTOOL}"
-      "-DBUNDLE=${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/kart"
-      -P "${CMAKE_CURRENT_LIST_DIR}/win_codesign.cmake"
+    COMMAND
+      ${CMAKE_COMMAND} "-DSIGNTOOL=${SIGNTOOL}" "-DAZURESIGNTOOL=${AZURESIGNTOOL}"
+      "-DBUNDLE=${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/kart" -P
+      "${CMAKE_CURRENT_LIST_DIR}/win_codesign.cmake"
     COMMAND ${CMAKE_COMMAND} -E touch pyinstaller/codesign.stamp
     VERBATIM
-    COMMENT "Code-signing Windows bundle"
-  )
+    COMMENT "Code-signing Windows bundle")
+  list(APPEND BUNDLE_DEPS pyinstaller/codesign.stamp)
 
+elseif(MACOS AND NOT "$ENV{MACOS_CODESIGN_ID}" STREQUAL "")
+  # macOS code-signing
+  set(MACOS_CODESIGN_ID $ENV{MACOS_CODESIGN_ID})
+  message(STATUS "Enabling macOS code-signing using identity: ${MACOS_CODESIGN_ID}")
+  add_custom_command(
+    OUTPUT pyinstaller/codesign.stamp
+    DEPENDS ${PYINSTALLER_EXE}
+    COMMAND
+      codesign --sign "${MACOS_CODESIGN_ID}" --verbose=3 --deep --timestamp --force --strict
+      --entitlements ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/entitlements.plist -o runtime
+      pyinstaller/dist/Kart.app
+    COMMAND codesign --display --verbose pyinstaller/dist/Kart.app
+    COMMAND codesign --verify --verbose --deep --strict=all pyinstaller/dist/Kart.app
+    COMMAND ${CMAKE_COMMAND} -E touch pyinstaller/codesign.stamp
+    VERBATIM
+    COMMENT "Code-signing macOS bundle")
   list(APPEND BUNDLE_DEPS pyinstaller/codesign.stamp)
 endif()
 
