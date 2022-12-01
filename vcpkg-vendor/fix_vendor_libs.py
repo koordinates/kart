@@ -576,10 +576,19 @@ def get_eventual_path(path_to_lib):
 
 def propose_rpaths(eventual_lib_path):
     path_to_env_lib = os.path.relpath("env/lib/", Path(eventual_lib_path).parents[0])
+
     if path_to_env_lib == ".":
         return [LOADER_PATH]
+
     path_to_env_lib = path_to_env_lib.rstrip("/") + "/"
-    return [LOADER_PATH, f"{LOADER_PATH}/{path_to_env_lib}"]
+    rpaths = [LOADER_PATH, f"{LOADER_PATH}/{path_to_env_lib}"]
+
+    if "libexec/git-core/" in eventual_lib_path:
+        path_to_env = os.path.relpath("env/", Path(eventual_lib_path).parents[0])
+        path_to_env = path_to_env.rstrip("/") + "/"
+        rpaths.append(f"{LOADER_PATH}/{path_to_env}")
+
+    return rpaths
 
 
 def fix_rpaths(root_path, make_fatal=False, verbose=False):
