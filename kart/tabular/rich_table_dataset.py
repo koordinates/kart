@@ -255,6 +255,7 @@ class RichTableDataset(TableDataset):
         *,
         schema=None,
         resolve_missing_values_from_ds=None,
+        new_feature_encoder=None,
     ):
         """Applies a feature diff."""
         if not feature_diff:
@@ -285,7 +286,7 @@ class RichTableDataset(TableDataset):
                     else None
                 )
                 new_path = (
-                    self.encode_1pk_to_path(new_key, relative=True)
+                    self.encode_1pk_to_path(new_key, relative=True, **encode_kwargs)
                     if new_key is not None
                     else None
                 )
