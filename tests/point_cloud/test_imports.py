@@ -119,8 +119,15 @@ def test_import_single_las(
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("command", ["point-cloud-import", "import"])
 def test_import_several_laz(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
+    command,
+    tmp_path,
+    chdir,
+    cli_runner,
+    data_archive_readonly,
+    requires_pdal,
+    requires_git_lfs,
 ):
     # Using postgres here because it has the best type preservation
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
@@ -132,7 +139,7 @@ def test_import_several_laz(
         with chdir(repo_path):
             r = cli_runner.invoke(
                 [
-                    "point-cloud-import",
+                    command,
                     *glob(f"{auckland}/auckland_*.laz"),
                     "--dataset-path=auckland",
                 ]
@@ -192,8 +199,15 @@ def test_import_several_laz(
                     ).is_file()
 
 
+@pytest.mark.parametrize("command", ["point-cloud-import", "import"])
 def test_import_single_laz_no_convert(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
+    command,
+    tmp_path,
+    chdir,
+    cli_runner,
+    data_archive_readonly,
+    requires_pdal,
+    requires_git_lfs,
 ):
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
         repo_path = tmp_path / "point-cloud-repo"
@@ -203,7 +217,7 @@ def test_import_single_laz_no_convert(
         with chdir(repo_path):
             r = cli_runner.invoke(
                 [
-                    "point-cloud-import",
+                    command,
                     f"{auckland}/auckland_0_0.laz",
                     "--message=test_import_single_laz_no_convert",
                     "--dataset-path=auckland",
@@ -241,7 +255,9 @@ def test_import_single_laz_no_convert(
             ]
 
 
+@pytest.mark.parametrize("command", ["point-cloud-import", "import"])
 def test_import_replace_existing(
+    command,
     cli_runner,
     data_archive,
     data_archive_readonly,
@@ -251,7 +267,7 @@ def test_import_replace_existing(
         with data_archive("point-cloud/auckland.tgz"):
             r = cli_runner.invoke(
                 [
-                    "point-cloud-import",
+                    command,
                     f"{src}/auckland_0_0.laz",
                     "--message=Import again but don't convert to COPC this time",
                     "--dataset-path=auckland",

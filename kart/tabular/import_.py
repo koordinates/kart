@@ -6,6 +6,7 @@ from kart.cli_util import (
     JsonFromFile,
     MutexOption,
     StringFromFile,
+    IdsFromFile,
     call_and_exit_flag,
     RemovalInKart013Warning,
     KartCommand,
@@ -24,21 +25,11 @@ from kart.working_copy import PartType
 
 def list_import_formats(ctx):
     """List the supported import formats."""
-    click.echo(suggest_specs())
+    from kart.import_sources import ImportType
 
-
-class GenerateIDsFromFile(StringFromFile):
-    name = "ids"
-
-    def convert(self, value, param, ctx):
-        fp = super().convert(
-            value,
-            param,
-            ctx,
-            # Get the file object, so we don't have to read the whole thing
-            as_file=True,
-        )
-        return (line.rstrip("\n") for line in fp)
+    click.echo(
+        suggest_specs(import_types=(ImportType.SQLALCHEMY_TABLE, ImportType.OGR_TABLE))
+    )
 
 
 def any_at_all(iterable):
@@ -48,13 +39,8 @@ def any_at_all(iterable):
     return any(True for _ in iterable)
 
 
-@click.command("import", cls=KartCommand)
+@click.command("table-import", hidden=True, cls=KartCommand)
 @click.pass_context
-@click.argument("source", shell_complete=file_path_completer)
-@click.argument(
-    "tables",
-    nargs=-1,
-)
 @click.option(
     "--all-tables",
     "-a",
@@ -127,7 +113,7 @@ def any_at_all(iterable):
 )
 @click.option(
     "--replace-ids",
-    type=GenerateIDsFromFile(encoding="utf-8"),
+    type=IdsFromFile(encoding="utf-8"),
     help=(
         "Replace only features with the given IDs. IDs should be given one-per-line. "
         "Use file arguments (--replace-ids=@filename.txt). Implies --replace-existing. "
@@ -176,15 +162,26 @@ def any_at_all(iterable):
     default=None,
     hidden=True,
 )
-def import_(
+@click.option(
+    "--dataset-path",
+    "--dataset",
+    "ds_path",
+    help="The dataset's path once imported",
+    hidden=True,
+)
+@click.argument(
+    "args",
+    nargs=-1,
+    metavar="SOURCE ([SOURCES...] or [TABLES...])",
+    shell_complete=file_path_completer,
+)
+def table_import(
     ctx,
     all_tables,
     message,
     do_list,
     output_format,
     primary_key,
-    source,
-    tables,
     table_info,
     replace_existing,
     replace_ids,
@@ -193,23 +190,36 @@ def import_(
     max_delta_depth,
     do_checkout,
     num_processes,
+    ds_path,
+    args,
 ):
     """
-    Import data into a repository.
+    Import table data into a repository.
 
-    $ kart import SOURCE [TABLE_SPEC] [TABLE_SPEC]
+    $ kart table-import SOURCE [TABLE-DATASET] [TABLE-DATASET]
 
-    SOURCE: Import from dataset: "FORMAT:PATH" eg. "GPKG:my.gpkg"
+    SOURCE: Import data from this source, eg "my_data.gpkg"
 
-    TABLE_SPEC: Import a particular table, optionally with a new name: "TABLE[:AS_NAME]"
+    TABLE-DATASET: Import a particular table as a new dataset, optionally with a new name: "TABLE[:AS_NAME]"
     eg. "2019_08_06_median_waterlevel:waterlevel"
 
-    $ kart import GPKG:my.gpkg [table1[:new_name1]] [table2[:new_name2]]
+    $ kart import my_data.gpkg [table1[:new_name1]] [table2[:new_name2]]
 
-    To show available tables in the import data, use
+    To show available tables in the import data, use:
 
-    $ kart import --list GPKG:my.gpkg
+    $ kart table-import --list my_data.gpkg
+
+    To show supported source types that can be imported from, use:
+
+    $ kart table-import --list-formats
     """
+
+    if not args:
+        click.echo("At least one SOURCE is required for kart table-import.", err=True)
+        raise click.UsageError("Usage: kart table-import SOURCE [TABLE-DATASETS...]")
+
+    source = args[0]
+    tables = args[1:]
 
     if num_processes is not None:
         warnings.warn(
@@ -234,14 +244,25 @@ def import_(
     elif not tables:
         tables = [base_import_source.prompt_for_table("Select a table to import")]
 
+    if len(tables) > 1 and ds_path:
+        raise click.UsageError(
+            "Cannot specify a --dataset-path while importing more than one table"
+        )
+
     import_sources = []
     for table in tables:
         if ":" in table:
+            if ds_path:
+                raise click.UsageError(
+                    "Cannot specify rename a table using a :NEW_NAME suffix if --dataset-path is specified"
+                )
             table, dest_path = table.split(":", 1)
             if not dest_path:
-                raise click.BadParameter("Invalid table name", param_hint="tables")
+                raise click.BadParameter(
+                    "Invalid dataset path", param_hint="TABLE_DATASET"
+                )
         else:
-            dest_path = None
+            dest_path = ds_path
 
         meta_overrides = table_info.get(dest_path or table, {})
         if is_windows and dest_path:

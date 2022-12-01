@@ -6,6 +6,7 @@ import pygit2
 
 from kart.cli_util import KartCommand, RemovalInKart012Warning
 from kart.exceptions import NotFound
+from kart.import_sources import from_spec
 
 
 class PreserveDoubleDash(KartCommand):
@@ -185,3 +186,61 @@ def parse_revisions_and_filters(
         _append_kwargs_to_options(options, kwargs, allow_options)
         revisions, filters = _disambiguate_revisions_and_filters(repo, args)
         return options, revisions, filters
+
+
+def parse_import_sources_and_datasets(args):
+    """
+    Interprets positional args for kart import, and its specific sub-variants: kart table-import, kart point-cloud-import.
+    These commands support two different formats:
+    - kart import SOURCE [SOURCE] [SOURCE]
+    - kart import SOURCE [DATASET] [DATASET]
+    (Although specific sub-variants may have no or limited support for either format).
+    Returns a two-tuple: (sources, datasets).
+    If len(sources) > 1, then datasets will be empty, and if datasets is not empty, len(sources) will be 1.
+    Raises a UsageError if the user-input doesn't conform to this idea.
+    """
+
+    import_source_types = set()
+
+    def is_import_source(arg, allow_unrecognised=True):
+        import_source_type = from_spec(arg, allow_unrecognised=allow_unrecognised)
+        if import_source_type is not None:
+            import_source_types.add(import_source_type)
+            return True
+        return False
+
+    if not args:
+        return [], []
+
+    first_arg = args[0]
+    assert is_import_source(first_arg, allow_unrecognised=False)
+
+    other_args = args[1:]
+    other_sources = []
+    datasets = []
+    for i, arg in enumerate(other_args):
+        if is_import_source(arg):
+            other_sources.append(arg)
+        else:
+            datasets.append(arg)
+
+        if other_sources and datasets:
+            raise click.UsageError(
+                "When importing, you may supply either more than one import-source:\n"
+                "    kart import SOURCE [SOURCE] [SOURCE]\n"
+                "or you may supply datasets to import found within that one import-source:"
+                "    kart import SOURCE [DATASET] [DATASET]\n"
+                "but this appears to be a mix of both:\n"
+                f"    {other_args[i - 1]}\n"
+                f"    {other_args[i]}\n"
+            )
+
+        if len(import_source_types) > 1:
+            raise click.UsageError(
+                "Cannot import more than one type of data in a single operation, as happened here:\n"
+                f"    {first_arg}\n"
+                f"    {arg}\n\n"
+                "Perform these imports as two separate operations."
+            )
+
+    return [first_arg, *other_sources], datasets
