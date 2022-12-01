@@ -1152,6 +1152,7 @@ jobs:
       KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
       KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
       FORCE_COLOR: "YES"
+
     services:
       postgis:
         image: postgis/postgis
@@ -1219,6 +1220,22 @@ jobs:
       #
       # App Build
       #
+
+      - name: "app: version"
+        id: version
+        run: |
+          if [ '${{ github.ref_type }} == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+            VER="${{ github.ref_name }}"
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "$VER" > kart/VERSION
+          echo "::set-output name=value::$VER"
+          echo "::set-output name=is_release::$IS_RELEASE"
 
       - name: "app: vendor dependencies"
         uses: lukka/run-cmake@v10
@@ -1369,6 +1386,22 @@ jobs:
       # App Build
       #
 
+      - name: "app: version"
+        id: version
+        run: |
+          if [ '${{ github.ref_type }} == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+            VER="${{ github.ref_name }}"
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "$VER" > kart/VERSION
+          echo "::set-output name=value::$VER"
+          echo "::set-output name=is_release::$IS_RELEASE"
+
       - name: "app: vendor dependencies"
         uses: lukka/run-cmake@v10
         with:
@@ -1409,8 +1442,18 @@ jobs:
       # Packaging
       #
 
+      - name: "bundle: setup app signing certificate"
+        id: keychain
+        uses: apple-actions/import-codesign-certs@v1
+        if: secrets.MACOS_CODESIGN_ID
+        with:
+          p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
+          p12-password: ${{ secrets.MACOS_CERT_PW }}
+
       - name: "bundle: assemble"
         uses: lukka/run-cmake@v10
+        env:
+          MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
         with:
           configurePreset: ci-macos
           buildPreset: ci-bundle-macos
@@ -1486,6 +1529,23 @@ jobs:
       # App Build
       #
 
+      - name: "app: version"
+        id: version
+        shell: bash
+        run: |
+          if [ '${{ github.ref_type }} == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+            VER="${{ github.ref_name }}"
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "$VER" > kart/VERSION
+          echo "::set-output name=value::$VER"
+          echo "::set-output name=is_release::$IS_RELEASE"
+
       - name: "app: vendor dependencies"
         uses: lukka/run-cmake@v10
         with:
@@ -1531,6 +1591,12 @@ jobs:
 
       - name: "bundle: assemble"
         uses: lukka/run-cmake@v10
+        env:
+          SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
+          SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
+          SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
+          SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}
+          SIGN_AZURE_TENANTID: ${{ secrets.WIN_SIGN_AZURE_TENANTID }}
         with:
           configurePreset: ci-windows
           buildPreset: ci-bundle-windows
