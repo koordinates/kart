@@ -1234,8 +1234,8 @@ jobs:
           echo "App Version: $VER"
           echo "Is Release? $IS_RELEASE"
           echo "$VER" > kart/VERSION
-          echo "::set-output name=value::$VER"
-          echo "::set-output name=is_release::$IS_RELEASE"
+          echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: vendor dependencies"
         uses: lukka/run-cmake@v10
@@ -1405,8 +1405,8 @@ jobs:
           echo "App Version: $VER"
           echo "Is Release? $IS_RELEASE"
           echo "$VER" > kart/VERSION
-          echo "::set-output name=value::$VER"
-          echo "::set-output name=is_release::$IS_RELEASE"
+          echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: vendor dependencies"
         uses: lukka/run-cmake@v10
@@ -1557,8 +1557,8 @@ jobs:
           echo "App Version: $VER"
           echo "Is Release? $IS_RELEASE"
           echo "$VER" > kart/VERSION
-          echo "::set-output name=value::$VER"
-          echo "::set-output name=is_release::$IS_RELEASE"
+          echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: vendor dependencies"
         uses: lukka/run-cmake@v10
