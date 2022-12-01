@@ -399,14 +399,20 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
 
 
 @pytest.mark.parametrize(
-    "new_pk_type,new_pk_expression",
+    "new_pk_type,new_pk_expression,reuse_pk_name",
     [
-        pytest.param("INTEGER", "id + 10", id="integer"),
-        pytest.param("TEXT", "'ID_' || id", id="text"),
+        pytest.param("INTEGER", "10 + id", False, id="integer"),
+        pytest.param("TEXT", "'ID_' || id", False, id="text"),
+        pytest.param("TEXT", "'ID_' || id", True, id="text-reuse-old-name"),
     ],
 )
 def test_edit_schema_primary_key(
-    new_pk_type, new_pk_expression, data_archive, cli_runner, new_postgis_db_schema
+    new_pk_type,
+    new_pk_expression,
+    reuse_pk_name,
+    data_archive,
+    cli_runner,
+    new_postgis_db_schema,
 ):
     with data_archive("polygons") as repo_path:
         repo = KartRepo(repo_path)
@@ -423,25 +429,31 @@ def test_edit_schema_primary_key(
             r = cli_runner.invoke(["diff", "--output-format=quiet"])
             assert r.exit_code == 0, r.stderr
 
+            table = f'"{postgres_schema}"."{H.POLYGONS.LAYER}"'
+
             with table_wc.session() as sess:
                 sess.execute(
-                    f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" DROP CONSTRAINT {H.POLYGONS.LAYER}_pkey;"""
+                    f"""ALTER TABLE {table} DROP CONSTRAINT {H.POLYGONS.LAYER}_pkey;"""
                 )
                 sess.execute(
-                    f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" ADD COLUMN new_id {new_pk_type};"""
+                    f"""ALTER TABLE {table} ADD COLUMN new_id {new_pk_type};"""
                 )
-                sess.execute(
-                    f"""UPDATE "{postgres_schema}"."{H.POLYGONS.LAYER}" SET new_id = {new_pk_expression};"""
-                )
-                sess.execute(
-                    f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" ADD PRIMARY KEY (new_id);"""
-                )
+                sess.execute(f"""UPDATE {table} SET new_id = {new_pk_expression};""")
+
+                if reuse_pk_name:
+                    new_name = "id"
+                    sess.execute(f"""ALTER TABLE {table} RENAME id TO old_id;""")
+                    sess.execute(f"""ALTER TABLE {table} RENAME new_id TO id;""")
+                else:
+                    new_name = "new_id"
+
+                sess.execute(f"""ALTER TABLE {table} ADD PRIMARY KEY ({new_name});""")
 
             r = cli_runner.invoke(["diff", "--output-format=json"])
             assert r.exit_code == 0, r.stderr
             ds_diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"][H.POLYGONS.LAYER]
             new_schema_col = ds_diff["meta"]["schema.json"]["+"][-1]
-            assert new_schema_col["name"] == "new_id"
+            assert new_schema_col["name"] == new_name
             assert new_schema_col["dataType"].upper() == new_pk_type
             assert new_schema_col["primaryKeyIndex"] == 0
             assert len(ds_diff["feature"]) == 456
