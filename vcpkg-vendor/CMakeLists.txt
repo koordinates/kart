@@ -617,7 +617,7 @@ add_custom_command(
   COMMAND
     ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} --modify
     PATH=path_list_prepend:${TOOLS_PATH} -- ${wheelBuildEnv_PYTHON}
-    "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<IF:$<BOOL:$ENV{VERBOSE}>,-vv,-v> .
+    "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<IF:$<BOOL:$ENV{VERBOSE}>,-v2,-v0> .
     ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
   VERBATIM
   COMMENT "Vendor dependency archive assembly")

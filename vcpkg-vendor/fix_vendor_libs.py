@@ -139,7 +139,6 @@ if PLATFORM == "Windows":
         "version.dll",
         "winhttp.dll",
         "ws2_32.dll",
-
         "odbc32.dll",
         "python3.dll",
         # python39.dll or similar:
@@ -253,7 +252,9 @@ def pack_all(root_path, output_path):
         subprocess.check_call(
             [
                 cmake_cmd,
-                "-E", "tar", "cf",
+                "-E",
+                "tar",
+                "cf",
                 output_path.absolute(),
                 "--format=zip",
                 *[f.name for f in contents_path.glob("*")],
@@ -342,7 +343,10 @@ def read_elf_cmd_lines(path_to_lib, pattern_to_read):
 def lib_paths(root_path, is_symlink=False):
     for ext in LIB_EXTENSIONS:
         for path_to_lib in root_path.glob(f"**/*{ext}"):
-            if any(path_to_lib.is_relative_to(root_path / VENDOR_ARCHIVE_CONTENTS / p) for p in NOFIX_PATHS):
+            if any(
+                path_to_lib.is_relative_to(root_path / VENDOR_ARCHIVE_CONTENTS / p)
+                for p in NOFIX_PATHS
+            ):
                 continue
 
             if path_to_lib.is_symlink() == is_symlink:
@@ -998,9 +1002,7 @@ for symbol in list(globals().keys()):
 
 def main():
     parser = argparse.ArgumentParser(usage=USAGE)
-    parser.add_argument(
-        "-v", "--verbose", default=0, action="count", help="Increase verbosity"
-    )
+    parser.add_argument("-v", "--verbose", type=int, default=0, help="Verbosity (0-3)")
     parser.add_argument(
         "-s",
         "--search-path",
