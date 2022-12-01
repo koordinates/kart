@@ -6,7 +6,7 @@ if(USE_VCPKG)
 endif()
 
 project(
-  KART
+  kart
   VERSION 0.12.0
   DESCRIPTION "Version control for geospatial data"
   HOMEPAGE_URL "https://kartproject.org"
@@ -17,7 +17,6 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include("vcpkg-vendor/osx-setup.cmake")
 include(PythonGetABIInfo)
 include(CCache)
-include(CTest)
 
 # find_package(Git REQUIRED) execute_process( COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
 # RESULT_VARIABLE result OUTPUT_VARIABLE KART_GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE )
@@ -45,6 +44,22 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX ON)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(MACOS ON)
+endif()
+
+if(PROJECT_IS_TOP_LEVEL)
+  include(CTest)
+
+  if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    if(MACOS)
+      set(CMAKE_INSTALL_PREFIX
+          "/Applications"
+          CACHE PATH "Install path prefix" FORCE)
+    elseif(LINUX)
+      set(CMAKE_INSTALL_PREFIX
+          "/opt"
+          CACHE PATH "Install path prefix" FORCE)
+    endif()
+  endif()
 endif()
 
 # OSX: prefer Homebrew over Frameworks
@@ -139,5 +154,26 @@ if(BUILD_TESTING)
   set_property(
     TEST e2e-1
     PROPERTY ENVIRONMENT_MODIFICATION
-             "PATH=path_list_prepend:${SQLite3_EXE_DIR};PATH=path_list_prepend:${BUNDLE_DIR}")
+             "PATH=path_list_prepend:${SQLite3_EXE_DIR};PATH=path_list_prepend:${BUNDLE_EXE_DIR}")
+endif()
+
+#
+# Installation
+#
+
+install(
+  DIRECTORY ${BUNDLE_DIR}
+  DESTINATION "."
+  USE_SOURCE_PERMISSIONS
+  COMPONENT bundle)
+if(NOT WIN32)
+  set(KART_SYSTEM_SYMLINK_DIR
+      /usr/local/bin
+      CACHE PATH "Directory to create the system path kart symlink in")
+  if(KART_SYSTEM_SYMLINK_DIR)
+    install(
+      CODE "message(STATUS \"Installing link: ${KART_SYSTEM_SYMLINK_DIR}/kart -> $<PATH:APPEND,\${CMAKE_INSTALL_PREFIX},${BUNDLE_PREFIX_REL_EXE}>\")"
+      CODE "file(CREATE_LINK \"$<PATH:APPEND,\${CMAKE_INSTALL_PREFIX},${BUNDLE_PREFIX_REL_EXE}>\" \"${KART_SYSTEM_SYMLINK_DIR}/kart\" SYMBOLIC)"
+      COMPONENT addToPath)
+  endif()
 endif()
