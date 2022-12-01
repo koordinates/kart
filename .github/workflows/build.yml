@@ -1302,8 +1302,8 @@ jobs:
       - name: "bundle: e2e tests"
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: ci-windows
-          testPreset: ci-e2e-windows
+          configurePreset: ci-linux
+          testPreset: ci-e2e-linux
 
   #
   # macOS via CMake+VCPKG
@@ -1474,8 +1474,8 @@ jobs:
       - name: "bundle: e2e tests"
         uses: lukka/run-cmake@v10
         with:
-          configurePreset: ci-windows
-          testPreset: ci-e2e-windows
+          configurePreset: ci-macos
+          testPreset: ci-e2e-macos
 
   #
   # Windows via CMake+VCPKG
