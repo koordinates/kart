@@ -80,19 +80,19 @@
             "name": "ci-bundle-linux",
             "displayName": "CI bundle assembly: Linux",
             "configurePreset": "ci-linux",
-            "target": "bundle"
+            "targets": ["bundle"]
         },
         {
             "name": "ci-bundle-macos",
             "displayName": "CI bundle assembly: macOS",
             "configurePreset": "ci-macos",
-            "target": "bundle"
+            "targets": ["bundle"]
         },
         {
             "name": "ci-bundle-windows",
             "displayName": "CI bundle assembly: Windows",
             "configurePreset": "ci-windows",
-            "target": "bundle"
+            "targets": ["bundle"]
         }
     ],
     "testPresets": [
