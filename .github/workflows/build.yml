@@ -1224,7 +1224,7 @@ jobs:
       - name: "app: version"
         id: version
         run: |
-          if [ '${{ github.ref_type }} == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
             VER="${{ github.ref_name }}"
             IS_RELEASE=1
           else
@@ -1395,7 +1395,7 @@ jobs:
       - name: "app: version"
         id: version
         run: |
-          if [ '${{ github.ref_type }} == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
             VER="${{ github.ref_name }}"
             IS_RELEASE=1
           else
@@ -1547,7 +1547,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [ '${{ github.ref_type }} == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
             VER="${{ github.ref_name }}"
             IS_RELEASE=1
           else
