@@ -11,7 +11,7 @@ from kart.cli_util import (
     parse_output_format,
     tool_environment,
 )
-from kart.completion_shared import path_completer
+from kart.completion_shared import ref_or_repo_path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
 from kart.subprocess_util import run
 from kart.key_filters import RepoKeyFilter
@@ -228,7 +228,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
     nargs=-1,
-    shell_complete=path_completer,
+    shell_complete=ref_or_repo_path_completer,
 )
 def log(
     ctx,

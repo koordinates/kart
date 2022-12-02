@@ -1,8 +1,19 @@
-import itertools
-
 from kart.merge_util import MergeContext, MergedIndex, RichConflict
 from kart.repo import KartRepoState
 from kart.context import Context
+
+
+class CompletionSet(set):
+    # This is a workaround for an inconvenience in Click's completion API:
+    # Click expects that shell_complete functions return lists - Click checks the first value using result[0].
+    # However, sets make more sense and are easier to test etc - don't have to worry about duplicates or ordering.
+    # There are other workarounds that involve returning lists, but this works well for now.
+
+    def __getitem__(self, index):
+        if not self:
+            raise IndexError("list index out of range")
+        assert index == 0
+        return next(iter(self))
 
 
 def discover_repository(allowed_states=None):
@@ -17,16 +28,20 @@ def ref_completer(ctx=None, param=None, incomplete=""):
     repo = discover_repository()
     if not repo:
         return []
-    all_refs = repo.listall_branches()
-    if not incomplete:
-        for ref in repo.references:
-            new_ref = ref.split("/")[-1]
-            if new_ref not in all_refs:
-                all_refs.append(ref)
-        return all_refs
 
-    all_refs = itertools.chain(all_refs, repo.references)
-    return [b for b in all_refs if b.startswith(incomplete)]
+    return CompletionSet(_do_complete_refs(repo, incomplete))
+
+
+def _do_complete_refs(repo, incomplete=""):
+    refs = set()
+    for ref in repo.references:
+        if incomplete and ref.startswith(incomplete):
+            refs.add(ref)
+        partial_ref = ref.split("/")[-1]
+        if partial_ref.startswith(incomplete):
+            refs.add(partial_ref)
+
+    return refs
 
 
 def conflict_completer(ctx=None, param=None, incomplete=""):
@@ -36,25 +51,50 @@ def conflict_completer(ctx=None, param=None, incomplete=""):
 
     merged_index = MergedIndex.read_from_repo(repo)
     merge_context = MergeContext.read_from_repo(repo)
-    rich_conflicts = []
-    ds_conflicts = set()
+    labels = set()
 
     for _, conflict in merged_index.conflicts.items():
         rich_conflict = RichConflict(conflict, merge_context)
-        if rich_conflict.label.startswith(incomplete):
-            rich_conflicts.append(rich_conflict.label)
-            ds_conflicts.add(rich_conflict.label.split(":")[0])
+        label = rich_conflict.label
+        if label.startswith(incomplete):
+            labels.add(label)
 
-    if not incomplete:
-        return list(ds_conflicts)
+    # TODO - this does not work very well, because:
+    # Conflict labels have ':' in them.
+    # POSIX shells don't treat ':' as special - but click shell completion for some reason does.
+    # It treats each ':' as starting a new argument, so, won't help with completing from that point on.
+    # The user can fix this by quoting the argument, but we can't make them quote the argument - at this point, we can't
+    # even detect if what they typed is already quoted or not, so we can't add any extra quotes.
 
-    return rich_conflicts
+    return CompletionSet(labels)
 
 
-def path_completer(ctx=None, param=None, incomplete=""):
+def repo_path_completer(ctx=None, param=None, incomplete=""):
     repo = discover_repository(allowed_states=KartRepoState.ALL_STATES)
     if not repo:
         return []
 
-    all_ds_paths = list(repo.datasets("HEAD").paths())
-    return all_ds_paths
+    return _do_complete_paths(repo, incomplete)
+
+
+def _do_complete_paths(repo, incomplete=""):
+    all_ds_paths = repo.datasets("HEAD").paths()
+    return set(p for p in all_ds_paths if p.startswith(incomplete))
+
+
+def ref_or_repo_path_completer(ctx=None, param=None, incomplete=""):
+    repo = discover_repository()
+    if not repo:
+        return []
+
+    return CompletionSet(
+        _do_complete_refs(repo, incomplete) | _do_complete_paths(repo, incomplete)
+    )
+
+
+def file_path_completer(ctx=None, param=None, incomplete=""):
+    from click.shell_completion import CompletionItem
+
+    # Return a special completion marker that tells the completion
+    # system to use the shell to provide file path completions.
+    return [CompletionItem(incomplete, type="file")]
