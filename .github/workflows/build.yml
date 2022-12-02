@@ -1336,6 +1336,7 @@ jobs:
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
       FORCE_COLOR: "YES"
+      MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
 
     steps:
       - uses: actions/checkout@v3
@@ -1451,8 +1452,6 @@ jobs:
       - name: "bundle: setup app signing certificate"
         id: keychain
         uses: apple-actions/import-codesign-certs@v1
-        env:
-          MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
         if: "${{ env.MACOS_CODESIGN_ID != '' }}"
         with:
           p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
@@ -1460,8 +1459,6 @@ jobs:
 
       - name: "bundle: assemble"
         uses: lukka/run-cmake@v10
-        env:
-          MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
         with:
           configurePreset: ci-macos
           buildPreset: ci-bundle-macos
@@ -1490,6 +1487,7 @@ jobs:
       PY_VER: ${{ matrix.python }}
       FORCE_COLOR: "YES"
       NINJA_VERSION: "1.10.2"  # workaround for python logging output buffering noise
+      SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -1510,6 +1508,9 @@ jobs:
           submodules: recursive
 
       # Setup
+
+      - name: "msvc setup"
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: "setup: cmake"
         uses: lukka/get-cmake@v3.24.3
@@ -1609,7 +1610,6 @@ jobs:
       - name: "bundle: assemble"
         uses: lukka/run-cmake@v10
         env:
-          SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
           SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
           SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
           SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}

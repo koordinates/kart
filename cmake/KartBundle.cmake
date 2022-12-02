@@ -42,9 +42,12 @@ set(BUNDLE_DEPS pyinstaller.stamp)
 
 if(WIN32 AND NOT "$ENV{SIGN_AZURE_CERTIFICATE}" STREQUAL "")
   # Windows code-signing using AzureSignTool
-  find_program(AZURESIGNTOOL azuresigntool REQUIRED PATHS "$ENV{USERPROFILE}/.dotnet/tools")
-  find_program(SIGNTOOL signtool REQUIRED PATHS "$ENV{WindowsSdkVerBinPath}/x64")
   message(STATUS "Enabling Windows code-signing")
+
+  find_program(AZURESIGNTOOL azuresigntool REQUIRED PATHS "$ENV{USERPROFILE}/.dotnet/tools")
+  message(STATUS "Found AzureSignTool: ${AZURESIGNTOOL}")
+  find_program(SIGNTOOL signtool REQUIRED PATHS ENV WindowsSdkVerBinPath PATH_SUFFIXES x64)
+  message(STATUS "Found signtool: ${SIGNTOOL}")
 
   add_custom_command(
     OUTPUT pyinstaller/codesign.stamp
