@@ -115,6 +115,7 @@
         },
         {
             "name": "ci-linux",
+            "displayName": "CI: Linux",
             "inherits": "ci-base",
             "configurePreset": "ci-linux"
         },
