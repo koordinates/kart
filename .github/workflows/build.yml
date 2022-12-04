@@ -17,7 +17,7 @@ jobs:
   #
   # Linux via CMake+VCPKG
   #
-  Linux-cmake-vcpkg:
+  Linux:
     strategy:
       matrix:
         os: [ubuntu-22.04, buildjet-2vcpu-ubuntu-2204]
@@ -219,7 +219,7 @@ jobs:
   #
   # macOS via CMake+VCPKG
   #
-  macOS-cmake-vcpkg:
+  macOS:
     strategy:
       matrix:
         os: [macos-12]
@@ -399,7 +399,7 @@ jobs:
   #
   # Windows via CMake+VCPKG
   #
-  Windows-cmake-vcpkg:
+  Windows:
     strategy:
       matrix:
         os: [windows-2019]
