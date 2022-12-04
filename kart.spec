@@ -153,7 +153,8 @@ else:
         (f'{BINARY_DIR}/venv/share/git-core', 'share/git-core'),
     ]
 
-    # add non-links from git to binaries, and symlinks to symlinks
+    # add elf/macho binaries from git to binaries, symlinks to symlinks,
+    # and the rest to datas
     git_libexec_core_root = f'{BINARY_DIR}/venv/libexec/git-core'
     for r, dl, fl in os.walk(git_libexec_core_root):
         for fn in fl:
@@ -163,10 +164,16 @@ else:
             if fp.is_symlink():
                 fp.resolve(strict=True)
                 symlinks.append((str(fp), dr))
-            elif fp.stat().st_mode & stat.S_IXUSR:
-                binaries.append((str(fp), dr))
-            else:
-                datas.append((str(fp), dr))
+                continue
+
+            if fp.stat().st_mode & stat.S_IXUSR:
+                # shell scripts are executable, but can't be codesigned on macOS
+                typ = subprocess.check_output(['file', '-b', str(fp)], text=True).split(' ', maxsplit=1)[0]
+                if typ in ('ELF', 'Mach-O'):
+                    binaries.append((str(fp), dr))
+                    continue
+
+            datas.append((str(fp), dr))
 
 
 pyi_analysis = Analysis(
