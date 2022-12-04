@@ -1313,6 +1313,7 @@ jobs:
       - name: "package: save"
         uses: actions/upload-artifact@v3
         with:
+          name: linux-${{ runner.arch }}-bundle
           path: build/dist/kart-*.tar.gz
 
   #
@@ -1492,6 +1493,7 @@ jobs:
       - name: "package: save"
         uses: actions/upload-artifact@v3
         with:
+          name: macos-${{ runner.arch }}-bundle
           path: build/dist/kart-*.zip
 
   #
@@ -1657,4 +1659,5 @@ jobs:
       - name: "package: save"
         uses: actions/upload-artifact@v3
         with:
+          name: windows-${{ runner.arch }}-bundle
           path: build/dist/kart-*.zip
