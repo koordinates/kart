@@ -18,23 +18,24 @@ include("vcpkg-vendor/osx-setup.cmake")
 include(PythonGetABIInfo)
 include(CCache)
 
-# Set the Kart version
-file(STRINGS kart/VERSION KART_BASE_VERSION LIMIT_COUNT 1)
-find_package(Git REQUIRED)
-execute_process(
-  COMMAND ${GIT_EXECUTABLE} describe --match="" --always --abbrev --dirty=X
-  RESULT_VARIABLE err
-  OUTPUT_VARIABLE KART_COMMIT_ID
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-if(NOT err AND KART_COMMIT_ID)
-  set(KART_VERSION "${KART_BASE_VERSION}+git${KART_COMMIT_ID}") # CACHE STRING "Kart Version")
-else()
-  set(KART_VERSION "${KART_BASE_VERSION}") # CACHE STRING "Kart Version")
+# Set the Kart application version
+if(NOT DEFINED KART_VERSION OR KART_VERSION STREQUAL "")
+  file(STRINGS kart/VERSION KART_BASE_VERSION LIMIT_COUNT 1)
+  find_package(Git REQUIRED)
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} describe --match="" --always --abbrev --dirty=X
+    RESULT_VARIABLE err
+    OUTPUT_VARIABLE KART_COMMIT_ID
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT err AND KART_COMMIT_ID)
+    set(KART_VERSION "${KART_BASE_VERSION}+git${KART_COMMIT_ID}")
+  else()
+    set(KART_VERSION "${KART_BASE_VERSION}")
+  endif()
 endif()
+set(CMAKE_PROJECT_VERSION "${KART_VERSION}")
+set(CPACK_PACKAGE_VERSION "${KART_VERSION}")
 message(STATUS "Kart build version: ${KART_VERSION}")
-
-set(CMAKE_PROJECT_VERSION "${KART_VERSION}") # CACHE STRING "Project Version")
-set(CPACK_PACKAGE_VERSION "${KART_VERSION}") # CACHE STRING "Package Version")
 
 #
 # options
