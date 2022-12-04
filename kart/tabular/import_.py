@@ -1,6 +1,5 @@
 import warnings
 import click
-from osgeo import gdal
 
 from kart import is_windows
 from kart.cli_util import (
@@ -16,33 +15,16 @@ from kart.core import check_git_user
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import InvalidOperation
 from kart.fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
+from kart.import_sources import suggest_specs
 from kart.key_filters import RepoKeyFilter
 from kart.tabular.import_source import TableImportSource
-from kart.tabular.ogr_import_source import FORMAT_TO_OGR_MAP
 from kart.tabular.pk_generation import PkGeneratingTableImportSource
 from kart.working_copy import PartType
 
 
 def list_import_formats(ctx):
-    """
-    List the supported import formats
-    """
-    click.echo("Geopackage: PATH.gpkg")
-    click.echo("PostgreSQL: postgresql://HOST/DBNAME[/DBSCHEMA]")
-    click.echo("SQL Server: mssql://HOST/DBNAME[/DBSCHEMA]")
-    click.echo("MySQL: mysql://HOST[/DBNAME]")
-
-    ogr_types = set()
-    for prefix, ogr_driver_name in FORMAT_TO_OGR_MAP.items():
-        d = gdal.GetDriverByName(ogr_driver_name)
-        if d:
-            m = d.GetMetadata()
-            # only vector formats which can read things.
-            if m.get("DCAP_VECTOR") == "YES" and m.get("DCAP_OPEN") == "YES":
-                ogr_types.add(prefix)
-
-    if "SHP" in ogr_types:
-        click.echo("Shapefile: PATH.shp")
+    """List the supported import formats."""
+    click.echo(suggest_specs())
 
 
 class GenerateIDsFromFile(StringFromFile):

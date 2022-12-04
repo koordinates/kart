@@ -5,13 +5,15 @@ import sys
 import click
 
 import sqlalchemy
+from kart.import_sources import bad_spec_error
 from kart.exceptions import NO_IMPORT_SOURCE, NO_TABLE, NotFound, NotYetImplemented
-from kart.output_util import dump_json_output
 from kart.list_of_conflicts import ListOfConflicts
+from kart.output_util import dump_json_output
 from kart.schema import Schema
 from kart.sqlalchemy import DbType, separate_last_path_part, strip_username_and_password
-from kart.utils import chunk, ungenerator
 from kart.serialise_util import ensure_bytes
+from kart.utils import chunk, ungenerator
+
 from sqlalchemy.orm import sessionmaker
 
 from .import_source import TableImportSource
@@ -29,7 +31,7 @@ class SqlAlchemyTableImportSource(TableImportSource):
     def open(cls, spec, table=None):
         db_type = DbType.from_spec(spec)
         if db_type is None:
-            raise cls._bad_import_source_spec(spec)
+            raise cls._bad_spec_error(spec)
 
         if db_type.clearly_doesnt_exist(spec):
             raise NotFound(f"Couldn't find '{spec}'", exit_code=NO_IMPORT_SOURCE)
@@ -47,7 +49,7 @@ class SqlAlchemyTableImportSource(TableImportSource):
         if not (
             shortest_allowed_path_length <= path_length <= longest_allowed_path_length
         ):
-            raise cls._bad_import_source_spec(spec)
+            raise cls._bad_spec_error(spec)
 
         connect_url = spec
         db_schema = None
@@ -67,15 +69,8 @@ class SqlAlchemyTableImportSource(TableImportSource):
         )
 
     @classmethod
-    def _bad_import_source_spec(self, spec):
-        return click.UsageError(
-            f"Unrecognised import-source specification: {spec}\n"
-            "Try one of:\n"
-            "  PATH.gpkg\n"
-            "  postgresql://HOST/DBNAME[/DBSCHEMA[/TABLE]]\n"
-            "  mssql://HOST/DBNAME[/DBSCHEMA[/TABLE]]\n"
-            "  mysql://HOST[/DBNAME[/TABLE]]"
-        )
+    def _bad_spec_error(self, spec):
+        return bad_spec_error(spec)
 
     def __init__(
         self,
