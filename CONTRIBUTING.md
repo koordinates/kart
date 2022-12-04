@@ -9,19 +9,20 @@ We're moving to CMake as a better system for building Kart and its
 dependencies. Currently CMake is still a work in progress and doesn't yet build
 all the vendor dependencies or create packages suitable for distribution.
 
-## Building the development version with CMake (macOS & Linux)
+## Building the development version with CMake
 
-Requirements for macOS & Linux:
-* CMake >= v3.21
-* GDAL >= v3.3.2
-* Git >= v2.31
-* OpenSSL >= v1.1
-* PostgreSQL client library (libpq)
-* Python >= 3.7
-* SpatiaLite >= v5.0.1
-* SQLite3 >= v3.31.1
-* SWIG
-* unixODBC >= v2.3.9 (macOS/Linux only)
+Requirements:
+* CMake >= v3.25
+* Git
+* Python >= 3.10
+* Go >= 1.17
+* Ninja
+* Rustc
+
+On Ubuntu:
+```console
+$ apt-get install autoconf build-essential curl git golang libtool patchelf python3-pip python3-venv tar unzip zip
+```
 
 Clone Kart from Github:
 
@@ -29,78 +30,46 @@ Clone Kart from Github:
 $ git clone https://github.com/koordinates/kart.git
 $ cd kart
 ```
-
-[Build and install libgit2](https://libgit2.org/docs/guides/build-and-link/#basic-build) v1.4.2
-from the [Koordinates `kx-latest` branch](https://github.com/koordinates/libgit2/tree/kx-latest):
-
-```console
-# do this outside your Kart checkout/directory
-$ git clone --branch=kx-latest https://github.com/koordinates/libgit2.git
-$ cd libgit2
-$ cmake -B build -S . -DBUILD_CLAR=OFF -Wno-dev
-$ cmake --build build
-$ cmake --install build
-```
-
-### Installing dependencies on macOS
-
-If you're a Homebrew user, you can get all of those via:
-
-```console
-$ brew install cmake gdal git openssl@1.1 libpq python@3.7 \
-    libspatialite sqlite3 swig unixodbc
-```
-
-Then configure Kart:
-```
-$ cmake -B build -S .
-```
-
-### Installing dependencies on Linux
-
-Ubuntu Focal using [UbuntuGIS](https://wiki.ubuntu.com/UbuntuGIS):
-```console
-$ sudo apt-get install software-properties-common
-$ wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - \
-    | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
-$ sudo apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
-$ sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
-$ sudo add-apt-repository ppa:git-core/ppa
-$ sudo apt-get install build-essential cmake ccache libgdal-dev gdal-data git \
-    libssl-dev libpq-dev python3.8-dev python3.8-venv \
-    libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
-```
-
-Then configure Kart:
-```console
-$ cmake -B build -S . \
-    -DSpatiaLite_EXTENSION=/usr/lib/x86_64-linux-gnu/mod_spatialite.so \
-    -DPROJ_DATADIR=/usr/share/proj
-```
-
 ### Building
 
+Then configure Kart:
 ```console
-$ cd build
-$ make
-$ ./kart --version
+$ cmake -B build -S . -DWITH_VCPKG=ON
+```
+
+Configuration builds all the dependencies using [VCPKG](https://github.com/microsoft/vcpkg)
+and can take quite a while. VCPKG caches by default, so future builds will be
+much quicker.
+
+Then build the development/editable version:
+
+```console
+$ cmake --build build
+$ build/kart --version
+```
+
+To build & install a bundled binary app. This will also create a
+`/usr/local/bin/kart` symlink to the installed application.
+
+```console
+$ cmake --build build --target bundle
+$ cmake --install build
 ```
 
 ### Downloading vendor dependencies from CI
 
-If you're having issues with the above, you can download a [recent master-branch
-vendor CI artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess) for your platform (`vendor-Darwin` for macOS,
-or `vendor-Linux` for Linux. Then:
+If you're having issues with VCPKG in the above, you can download a [recent
+master-branch vendor CI artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess) for your platform (eg: `vendor-macos-X64-3.10`). Then:
 
 ```console
-$ cmake -B build -S . -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-Darwin.zip
-$ cd build
-$ make
-$ ./kart --version
+$ cmake -B build -S . -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-Darwin.zip -DUSE_VCPKG=OFF
+$ cmake --build build
+$ build/kart --version
 ```
 
 Note you'll need to have the same version of Python that Kart CI currently uses
-(Python 3.7). Get CMake to pick up the right Python using `-DPython3_ROOT=...` - for example, `-DPython3_ROOT=$(which python3.7 | sed 's@/bin/.*@/@')`
+(Python 3.10). Get CMake to pick up the right Python using `-DPython3_ROOT=...` -
+for example, `-DPython3_ROOT=$(which python3.10 | sed 's@/bin/.*@/@')`
 
 ### Running the tests
 
@@ -110,15 +79,11 @@ $ ./build/venv/bin/pytest -v
 
 ## Building the development version with CMake (Windows)
 
-Currently Windows CMake builds are restricted to using vendor artifacts from
-Kart's CI. Download a [recent master-branch vendor artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess)
-for Windows (`vendor-Windows`).
-
 Requirements:
 * Windows 64-bit 8.1 / Windows Server 64-bit 2016; or newer
 * MS Visual Studio 2017 or newer, with C++ tools installed
-* Python 3.7
-* CMake >= v3.21
+* Python >= 3.10
+* CMake >= v3.25
 * Git for Windows
 
 Clone Kart from Github:
@@ -131,9 +96,9 @@ Clone Kart from Github:
 Configure and build Kart:
 
 ```console
-> cmake --log-level=VERBOSE -B build -S . -A x64 -DVENDOR_ARCHIVE=X:\Path\To\vendor-Windows.zip -DPython3_ROOT=X:\Path\To\Python37
-> cmake --build build --config Release
-> .\build\kart --version
+> cmake -B build -S . -DPython3_ROOT=C:\Program Files\Python310 -DUSE_VCPKG=ON
+> cmake --build build
+> .\build\venv\Scripts\kart.exe --version
 ```
 
 The commands above should be run from within a Visual Studio 64-bit command
@@ -142,83 +107,31 @@ solution file and several project files, and by default it chooses the latest
 version of Visual Studio that’s installed on your machine. Use CMake-GUI or the
 `-G` flag to CMake to select an alternative compiler.
 
+To build a bundled binary app.
+
+```console
+$ cmake --build build --target bundle
+$ build\pyinstaller\dist\kart\kart.exe --version
+```
+
+### Downloading vendor dependencies from CI
+
+If you're having issues with VCPKG in the above, you can download a [recent
+master-branch vendor CI artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess) for your platform (eg: `vendor-windows-X64-3.10`). Then:
+
+```console
+> cmake -B build -S . -DPython3_ROOT=C:\Program Files\Python310 -DVENDOR_ARCHIVE=D:\path\to\downloaded\vendor-windows-X64-3.10.zip -DUSE_VCPKG=OFF
+> cmake --build build
+> .\build\venv\Scripts\kart.exe --version
+```
+
+Note you'll need to have the same version of Python that Kart CI currently uses
+(Python 3.10).
+
 ### Running the tests
 
 ```console
-$ .\build\venv\Scripts\pytest -v
-```
-
-## Installing the development version the legacy way
-
-By default, vendored dependencies are downloaded from recent CI artifacts to save you a lot of time and effort building them.
-
-If for some reason you do need to build them locally, `cd vendor` and run:
-
-* MacOS/Linux: `make "build-$(uname -s)"`
-* Windows: `nmake /f makefile.vc`
-
-### macOS
-
-Requirements (install via Homebrew/somehow):
-* Python 3.7
-* wget
-* jq
-
-```console
-$ git clone git@github.com:koordinates/kart.git
-$ cd kart
-$ make
-
-# check it's working
-$ venv/bin/kart --version
-Kart v0.9.1.dev0, Copyright (c) Kart Contributors
-» GDAL v3.0.4
-» PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
-» APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
-```
-
-### Linux
-
-Requirements:
-* Python 3.7
-* wget
-
-```console
-$ git clone git@github.com:koordinates/kart.git
-$ cd kart
-$ make
-
-# check it's working
-$ venv/bin/kart --version
-Kart v0.9.1.dev0, Copyright (c) Kart Contributors
-» GDAL v3.0.4
-» PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
-» APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
-```
-
-### Windows
-
-Requirements:
-* Windows 64-bit 8.1 / Windows Server 64-bit 2016; or newer
-* MS Visual Studio 2017 or newer, with C++ tools installed
-* Python 3.7 from [Python.org](https://python.org)
-* cmake 3.15+
-* 7-Zip
-* Git
-
-Run the following from the "x64 Native Tools Command Prompt for VS 2019":
-
-```console
-> git clone git@github.com:koordinates/kart.git
-> cd kart
-> nmake /F makefile.vc
-
-# check it's working
-> venv\Scripts\kart --version
-Kart v0.9.1.dev0, Copyright (c) Kart Contributors
-» GDAL v3.0.4
-» PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
-» APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
+$ .\build\venv\Scripts\pytest.exe -v
 ```
 
 ## CI
