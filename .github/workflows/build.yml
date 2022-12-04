@@ -20,7 +20,7 @@ jobs:
   Linux-cmake-vcpkg:
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-22.04, buildjet-2vcpu-ubuntu-2204]
         python: ["3.10"]
     runs-on: ${{ matrix.os }}
 
@@ -50,6 +50,9 @@ jobs:
     services:
       postgis:
         image: postgis/postgis
+        credentials:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
         options: >-
           --health-cmd pg_isready
           --health-interval 2s
@@ -67,6 +70,9 @@ jobs:
           - 1433:1433
       mysql:
         image: mysql
+        credentials:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
