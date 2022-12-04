@@ -18,9 +18,23 @@ include("vcpkg-vendor/osx-setup.cmake")
 include(PythonGetABIInfo)
 include(CCache)
 
-# find_package(Git REQUIRED) execute_process( COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-# RESULT_VARIABLE result OUTPUT_VARIABLE KART_GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE )
-# if(result) message(FATAL_ERROR "Failed to get Git commit: ${result}") endif()
+# Set the Kart version
+file(STRINGS kart/VERSION KART_BASE_VERSION LIMIT_COUNT 1)
+find_package(Git REQUIRED)
+execute_process(
+  COMMAND ${GIT_EXECUTABLE} describe --match="" --always --abbrev --dirty=X
+  RESULT_VARIABLE err
+  OUTPUT_VARIABLE KART_COMMIT_ID
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(NOT err AND KART_COMMIT_ID)
+  set(KART_VERSION "${KART_BASE_VERSION}+git${KART_COMMIT_ID}") # CACHE STRING "Kart Version")
+else()
+  set(KART_VERSION "${KART_BASE_VERSION}") # CACHE STRING "Kart Version")
+endif()
+message(STATUS "Kart build version: ${KART_VERSION}")
+
+set(CMAKE_PROJECT_VERSION "${KART_VERSION}") # CACHE STRING "Project Version")
+set(CPACK_PACKAGE_VERSION "${KART_VERSION}") # CACHE STRING "Package Version")
 
 #
 # options
@@ -177,3 +191,26 @@ if(NOT WIN32)
       COMPONENT addToPath)
   endif()
 endif()
+
+#
+# Packaging
+#
+set(CPACK_PACKAGE_NAME "kart")
+set(CPACK_PACKAGE_VENDOR "Kart Project")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Version control for geospatial data")
+set(CPACK_VERBATIM_VARIABLES YES)
+
+if(MACOS)
+  set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+  set(CPACK_SYSTEM_NAME "macOS-${CMAKE_HOST_SYSTEM_PROCESSOR}")
+elseif(LINUX)
+  set(CPACK_SYSTEM_NAME "linux-${CMAKE_HOST_SYSTEM_PROCESSOR}")
+endif()
+
+if(LINUX)
+  set(CPACK_GENERATOR "TGZ")
+else()
+  set(CPACK_GENERATOR "ZIP")
+endif()
+
+include(CPack)

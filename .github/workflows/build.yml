@@ -1233,8 +1233,8 @@ jobs:
           fi
           echo "App Version: $VER"
           echo "Is Release? $IS_RELEASE"
-          echo "$VER" > kart/VERSION
           echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "KART_VERSION=$VER" >> $GITHUB_ENV
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: vendor dependencies"
@@ -1304,6 +1304,16 @@ jobs:
         with:
           configurePreset: ci-linux
           testPreset: ci-e2e-linux
+
+      - name: "package: ZIP"
+        shell: bash
+        run: |
+          cpack --preset=ci-linux
+
+      - name: "package: save"
+        uses: actions/upload-artifact@v3
+        with:
+          path: build/dist/kart-*.tar.gz
 
   #
   # macOS via CMake+VCPKG
@@ -1405,8 +1415,8 @@ jobs:
           fi
           echo "App Version: $VER"
           echo "Is Release? $IS_RELEASE"
-          echo "$VER" > kart/VERSION
           echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "KART_VERSION=$VER" >> $GITHUB_ENV
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: vendor dependencies"
@@ -1473,6 +1483,16 @@ jobs:
         with:
           configurePreset: ci-macos
           testPreset: ci-e2e-macos
+
+      - name: "package: ZIP"
+        shell: bash
+        run: |
+          cpack --preset=ci-macos
+
+      - name: "package: save"
+        uses: actions/upload-artifact@v3
+        with:
+          path: build/dist/kart-*.zip
 
   #
   # Windows via CMake+VCPKG
@@ -1562,8 +1582,8 @@ jobs:
           fi
           echo "App Version: $VER"
           echo "Is Release? $IS_RELEASE"
-          echo "$VER" > kart/VERSION
           echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "KART_VERSION=$VER" >> $GITHUB_ENV
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: vendor dependencies"
@@ -1628,3 +1648,13 @@ jobs:
         with:
           configurePreset: ci-windows
           testPreset: ci-e2e-windows
+
+      - name: "package: ZIP"
+        shell: bash
+        run: |
+          cpack --preset=ci-windows
+
+      - name: "package: save"
+        uses: actions/upload-artifact@v3
+        with:
+          path: build/dist/kart-*.zip

@@ -128,9 +128,11 @@ if not is_win:
         (f'{BINARY_DIR}/venv/bin/git', '.'),
     ]
 
+kart_version_file = os.environ.get("KART_VERSION_FILE", "kart/VERSION")
+
 # Data files — these are copied in as-is
 datas=[
-    ('kart/VERSION', 'share/kart'),
+    (kart_version_file, 'share/kart'),
     ('kart/diff-view.html', 'share/kart'),
     ('README.md', '.'),
     ('COPYING', '.'),

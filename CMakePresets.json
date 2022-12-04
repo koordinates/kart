@@ -12,7 +12,8 @@
             "binaryDir": "build",
             "cacheVariables": {
                 "USE_VCPKG": "ON",
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "KART_VERSION": "$env{KART_VERSION}"
             },
             "environment": {
                 "CI": "true"
@@ -168,6 +169,39 @@
             "name": "ci-e2e-windows",
             "displayName": "CI E2E: Windows",
             "inherits": "ci-e2e-base",
+            "configurePreset": "ci-windows"
+        }
+    ],
+    "packagePresets": [
+        {
+            "name": "ci-base",
+            "hidden": true,
+            "generators": ["ZIP"],
+            "output": {
+                "verbose": true
+            },
+            "environment": {
+                "CI": "true"
+            },
+            "packageDirectory": "dist",
+            "packageVersion": "$env{KART_VERSION}"
+        },
+        {
+            "name": "ci-linux",
+            "displayName": "CI Packages: Linux",
+            "inherits": "ci-base",
+            "configurePreset": "ci-linux"
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "CI Packages: macOS",
+            "inherits": "ci-base",
+            "configurePreset": "ci-macos"
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI Packages: Windows",
+            "inherits": "ci-base",
             "configurePreset": "ci-windows"
         }
     ]

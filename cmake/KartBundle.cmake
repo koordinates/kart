@@ -5,7 +5,11 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/bundleEnv.requirements.txt
 
 createvirtualenvironment(bundleEnv REQUIREMENTS_TXT "bundleEnv.requirements.txt")
 
-set(PYINSTALLER_ENV "BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}" "PYTHONPATH=${bundleEnv_PURELIB_DIR}")
+file(CONFIGURE OUTPUT "VERSION" CONTENT "${KART_VERSION}\n")
+
+set(PYINSTALLER_ENV
+    "BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}" "PYTHONPATH=${bundleEnv_PURELIB_DIR}"
+    "KART_VERSION=${KART_VERSION}" "KART_VERSION_FILE=${CMAKE_CURRENT_BINARY_DIR}/VERSION")
 
 if(MACOS)
   list(APPEND PYINSTALLER_ENV "DYLD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/venv/lib")
@@ -28,7 +32,7 @@ endif()
 
 add_custom_command(
   OUTPUT pyinstaller.stamp ${BUNDLE_EXE}
-  DEPENDS bundleEnv kart.spec # ${KART_EXE_VENV}
+  DEPENDS bundleEnv kart.spec VERSION # ${KART_EXE_VENV}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/
   COMMAND
@@ -46,7 +50,10 @@ if(WIN32 AND NOT "$ENV{SIGN_AZURE_CERTIFICATE}" STREQUAL "")
 
   find_program(AZURESIGNTOOL azuresigntool REQUIRED PATHS "$ENV{USERPROFILE}/.dotnet/tools")
   message(STATUS "Found AzureSignTool: ${AZURESIGNTOOL}")
-  find_program(SIGNTOOL signtool REQUIRED PATHS ENV WindowsSdkVerBinPath PATH_SUFFIXES x64)
+  find_program(
+    SIGNTOOL signtool REQUIRED
+    PATHS ENV WindowsSdkVerBinPath
+    PATH_SUFFIXES x64)
   message(STATUS "Found signtool: ${SIGNTOOL}")
 
   add_custom_command(
