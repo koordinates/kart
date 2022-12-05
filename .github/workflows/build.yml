@@ -84,12 +84,27 @@ jobs:
       # setup
       #
 
-      - name: "setup: python"
+      - name: "setup: python (amd64)"
         uses: actions/setup-python@v4
+        if: runner.arch != "ARM64"
         with:
           python-version: ${{ env.PY_VER }}
           cache: 'pip'
           cache-dependency-path: 'requirements/*.txt'
+
+      - name: "setup: python (arm64)"
+        if: runner.arch == "ARM64"
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update -q -y
+          apt-get install -q -y --no-install-recommends \
+            python${{ env.PY_VER }} \
+            python${{ env.PY_VER }}-venv \
+            python3-pip
+
+          echo "Python3_EXECUTABLE=$(command -v python3.10)" >> $GITHUB_ENV
+          echo "Python3_ROOT=/usr" >> $GITHUB_ENV
 
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@v3.24.3
@@ -221,7 +236,7 @@ jobs:
   macOS:
     strategy:
       matrix:
-        os: [{id: macos-12, label: 12/x86_64}]
+        os: [{id: macos-12, label: "12/x86_64"}]
     runs-on: ${{ matrix.os.id }}
     name: macOS ${{ matrix.os.label }}
 
