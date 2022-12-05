@@ -31,9 +31,13 @@ elseif(WIN32)
   set(BUNDLE_PREFIX_REL_EXE kart/kart.exe)
 endif()
 
+if(NOT WIN32)
+  set(BUNDLE_DEPENDS kart_cli_helper)
+endif()
+
 add_custom_command(
   OUTPUT pyinstaller.stamp ${BUNDLE_EXE}
-  DEPENDS bundleEnv kart.spec VERSION kart_cli_helper # ${KART_EXE_VENV}
+  DEPENDS bundleEnv kart.spec VERSION ${BUNDLE_DEPENDS} # ${KART_EXE_VENV}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/
   COMMAND

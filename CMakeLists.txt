@@ -114,7 +114,10 @@ file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 #
 # main build targets
 #
-add_subdirectory(cli_helper)
+if(NOT WIN32)
+  add_subdirectory(cli_helper)
+endif()
+
 include(KartPy)
 include(KartBundle)
 
