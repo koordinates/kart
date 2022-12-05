@@ -5,7 +5,7 @@ on: [push, pull_request]
 
 env:
   PY_VER: "3.10"
-  CMAKE_VERSION: "3.25.0"
+  CMAKE_VERSION: "~3.25.0"
   FORCE_COLOR: "YES"
 
 jobs:
@@ -107,7 +107,7 @@ jobs:
           echo "Python3_ROOT=/usr" >> $GITHUB_ENV
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.24.3
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -289,7 +289,7 @@ jobs:
           key: brew-cmake-${{ matrix.os.id }}-vcpkg
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.24.3
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -421,7 +421,7 @@ jobs:
     name: Windows ${{ matrix.os.label }}
 
     env:
-      NINJA_VERSION: "1.10.2"  # workaround for python logging output buffering noise
+      NINJA_VERSION: "~1.10.2"  # workaround for python logging output buffering noise
       SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
@@ -448,7 +448,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: "setup: cmake"
-        uses: lukka/get-cmake@v3.24.3
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
           ninjaVersion: "${{ env.NINJA_VERSION }}"
