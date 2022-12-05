@@ -12,14 +12,9 @@ set(REQUIREMENTS_DEPS
     PARENT_SCOPE)
 
 # fixme: use a list from somewhere else
-set(WHEEL_DEPS
-    cryptography
-    psycopg2
-    pygit2
-    GDAL
-    cffi
-    pysqlite3
-    pyodbc)
+set(WHEEL_DEPS cryptography psycopg2 pygit2 gdal cffi pysqlite3
+               # pyodbc: this is OS-qualified already in requirements.in
+)
 
 set(PIP_COMPILE_COMMAND
     ${CMAKE_COMMAND} -E env CUSTOM_COMPILE_COMMAND="cmake --build build --target py-requirements"

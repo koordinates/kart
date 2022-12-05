@@ -23,6 +23,8 @@ docutils==0.17.1
     # via
     #   -r requirements.in
     #   rst2txt
+#gdal==3.5.2
+    # via -r requirements.in
 jsonschema==4.1.2
     # via -r requirements.in
 msgpack==0.6.2
@@ -39,10 +41,10 @@ pygments==2.13.0
     #   rst2txt
 pymysql==1.0.2
     # via -r requirements.in
-#pyodbc==4.0.35  platform_system != "Linux"
-    # via -r requirements.in
 pyrsistent==0.18.1
     # via jsonschema
+#pysqlite3==0.4.5
+    # via -r requirements.in
 rst2txt==1.1.0
     # via -r requirements.in
 shellingham==1.5.0

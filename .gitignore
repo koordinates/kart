@@ -72,13 +72,13 @@ pytest.xml
 /.pytest*
 /test-results/
 /dist
-/build
 docs/_build/
 *.code-workspace
 .vscode/
 .idea/
 
 CMakeUserPresets.json
+build*/
 
 *.p12
 kart/_env.py
