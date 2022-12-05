@@ -42,6 +42,7 @@ message(STATUS "Kart build version: ${KART_VERSION}")
 #
 
 option(USE_VCPKG "Use vcpkg for vendor dependencies")
+option(CLI_HELPER "Default to the CLI helper on macOS & Linux")
 set(VENDOR_ARCHIVE
     ""
     CACHE
@@ -113,6 +114,7 @@ file(COPY ${DOCS} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 #
 # main build targets
 #
+add_subdirectory(cli_helper)
 include(KartPy)
 include(KartBundle)
 
@@ -164,12 +166,33 @@ if(BUILD_TESTING)
       NAME e2e-1
       COMMAND tests/scripts/e2e-1.sh
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+    if(CLI_HELPER)
+      # Run the same test under Linux & Mac using the cli helper
+      add_test(NAME cli-helper-clean COMMAND pkill -f "/kart_cli helper")
+      set_tests_properties(cli-helper-clean PROPERTIES LABELS "e2e" SKIP_RETURN_CODE 1
+                                                       FIXTURES_SETUP cli-helper)
+      add_test(
+        NAME e2e-1-helper
+        COMMAND tests/scripts/e2e-1.sh
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+      set_tests_properties(
+        e2e-1-helper
+        PROPERTIES
+          LABELS
+          "e2e"
+          FIXTURES_REQUIRED
+          cli-helper
+          ENVIRONMENT_MODIFICATION
+          "PATH=path_list_prepend:${SQLite3_EXE_DIR};PATH=path_list_prepend:${BUNDLE_EXE_DIR}"
+          ENVIRONMENT
+          "KART_USE_HELPER=1;KART_HELPER_LOG=${CMAKE_CURRENT_BINARY_DIR}/e2e-1-helper.log")
+    endif()
   endif()
-  set_property(TEST e2e-1 PROPERTY LABELS "e2e")
-  set_property(
-    TEST e2e-1
-    PROPERTY ENVIRONMENT_MODIFICATION
-             "PATH=path_list_prepend:${SQLite3_EXE_DIR};PATH=path_list_prepend:${BUNDLE_EXE_DIR}")
+  set_tests_properties(
+    e2e-1
+    PROPERTIES LABELS "e2e" ENVIRONMENT_MODIFICATION
+               "PATH=path_list_prepend:${SQLite3_EXE_DIR};PATH=path_list_prepend:${BUNDLE_EXE_DIR}")
 endif()
 
 #

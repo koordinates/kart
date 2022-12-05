@@ -22,6 +22,7 @@ from PyInstaller.depend import dylib
 from PyInstaller.utils.hooks import collect_data_files
 
 BINARY_DIR = os.environ.get("BINARY_DIR", "build")
+USE_CLI_HELPER = os.environ.get("USE_CLI_HELPER", "ON") == "ON"
 
 if is_win:
     lib_suffix_glob = 'dll'
@@ -124,9 +125,13 @@ binaries = [
 ]
 if not is_win:
     binaries += [
-        # ('cli_helper/kart_cli_helper', '.'),
         (f'{BINARY_DIR}/venv/bin/git', '.'),
     ]
+    if USE_CLI_HELPER:
+        binaries += [
+            (f'{BINARY_DIR}/cli_helper/kart', '.'),
+        ]
+
 
 kart_version_file = os.environ.get("KART_VERSION_FILE", "kart/VERSION")
 
@@ -222,15 +227,17 @@ pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
 if is_win:
     exe_icon = 'platforms/windows/kart.ico'
+    exe_name = 'kart'
 else:
     exe_icon = 'platforms/macos/kart.icns'
+    exe_name = 'kart_cli' if USE_CLI_HELPER else 'kart'
 
 pyi_exe = EXE(
     pyi_pyz,
     pyi_analysis.scripts,
     [],
     exclude_binaries=True,
-    name='kart',
+    name=exe_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
