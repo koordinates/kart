@@ -15,8 +15,15 @@ jobs:
   Linux:
     strategy:
       matrix:
-        os: [ubuntu-22.04, buildjet-2vcpu-ubuntu-2204-arm]
-    runs-on: ${{ matrix.os }}
+        os: [{id: ubuntu-22.04, label: ubuntu-22.04/amd64}]
+        experimental: [false]
+        include:
+          - os: {id: buildjet-2vcpu-ubuntu-2204-arm, label: ubuntu-22.04/arm64}
+            experimental: true
+
+    name: Linux ${{ matrix.os.label }}
+    runs-on: ${{ matrix.os.id }}
+    continue-on-error: ${{ matrix.experimental }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -93,7 +100,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-${{ matrix.os }}-cmake-vcpkg
+          key: vendor-ccache-${{ matrix.os.id }}-cmake-vcpkg
 
       - name: "setup: misc"
         run: |
@@ -106,7 +113,7 @@ jobs:
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a-${{ matrix.os }}"
+          prependedCacheKey: "20221110a-${{ matrix.os.id }}"
           appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       #
@@ -214,8 +221,9 @@ jobs:
   macOS:
     strategy:
       matrix:
-        os: [macos-12]
-    runs-on: ${{ matrix.os }}
+        os: [{id: macos-12, label: 12/x86_64}]
+    runs-on: ${{ matrix.os.id }}
+    name: macOS ${{ matrix.os.label }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -263,7 +271,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .cache/brew
-          key: brew-cmake-${{ matrix.os }}-vcpkg
+          key: brew-cmake-${{ matrix.os.id }}-vcpkg
 
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@v3.24.3
@@ -275,7 +283,7 @@ jobs:
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-${{ matrix.os }}-vcpkg
+          key: vendor-ccache-${{ matrix.os.id }}-vcpkg
 
       - name: "setup: misc"
         run: |
@@ -393,8 +401,10 @@ jobs:
   Windows:
     strategy:
       matrix:
-        os: [windows-2019]
-    runs-on: ${{ matrix.os }}
+        os: [{id: windows-2019, label: "2019/x64"}]
+    runs-on: ${{ matrix.os.id }}
+    name: Windows ${{ matrix.os.label }}
+
     env:
       NINJA_VERSION: "1.10.2"  # workaround for python logging output buffering noise
       SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
