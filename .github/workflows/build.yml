@@ -86,14 +86,14 @@ jobs:
 
       - name: "setup: python (amd64)"
         uses: actions/setup-python@v4
-        if: runner.arch != "ARM64"
+        if: "runner.arch != 'ARM64'"
         with:
           python-version: ${{ env.PY_VER }}
           cache: 'pip'
           cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: python (arm64)"
-        if: runner.arch == "ARM64"
+        if: "runner.arch == 'ARM64'"
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
