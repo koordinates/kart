@@ -7,7 +7,14 @@ sqlalchemy
 pyodbc ; os_name!="posix"
 shellingham
 docutils<0.18
+msgpack~=0.6.1
+Pygments
+pymysql
+pyodbc ; platform_system!="Linux"
 rst2txt
+shellingham
+sqlalchemy
+tqdm
 
 # jsonschema>=4.2 pulls in importlib_resources, which breaks PyInstaller<4.8
 # https://github.com/pyinstaller/pyinstaller/pull/6195

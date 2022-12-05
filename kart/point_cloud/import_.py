@@ -6,6 +6,7 @@ import click
 import pygit2
 
 from kart.cli_util import StringFromFile, MutexOption, KartCommand
+from kart.completion_shared import file_path_completer
 from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
@@ -117,7 +118,13 @@ L = logging.getLogger(__name__)
         "such a commit. This option bypasses the safety"
     ),
 )
-@click.argument("sources", metavar="SOURCES", nargs=-1, required=False)
+@click.argument(
+    "sources",
+    metavar="SOURCES",
+    nargs=-1,
+    required=False,
+    shell_complete=file_path_completer,
+)
 def point_cloud_import(
     ctx,
     convert_to_copc,

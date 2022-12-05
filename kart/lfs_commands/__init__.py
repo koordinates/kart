@@ -57,7 +57,7 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
 
     lfs_oids = set()
     for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
-        repo, start_commits, stop_commits
+        repo, start_commits, [f"--remotes={remote_name}", *stop_commits]
     ):
         # Because of the way a Kart repo is laid out, we know that:
         # All LFS pointer files are blobs inside **/.point-cloud-dataset.v?/tile/**
@@ -303,9 +303,7 @@ def gc(ctx, dry_run):
     spatial_filter = repo.spatial_filter
     checked_out_lfs_oids = set()
     for dataset in repo.datasets("HEAD", filter_dataset_type="point-cloud"):
-        checked_out_lfs_oids.update(
-            dataset.tile_lfs_hashes(spatial_filter.transform_for_dataset(dataset))
-        )
+        checked_out_lfs_oids.update(dataset.tile_lfs_hashes(spatial_filter))
 
     to_delete = set()
     total_size_to_delete = 0

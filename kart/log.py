@@ -11,7 +11,7 @@ from kart.cli_util import (
     parse_output_format,
     tool_environment,
 )
-from kart.completion_shared import path_completer
+from kart.completion_shared import ref_or_repo_path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
 from kart.subprocess_util import run
 from kart.key_filters import RepoKeyFilter
@@ -154,7 +154,8 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     help=(
         "Adds a 'feature_count' (the number of features modified in this diff) to JSON output."
         "If the value is 'exact', the feature count is exact (this may be slow.) "
-        "Otherwise, the feature count will be approximated with varying levels of accuracy."
+        "Otherwise, the feature count will be approximated with varying levels of accuracy. "
+        "For non-tabular datasets, the feature count is always exact, and refers to the number of tiles."
     ),
 )
 # Some standard git options
@@ -227,7 +228,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
     nargs=-1,
-    shell_complete=path_completer,
+    shell_complete=ref_or_repo_path_completer,
 )
 def log(
     ctx,

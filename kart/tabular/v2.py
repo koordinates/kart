@@ -15,3 +15,6 @@ class TableV2(TableV3):
     @property
     def feature_path_encoder(self):
         return PathEncoder.LEGACY_ENCODER
+
+    def feature_path_encoder_for_schema(self, schema):
+        return PathEncoder.LEGACY_ENCODER

@@ -11,6 +11,7 @@ from kart.cli_util import (
     RemovalInKart013Warning,
     KartCommand,
 )
+from kart.completion_shared import file_path_completer
 from kart.core import check_git_user
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import InvalidOperation
@@ -67,7 +68,7 @@ def any_at_all(iterable):
 
 @click.command("import", cls=KartCommand)
 @click.pass_context
-@click.argument("source")
+@click.argument("source", shell_complete=file_path_completer)
 @click.argument(
     "tables",
     nargs=-1,

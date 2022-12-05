@@ -177,6 +177,11 @@ class TableV1(TableDataset):
 
                     yield leaf
 
+    @property
+    def feature_count(self):
+        """The total number of features in this dataset."""
+        return sum(1 for blob in self.feature_blobs())
+
     def features(self):
         # Geometries weren't normalised in V1, but they are in V2.
         # Normalise them here.

@@ -16,6 +16,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - `metadata.xml` is now consistently treated as an attached file, rather than as a hidden "meta item". [#583](https://github.com/koordinates/kart/issues/583)
 - `apply` and `meta set` now support `--amend` to amend an existing commit
 - Bugfix: don't allow `kart diff` to diff to/from HEAD if HEAD does not yet point to a commit.
+- Improved progress reporting during working-copy checkout. [#738](https://github.com/koordinates/kart/pull/738)
+- Support for changing the primary key column of an existing dataset. [#238](https://github.com/koordinates/kart/issues/238)
 
 ## 0.11.5
 

@@ -658,3 +658,12 @@ class DefaultRoundtripContext:
         """
 
         return new_col_dict["dataType"] == old_col_dict["dataType"]
+
+
+def is_schema_delta_pk_compatible(schema_delta):
+    if schema_delta is None or schema_delta.type != "update":
+        return True
+
+    old_schema = Schema.from_column_dicts(schema_delta.old_value)
+    new_schema = Schema.from_column_dicts(schema_delta.new_value)
+    return old_schema.is_pk_compatible(new_schema)

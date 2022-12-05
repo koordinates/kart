@@ -18,6 +18,7 @@ from kart.lfs_util import (
 )
 from kart import meta_items
 from kart.meta_items import MetaItemDefinition, MetaItemFileType
+from kart.progress_util import progress_bar
 from kart.point_cloud.metadata_util import (
     RewriteMetadata,
     extract_pc_tile_metadata,
@@ -73,41 +74,65 @@ class PointCloudV1(BaseDataset):
     def tile_tree(self):
         return self.get_subtree(self.TILE_PATH)
 
-    def tile_pointer_blobs(self, spatial_filter=SpatialFilter.MATCH_ALL):
+    def tile_pointer_blobs(
+        self, spatial_filter=SpatialFilter.MATCH_ALL, show_progress=False
+    ):
         """Returns a generator that yields every tile pointer blob in turn."""
         tile_tree = self.tile_tree
         if not tile_tree:
             return
 
-        if spatial_filter.match_all:
-            yield from find_blobs_in_tree(tile_tree)
-            return
-
         spatial_filter = spatial_filter.transform_for_dataset(self)
 
-        for tile in find_blobs_in_tree(tile_tree):
-            if spatial_filter.matches(tile):
-                yield tile
+        n_read = 0
+        n_matched = 0
+        n_total = self.tile_count if show_progress else 0
+        progress = progress_bar(
+            show_progress=show_progress, total=n_total, unit="tile", desc=self.path
+        )
+
+        with progress as p:
+            for tile in find_blobs_in_tree(tile_tree):
+                n_read += 1
+                if spatial_filter.matches(tile):
+                    n_matched += 1
+                    yield tile
+
+                p.update(1)
+
+        if show_progress and not spatial_filter.match_all:
+            p.write(
+                f"(of {n_read} features read, wrote {n_matched} matching features to the working copy due to spatial filter)"
+            )
 
     @property
     def tile_count(self):
         """The total number of features in this dataset."""
-        return sum(1 for blob in self.tile_pointer_blobs())
+        return self.count_blobs_in_subtree(self.TILE_PATH)
 
-    def tile_lfs_hashes(self, spatial_filter=SpatialFilter.MATCH_ALL):
+    def tile_lfs_hashes(
+        self, spatial_filter=SpatialFilter.MATCH_ALL, show_progress=False
+    ):
         """Returns a generator that yields every LFS hash."""
-        for blob in self.tile_pointer_blobs(spatial_filter=spatial_filter):
+        for blob in self.tile_pointer_blobs(
+            spatial_filter=spatial_filter, show_progress=show_progress
+        ):
             yield get_hash_from_pointer_file(blob)
 
     def tilenames_with_lfs_hashes(
-        self, spatial_filter=SpatialFilter.MATCH_ALL, fix_extensions=True
+        self,
+        spatial_filter=SpatialFilter.MATCH_ALL,
+        fix_extensions=True,
+        show_progress=False,
     ):
         """
         Returns a generator that yields every tilename along with its LFS hash.
         If fix_extensions is True, then the returned name will be modified to have the correct extension for the
         type of tile the blob is pointing to (eg .laz or .copc.laz), regardless of the blob's extension (if any).
         """
-        for blob in self.tile_pointer_blobs(spatial_filter=spatial_filter):
+        for blob in self.tile_pointer_blobs(
+            spatial_filter=spatial_filter, show_progress=show_progress
+        ):
             if fix_extensions:
                 pointer_dict = pointer_file_bytes_to_dict(blob)
                 tile_format = pointer_dict["format"]
@@ -117,11 +142,16 @@ class PointCloudV1(BaseDataset):
                 yield blob.name, get_hash_from_pointer_file(blob)
 
     def tilenames_with_lfs_paths(
-        self, spatial_filter=SpatialFilter.MATCH_ALL, fix_extensions=True
+        self,
+        spatial_filter=SpatialFilter.MATCH_ALL,
+        fix_extensions=True,
+        show_progress=False,
     ):
         """Returns a generator that yields every tilename along with the path where the tile content is stored locally."""
         for blob_name, lfs_hash in self.tilenames_with_lfs_hashes(
-            spatial_filter=spatial_filter, fix_extensions=fix_extensions
+            spatial_filter=spatial_filter,
+            fix_extensions=fix_extensions,
+            show_progress=show_progress,
         ):
             yield blob_name, get_local_path_from_lfs_hash(self.repo, lfs_hash)
 

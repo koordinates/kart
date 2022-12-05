@@ -19,7 +19,7 @@ from kart import meta_items
 from kart.promisor_utils import LibgitSubcode
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tabular.table_dataset import TableDataset
-from kart.schema import DefaultRoundtripContext, Schema
+from kart.schema import DefaultRoundtripContext, Schema, is_schema_delta_pk_compatible
 from kart.utils import chunk
 from kart.working_copy import WorkingCopyDirty, WorkingCopyPart
 
@@ -614,17 +614,23 @@ class TableWorkingCopy(WorkingCopyPart):
     def diff_dataset_to_working_copy_feature(
         self, dataset, feature_filter, meta_diff, raise_if_dirty=False
     ):
-        pk_field = dataset.schema.pk_columns[0].name
-        schema_diff = meta_diff.get("schema.json")
+        schema_delta = meta_diff.get("schema.json")
 
-        if schema_diff and schema_diff.type == "delete":
+        if schema_delta and schema_delta.type == "delete":
             # The entire table has been deleted - add delete deltas for every feature.
             return dataset.all_features_diff(
-                feature_filter=feature_filter,
-                delta_type=Delta.delete,
-                flags=WORKING_COPY_EDIT,
+                delta_type=Delta.delete, flags=WORKING_COPY_EDIT
             )
+        if (
+            schema_delta
+            and schema_delta.type == "update"
+            and not is_schema_delta_pk_compatible(schema_delta)
+        ):
+            return dataset.all_features_diff(
+                delta_type=Delta.delete, flags=WORKING_COPY_EDIT
+            ) + self.all_features_diff(dataset, meta_diff, delta_type=Delta.delete)
 
+        pk_field = dataset.schema.pk_columns[0].name
         find_renames = self.can_find_renames(meta_diff)
 
         with self.session() as sess:
@@ -669,6 +675,21 @@ class TableWorkingCopy(WorkingCopyPart):
 
         if find_renames and (insert_count + delete_count) <= 400:
             self.find_renames(feature_diff, dataset)
+
+        return feature_diff
+
+    def all_features_diff(self, dataset, meta_diff, delta_type=Delta.insert):
+        assert delta_type in (Delta.insert, Delta.delete)
+        pk_field = self._get_dataset_schema(dataset, meta_diff).pk_columns[0].name
+
+        feature_diff = DeltaDiff()
+        with self.session() as sess:
+            r = self._execute_all_rows_query(sess, dataset, meta_diff)
+            for row in r:
+                db_obj = {k: row[k] for k in row.keys()}
+                delta = Delta.insert((db_obj[pk_field], db_obj))
+                delta.flags = WORKING_COPY_EDIT
+                feature_diff.add_delta(delta)
 
         return feature_diff
 
@@ -755,6 +776,15 @@ class TableWorkingCopy(WorkingCopyPart):
             )
 
         return sess.execute(query)
+
+    def _execute_all_rows_query(self, sess, dataset, meta_diff=None):
+        """
+        Does a join on the tracking table and the table for the given dataset, and returns a result
+        containing all the rows that have been inserted / updated / deleted.
+        """
+        schema = self._get_dataset_schema(dataset, meta_diff)
+        table = self._table_def_for_schema(schema, dataset.table_name)
+        return sess.execute(sa.select(table.columns).select_from(table))
 
     def get_dirty_pks(self, dataset):
         kart_track = self.kart_tables.kart_track
@@ -929,8 +959,9 @@ class TableWorkingCopy(WorkingCopyPart):
         with pause_refreshing(self.repo.odb), self.session() as sess:
             dataset_count = len(datasets)
             for i, dataset in enumerate(datasets):
-                L.info(
-                    "Writing dataset %d of %d: %s", i + 1, dataset_count, dataset.path
+                click.echo(
+                    f"Writing features for dataset {i+1} of {dataset_count}: {dataset.path}",
+                    err=True,
                 )
 
                 try:
@@ -956,7 +987,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
                 for row_dicts in chunk(
                     dataset.features_with_crs_ids(
-                        self.repo.spatial_filter, log_progress=L.info
+                        self.repo.spatial_filter, show_progress=True
                     ),
                     CHUNK_SIZE,
                 ):

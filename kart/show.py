@@ -4,7 +4,7 @@ from kart.completion_shared import ref_completer
 
 from kart import diff_estimation
 from kart.cli_util import KartCommand, OutputFormatType, parse_output_format
-from kart.completion_shared import path_completer
+from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
@@ -79,7 +79,7 @@ from kart.repo import KartRepoState
     metavar="[REVISION] [--] [FILTERS]",
     nargs=-1,
     type=click.UNPROCESSED,
-    shell_complete=path_completer,
+    shell_complete=ref_or_repo_path_completer,
 )
 def show(
     ctx,
