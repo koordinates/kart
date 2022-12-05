@@ -97,8 +97,8 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          apt-get update -q -y
-          apt-get install -q -y --no-install-recommends \
+          sudo apt-get update -q -y
+          sudo apt-get install -q -y --no-install-recommends \
             python${{ env.PY_VER }} \
             python${{ env.PY_VER }}-venv \
             python3-pip
