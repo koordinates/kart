@@ -4,24 +4,18 @@ name: Build
 on: [push, pull_request]
 
 env:
-  PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
-  LIBGIT2_TAG: kart-v0.11.1
+  PY_VER: "3.10"
   CMAKE_VERSION: "3.25.0"
+  FORCE_COLOR: "YES"
 
 jobs:
-  #
-  # CMAKE + VCPKG
-  # -------------
-  #
-
   #
   # Linux via CMake+VCPKG
   #
   Linux:
     strategy:
       matrix:
-        os: [ubuntu-22.04]
-        python: ["3.10"]
+        os: [ubuntu-22.04, buildjet-2vcpu-ubuntu-2204-arm]
     runs-on: ${{ matrix.os }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
@@ -41,18 +35,14 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      PY_VER: ${{ matrix.python }}
       KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
       KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
       KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
-      FORCE_COLOR: "YES"
 
     services:
       postgis:
-        image: postgis/postgis
-        credentials:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+        # https://github.com/postgis/docker-postgis/issues/216
+        image: ghcr.io/baosystems/postgis
         options: >-
           --health-cmd pg_isready
           --health-interval 2s
@@ -90,7 +80,9 @@ jobs:
       - name: "setup: python"
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python }}
+          python-version: ${{ env.PY_VER }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@v3.24.3
@@ -101,7 +93,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-${{ runner.os }}-cmake-vcpkg
+          key: vendor-ccache-${{ matrix.os }}-cmake-vcpkg
 
       - name: "setup: misc"
         run: |
@@ -114,7 +106,7 @@ jobs:
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a-${{ runner.arch }}"
+          prependedCacheKey: "20221110a-${{ matrix.os }}"
           appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       #
@@ -156,7 +148,7 @@ jobs:
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
         with:
-          name: vendor-linux-${{ runner.arch }}-${{ matrix.python }}
+          name: vendor-linux-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
 
       #
@@ -223,7 +215,6 @@ jobs:
     strategy:
       matrix:
         os: [macos-12]
-        python: ["3.10"]
     runs-on: ${{ matrix.os }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
@@ -243,10 +234,8 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      PY_VER: ${{ matrix.python }}
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
-      FORCE_COLOR: "YES"
       MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
 
     steps:
@@ -265,14 +254,16 @@ jobs:
       - name: "setup: python"
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python }}
+          python-version: ${{ env.PY_VER }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: homebrew cache"
         id: cache-brew
         uses: actions/cache@v3
         with:
           path: .cache/brew
-          key: brew-cmake-${{ runner.os }}-vcpkg
+          key: brew-cmake-${{ matrix.os }}-vcpkg
 
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@v3.24.3
@@ -284,7 +275,7 @@ jobs:
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-${{ runner.os }}-vcpkg
+          key: vendor-ccache-${{ matrix.os }}-vcpkg
 
       - name: "setup: misc"
         run: |
@@ -339,7 +330,7 @@ jobs:
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
         with:
-          name: vendor-macos-${{ runner.arch }}-${{ matrix.python }}
+          name: vendor-macos-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
 
       #
@@ -403,11 +394,8 @@ jobs:
     strategy:
       matrix:
         os: [windows-2019]
-        python: ["3.10"]
     runs-on: ${{ matrix.os }}
     env:
-      PY_VER: ${{ matrix.python }}
-      FORCE_COLOR: "YES"
       NINJA_VERSION: "1.10.2"  # workaround for python logging output buffering noise
       SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
 
@@ -445,14 +433,8 @@ jobs:
         with:
           python-version: "${{ env.PY_VER }}"
           architecture: x64
-
-      - name: "setup: pip cache"
-        uses: actions/cache@v3
-        with:
-          path: .cache/pip
-          key: pip-${{ runner.os }}-cmakevcpkg-${{ hashFiles('requirements.txt', 'requirements/*.txt') }}
-          restore-keys: |
-            pip-${{ runner.os }}-cmakevcpkg-
+          cache: 'pip'
+          cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v10
@@ -507,7 +489,7 @@ jobs:
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
         with:
-          name: vendor-windows-${{ runner.arch }}-${{ matrix.python }}
+          name: vendor-windows-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.zip
 
       #
