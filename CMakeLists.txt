@@ -14,6 +14,13 @@ project(
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+set(CMAKE_TLS_VERIFY TRUE)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(LINUX ON)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(MACOS ON)
+endif()
+
 include("vcpkg-vendor/osx-setup.cmake")
 include(PythonGetABIInfo)
 include(CCache)
@@ -50,17 +57,30 @@ set(VENDOR_ARCHIVE
       "Use vendor packages from CI: path to vendor archive file from https://github.com/koordinates/kart"
 )
 
+if(MACOS)
+  option(MACOS_SIGN_BUNDLE "Notarize macOS bundle")
+  option(MACOS_SIGN_PKG "Notarize macOS installer")
+  option(MACOS_NOTARIZE "Notarize macOS bundle & installer")
+  set(MACOS_NOTARIZE_TIMEOUT
+      1h
+      CACHE STRING "Timeout for Apple Notarization (eg: 60m, 1h)")
+
+  if(MACOS_SIGN_BUNDLE)
+    find_program(XCODE_CODESIGN codesign REQUIRED)
+  endif()
+  if(MACOS_SIGN_PKG)
+    find_program(XCODE_PKGUTIL pkgutil REQUIRED)
+  endif()
+  if(MACOS_NOTARIZE)
+    find_program(XCODE_XCRUN xcrun REQUIRED)
+    find_program(XCODE_SPCTL spctl REQUIRED)
+    find_program(XCODE_DITTO ditto REQUIRED)
+  endif()
+endif()
+
 #
 # setup
 #
-
-set(CMAKE_TLS_VERIFY TRUE)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  set(LINUX ON)
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  set(MACOS ON)
-endif()
 
 if(PROJECT_IS_TOP_LEVEL)
   include(CTest)
@@ -222,22 +242,122 @@ endif()
 #
 # Packaging
 #
-set(CPACK_PACKAGE_NAME "kart")
+set(CPACK_PACKAGE_NAME "Kart")
 set(CPACK_PACKAGE_VENDOR "Kart Project")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Version control for geospatial data")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://kartproject.org")
 set(CPACK_VERBATIM_VARIABLES YES)
+set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 
 if(MACOS)
+  configure_file(platforms/macos/intro.md macos-intro.md @ONLY)
+  configure_file(platforms/macos/summary.md macos-summary.md @ONLY)
+
+  find_program(PANDOC pandoc REQUIRED)
+
+  execute_process(
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${PANDOC} -s macos-intro.md --from=gfm -o macos-pkg-welcome.rtf
+    COMMAND_ERROR_IS_FATAL ANY)
+  execute_process(
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${PANDOC} -s macos-summary.md --from=gfm -o macos-pkg-readme.rtf
+    COMMAND_ERROR_IS_FATAL ANY)
+  execute_process(
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${PANDOC} -s ${CMAKE_CURRENT_SOURCE_DIR}/COPYING --from=twiki -o macos-pkg-license.rtf
+    COMMAND_ERROR_IS_FATAL ANY)
+  file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources)
+  file(COPY_FILE platforms/macos/background.png
+       ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources/background.png)
+
   set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
   set(CPACK_SYSTEM_NAME "macOS-${CMAKE_HOST_SYSTEM_PROCESSOR}")
+  set(CPACK_PRODUCTBUILD_IDENTIFIER "com.koordinates.Sno.SnoCore")
+  set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/kart.icns)
+  set(CPACK_PRODUCTBUILD_RESOURCES_DIR ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources)
+  set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-license.rtf)
+  set(CPACK_RESOURCE_FILE_WELCOME ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-welcome.rtf)
+  set(CPACK_RESOURCE_FILE_README ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-readme.rtf)
+  set(CPACK_PRODUCTBUILD_BACKGROUND background.png)
+
+  if(MACOS_SIGN_BUNDLE AND MACOS_SIGN_PKG)
+    set(CPACK_PKGBUILD_IDENTITY_NAME $ENV{MACOS_PKGSIGN_ID})
+    set(CPACK_PRODUCTBUILD_IDENTITY_NAME $ENV{MACOS_PKGSIGN_ID})
+  endif()
+
+  # https://gitlab.kitware.com/cmake/cmake/-/issues/21520
+  file(
+    WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake
+    [=[
+    file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/")
+    file(CREATE_LINK /Applications/Kart.app/Contents/MacOS/kart "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/kart" SYMBOLIC)
+  ]=])
+  set(CPACK_PRE_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake)
+
+  if(MACOS_SIGN_BUNDLE
+     AND MACOS_SIGN_PKG
+     AND MACOS_NOTARIZE)
+    file(
+      WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake
+      "
+      message(STATUS \"Checking PKG signature...\")
+      execute_process(
+        COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_OUTPUT_FILE_PATH}
+        COMMAND_ECHO STDERR
+        COMMAND_ERROR_IS_FATAL ANY)
+      message(STATUS \"Notarizing PKG with notarytool...\")
+      execute_process(
+        COMMAND ${XCODE_XCRUN} notarytool submit \${CPACK_OUTPUT_FILE_PATH}
+          --keychain-profile \"$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}\"
+          --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
+        COMMAND_ECHO NONE
+        COMMAND_ERROR_IS_FATAL ANY)
+      message(STATUS \"Stapling notarization to PKG...\")
+      execute_process(
+        COMMAND ${XCODE_XCRUN} stapler staple \${CPACK_OUTPUT_FILE_PATH}
+        COMMAND_ECHO STDERR
+        COMMAND_ERROR_IS_FATAL ANY)
+      message(STATUS \"Checking PKG notarization...\")
+      execute_process(
+        COMMAND ${XCODE_SPCTL} --assess -vvv --type install \${CPACK_OUTPUT_FILE_PATH}
+        COMMAND_ECHO STDERR
+        COMMAND_ERROR_IS_FATAL ANY)
+      ")
+    set(CPACK_POST_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake)
+  elseif(MACOS_SIGN_BUNDLE AND MACOS_SIGN_PKG)
+    file(
+      WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake
+      "
+      message(STATUS \"Checking PKG signature...\")
+      execute_process(
+        COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_OUTPUT_FILE_PATH}
+        COMMAND_ECHO STDERR
+        COMMAND_ERROR_IS_FATAL ANY)
+      ")
+    set(CPACK_POST_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake)
+  endif()
+
+  set(CPACK_GENERATOR "ZIP;productbuild")
+
 elseif(LINUX)
   set(CPACK_SYSTEM_NAME "linux-${CMAKE_HOST_SYSTEM_PROCESSOR}")
-endif()
-
-if(LINUX)
   set(CPACK_GENERATOR "TGZ")
-else()
+
+elseif(WIN32)
   set(CPACK_GENERATOR "ZIP")
+
 endif()
 
 include(CPack)
+
+cpack_add_component(
+  bundle
+  DISPLAY_NAME "Kart"
+  DESCRIPTION "Kart command-line tools"
+  REQUIRED)
+
+cpack_add_component(
+  addToPath
+  DISPLAY_NAME "Add to PATH"
+  DESCRIPTION "Add kart to the system path")

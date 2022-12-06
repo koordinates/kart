@@ -39,6 +39,11 @@
             "displayName": "CI: macOS",
             "inherits": "ci-base",
             "generator": "Unix Makefiles",
+            "cacheVariables": {
+                "MACOS_SIGN_BUNDLE": "$env{MACOS_SIGN_BUNDLE}",
+                "MACOS_SIGN_PKG": "$env{MACOS_SIGN_PKG}",
+                "MACOS_NOTARIZE": "$env{MACOS_NOTARIZE}"
+            },
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -176,7 +181,6 @@
         {
             "name": "ci-base",
             "hidden": true,
-            "generators": ["ZIP"],
             "output": {
                 "verbose": true
             },
@@ -197,13 +201,15 @@
             "name": "ci-macos",
             "displayName": "CI Packages: macOS",
             "inherits": "ci-base",
-            "configurePreset": "ci-macos"
+            "configurePreset": "ci-macos",
+            "generators": ["productbuild", "ZIP"]
         },
         {
             "name": "ci-windows",
             "displayName": "CI Packages: Windows",
             "inherits": "ci-base",
-            "configurePreset": "ci-windows"
+            "configurePreset": "ci-windows",
+            "generators": ["ZIP"]
         }
     ]
 }

@@ -151,7 +151,7 @@ jobs:
           echo "KART_VERSION=$VER" >> $GITHUB_ENV
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
-      - name: "app: vendor dependencies"
+      - name: "app: configuration & vendor dependencies"
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-linux
@@ -219,7 +219,7 @@ jobs:
           configurePreset: ci-linux
           testPreset: ci-e2e-linux
 
-      - name: "package: ZIP"
+      - name: "package: TGZ"
         shell: bash
         run: |
           cpack --preset=ci-linux
@@ -260,6 +260,8 @@ jobs:
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
       MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
+      MACOS_PKGSIGN_ID: ${{ secrets.MACOS_PKGSIGN_ID }}
+      MACOS_NOTARIZE_KEYCHAIN_PROFILE: "NOTARIZE_AUTH"
 
     steps:
       - uses: actions/checkout@v3
@@ -320,6 +322,8 @@ jobs:
 
       - name: "app: version"
         id: version
+        env:
+          MACOS_NOTARIZE_TEAMID: ${{ secrets.MACOS_NOTARIZE_TEAMID }}
         run: |
           if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
             VER="${{ github.ref_name }}"
@@ -334,7 +338,23 @@ jobs:
           echo "KART_VERSION=$VER" >> $GITHUB_ENV
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
-      - name: "app: vendor dependencies"
+          if [[ -n "${MACOS_CODESIGN_ID" ]]
+            echo "MACOS_SIGN_BUNDLE=ON" >> $GITHUB_ENV
+          else
+            echo "MACOS_SIGN_BUNDLE=OFF" >> $GITHUB_ENV
+          fi
+          if (( $IS_RELEASE && [[ -n "$MACOS_PKGSIGN_ID" ]]
+            echo "MACOS_SIGN_PKG=ON" >> $GITHUB_ENV
+          else
+            echo "MACOS_SIGN_PKG=OFF" >> $GITHUB_ENV
+          fi
+          if (( $IS_RELEASE && [[ -n "$MACOS_NOTARIZE_TEAMID" ]]
+            echo "MACOS_NOTARIZE=ON" >> $GITHUB_ENV
+          else
+            echo "MACOS_NOTARIZE=OFF" >> $GITHUB_ENV
+          fi
+
+      - name: "app: configuration & vendor dependencies"
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-macos
@@ -377,10 +397,23 @@ jobs:
       - name: "bundle: setup app signing certificate"
         id: keychain
         uses: apple-actions/import-codesign-certs@v1
-        if: "${{ env.MACOS_CODESIGN_ID != '' }}"
+        if: "${{ env.MACOS_SIGN_BUNDLE }} == 'ON'"
         with:
           p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
           p12-password: ${{ secrets.MACOS_CERT_PW }}
+
+      - name: "bundle: setup notarization auth"
+        if: "${{ env.MACOS_NOTARIZE }} == 'ON'"
+        env:
+          MACOS_NOTARIZE_TEAMID: ${{ secrets.MACOS_NOTARIZE_TEAMID }}
+          MACOS_NOTARIZE_USER: ${{ secrets.MACOS_NOTARIZE_USER }}
+          MACOS_NOTARIZE_PW: ${{ secrets.MACOS_NOTARIZE_PW }}
+        run: |
+          xcrun notarytool store-credentials "$MACOS_NOTARIZE_KEYCHAIN_PROFILE"
+              --keychain signing_temp
+              --apple-id "$MACOS_NOTARIZE_USER"
+              --team-id "$MACOS_NOTARIZE_TEAMID"
+              --password "$MACOS_NOTARIZE_PW"
 
       - name: "bundle: assemble"
         uses: lukka/run-cmake@v10
@@ -399,16 +432,32 @@ jobs:
           configurePreset: ci-macos
           testPreset: ci-e2e-macos
 
-      - name: "package: ZIP"
-        shell: bash
-        run: |
-          cpack --preset=ci-macos
+      - name: "package: setup installer signing certificate"
+        uses: apple-actions/import-codesign-certs@v1
+        if: "${{ env.MACOS_SIGN_PKG }} == 'ON'"
+        with:
+          create-keychain: false
+          keychain-password: ${{ steps.keychain.outputs.keychain-password }}
+          p12-file-base64: ${{ secrets.MACOS_INSTALLER_CERT }}
+          p12-password: ${{ secrets.MACOS_CERT_PW }}
 
-      - name: "package: save"
+      - name: "package: ZIP & PKG"
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: ci-macos
+          packagePreset: ci-macos
+
+      - name: "package: save ZIP"
         uses: actions/upload-artifact@v3
         with:
-          name: macos-${{ runner.arch }}-bundle
-          path: build/dist/kart-*.zip
+          name: macOS-${{ runner.arch }}-bundle
+          path: build/dist/Kart-*.zip
+
+      - name: "package: save PKG"
+        uses: actions/upload-artifact@v3
+        with:
+          name: macOS-${{ runner.arch }}-installer
+          path: build/dist/Kart-*.pkg
 
   #
   # Windows via CMake+VCPKG
@@ -495,7 +544,7 @@ jobs:
           echo "KART_VERSION=$VER" >> $GITHUB_ENV
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
-      - name: "app: vendor dependencies"
+      - name: "app: configuration & vendor dependencies"
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-windows
@@ -567,4 +616,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: windows-${{ runner.arch }}-bundle
-          path: build/dist/kart-*.zip
+          path: build/dist/Kart-*.zip

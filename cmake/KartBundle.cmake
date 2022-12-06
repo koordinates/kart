@@ -49,6 +49,9 @@ add_custom_command(
 
 set(BUNDLE_DEPS pyinstaller.stamp)
 
+#
+# Code signing
+#
 if(WIN32 AND NOT "$ENV{SIGN_AZURE_CERTIFICATE}" STREQUAL "")
   # Windows code-signing using AzureSignTool
   message(STATUS "Enabling Windows code-signing")
@@ -73,23 +76,41 @@ if(WIN32 AND NOT "$ENV{SIGN_AZURE_CERTIFICATE}" STREQUAL "")
     COMMENT "Code-signing Windows bundle")
   list(APPEND BUNDLE_DEPS pyinstaller/codesign.stamp)
 
-elseif(MACOS AND NOT "$ENV{MACOS_CODESIGN_ID}" STREQUAL "")
+elseif(MACOS AND MACOS_SIGN_BUNDLE)
   # macOS code-signing
-  set(MACOS_CODESIGN_ID $ENV{MACOS_CODESIGN_ID})
-  message(STATUS "Enabling macOS code-signing using identity: ${MACOS_CODESIGN_ID}")
+  message(STATUS "Enabling macOS code-signing using identity: $ENV{MACOS_CODESIGN_ID}")
   add_custom_command(
     OUTPUT pyinstaller/codesign.stamp
     DEPENDS ${BUNDLE_EXE}
     COMMAND
-      codesign --sign "${MACOS_CODESIGN_ID}" --verbose=3 --deep --timestamp --force --strict
-      --entitlements ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/entitlements.plist -o runtime
-      pyinstaller/dist/Kart.app
-    COMMAND codesign --display --verbose pyinstaller/dist/Kart.app
-    COMMAND codesign --verify --verbose --deep --strict=all pyinstaller/dist/Kart.app
+      ${XCODE_CODESIGN} --sign "$ENV{MACOS_CODESIGN_ID}" --verbose=3 --deep --timestamp --force
+      --strict --entitlements ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/entitlements.plist -o
+      runtime pyinstaller/dist/Kart.app
+    COMMAND ${XCODE_CODESIGN} --display --verbose pyinstaller/dist/Kart.app
+    COMMAND ${XCODE_CODESIGN} --verify --verbose --deep --strict=all pyinstaller/dist/Kart.app
     COMMAND ${CMAKE_COMMAND} -E touch pyinstaller/codesign.stamp
     VERBATIM
     COMMENT "Code-signing macOS bundle")
   list(APPEND BUNDLE_DEPS pyinstaller/codesign.stamp)
+
+  if(MACOS_NOTARIZE)
+    # macos notarization
+    add_custom_command(
+      OUTPUT pyinstaller/notarize.stamp
+      DEPENDS pyinstaller/codesign.stamp
+      BYPRODUCTS kart-bundle-notarize.zip
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist
+      COMMAND ${XCODE_DITTO} -c -k --sequesterRsrc --keepParent "Kart.app"
+              "kart-bundle-notarize.zip"
+      COMMAND ${XCODE_XCRUN} notarytool submit kart-bundle-notarize.zip --keychain-profile
+              "$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}" --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
+      COMMAND ${XCODE_XCRUN} stapler staple Kart.app
+      COMMAND ${XCODE_SPCTL} --assess -t execute -vvv Kart.app
+      COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/notarize.stamp
+      VERBATIM
+      COMMENT "Notarizing macOS bundle")
+    list(APPEND BUNDLE_DEPS pyinstaller/notarize.stamp)
+  endif()
 endif()
 
 add_custom_target(
