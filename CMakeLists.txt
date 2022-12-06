@@ -257,16 +257,16 @@ if(MACOS)
 
   execute_process(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${PANDOC} -s macos-intro.md --from=gfm -o macos-pkg-welcome.rtf
-    COMMAND_ERROR_IS_FATAL ANY)
+    COMMAND ${PANDOC} -s macos-intro.md --from=gfm -o macos-pkg-welcome.rtf COMMAND_ERROR_IS_FATAL
+            ANY)
   execute_process(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${PANDOC} -s macos-summary.md --from=gfm -o macos-pkg-readme.rtf
-    COMMAND_ERROR_IS_FATAL ANY)
+    COMMAND ${PANDOC} -s macos-summary.md --from=gfm -o macos-pkg-readme.rtf COMMAND_ERROR_IS_FATAL
+            ANY)
   execute_process(
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${PANDOC} -s ${CMAKE_CURRENT_SOURCE_DIR}/COPYING --from=twiki -o macos-pkg-license.rtf
-    COMMAND_ERROR_IS_FATAL ANY)
+            COMMAND_ERROR_IS_FATAL ANY)
   file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources)
   file(COPY_FILE platforms/macos/background.png
        ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources/background.png)

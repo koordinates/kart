@@ -343,12 +343,12 @@ jobs:
           else
             echo "MACOS_SIGN_BUNDLE=OFF" >> $GITHUB_ENV
           fi
-          if (( $IS_RELEASE && [[ -n "$MACOS_PKGSIGN_ID" ]]
+          if (( $IS_RELEASE )) && [[ -n "$MACOS_PKGSIGN_ID" ]]
             echo "MACOS_SIGN_PKG=ON" >> $GITHUB_ENV
           else
             echo "MACOS_SIGN_PKG=OFF" >> $GITHUB_ENV
           fi
-          if (( $IS_RELEASE && [[ -n "$MACOS_NOTARIZE_TEAMID" ]]
+          if (( $IS_RELEASE )) && [[ -n "$MACOS_NOTARIZE_TEAMID" ]]
             echo "MACOS_NOTARIZE=ON" >> $GITHUB_ENV
           else
             echo "MACOS_NOTARIZE=OFF" >> $GITHUB_ENV
