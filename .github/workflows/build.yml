@@ -99,7 +99,7 @@ jobs:
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
-      - name: "setup: python & cmake (arm64)"
+      - name: "setup: python & cmake & ninja (arm64)"
         if: "runner.arch == 'ARM64'"
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -109,7 +109,8 @@ jobs:
           sudo apt-get install -q -y --no-install-recommends \
             python${{ env.PY_VER }} \
             python${{ env.PY_VER }}-venv \
-            python3-pip
+            python3-pip \
+            ninja-build
           echo "Python3_EXECUTABLE=$(command -v python3.10)" >> $GITHUB_ENV
           echo "Python3_ROOT=/usr" >> $GITHUB_ENV
 
@@ -126,6 +127,7 @@ jobs:
 
       - name: "setup: misc"
         run: |
+          sudo apt-get update -q -y
           sudo apt-get install -q -y --no-install-recommends ccache
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "/usr/lib/ccache" >> $GITHUB_PATH
