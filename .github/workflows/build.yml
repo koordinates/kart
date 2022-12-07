@@ -119,6 +119,9 @@ jobs:
           "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin/cmake" --version
           echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin" >> $GITHUB_PATH
 
+          # necessary for vcpkg on arm64
+          echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
+
       - name: "setup: ccache"
         uses: actions/cache@v3
         with:
