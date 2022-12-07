@@ -357,7 +357,7 @@ jobs:
           echo "KART_VERSION=$VER" >> $GITHUB_ENV
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
-          if [[ -n "${MACOS_CODESIGN_ID" ]]; then
+          if [[ -n "$MACOS_CODESIGN_ID" ]]; then
             echo "MACOS_SIGN_BUNDLE=ON" >> $GITHUB_ENV
           else
             echo "MACOS_SIGN_BUNDLE=OFF" >> $GITHUB_ENV
