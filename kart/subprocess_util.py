@@ -137,9 +137,7 @@ def subprocess_tee(cmd, **kwargs):
         loop = asyncio.ProactorEventLoop()  # for subprocess' pipes on Windows
         asyncio.set_event_loop(loop)
 
-    return_code, stdout, stderr = asyncio.get_event_loop().run_until_complete(
-        read_and_display(cmd, **kwargs)
-    )
+    return_code, stdout, stderr = asyncio.run(read_and_display(cmd, **kwargs))
     return return_code, stdout, stderr
 
 
