@@ -323,7 +323,7 @@ jobs:
 
       - name: "setup: misc"
         run: |
-          brew install -q autoconf automake ccache
+          brew install -q autoconf automake ccache pandoc
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
