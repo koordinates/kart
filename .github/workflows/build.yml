@@ -109,8 +109,7 @@ jobs:
           sudo apt-get install -q -y --no-install-recommends \
             python${{ env.PY_VER }} \
             python${{ env.PY_VER }}-venv \
-            python3-pip \
-            ninja-build
+            python3-pip
           echo "Python3_EXECUTABLE=$(command -v python3.10)" >> $GITHUB_ENV
           echo "Python3_ROOT=/usr" >> $GITHUB_ENV
 
@@ -118,6 +117,9 @@ jobs:
           tar xzf "${RUNNER_TEMP}/cmake-linux.tgz" -C "${RUNNER_TEMP}"
           "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin/cmake" --version
           echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin" >> $GITHUB_PATH
+
+          python3.10 -m pip install ninja~=1.11.1
+          ninja --version
 
           # necessary for vcpkg on arm64
           echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
