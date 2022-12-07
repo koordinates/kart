@@ -231,10 +231,16 @@ if(NOT WIN32)
   set(KART_SYSTEM_SYMLINK_DIR
       /usr/local/bin
       CACHE PATH "Directory to create the system path kart symlink in")
+
   if(KART_SYSTEM_SYMLINK_DIR)
+    file(
+      WRITE ${CMAKE_CURRENT_BINARY_DIR}/install-addToPath.cmake
+      "
+      message(STATUS \"Installing link: \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/..${KART_SYSTEM_SYMLINK_DIR}/kart\" (ie: ${KART_SYSTEM_SYMLINK_DIR}/kart) -> \"${CMAKE_INSTALL_PREFIX}/${BUNDLE_PREFIX_REL_EXE}\")
+      file(CREATE_LINK \"${CMAKE_INSTALL_PREFIX}/${BUNDLE_PREFIX_REL_EXE}\" \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/..${KART_SYSTEM_SYMLINK_DIR}/kart\" SYMBOLIC)
+      ")
     install(
-      CODE "message(STATUS \"Installing link: ${KART_SYSTEM_SYMLINK_DIR}/kart -> $<PATH:APPEND,\${CMAKE_INSTALL_PREFIX},${BUNDLE_PREFIX_REL_EXE}>\")"
-      CODE "file(CREATE_LINK \"$<PATH:APPEND,\${CMAKE_INSTALL_PREFIX},${BUNDLE_PREFIX_REL_EXE}>\" \"${KART_SYSTEM_SYMLINK_DIR}/kart\" SYMBOLIC)"
+      SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/install-addToPath.cmake
       COMPONENT addToPath)
   endif()
 endif()
@@ -246,7 +252,9 @@ set(CPACK_PACKAGE_NAME "Kart")
 set(CPACK_PACKAGE_VENDOR "Kart Project")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Version control for geospatial data")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://kartproject.org")
+set(CPACK_PACKAGE_CONTACT "support@koordinates.com")
 set(CPACK_VERBATIM_VARIABLES YES)
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/cpack_project_config.cmake")
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 
 if(MACOS)
@@ -288,11 +296,10 @@ if(MACOS)
 
   # https://gitlab.kitware.com/cmake/cmake/-/issues/21520
   file(
-    WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake
-    [=[
-    file(MAKE_DIRECTORY "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/")
-    file(CREATE_LINK /Applications/Kart.app/Contents/MacOS/kart "${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/kart" SYMBOLIC)
-  ]=])
+    WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake "
+    file(MAKE_DIRECTORY \"\${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/\")
+    file(CREATE_LINK \"${CMAKE_INSTALL_PREFIX}/Kart.app/Contents/MacOS/kart\" \"\${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/kart\" SYMBOLIC)
+  ")
   set(CPACK_PRE_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake)
 
   if(MACOS_SIGN_BUNDLE
@@ -342,7 +349,30 @@ if(MACOS)
 
 elseif(LINUX)
   set(CPACK_SYSTEM_NAME "linux-${CMAKE_HOST_SYSTEM_PROCESSOR}")
-  set(CPACK_GENERATOR "TGZ")
+  set(CPACK_GENERATOR "TGZ;DEB;RPM")
+  set(CPACK_PACKAGING_INSTALL_PREFIX "/opt")
+
+  set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS openssh-client)
+  set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+  set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS_PRIVATE_DIRS ${BUNDLE_DIR})
+   
+  set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+  set(CPACK_RPM_PACKAGE_LICENSE "GPLv2")
+  set(CPACK_RPM_PACKAGE_REQUIRES "openssh-clients, libstdc++, libgcc, bzip2-libs, expat, xz-libs, libstdc++, ncurses-libs, zlib")
+  set(CPACK_RPM_PACKAGE_AUTOREQPROV OFF)
+  set(CPACK_RPM_PACKAGE_RELOCATABLE OFF)
+  set(CPACK_RPM_SPEC_CHANGELOG ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md)
+  set(CPACK_RPM_SPEC_MORE_DEFINE "%define _build_id_links none")
+
+  # https://gitlab.kitware.com/cmake/cmake/-/issues/21520
+  file(
+    WRITE ${CMAKE_CURRENT_BINARY_DIR}/linux-debrpm-pre-build.cmake
+    "
+    file(MAKE_DIRECTORY \"\${CPACK_TEMPORARY_INSTALL_DIRECTORY}/ALL_COMPONENTS_IN_ONE/usr/bin/\")
+    file(CREATE_LINK \"${CMAKE_INSTALL_PREFIX}/kart/kart\" \"\${CPACK_TEMPORARY_INSTALL_DIRECTORY}/ALL_COMPONENTS_IN_ONE/usr/bin/kart\" SYMBOLIC)
+    ")
+  set(CPACK_PRE_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/linux-debrpm-pre-build.cmake)
 
 elseif(WIN32)
   set(CPACK_GENERATOR "ZIP")
@@ -357,7 +387,9 @@ cpack_add_component(
   DESCRIPTION "Kart command-line tools"
   REQUIRED)
 
-cpack_add_component(
-  addToPath
-  DISPLAY_NAME "Add to PATH"
-  DESCRIPTION "Add kart to the system path")
+if(KART_SYSTEM_SYMLINK_DIR)
+  cpack_add_component(
+    addToPath
+    DISPLAY_NAME "Add to PATH"
+    DESCRIPTION "Add kart to the system path")
+endif()

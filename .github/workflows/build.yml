@@ -219,16 +219,28 @@ jobs:
           configurePreset: ci-linux
           testPreset: ci-e2e-linux
 
-      - name: "package: TGZ"
+      - name: "package: TGZ & DEB & RPM"
         shell: bash
         run: |
           cpack --preset=ci-linux
 
-      - name: "package: save"
+      - name: "package: save TGZ"
         uses: actions/upload-artifact@v3
         with:
-          name: linux-${{ runner.arch }}-bundle
-          path: build/dist/kart-*.tar.gz
+          name: linux-${{ runner.arch }}-tgz
+          path: build/dist/Kart-*.tar.gz
+
+      - name: "package: save DEB"
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-${{ runner.arch }}-deb
+          path: build/dist/kart_*.deb
+
+      - name: "package: save RPM"
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-${{ runner.arch }}-rpm
+          path: build/dist/Kart-*.rpm
 
   #
   # macOS via CMake+VCPKG

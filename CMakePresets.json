@@ -195,7 +195,7 @@
             "displayName": "CI Packages: Linux",
             "inherits": "ci-base",
             "configurePreset": "ci-linux",
-            "generators": ["TGZ"]
+            "generators": ["TGZ", "DEB", "RPM"]
         },
         {
             "name": "ci-macos",
