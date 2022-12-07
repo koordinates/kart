@@ -186,6 +186,7 @@ jobs:
         with:
           name: vendor-linux-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
+          if-no-files-found: error
 
       #
       # App tests & checks
@@ -243,18 +244,21 @@ jobs:
         with:
           name: linux-${{ runner.arch }}-tgz
           path: build/dist/Kart-*.tar.gz
+          if-no-files-found: error
 
       - name: "package: save DEB"
         uses: actions/upload-artifact@v3
         with:
           name: linux-${{ runner.arch }}-deb
           path: build/dist/kart_*.deb
+          if-no-files-found: error
 
       - name: "package: save RPM"
         uses: actions/upload-artifact@v3
         with:
           name: linux-${{ runner.arch }}-rpm
           path: build/dist/Kart-*.rpm
+          if-no-files-found: error
 
   #
   # macOS via CMake+VCPKG
@@ -401,6 +405,7 @@ jobs:
         with:
           name: vendor-macos-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
+          if-no-files-found: error
 
       #
       # App tests & checks
@@ -468,22 +473,23 @@ jobs:
           p12-password: ${{ secrets.MACOS_CERT_PW }}
 
       - name: "package: ZIP & PKG"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-macos
-          packagePreset: ci-macos
+        shell: bash
+        run: |
+          cpack --preset=ci-macos
 
       - name: "package: save ZIP"
         uses: actions/upload-artifact@v3
         with:
           name: macOS-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
+          if-no-files-found: error
 
       - name: "package: save PKG"
         uses: actions/upload-artifact@v3
         with:
           name: macOS-${{ runner.arch }}-installer
           path: build/dist/Kart-*.pkg
+          if-no-files-found: error
 
   #
   # Windows via CMake+VCPKG
@@ -591,6 +597,7 @@ jobs:
         with:
           name: vendor-windows-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.zip
+          if-no-files-found: error
 
       #
       # App tests & checks
@@ -643,3 +650,4 @@ jobs:
         with:
           name: windows-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
+          if-no-files-found: error
