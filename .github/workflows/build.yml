@@ -86,7 +86,7 @@ jobs:
 
       - name: "setup: python (amd64)"
         uses: actions/setup-python@v4
-        if: "runner.arch != 'ARM64'"
+        if: runner.arch != 'ARM64'
         with:
           python-version: ${{ env.PY_VER }}
           cache: 'pip'
@@ -95,12 +95,12 @@ jobs:
       # https://github.com/lukka/get-cmake/issues/63
       - name: "setup: cmake & ninja (amd64)"
         uses: lukka/get-cmake@latest
-        if: "runner.arch != 'ARM64'"
+        if: runner.arch != 'ARM64'
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       - name: "setup: python & cmake & ninja (arm64)"
-        if: "runner.arch == 'ARM64'"
+        if: runner.arch == 'ARM64'
         env:
           DEBIAN_FRONTEND: noninteractive
           CMAKE_VERSION: "3.25.1"
@@ -171,7 +171,7 @@ jobs:
           configurePreset: ci-linux
 
       - name: "check for vcpkg errors"
-        if: ${{ failure() || cancelled() }}
+        if: "failure() || cancelled()"
         run: |
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
@@ -386,7 +386,7 @@ jobs:
           configurePreset: ci-macos
 
       - name: "check for vcpkg errors"
-        if: ${{ failure() || cancelled() }}
+        if: failure() || cancelled()
         run: |
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
@@ -423,13 +423,13 @@ jobs:
       - name: "bundle: setup app signing certificate"
         id: keychain
         uses: apple-actions/import-codesign-certs@v1
-        if: "${{ env.MACOS_SIGN_BUNDLE }} == 'ON'"
+        if: env.MACOS_SIGN_BUNDLE == 'ON'
         with:
           p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
           p12-password: ${{ secrets.MACOS_CERT_PW }}
 
       - name: "bundle: setup notarization auth"
-        if: "${{ env.MACOS_NOTARIZE }} == 'ON'"
+        if: env.MACOS_NOTARIZE == 'ON'
         env:
           MACOS_NOTARIZE_TEAMID: ${{ secrets.MACOS_NOTARIZE_TEAMID }}
           MACOS_NOTARIZE_USER: ${{ secrets.MACOS_NOTARIZE_USER }}
@@ -460,7 +460,7 @@ jobs:
 
       - name: "package: setup installer signing certificate"
         uses: apple-actions/import-codesign-certs@v1
-        if: "${{ env.MACOS_SIGN_PKG }} == 'ON'"
+        if: env.MACOS_SIGN_PKG == 'ON'
         with:
           create-keychain: false
           keychain-password: ${{ steps.keychain.outputs.keychain-password }}
@@ -576,7 +576,7 @@ jobs:
           configurePreset: ci-windows
 
       - name: "check for vcpkg errors"
-        if: ${{ failure() || cancelled() }}
+        if: failure() || cancelled()
         run: |
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
