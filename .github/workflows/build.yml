@@ -114,7 +114,7 @@ jobs:
           echo "Python3_ROOT=/usr" >> $GITHUB_ENV
 
           curl -fL https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz > "${RUNNER_TEMP}/cmake-linux.tgz"
-          sudo tar xzf -C "$RUNNER_TEMP" "${RUNNER_TEMP}/cmake-install-linux.tgz"
+          tar xzf -C "${RUNNER_TEMP}" "${RUNNER_TEMP}/cmake-linux.tgz"
           "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin/cmake" --version
           echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin" >> $GITHUB_PATH
 
