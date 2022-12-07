@@ -113,6 +113,7 @@ jobs:
           echo "Python3_EXECUTABLE=$(command -v python3.10)" >> $GITHUB_ENV
           echo "Python3_ROOT=/usr" >> $GITHUB_ENV
 
+          echo "RUNNER_TEMP=${RUNNER_TEMP} runner.temp=${{ runner.temp }}"
           curl -fL https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz > "${RUNNER_TEMP}/cmake-linux.tgz"
           tar xzf -C "${RUNNER_TEMP}" "${RUNNER_TEMP}/cmake-linux.tgz"
           "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin/cmake" --version
