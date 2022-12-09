@@ -18,6 +18,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Bugfix: don't allow `kart diff` to diff to/from HEAD if HEAD does not yet point to a commit.
 - Improved progress reporting during working-copy checkout. [#738](https://github.com/koordinates/kart/pull/738)
 - Support for changing the primary key column of an existing dataset. [#238](https://github.com/koordinates/kart/issues/238)
+- Help for the user get the working copy back into a valid state if a crash or similar causes it to become out of sync with the Kart repo. [#751](https://github.com/koordinates/kart/pull/751)
 
 ## 0.11.5
 
