@@ -576,6 +576,14 @@ jobs:
           echo "KART_VERSION=$VER" >> $GITHUB_ENV
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
+          if (( $IS_RELEASE )) && [[ -n "$SIGN_AZURE_CERTIFICATE" ]]; then
+            echo "WIN_SIGN_BUNDLE=ON" >> $GITHUB_ENV
+            echo "WIN_SIGN_INSTALLER=ON" >> $GITHUB_ENV
+          else
+            echo "WIN_SIGN_BUNDLE=OFF" >> $GITHUB_ENV
+            echo "WIN_SIGN_INSTALLER=OFF" >> $GITHUB_ENV
+          fi
+
       - name: "app: configuration & vendor dependencies"
         uses: lukka/run-cmake@v10
         with:
@@ -640,14 +648,26 @@ jobs:
           configurePreset: ci-windows
           testPreset: ci-e2e-windows
 
-      - name: "package: ZIP"
+      - name: "package: ZIP & MSI"
+        env:
+          SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
+          SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
+          SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}
+          SIGN_AZURE_TENANTID: ${{ secrets.WIN_SIGN_AZURE_TENANTID }}
         shell: bash
         run: |
           cpack --preset=ci-windows
 
-      - name: "package: save"
+      - name: "package: save ZIP"
         uses: actions/upload-artifact@v3
         with:
           name: windows-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
+          if-no-files-found: error
+
+      - name: "package: save MSI"
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-${{ runner.arch }}-installer
+          path: build/dist/Kart-*.msi
           if-no-files-found: error

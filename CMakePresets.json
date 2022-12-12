@@ -55,6 +55,10 @@
             "displayName": "CI: Windows",
             "inherits": "ci-base",
             "generator": "Ninja",
+            "cacheVariables": {
+                "WIN_SIGN_BUNDLE": "$env{WIN_SIGN_BUNDLE}",
+                "WIN_SIGN_INSTALLER": "$env{WIN_SIGN_INSTALLER}"
+            },
             "architecture": {
                 "value": "x64",
                 "strategy": "external"
@@ -209,7 +213,7 @@
             "displayName": "CI Packages: Windows",
             "inherits": "ci-base",
             "configurePreset": "ci-windows",
-            "generators": ["ZIP"]
+            "generators": ["WIX", "ZIP"]
         }
     ]
 }

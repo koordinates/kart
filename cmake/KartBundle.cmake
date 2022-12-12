@@ -52,28 +52,19 @@ set(BUNDLE_DEPS pyinstaller.stamp)
 #
 # Code signing
 #
-if(WIN32 AND NOT "$ENV{SIGN_AZURE_CERTIFICATE}" STREQUAL "")
+if(WIN32 AND WIN_SIGN_BUNDLE)
   # Windows code-signing using AzureSignTool
   message(STATUS "Enabling Windows code-signing")
-
-  find_program(AZURESIGNTOOL azuresigntool REQUIRED PATHS "$ENV{USERPROFILE}/.dotnet/tools")
-  message(STATUS "Found AzureSignTool: ${AZURESIGNTOOL}")
-  find_program(
-    SIGNTOOL signtool REQUIRED
-    PATHS ENV WindowsSdkVerBinPath
-    PATH_SUFFIXES x64)
-  message(STATUS "Found signtool: ${SIGNTOOL}")
-
   add_custom_command(
     OUTPUT pyinstaller/codesign.stamp
     DEPENDS pyinstaller/dist/kart/kart.exe
     COMMAND
-      ${CMAKE_COMMAND} "-DSIGNTOOL=${SIGNTOOL}" "-DAZURESIGNTOOL=${AZURESIGNTOOL}"
+      ${CMAKE_COMMAND} "-DSIGNTOOL=${WIN_SIGNTOOL}" "-DAZURESIGNTOOL=${WIN_AZURESIGNTOOL}"
       "-DBUNDLE=${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist/kart" -P
       "${CMAKE_CURRENT_LIST_DIR}/win_codesign.cmake"
     COMMAND ${CMAKE_COMMAND} -E touch pyinstaller/codesign.stamp
     VERBATIM
-    COMMENT "Code-signing Windows bundle")
+    COMMENT "Code-signing Windows application bundle")
   list(APPEND BUNDLE_DEPS pyinstaller/codesign.stamp)
 
 elseif(MACOS AND MACOS_SIGN_BUNDLE)

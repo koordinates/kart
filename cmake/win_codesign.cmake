@@ -1,15 +1,17 @@
 #
 # Windows Code-signing using AzureSignTool
 #
-
-if(NOT DEFINED BUNDLE
+# Signs either a bundle directory, or individual files
+#
+if(NOT (DEFINED BUNDLE OR DEFINED FILES)
 OR NOT DEFINED SIGNTOOL
 OR NOT DEFINED AZURESIGNTOOL
 OR "$ENV{SIGN_AZURE_CERTIFICATE}" STREQUAL "")
 message(
  FATAL_ERROR
    " Usage:\n"
-   "   cmake -DBUNDLE=<path> -DSIGNTOOL=<path> -DAZURESIGNTOOL=<path> -P win_codesign.cmake\n"
+   "   cmake -DBUNDLE=<dir> -DSIGNTOOL=<path> -DAZURESIGNTOOL=<path> [-DDESCRIPTION=<description>] -P win_codesign.cmake\n"
+   "   cmake -DFILES=<path>[;<path>] -DSIGNTOOL=<path> -DAZURESIGNTOOL=<path> [-DDESCRIPTION=<description>] -P win_codesign.cmake\n"
    " Expects the following environment variables to be set:\n"
    "   SIGN_AZURE_VAULT\n"
    "   SIGN_AZURE_CERTIFICATE\n"
@@ -18,22 +20,33 @@ message(
    "   SIGN_AZURE_CLIENTSECRET")
 endif()
 
-# Find the binaries to sign
-file(GLOB_RECURSE binaries LIST_DIRECTORIES false RELATIVE ${BUNDLE}
-    "${BUNDLE}/*.exe"
-    "${BUNDLE}/*.dll"
-)
-# Exclude binaries that aren't built as part of Kart
-# These should be signed by someone else
-list(FILTER binaries EXCLUDE REGEX "^git/")
-list(FILTER binaries EXCLUDE REGEX "^MSVC.*\\.dll$")
-list(FILTER binaries EXCLUDE REGEX "^VCRUNTIME.*\\.dll$")
-list(FILTER binaries EXCLUDE REGEX "^python3.*\\.dll$")
-list(LENGTH binaries binCount)
-message(VERBOSE "Binaries to sign (${binCount}): ${binaries}")
+if(NOT DEFINED DESCRIPTION)
+    set(DESCRIPTION "Kart CLI")
+endif()
 
-list(TRANSFORM binaries PREPEND "${BUNDLE}/")
-cmake_path(CONVERT "${binaries}" TO_NATIVE_PATH_LIST binariesPaths NORMALIZE)
+if(DEFINED BUNDLE)
+    # Find the binaries to sign
+    file(GLOB_RECURSE binaries LIST_DIRECTORIES false RELATIVE ${BUNDLE}
+        "${BUNDLE}/*.exe"
+        "${BUNDLE}/*.dll"
+    )
+    # Exclude binaries that aren't built as part of Kart
+    # These should be signed by someone else
+    list(FILTER binaries EXCLUDE REGEX "^git/")
+    list(FILTER binaries EXCLUDE REGEX "^MSVC.*\\.dll$")
+    list(FILTER binaries EXCLUDE REGEX "^VCRUNTIME.*\\.dll$")
+    list(FILTER binaries EXCLUDE REGEX "^python3.*\\.dll$")
+    list(LENGTH binaries binCount)
+    message(VERBOSE "Binaries to sign (${binCount}): ${binaries}")
+
+    list(TRANSFORM binaries PREPEND "${BUNDLE}/")
+    cmake_path(CONVERT "${binaries}" TO_NATIVE_PATH_LIST binariesPaths NORMALIZE)
+elseif(DEFINED FILES)
+    list(LENGTH FILES binCount)
+    cmake_path(CONVERT "${FILES}" TO_NATIVE_PATH_LIST binariesPaths NORMALIZE)
+else()
+    message(FATAL_ERROR "Need to specify either -DBUNDLE= or -DFILES=")
+endif()
 
 set(TIMESTAMP_SERVERS
     "http://timestamp.digicert.com"
@@ -51,7 +64,7 @@ foreach(ts IN LISTS TIMESTAMP_SERVERS)
         "--azure-key-vault-certificate=$ENV{SIGN_AZURE_CERTIFICATE}"
         "--azure-key-vault-tenant-id=$ENV{SIGN_AZURE_TENANTID}"
         "--description-url=https://kartproject.org"
-        "--description=Kart CLI"
+        "--description=${DESCRIPTION}"
         "--timestamp-rfc3161=${ts}"
         ${binariesPaths}
         COMMAND_ECHO NONE

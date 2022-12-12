@@ -26,8 +26,13 @@ include(PythonGetABIInfo)
 include(CCache)
 
 # Set the Kart application version
+file(STRINGS kart/VERSION KART_BASE_VERSION LIMIT_COUNT 1)
+string(REPLACE "." ";" _verParts "${KART_BASE_VERSION}")
+list(GET _verParts 0 CMAKE_PROJECT_VERSION_MAJOR)
+list(GET _verParts 1 CMAKE_PROJECT_VERSION_MINOR)
+list(GET _verParts 2 CMAKE_PROJECT_VERSION_PATCH)
+
 if(NOT DEFINED KART_VERSION OR KART_VERSION STREQUAL "")
-  file(STRINGS kart/VERSION KART_BASE_VERSION LIMIT_COUNT 1)
   find_package(Git REQUIRED)
   execute_process(
     COMMAND ${GIT_EXECUTABLE} describe --match="" --always --abbrev --dirty=X
@@ -59,7 +64,7 @@ set(VENDOR_ARCHIVE
 
 if(MACOS)
   option(MACOS_SIGN_BUNDLE "Notarize macOS bundle")
-  option(MACOS_SIGN_PKG "Notarize macOS installer")
+  option(MACOS_SIGN_PKG "Notarize macOS .pkg installer")
   option(MACOS_NOTARIZE "Notarize macOS bundle & installer")
   set(MACOS_NOTARIZE_TIMEOUT
       1h
@@ -75,6 +80,16 @@ if(MACOS)
     find_program(XCODE_XCRUN xcrun REQUIRED)
     find_program(XCODE_SPCTL spctl REQUIRED)
     find_program(XCODE_DITTO ditto REQUIRED)
+  endif()
+elseif(WIN32)
+  option(WIN_SIGN_BUNDLE "Code-sign Windows application")
+  option(WIN_SIGN_INSTALLER "Code-sign Windows .msi installer")
+  if(WIN_SIGN_BUNDLE OR WIN_SIGN_INSTALLER)
+    find_program(WIN_AZURESIGNTOOL azuresigntool REQUIRED PATHS "$ENV{USERPROFILE}/.dotnet/tools")
+    find_program(
+      WIN_SIGNTOOL signtool REQUIRED
+      PATHS ENV WindowsSdkVerBinPath
+      PATH_SUFFIXES x64)
   endif()
 endif()
 
@@ -223,7 +238,7 @@ endif()
 #
 
 install(
-  DIRECTORY ${BUNDLE_DIR}
+  DIRECTORY "${BUNDLE_DIR}/"
   DESTINATION "."
   USE_SOURCE_PERMISSIONS
   COMPONENT bundle)
@@ -308,39 +323,43 @@ if(MACOS)
     file(
       WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake
       "
-      message(STATUS \"Checking PKG signature...\")
-      execute_process(
-        COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_OUTPUT_FILE_PATH}
-        COMMAND_ECHO STDERR
-        COMMAND_ERROR_IS_FATAL ANY)
-      message(STATUS \"Notarizing PKG with notarytool...\")
-      execute_process(
-        COMMAND ${XCODE_XCRUN} notarytool submit \${CPACK_OUTPUT_FILE_PATH}
-          --keychain-profile \"$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}\"
-          --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
-        COMMAND_ECHO NONE
-        COMMAND_ERROR_IS_FATAL ANY)
-      message(STATUS \"Stapling notarization to PKG...\")
-      execute_process(
-        COMMAND ${XCODE_XCRUN} stapler staple \${CPACK_OUTPUT_FILE_PATH}
-        COMMAND_ECHO STDERR
-        COMMAND_ERROR_IS_FATAL ANY)
-      message(STATUS \"Checking PKG notarization...\")
-      execute_process(
-        COMMAND ${XCODE_SPCTL} --assess -vvv --type install \${CPACK_OUTPUT_FILE_PATH}
-        COMMAND_ECHO STDERR
-        COMMAND_ERROR_IS_FATAL ANY)
+      if(\${CPACK_GENERATOR} STREQUAL \"productbuild\")
+        message(STATUS \"Checking PKG signature...\")
+        execute_process(
+          COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_OUTPUT_FILE_PATH}
+          COMMAND_ECHO STDERR
+          COMMAND_ERROR_IS_FATAL ANY)
+        message(STATUS \"Notarizing PKG with notarytool...\")
+        execute_process(
+          COMMAND ${XCODE_XCRUN} notarytool submit \${CPACK_OUTPUT_FILE_PATH}
+            --keychain-profile \"$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}\"
+            --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
+          COMMAND_ECHO NONE
+          COMMAND_ERROR_IS_FATAL ANY)
+        message(STATUS \"Stapling notarization to PKG...\")
+        execute_process(
+          COMMAND ${XCODE_XCRUN} stapler staple \${CPACK_OUTPUT_FILE_PATH}
+          COMMAND_ECHO STDERR
+          COMMAND_ERROR_IS_FATAL ANY)
+        message(STATUS \"Checking PKG notarization...\")
+        execute_process(
+          COMMAND ${XCODE_SPCTL} --assess -vvv --type install \${CPACK_OUTPUT_FILE_PATH}
+          COMMAND_ECHO STDERR
+          COMMAND_ERROR_IS_FATAL ANY)
+      endif()
       ")
     set(CPACK_POST_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake)
   elseif(MACOS_SIGN_BUNDLE AND MACOS_SIGN_PKG)
     file(
       WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake
       "
-      message(STATUS \"Checking PKG signature...\")
-      execute_process(
-        COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_OUTPUT_FILE_PATH}
-        COMMAND_ECHO STDERR
-        COMMAND_ERROR_IS_FATAL ANY)
+      if(\${CPACK_GENERATOR} STREQUAL \"productbuild\")
+        message(STATUS \"Checking PKG signature...\")
+        execute_process(
+          COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_OUTPUT_FILE_PATH}
+          COMMAND_ECHO STDERR
+          COMMAND_ERROR_IS_FATAL ANY)
+      endif()
       ")
     set(CPACK_POST_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake)
   endif()
@@ -356,7 +375,7 @@ elseif(LINUX)
   set(CPACK_DEBIAN_PACKAGE_DEPENDS openssh-client)
   set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
   set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS_PRIVATE_DIRS ${BUNDLE_DIR})
-   
+
   set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
   set(CPACK_RPM_PACKAGE_LICENSE "GPLv2")
   set(CPACK_RPM_PACKAGE_REQUIRES "openssh-clients, libstdc++, libgcc, bzip2-libs, expat, xz-libs, libstdc++, ncurses-libs, zlib")
@@ -375,7 +394,37 @@ elseif(LINUX)
   set(CPACK_PRE_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/linux-debrpm-pre-build.cmake)
 
 elseif(WIN32)
-  set(CPACK_GENERATOR "ZIP")
+  set(CPACK_PACKAGE_VERSION "${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}.${CMAKE_PROJECT_VERSION_PATCH}")
+  set(CPACK_GENERATOR "ZIP;WIX")
+  set(CPACK_WIX_UPGRADE_GUID "53b2434b-7cba-4e79-b63d-2adde1478de9")
+  set(CPACK_WIX_PRODUCT_GUID "70118EC7-3341-4039-9FA6-33B1F46CD908")
+  set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_NAME}")
+  #set(CPACK_WIX_LICENSE_RTF "${CMAKE_CURRENT_SOURCE_DIR}/platforms/license.rtf")
+  set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/platforms/windows/cpack-wix-patch.xml")
+  set(CPACK_WIX_UI_BANNER "${CMAKE_CURRENT_SOURCE_DIR}/platforms/windows/banner.bmp")
+  set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/platforms/windows/kart.ico")
+  set(CPACK_WIX_UI_DIALOG "${CMAKE_CURRENT_SOURCE_DIR}/platforms/windows/dialog.bmp")
+  set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT "https://kartproject.org")
+  set(CPACK_WIX_PROPERTY_ARPHELPLINK "https://github.com/koordinates/kart/discussions")
+  set(CPACK_WIX_ARCHITECTURE "x64")
+
+  if(WIN_SIGN_INSTALLER)
+    file(
+      WRITE ${CMAKE_CURRENT_BINARY_DIR}/win-msi-post-build.cmake
+      "
+      if(\${CPACK_GENERATOR} STREQUAL \"WIX\")
+        message(STATUS \"Code-signing MSI installer...\")
+        execute_process(
+          COMMAND
+            \"${CMAKE_COMMAND}\" \"-DSIGNTOOL=${WIN_SIGNTOOL}\" \"-DAZURESIGNTOOL=${WIN_AZURESIGNTOOL}\"
+            \"-DFILES=\${CPACK_OUTPUT_FILE_PATH}\" \"-DDESCRIPTION=Kart Installer\" -P
+            \"${CMAKE_CURRENT_LIST_DIR}/cmake/win_codesign.cmake\"
+          COMMAND_ECHO STDERR
+          COMMAND_ERROR_IS_FATAL ANY)
+      endif()
+      ")
+    set(CPACK_POST_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/win-msi-post-build.cmake)
+  endif()
 
 endif()
 
@@ -391,5 +440,5 @@ if(KART_SYSTEM_SYMLINK_DIR)
   cpack_add_component(
     addToPath
     DISPLAY_NAME "Add to PATH"
-    DESCRIPTION "Add kart to the system path")
+    DESCRIPTION "Add Kart to the system path")
 endif()
