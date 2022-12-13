@@ -92,14 +92,7 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'requirements/*.txt'
 
-      # https://github.com/lukka/get-cmake/issues/63
-      - name: "setup: cmake & ninja (amd64)"
-        uses: lukka/get-cmake@latest
-        if: runner.arch != 'ARM64'
-        with:
-          cmakeVersion: "${{ env.CMAKE_VERSION }}"
-
-      - name: "setup: python & cmake & ninja (arm64)"
+      - name: "setup: python (arm64)"
         if: runner.arch == 'ARM64'
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -113,16 +106,10 @@ jobs:
           echo "Python3_EXECUTABLE=$(command -v python3.10)" >> $GITHUB_ENV
           echo "Python3_ROOT=/usr" >> $GITHUB_ENV
 
-          curl -fL https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz > "${RUNNER_TEMP}/cmake-linux.tgz"
-          tar xzf "${RUNNER_TEMP}/cmake-linux.tgz" -C "${RUNNER_TEMP}"
-          "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin/cmake" --version
-          echo "${RUNNER_TEMP}/cmake-${CMAKE_VERSION}-linux-aarch64/bin" >> $GITHUB_PATH
-
-          python3.10 -m pip install ninja~=1.11.1
-          ninja --version
-
-          # necessary for vcpkg on arm64
-          echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
+      - name: "setup: cmake & ninja"
+        uses: lukka/get-cmake@arm64-win-linux
+        with:
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       - name: "setup: ccache"
         uses: actions/cache@v3
@@ -136,6 +123,11 @@ jobs:
           sudo apt-get install -q -y --no-install-recommends ccache
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "/usr/lib/ccache" >> $GITHUB_PATH
+
+          if [[ '${{ runner.arch }}' == 'ARM64' ]]; then
+            # necessary for vcpkg on arm64
+            echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
+          fi
 
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v10
