@@ -257,7 +257,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: linux-${{ runner.arch }}-rpm
-          path: build/dist/Kart-*.rpm
+          path: build/dist/kart-*.rpm
           if-no-files-found: error
 
   #
@@ -656,7 +656,10 @@ jobs:
           SIGN_AZURE_TENANTID: ${{ secrets.WIN_SIGN_AZURE_TENANTID }}
         shell: bash
         run: |
-          cpack --preset=ci-windows
+          if ! cpack --preset=ci-windows; then
+            cat build/dist/_CPack_Packages/win64/WIX/wix.log
+            exit 1
+          fi
 
       - name: "package: save ZIP"
         uses: actions/upload-artifact@v3

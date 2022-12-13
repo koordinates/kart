@@ -254,9 +254,7 @@ if(NOT WIN32)
       message(STATUS \"Installing link: \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/..${KART_SYSTEM_SYMLINK_DIR}/kart\" (ie: ${KART_SYSTEM_SYMLINK_DIR}/kart) -> \"${CMAKE_INSTALL_PREFIX}/${BUNDLE_PREFIX_REL_EXE}\")
       file(CREATE_LINK \"${CMAKE_INSTALL_PREFIX}/${BUNDLE_PREFIX_REL_EXE}\" \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/..${KART_SYSTEM_SYMLINK_DIR}/kart\" SYMBOLIC)
       ")
-    install(
-      SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/install-addToPath.cmake
-      COMPONENT addToPath)
+    install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/install-addToPath.cmake COMPONENT addToPath)
   endif()
 endif()
 
@@ -286,10 +284,6 @@ if(MACOS)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND ${PANDOC} -s macos-summary.md --from=gfm -o macos-pkg-readme.rtf COMMAND_ERROR_IS_FATAL
             ANY)
-  execute_process(
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND ${PANDOC} -s ${CMAKE_CURRENT_SOURCE_DIR}/COPYING --from=twiki -o macos-pkg-license.rtf
-            COMMAND_ERROR_IS_FATAL ANY)
   file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources)
   file(COPY_FILE platforms/macos/background.png
        ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources/background.png)
@@ -299,7 +293,7 @@ if(MACOS)
   set(CPACK_PRODUCTBUILD_IDENTIFIER "com.koordinates.Sno.SnoCore")
   set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/kart.icns)
   set(CPACK_PRODUCTBUILD_RESOURCES_DIR ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources)
-  set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-license.rtf)
+  set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_SOURCE_DIR}/platforms/license.rtf)
   set(CPACK_RESOURCE_FILE_WELCOME ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-welcome.rtf)
   set(CPACK_RESOURCE_FILE_README ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-readme.rtf)
   set(CPACK_PRODUCTBUILD_BACKGROUND background.png)
@@ -311,7 +305,8 @@ if(MACOS)
 
   # https://gitlab.kitware.com/cmake/cmake/-/issues/21520
   file(
-    WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake "
+    WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake
+    "
     file(MAKE_DIRECTORY \"\${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/\")
     file(CREATE_LINK \"${CMAKE_INSTALL_PREFIX}/Kart.app/Contents/MacOS/kart\" \"\${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/kart\" SYMBOLIC)
   ")
@@ -378,7 +373,9 @@ elseif(LINUX)
 
   set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
   set(CPACK_RPM_PACKAGE_LICENSE "GPLv2")
-  set(CPACK_RPM_PACKAGE_REQUIRES "openssh-clients, libstdc++, libgcc, bzip2-libs, expat, xz-libs, libstdc++, ncurses-libs, zlib")
+  set(CPACK_RPM_PACKAGE_REQUIRES
+      "openssh-clients, libstdc++, libgcc, bzip2-libs, expat, xz-libs, libstdc++, ncurses-libs, zlib"
+  )
   set(CPACK_RPM_PACKAGE_AUTOREQPROV OFF)
   set(CPACK_RPM_PACKAGE_RELOCATABLE OFF)
   set(CPACK_RPM_SPEC_CHANGELOG ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md)
@@ -394,12 +391,14 @@ elseif(LINUX)
   set(CPACK_PRE_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/linux-debrpm-pre-build.cmake)
 
 elseif(WIN32)
-  set(CPACK_PACKAGE_VERSION "${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}.${CMAKE_PROJECT_VERSION_PATCH}")
+  set(CPACK_PACKAGE_VERSION
+      "${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}.${CMAKE_PROJECT_VERSION_PATCH}"
+  )
   set(CPACK_GENERATOR "ZIP;WIX")
   set(CPACK_WIX_UPGRADE_GUID "53b2434b-7cba-4e79-b63d-2adde1478de9")
   set(CPACK_WIX_PRODUCT_GUID "70118EC7-3341-4039-9FA6-33B1F46CD908")
   set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_NAME}")
-  #set(CPACK_WIX_LICENSE_RTF "${CMAKE_CURRENT_SOURCE_DIR}/platforms/license.rtf")
+  set(CPACK_WIX_LICENSE_RTF "${CMAKE_CURRENT_SOURCE_DIR}/platforms/license.rtf")
   set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/platforms/windows/cpack-wix-patch.xml")
   set(CPACK_WIX_UI_BANNER "${CMAKE_CURRENT_SOURCE_DIR}/platforms/windows/banner.bmp")
   set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/platforms/windows/kart.ico")
