@@ -251,8 +251,10 @@ if(NOT WIN32)
     file(
       WRITE ${CMAKE_CURRENT_BINARY_DIR}/install-addToPath.cmake
       "
-      message(STATUS \"Installing link: \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/..${KART_SYSTEM_SYMLINK_DIR}/kart\" (ie: ${KART_SYSTEM_SYMLINK_DIR}/kart) -> \"${CMAKE_INSTALL_PREFIX}/${BUNDLE_PREFIX_REL_EXE}\")
-      file(CREATE_LINK \"${CMAKE_INSTALL_PREFIX}/${BUNDLE_PREFIX_REL_EXE}\" \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/..${KART_SYSTEM_SYMLINK_DIR}/kart\" SYMBOLIC)
+      set(P \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/..${KART_SYSTEM_SYMLINK_DIR}/kart\")
+      cmake_path(NORMAL_PATH P)
+      message(STATUS \"Installing link: \${P} (ie: ${KART_SYSTEM_SYMLINK_DIR}/kart) -> ${CMAKE_INSTALL_PREFIX}/${BUNDLE_PREFIX_REL_EXE}\")
+      file(CREATE_LINK \"${CMAKE_INSTALL_PREFIX}/${BUNDLE_PREFIX_REL_EXE}\" \"\${P}\" SYMBOLIC)
       ")
     install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/install-addToPath.cmake COMPONENT addToPath)
   endif()
@@ -305,12 +307,12 @@ if(MACOS)
 
   # https://gitlab.kitware.com/cmake/cmake/-/issues/21520
   file(
-    WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake
+    WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-install.cmake
     "
     file(MAKE_DIRECTORY \"\${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/\")
     file(CREATE_LINK \"${CMAKE_INSTALL_PREFIX}/Kart.app/Contents/MacOS/kart\" \"\${CPACK_TEMPORARY_INSTALL_DIRECTORY}/addToPath/usr/local/bin/kart\" SYMBOLIC)
   ")
-  set(CPACK_PRE_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-build.cmake)
+  set(CPACK_INSTALL_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-install.cmake)
 
   if(MACOS_SIGN_BUNDLE
      AND MACOS_SIGN_PKG
