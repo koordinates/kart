@@ -239,7 +239,7 @@ endif()
 
 install(
   DIRECTORY "${BUNDLE_DIR}/"
-  DESTINATION "."
+  DESTINATION "${BUNDLE_DIR_NAME}"
   USE_SOURCE_PERMISSIONS
   COMPONENT bundle)
 if(NOT WIN32)
@@ -290,7 +290,6 @@ if(MACOS)
   file(COPY_FILE platforms/macos/background.png
        ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-resources/background.png)
 
-  set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
   set(CPACK_SYSTEM_NAME "macOS-${CMAKE_HOST_SYSTEM_PROCESSOR}")
   set(CPACK_PRODUCTBUILD_IDENTIFIER "com.koordinates.Sno.SnoCore")
   set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/kart.icns)
@@ -366,6 +365,7 @@ if(MACOS)
 elseif(LINUX)
   set(CPACK_SYSTEM_NAME "linux-${CMAKE_HOST_SYSTEM_PROCESSOR}")
   set(CPACK_GENERATOR "TGZ;DEB;RPM")
+  # overridden to "" for TGZ
   set(CPACK_PACKAGING_INSTALL_PREFIX "/opt")
 
   set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
