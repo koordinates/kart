@@ -234,21 +234,21 @@ jobs:
       - name: "package: save TGZ"
         uses: actions/upload-artifact@v3
         with:
-          name: linux-${{ runner.arch }}-tgz
+          name: Kart-linux-${{ runner.arch }}-tgz
           path: build/dist/Kart-*.tar.gz
           if-no-files-found: error
 
       - name: "package: save DEB"
         uses: actions/upload-artifact@v3
         with:
-          name: linux-${{ runner.arch }}-deb
+          name: Kart-linux-${{ runner.arch }}-deb
           path: build/dist/kart_*.deb
           if-no-files-found: error
 
       - name: "package: save RPM"
         uses: actions/upload-artifact@v3
         with:
-          name: linux-${{ runner.arch }}-rpm
+          name: Kart-linux-${{ runner.arch }}-rpm
           path: build/dist/kart-*.rpm
           if-no-files-found: error
 
@@ -472,14 +472,14 @@ jobs:
       - name: "package: save ZIP"
         uses: actions/upload-artifact@v3
         with:
-          name: macOS-${{ runner.arch }}-bundle
+          name: Kart-macOS-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
           if-no-files-found: error
 
       - name: "package: save PKG"
         uses: actions/upload-artifact@v3
         with:
-          name: macOS-${{ runner.arch }}-installer
+          name: Kart-macOS-${{ runner.arch }}-installer
           path: build/dist/Kart-*.pkg
           if-no-files-found: error
 
@@ -656,13 +656,13 @@ jobs:
       - name: "package: save ZIP"
         uses: actions/upload-artifact@v3
         with:
-          name: windows-${{ runner.arch }}-bundle
+          name: Kart-windows-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
           if-no-files-found: error
 
       - name: "package: save MSI"
         uses: actions/upload-artifact@v3
         with:
-          name: windows-${{ runner.arch }}-installer
+          name: Kart-windows-${{ runner.arch }}-installer
           path: build/dist/Kart-*.msi
           if-no-files-found: error
