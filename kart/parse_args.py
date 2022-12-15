@@ -226,9 +226,10 @@ def parse_import_sources_and_datasets(args):
 
         if other_sources and datasets:
             raise click.UsageError(
-                "When importing, you may supply either more than one import-source:\n"
+                "Specifying multiple sources as well as datasets is not allowed.\n"
+                "When importing, you may either supply multiple import sources:\n"
                 "    kart import SOURCE [SOURCE] [SOURCE]\n"
-                "or you may supply datasets to import found within that one import-source:"
+                "OR you may supply datasets to import from a single source:"
                 "    kart import SOURCE [DATASET] [DATASET]\n"
                 "but this appears to be a mix of both:\n"
                 f"    {other_args[i - 1]}\n"
