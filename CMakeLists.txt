@@ -371,7 +371,7 @@ if(MACOS)
 elseif(LINUX)
   set(CPACK_SYSTEM_NAME "linux-${CMAKE_HOST_SYSTEM_PROCESSOR}")
   set(CPACK_GENERATOR "TGZ;DEB;RPM")
-  # overridden to "" for TGZ
+  # overridden to "" for TGZ
   set(CPACK_PACKAGING_INSTALL_PREFIX "/opt")
 
   set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
@@ -438,7 +438,8 @@ cpack_add_component(
   bundle
   DISPLAY_NAME "Kart"
   DESCRIPTION "Kart command-line tools"
-  REQUIRED)
+  REQUIRED
+  PLIST "${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/bundle-components.plist")
 
 if(KART_SYSTEM_SYMLINK_DIR)
   cpack_add_component(
