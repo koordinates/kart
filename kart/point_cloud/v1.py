@@ -74,10 +74,17 @@ class PointCloudV1(BaseDataset):
     def tile_tree(self):
         return self.get_subtree(self.TILE_PATH)
 
-    def tile_pointer_blobs(
-        self, spatial_filter=SpatialFilter.MATCH_ALL, show_progress=False
+    def _tile_pointer_blobs_and_dicts(
+        self,
+        spatial_filter=SpatialFilter.MATCH_ALL,
+        show_progress=False,
+        *,
+        parse_pointer_dicts=True,
     ):
-        """Returns a generator that yields every tile pointer blob in turn."""
+        """
+        Returns a generator that yields every tile pointer blob in turn.
+        Also yields the parsed pointer file as a dict, unless parse_pointer_dicts is False (then it yields None)
+        """
         tile_tree = self.tile_tree
         if not tile_tree:
             return
@@ -92,11 +99,14 @@ class PointCloudV1(BaseDataset):
         )
 
         with progress as p:
-            for tile in find_blobs_in_tree(tile_tree):
+            for blob in find_blobs_in_tree(tile_tree):
                 n_read += 1
-                if spatial_filter.matches(tile):
+                tile_dict = None
+                if parse_pointer_dicts:
+                    tile_dict = pointer_file_bytes_to_dict(blob)
+                if spatial_filter.matches(tile_dict if parse_pointer_dicts else blob):
                     n_matched += 1
-                    yield tile
+                    yield blob, tile_dict
 
                 p.update(1)
 
@@ -104,6 +114,19 @@ class PointCloudV1(BaseDataset):
             p.write(
                 f"(of {n_read} features read, wrote {n_matched} matching features to the working copy due to spatial filter)"
             )
+
+    def tile_pointer_blobs(
+        self, spatial_filter=SpatialFilter.MATCH_ALL, show_progress=False
+    ):
+        """
+        Returns a generator that yields every tile pointer blob in turn.
+        """
+        for blob, _ in self._tile_pointer_blobs_and_dicts(
+            spatial_filter=spatial_filter,
+            show_progress=show_progress,
+            parse_pointer_dicts=False,
+        ):
+            yield blob
 
     @property
     def tile_count(self):
@@ -130,11 +153,10 @@ class PointCloudV1(BaseDataset):
         If fix_extensions is True, then the returned name will be modified to have the correct extension for the
         type of tile the blob is pointing to (eg .laz or .copc.laz), regardless of the blob's extension (if any).
         """
-        for blob in self.tile_pointer_blobs(
+        for blob, pointer_dict in self._tile_pointer_blobs_and_dicts(
             spatial_filter=spatial_filter, show_progress=show_progress
         ):
             if fix_extensions:
-                pointer_dict = pointer_file_bytes_to_dict(blob)
                 tile_format = pointer_dict["format"]
                 oid = pointer_dict["oid"].split(":", maxsplit=1)[1]
                 yield set_tile_extension(blob.name, tile_format=tile_format), oid
