@@ -4,6 +4,7 @@ import importlib.util
 import inspect
 import logging
 import os
+from multiprocessing import freeze_support
 import pathlib
 import re
 import subprocess
@@ -398,6 +399,7 @@ def load_commands_from_args(args, skip_first_arg=True):
 
 
 def entrypoint():
+    freeze_support()
     load_commands_from_args(sys.argv)
     cli()
 
