@@ -20,6 +20,7 @@ from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
 from kart.structs import CommitWithReference
+from kart.spatial_filter import SpatialFilter
 
 EMPTY_SHA = "0" * 40
 
@@ -214,25 +215,45 @@ def _push_lfs_oids_using_args(repo, remote_name, lfs_oids):
 
 @lfs_plus.command()
 @click.pass_context
+@click.option("--remote", help="Remote to fetch the LFS blobs from")
+@click.option(
+    "--spatial-filter/--no-spatial-filter",
+    "do_spatial_filter",
+    is_flag=True,
+    default=True,
+    show_default=True,
+    help="Respect the current spatial filter - don't fetch tiles that are outside it.",
+)
 @click.option(
     "--dry-run",
     is_flag=True,
     help="Don't fetch anything, just show what would be fetched",
 )
-@click.option("--remote", help="Remote to fetch the LFS blobs from")
 @click.argument("commits", nargs=-1)
-def fetch(ctx, remote, commits, dry_run):
+def fetch(ctx, remote, do_spatial_filter, dry_run, commits):
     """Fetch LFS files referenced by the given commit(s) from a remote."""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
 
     if not commits:
         commits = ["HEAD"]
 
-    fetch_lfs_blobs_for_commits(repo, commits, remote_name=remote, dry_run=dry_run)
+    fetch_lfs_blobs_for_commits(
+        repo,
+        commits,
+        do_spatial_filter=do_spatial_filter,
+        remote_name=remote,
+        dry_run=dry_run,
+    )
 
 
 def fetch_lfs_blobs_for_commits(
-    repo, commits, *, remote_name=None, dry_run=False, quiet=False
+    repo,
+    commits,
+    *,
+    remote_name=None,
+    do_spatial_filter=True,
+    dry_run=False,
+    quiet=False,
 ):
     """
     Given a list of commits (or commit OIDS), fetch all the tiles from those commits that
@@ -246,10 +267,17 @@ def fetch_lfs_blobs_for_commits(
     if not remote_name:
         return
 
+    spatial_filter = (
+        repo.spatial_filter if do_spatial_filter else SpatialFilter.MATCH_ALL
+    )
+
     pointer_file_oids = set()
     for commit in commits:
         for dataset in repo.datasets(commit, filter_dataset_type="point-cloud"):
-            pointer_file_oids.update(blob.hex for blob in dataset.tile_pointer_blobs())
+            pointer_file_oids.update(
+                blob.hex
+                for blob in dataset.tile_pointer_blobs(spatial_filter=spatial_filter)
+            )
 
     fetch_lfs_blobs_for_pointer_files(
         repo, pointer_file_oids, dry_run=dry_run, quiet=quiet
@@ -289,8 +317,6 @@ def fetch_lfs_blobs_for_pointer_files(
         lfs_path = get_local_path_from_lfs_hash(repo, lfs_oid)
         if lfs_path.is_file():
             continue  # Already fetched.
-
-        # TODO - don't fetch tiles that are outside the spatial filter.
 
         object_builder.insert(next(next_blob_name), pointer_blob)
         if dry_run:
