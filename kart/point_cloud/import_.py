@@ -1,11 +1,12 @@
 import logging
+import os
 import uuid
 from pathlib import Path
 
 import click
 import pygit2
 
-from kart.cli_util import StringFromFile, MutexOption, KartCommand
+from kart.cli_util import StringFromFile, MutexOption, KartCommand, find_param
 from kart.completion_shared import file_path_completer
 from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
@@ -31,6 +32,7 @@ from kart.lfs_util import (
     copy_file_to_local_lfs_cache,
     get_hash_and_size_of_file,
 )
+from kart.parse_args import parse_import_sources_and_datasets
 from kart.point_cloud.metadata_util import (
     RewriteMetadata,
     extract_pc_tile_metadata,
@@ -45,6 +47,7 @@ from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     extra_blobs_for_version,
 )
+from kart.point_cloud.tilename_util import remove_tile_extension
 from kart.working_copy import PartType
 
 
@@ -59,9 +62,6 @@ L = logging.getLogger(__name__)
     is_flag=True,
     default=True,
     help="Whether to convert all non-COPC LAS or LAZ files to COPC LAZ files, or to import all files in their native format.",
-)
-@click.option(
-    "--dataset-path", "ds_path", help="The dataset's path once imported", required=True
 )
 @click.option(
     "--message",
@@ -118,11 +118,19 @@ L = logging.getLogger(__name__)
         "such a commit. This option bypasses the safety"
     ),
 )
+@click.option(
+    "--num-processes",
+    help="Parallel import using multiple processes. Not yet supported",
+    default=None,
+    hidden=True,
+)
+@click.option(
+    "--dataset-path", "--dataset", "ds_path", help="The dataset's path once imported"
+)
 @click.argument(
-    "sources",
-    metavar="SOURCES",
+    "args",
     nargs=-1,
-    required=False,
+    metavar="SOURCE [SOURCES...]",
     shell_complete=file_path_completer,
 )
 def point_cloud_import(
@@ -136,7 +144,8 @@ def point_cloud_import(
     delete,
     amend,
     allow_empty,
-    sources,
+    num_processes,
+    args,
 ):
     """
     Experimental command for importing point cloud datasets. Work-in-progress.
@@ -146,11 +155,29 @@ def point_cloud_import(
     """
     repo = ctx.obj.repo
 
+    sources, datasets = parse_import_sources_and_datasets(args)
+    if datasets:
+        problem = "    \n".join(datasets)
+        raise click.UsageError(
+            f"For point-cloud import, every argument should be a LAS/LAZ file:\n    {problem}"
+        )
+
     if not sources and not delete:
         # sources aren't required if you use --delete;
         # this allows you to use this command to solely delete tiles.
         # otherwise, sources are required.
-        raise click.MissingParameter(param=ctx.command.params[-1])
+        raise click.MissingParameter(param=find_param(ctx, "args"))
+
+    if delete and not ds_path:
+        # Dataset-path is required if you use --delete.
+        raise click.MissingParameter(param=find_param(ctx, "ds_path"))
+
+    if not ds_path:
+        ds_path = infer_ds_path(sources)
+        if ds_path:
+            click.echo(f"Defaulting to '{ds_path}' as the dataset path...")
+        else:
+            raise click.MissingParameter(param=find_param(ctx, "ds_path"))
 
     if delete:
         # --delete kind of implies --update-existing (we're modifying an existing dataset)
@@ -419,3 +446,28 @@ def point_cloud_import(
         repo_key_filter=RepoKeyFilter.datasets([ds_path]),
         create_parts_if_missing=parts_to_create,
     )
+
+
+def infer_ds_path(sources):
+    """Given a list of sources to import, choose a reasonable name for the dataset."""
+    if len(sources) == 1:
+        return remove_tile_extension(Path(sources[0]).name)
+    names = set()
+    parent_names = set()
+    for source in sources:
+        path = Path(source)
+        names.add(path.name)
+        parent_names.add(path.parents[0].name if path.parents else "*")
+    result = _common_prefix(names)
+    if result is None:
+        result = _common_prefix(parent_names)
+    return result
+
+
+def _common_prefix(collection, min_length=4):
+    prefix = os.path.commonprefix(list(collection))
+    prefix = prefix.split("*", maxsplit=1)[0]
+    prefix = prefix.rstrip("_-.,/\\")
+    if len(prefix) < min_length:
+        return None
+    return prefix

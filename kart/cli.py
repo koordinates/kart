@@ -37,6 +37,7 @@ MODULE_COMMANDS = {
     "diff": {"diff"},
     "fsck": {"fsck"},
     "helper": {"helper"},
+    "import_": {"import"},
     "init": {"init"},
     "lfs_commands": {"lfs+"},
     "log": {"log"},
@@ -48,7 +49,7 @@ MODULE_COMMANDS = {
     "spatial_filter": {"spatial-filter"},
     "status": {"status"},
     "upgrade": {"upgrade"},
-    "tabular.import_": {"import"},
+    "tabular.import_": {"table-import"},
     "point_cloud.import_": {"point-cloud-import"},
     "install": {"install"},
 }

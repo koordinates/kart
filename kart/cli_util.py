@@ -20,6 +20,10 @@ L = logging.getLogger("kart.cli_util")
 
 
 class KartCommand(click.Command):
+    def parse_args(self, ctx, args):
+        ctx.unparsed_args = list(args)
+        super().parse_args(ctx, args)
+
     def format_help(self, ctx, formatter):
         try:
             render(ctx.command_path)
@@ -294,6 +298,22 @@ class StringFromFile(click.types.StringParamType):
         )
 
 
+class IdsFromFile(StringFromFile):
+    """Like StringFromFile, but returns a generator that yields an ID for each line of the file."""
+
+    name = "ids"
+
+    def convert(self, value, param, ctx):
+        fp = super().convert(
+            value,
+            param,
+            ctx,
+            # Get the file object, so we don't have to read the whole thing
+            as_file=True,
+        )
+        return (line.rstrip("\n") for line in fp)
+
+
 def _resolve_file(path):
     return str(Path(path).expanduser())
 
@@ -473,6 +493,22 @@ def parse_output_format(output_format, json_style):
         if output_type in ("json", "json-lines", "geojson"):
             fmt = json_style
     return output_type, fmt
+
+
+def find_param(ctx_or_params, name):
+    """Given the click context / command / list of params - find the param with the given name."""
+    ctx = ctx_or_params
+    if isinstance(ctx, click.core.Context):
+        ctx = ctx.command
+    if isinstance(ctx, click.core.Command):
+        params = ctx.params
+    else:
+        params = ctx_or_params
+
+    for param in params:
+        if param.name == name:
+            return param
+    raise RuntimeError(f"Couldn't find param: {name}")
 
 
 class RemovalInKart012Warning(UserWarning):
