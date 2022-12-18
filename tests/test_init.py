@@ -1049,13 +1049,13 @@ def test_import_list_formats(data_archive_readonly, cli_runner):
     with data_archive_readonly("points") as _:
         r = cli_runner.invoke(["import", "--list-formats"])
         assert r.exit_code == 0, r.stderr
-        prefixes = [l.split(":")[0] for l in r.stdout.splitlines()]
+        prefixes = [l.split(":")[0].strip() for l in r.stdout.splitlines()]
         assert prefixes == [
-            "Geopackage",
+            "GeoPackage",
             "PostgreSQL",
-            "SQL Server",
+            "Microsoft SQL Server",
             "MySQL",
-            "Shapefile",
+            "ESRI Shapefile",
         ]
 
 
