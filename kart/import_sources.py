@@ -109,7 +109,10 @@ ALL_IMPORT_SOURCE_TYPES = [
     ),
     # OGR tabular imports
     ImportSourceType(
-        "ESRI Shapefile", "PATH.shp", ImportType.OGR_TABLE, file_ext=".shp"
+        "ESRI Shapefile",
+        "PATH.shp",
+        ImportType.OGR_TABLE,
+        file_ext=(".shp", ".shx", ".dbf"),
     ),
     ImportSourceType(
         "OGR", "OGR:...", ImportType.OGR_TABLE, uri_scheme="OGR", hidden=True
