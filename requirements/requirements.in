@@ -29,8 +29,10 @@ gdal==3.5.2
 psycopg2==2.8.5
 pygit2==1.3.0
 pysqlite3==0.4.5
-# On Linux & macOS we build pyodbc ourselves, because it links to/uses unixodbc
-pyodbc; os_name!="posix"
+pyodbc==4.0.32
+
+# SQLAlchemy on Windows
+greenlet; os_name!="posix"
 
 # workaround weird import error with pyinstaller
 # https://github.com/pypa/setuptools/issues/1963#issuecomment-656811086

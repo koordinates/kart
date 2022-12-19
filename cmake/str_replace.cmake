@@ -12,6 +12,7 @@ file(STRINGS "${FILE}" lines)
 
 foreach(lineIn IN LISTS lines)
   string(REGEX REPLACE "${MATCH}" "${REPLACE}" lineOut "${lineIn}")
+  string(REGEX REPLACE ";" "\\\\;" lineOut "${lineOut}")
   string(APPEND linesOut "${lineOut}\n")
 endforeach()
 
