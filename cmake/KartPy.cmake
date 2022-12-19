@@ -53,7 +53,7 @@ foreach(reqFile reqDep IN ZIP_LISTS REQUIREMENTS_FILES REQUIREMENTS_DEPS)
   add_custom_command(
     OUTPUT ${reqStamp}
     DEPENDS venv/.vendor.stamp requirements/${reqFile} ${reqDep}
-    COMMAND ${VENV_PIP_INSTALL} --no-deps --no-binary ":all:" -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements/${reqFile}"
+    COMMAND ${VENV_PIP_INSTALL} --no-deps -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements/${reqFile}"
     COMMAND ${CMAKE_COMMAND} -E touch ${reqStamp}
     COMMENT "Installing Python dependencies: ${reqFile}")
 
