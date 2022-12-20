@@ -7,7 +7,9 @@ officially supported by Kart (SQL Server 2012 and later are largely
 compatible but not officially supported).
 
 You also need to have the `Microsoft ODBC Driver for SQL Server <sql_server_odbc_docs_>`_
-installed on your system.
+installed on your system and working properly. This can be tested by
+connecting to your SQL Server database using the `sqlcmd utility <sqlcmd_utility_>`_ -
+see the `ODBC Driver <#odbc-driver>`__ section to troubleshoot.
 
 SQL Server partitioning
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -185,3 +187,30 @@ It is possible to modify the CRS definition attached to a particular
 geometry column by editing the code embedded in every geometry in that
 column. This change can be committed as long as the new CRS you have
 chosen is one that is built into SQL Server.
+
+ODBC Driver
+~~~~~~~~~~~
+
+You need to have the `Microsoft ODBC Driver for SQL Server <sql_server_odbc_docs_>`_
+installed on your system and working properly in order for Kart to use
+a SQL Server working copy - Kart will not install this for you. That the driver
+is installed and working correctly can be verified by using the
+`sqlcmd utility <sqlcmd_utility_>`_ to connect to your SQL Server database.
+Here are some possible issues - the error message from Kart or ``sqlcmd`` will
+help you diagnose the issue:
+
+- The ODBC Driver for SQL Server is not installed at all. To remedy, visit
+  the `Microsoft ODBC Driver for SQL Server <sql_server_odbc_docs_>`_ and follow
+  the instructions for your system.
+- The ODBC Driver on your system is not compatible with the version of OpenSSL
+  on your system. Try installing the latest version of both the driver and of
+  OpenSSL.
+- The ODBC Driver won't connect to your SQL Server instance because you have a
+  self-signed certificate. This happens on more recent versions of ODBC Driver
+  for SQL Server. For publicly accessible databases you will generally want
+  your certificate properly signed by a third-party certificate authority.
+  You can learn more about this in the `SQL Server documentation <sql_server_certificate_docs_>`_.
+  However, to force Kart to circumvent this requirement, you can append the
+  query ``?TrustServerCertificate=yes`` to the connection URI. To force
+  ``sqlcmd`` to circumvent this requirement, you just need to add the ``-C``
+  option at the commandline.

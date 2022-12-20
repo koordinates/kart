@@ -3,7 +3,7 @@ import shutil
 import os
 
 from kart.base_dataset import BaseDataset
-from kart.core import find_blobs_in_tree
+from kart.core import all_blobs_in_tree
 from kart.decorators import allow_classmethod
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue, WORKING_COPY_EDIT
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
@@ -99,7 +99,7 @@ class PointCloudV1(BaseDataset):
         )
 
         with progress as p:
-            for blob in find_blobs_in_tree(tile_tree):
+            for blob in all_blobs_in_tree(tile_tree):
                 n_read += 1
                 tile_dict = None
                 if parse_pointer_dicts:

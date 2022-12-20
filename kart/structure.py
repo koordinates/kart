@@ -1,5 +1,4 @@
 import logging
-from collections import deque
 import functools
 import re
 from typing import Optional
@@ -17,7 +16,7 @@ from .exceptions import (
     NotFound,
     NotYetImplemented,
 )
-from .core import peel_to_commit_and_tree
+from .core import peel_to_commit_and_tree, all_trees_with_paths_in_tree
 from .key_filters import RepoKeyFilter
 from . import list_of_conflicts
 from .pack_util import packfile_object_builder
@@ -532,34 +531,13 @@ class Datasets:
         return sum(1 for _ in self)
 
     def __iter__(self):
-        """Iterate over all available datasets in self.tree."""
-        if self.tree is None:
+        if not self.tree:
             return
 
-        to_examine = deque([(self.tree, "")])
-
-        while to_examine:
-            tree, path = to_examine.popleft()
-
-            for child in tree:
-                # Ignore everything other than directories
-                if child.type_str != "tree":
-                    continue
-                # Ignore "hidden" directories.
-                if child.name.startswith("."):
-                    continue
-
-                if path:
-                    child_path = "/".join([path, child.name])
-                else:
-                    child_path = child.name
-
-                # Examine inside this directory
-                to_examine.append((child, child_path))
-
-                ds = self._get_for_tree(child, child_path)
-                if ds is not None:
-                    yield ds
+        for tree_path, tree in all_trees_with_paths_in_tree(self.tree):
+            ds = self._get_for_tree(tree, tree_path)
+            if ds is not None:
+                yield ds
 
     def working_copy_part_types(self):
         """Returns the types of working copy parts that are needed to check out these datasets."""

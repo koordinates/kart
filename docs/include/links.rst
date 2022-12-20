@@ -12,6 +12,8 @@
 .. _sql_server: https://www.microsoft.com/sql-server/
 .. _sql_server_docs: https://docs.microsoft.com/sql/sql-server
 .. _sql_server_odbc_docs: https://docs.microsoft.com/sql/connect/odbc/microsoft-odbc-driver-for-sql-server
+.. _sqlcmd_utility: https://learn.microsoft.com/en-us/sql/tools/sqlcmd-utility
+.. _sql_server_certificate_docs: https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/configure-sql-server-encryption
 .. _sql_server_spatial_data_types: https://docs.microsoft.com/sql/relational-databases/spatial/spatial-data-types-overview
 .. _sys_spatial_reference_systems_transact_sql: https://docs.microsoft.com/sql/relational-databases/system-catalog-views/sys-spatial-reference-systems-transact-sql
 .. _sqlite: https://www.sqlite.org/index.html

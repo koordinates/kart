@@ -5,7 +5,7 @@ import sys
 import click
 import pygit2
 
-from kart.core import find_blobs_in_tree, find_blobs_with_paths_in_tree
+from kart.core import all_blobs_in_tree, all_blobs_with_paths_in_tree
 from kart.dataset_mixins import DatasetDiffMixin
 from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION, PATCH_DOES_NOT_APPLY
 from kart.meta_items import MetaItemFileType, MetaItemVisibility
@@ -152,7 +152,7 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
         if self.inner_tree is not None:
             try:
                 subtree = self.inner_tree / subtree_path
-                return sum(1 for blob in find_blobs_in_tree(subtree))
+                return sum(1 for blob in all_blobs_in_tree(subtree))
             except KeyError:
                 pass
         return 0
@@ -281,7 +281,7 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
     @functools.lru_cache(maxsize=1)
     def _meta_item_paths_grouped_by_definition(self):
         result = {}
-        for meta_item_path, blob in find_blobs_with_paths_in_tree(self.meta_tree):
+        for meta_item_path, blob in all_blobs_with_paths_in_tree(self.meta_tree):
             definition = self.get_meta_item_definition(meta_item_path)
             result.setdefault(definition, []).append(meta_item_path)
         return result
