@@ -4,7 +4,7 @@ import re
 
 import pygit2
 
-from kart.core import find_blobs_in_tree
+from kart.core import all_blobs_in_tree
 from kart.exceptions import (
     PATCH_DOES_NOT_APPLY,
     InvalidOperation,
@@ -181,7 +181,7 @@ class TableV3(RichTableDataset):
         """
         if self.FEATURE_PATH not in self.inner_tree:
             return
-        yield from find_blobs_in_tree(self.inner_tree / self.FEATURE_PATH)
+        yield from all_blobs_in_tree(self.inner_tree / self.FEATURE_PATH)
 
     @property
     @functools.lru_cache(maxsize=1)
