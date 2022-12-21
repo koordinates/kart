@@ -471,8 +471,11 @@ def handle_working_copy_tree_mismatch(wc_type_name, actual_tree_id, expected_tre
         f"tree {expected_tree_id}" if expected_tree_id else "the empty tree"
     )
 
+    summary = (
+        f"The {wc_type_name} working copy appears to be out of sync with the repository"
+    )
     message = [
-        f"The {wc_type_name} working copy appears to be out of sync with the repository:",
+        f"{summary}:",
         f"  * The working copy's own records show it is tracking {actual_tree_id};",
         f"  * Based on the repository it should be tracking {expected_tree_id}.",
         "The simplest fix is generally to recreate the working copy (losing any uncommitted changes in the process.)",
@@ -486,7 +489,7 @@ def handle_working_copy_tree_mismatch(wc_type_name, actual_tree_id, expected_tre
     click.echo("\n".join(message))
     click.echo()
     if not click.confirm("Do you want to recreate the working copy?"):
-        raise BadStateError(message[0], exit_code=BAD_WORKING_COPY_STATE)
+        raise BadStateError(f"{summary}.", exit_code=BAD_WORKING_COPY_STATE)
 
     from kart.create_workingcopy import create_workingcopy
 
@@ -497,9 +500,4 @@ def handle_working_copy_tree_mismatch(wc_type_name, actual_tree_id, expected_tre
     subctx.invoke(create_workingcopy, delete_existing=True, discard_changes=True)
 
     orig_command = f"{ctx.command_path} {' '.join(ctx.unparsed_args)}"
-    click.echo(f"\nThe original command was: {orig_command}")
-
-    if not click.confirm("Do you want to continue running the original command?"):
-        sys.exit(0)
-
-    click.echo()
+    click.echo(f"\nContinuing with the original command: {orig_command}\n")
