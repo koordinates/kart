@@ -303,7 +303,7 @@ jobs:
       # TODO: cache
       - name: "setup: python"
         run: |
-          curl "${PY_VER_INSTALLER}" -O ${{runner.temp}}/py.pkg
+          curl -sSfL -o ${{runner.temp}}/py.pkg "${PY_VER_INSTALLER}"
           sudo installer -pkg ${{runner.temp}}/py.pkg -dumplog -target /
           sudo ln -sf python3 /Library/Frameworks/Python.framework/Versions/${PY_VER}/bin/python
           export PATH="/Library/Frameworks/Python.framework/Versions/${PY_VER}/bin:$PATH"
