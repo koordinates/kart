@@ -51,16 +51,16 @@ def rev_list_object_oids(repo, start_commits, stop_commits, pathspecs):
         "--stdin",
     ]
     try:
-        p = subprocess.Popen(
+        with subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             encoding="utf8",
             env=tool_environment(),
-        )
-        p.stdin.write(os.linesep.join(["--", *pathspecs]))
-        p.stdin.close()
-        yield from _parse_revlist_output(repo, p.stdout)
+        ) as p:
+            p.stdin.write(os.linesep.join(["--", *pathspecs]))
+            p.stdin.close()
+            yield from _parse_revlist_output(repo, p.stdout)
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
             f"There was a problem with git rev-list: {e}", called_process_error=e
@@ -71,6 +71,7 @@ def get_dataset_pathspecs(repo, start_commits, stop_commits, dirname_filter):
     """
     Get the list of dataset paths we need to search in for the objects we are insterested in.
     Without this, all datasets are searched - even irrelevant ones - which could waste a lot of time.
+    dir_name_filter should match whichever dataset-dirnames are relevant to search, eg ".table-dataset"
     """
     # TODO - if git rev-list --objects pathspec filtering is fixed, there would be other approaches
     # we could take, some potentially using only a single call to rev-list.
@@ -83,23 +84,26 @@ def get_dataset_pathspecs(repo, start_commits, stop_commits, dirname_filter):
     ]
     result = set()
     try:
-        p = subprocess.Popen(
+        with subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             encoding="utf8",
             env=tool_environment(),
-        )
-        for line in p.stdout:
-            commit = repo[line.strip()]
-            for tree_path, tree in all_trees_with_paths_in_tree(commit.tree):
-                if tree_path in result:
-                    continue
-                for child in tree:
-                    if dirname_filter(child.name):
-                        result.add(tree_path)
-                        break
+        ) as p:
+            for line in p.stdout:
+                commit = repo[line.strip()]
+                for tree_path, tree in all_trees_with_paths_in_tree(commit.tree):
+                    # No need to check if this is a relevant dataset if we already know it is
+                    # since it's already in the results:
+                    if tree_path in result:
+                        continue
+                    # Use dirname_filter to see if the tree has a child that means we need to search it.
+                    for child in tree:
+                        if dirname_filter(child.name):
+                            result.add(tree_path)
+                            break
 
-        return result
+            return result
 
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
