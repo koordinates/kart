@@ -11,7 +11,11 @@ import click
 
 from kart.cli_util import KartGroup, add_help_subcommand, tool_environment
 from kart.exceptions import SubprocessError, InvalidOperation
-from kart.lfs_util import get_hash_from_pointer_file, get_local_path_from_lfs_hash
+from kart.lfs_util import (
+    pointer_file_bytes_to_dict,
+    get_hash_from_pointer_file,
+    get_local_path_from_lfs_hash,
+)
 from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
@@ -29,10 +33,13 @@ def lfs_plus(ctx, **kwargs):
 
 @lfs_plus.command("ls-files")
 @click.pass_context
+@click.option(
+    "--size", "-s", "show_size", is_flag=True, help="Show the size of each LFS file"
+)
 @click.option("--all", is_flag=True, help="Scan all refs and HEAD")
 @click.argument("ref1", required=False)
 @click.argument("ref2", required=False)
-def ls_files(ctx, all, ref1, ref2):
+def ls_files(ctx, show_size, all, ref1, ref2):
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
 
     if all:
@@ -63,10 +70,22 @@ def ls_files(ctx, all, ref1, ref2):
     for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
         repo, start_commits, stop_commits
     ):
+
+        if show_size:
+            pointer_dict = pointer_file_bytes_to_dict(
+                pointer_blob, decode_extra_values=False
+            )
+            lfs_hash = get_hash_from_pointer_file(pointer_dict)
+            size = pointer_dict["size"]
+
         lfs_hash = get_hash_from_pointer_file(pointer_blob)
         indicator = "*" if is_present(lfs_hash) else "-"
         filepath = path_match_result.group(0)
-        click.echo(f"{lfs_hash} {indicator} {filepath}")
+
+        if show_size:
+            click.echo(f"{lfs_hash} {indicator} {filepath} ({size})")
+        else:
+            click.echo(f"{lfs_hash} {indicator} {filepath}")
 
 
 @lfs_plus.command()
