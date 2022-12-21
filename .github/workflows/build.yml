@@ -334,7 +334,7 @@ jobs:
 
       - name: "setup: misc"
         run: |
-          brew install -q autoconf automake ccache pandoc sqlite3
+          brew install -q autoconf automake ccache pandoc
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
@@ -495,7 +495,9 @@ jobs:
         run: |
           sudo installer -pkg build/dist/Kart-*.pkg -dumplog -target /
           readlink $(which kart)
-          PATH="$PATH:$(brew --prefix)/opt/sqlite3/bin" tests/scripts/e2e-1.sh
+          # make sure good sqlite is in path
+          export PATH="$(pwd)/build/vcpkg_installed/x64-osx/tools:$PATH"
+          tests/scripts/e2e-1.sh
 
   #
   # Windows via CMake+VCPKG
