@@ -334,7 +334,7 @@ jobs:
 
       - name: "setup: misc"
         run: |
-          brew install -q autoconf automake ccache pandoc
+          brew install -q autoconf automake ccache pandoc sqlite3
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
@@ -491,6 +491,12 @@ jobs:
           path: build/dist/Kart-*.pkg
           if-no-files-found: error
 
+      - name: "package: tests"
+        run: |
+          sudo installer -pkg build/dist/Kart-*.pkg -dumplog -target /
+          readlink $(which kart)
+          PATH="$PATH:$(brew --prefix)/opt/sqlite3/bin" tests/scripts/e2e-1.sh
+
   #
   # Windows via CMake+VCPKG
   #
@@ -554,6 +560,7 @@ jobs:
         shell: pwsh
         run: |
           & dotnet tool install --global AzureSignTool --version 3.0.0
+          & choco install sqlite.shell
 
       #
       # App Build
@@ -674,3 +681,14 @@ jobs:
           name: Kart-windows-${{ runner.arch }}-installer
           path: build/dist/Kart-*.msi
           if-no-files-found: error
+
+      - name: "package: tests"
+        shell: pwsh
+        run: |
+          Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\build\dist\Kart-*.msi' /quiet /norestart /l* install.log'
+          if (Test-Path install.log -PathType leaf) { Get-Content install.log }
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
+          & kart --version
+          if (-not $?) {throw "Smoke test Failed"}
+          & tests\scripts\e2e-1.ps1
+          if (-not $?) {throw "E2E test Failed"}
