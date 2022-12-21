@@ -84,7 +84,7 @@ function(CreateVirtualEnvironment TARGET)
   set(EXEC ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${BIN_DIR})
   if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     # Force compilation with the expected deployment target and architecture
-    list(APPEND EXEC "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    list(APPEND EXEC "MACOSX_DEPLOYMENT_TARGET=${Python3_MACOSX_DEPLOYMENT_TARGET}")
     list(APPEND EXEC "ARCHFLAGS=-arch ${CMAKE_HOST_SYSTEM_PROCESSOR}")
   endif()
 

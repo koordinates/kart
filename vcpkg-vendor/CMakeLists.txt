@@ -372,12 +372,12 @@ ExternalProject_Add(
     ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${RUST_DIR}
     ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all: --no-build-isolation --no-deps
     --no-index --wheel-dir <TMP_DIR>/dist .
-  # Cryptography is too clever with wheel names no matter how forceful you are
   INSTALL_COMMAND
-    ${CMAKE_COMMAND} -DSOURCES=<TMP_DIR>/dist/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-*.whl
-    -DDEST=<INSTALL_DIR> -P ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake)
+    ${CMAKE_COMMAND} -E copy
+    <TMP_DIR>/dist/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(cryptography INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-*.whl)
+list(APPEND WHEEL_LIST
+     ${INSTALL_DIR}/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 # ##################################################################################################
 # OTHER LIBS AND BINS
@@ -607,8 +607,7 @@ add_custom_command(
   DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share env/${EXE_DIR}
-  COMMAND ${CMAKE_COMMAND} "-DSOURCES=${WHEEL_LIST}" -DDEST=wheelhouse -P
-          ${CMAKE_CURRENT_LIST_DIR}/cmake/copy_1.cmake
+  COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
   COMMAND ${CMAKE_COMMAND} -E copy ${LIB_LIST} env/lib
   COMMAND ${CMAKE_COMMAND} -E copy ${EXE_LIST} env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
