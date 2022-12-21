@@ -2,16 +2,20 @@ import click
 from enum import Enum, auto
 import pygit2
 import os
+import sys
 
 from kart.exceptions import (
     InvalidOperation,
     NotFound,
     NotYetImplemented,
+    BadStateError,
     UNCOMMITTED_CHANGES,
     NO_DATA,
     NO_WORKING_COPY,
+    BAD_WORKING_COPY_STATE,
 )
 from kart.key_filters import RepoKeyFilter
+from kart.output_util import get_input_mode, InputMode
 
 # General code for working copies.
 # Nothing specific to tabular working copies, nor file-based working copies.
@@ -31,17 +35,6 @@ class WorkingCopyDirty(Exception):
     """Exception to abort immediately if working copy is dirty."""
 
     pass
-
-
-class WorkingCopyTreeMismatch(ValueError):
-    """Error for if the tree id stored in state table doesn't match the one at HEAD."""
-
-    def __init__(self, working_copy_tree_id, expected_tree_id):
-        self.working_copy_tree_id = working_copy_tree_id
-        self.expected_tree_id = expected_tree_id
-
-    def __str__(self):
-        return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.expected_tree_id}"
 
 
 class WorkingCopy:
@@ -96,14 +89,14 @@ class WorkingCopy:
     def assert_matches_head_tree(self):
         """
         Checks that all parts of the working copy are based on the HEAD tree, according to their kart-state tables.
-        Otherwise, raises WorkingCopyTreeMismatch.
+        Otherwise, tries to help the user fix the problem and/or raises BadStateError.
         """
         self.assert_matches_tree(self.repo.head_tree)
 
     def assert_matches_tree(self, tree):
         """
         Checks that all parts of the working copy are based on the given tree, according to their kart-state tables.
-        Otherwise, raises WorkingCopyTreeMismatch.
+        Otherwise, tries to help the user fix the problem and/or raises BadStateError.
         """
         for p in self.parts():
             p.assert_matches_tree(tree)
@@ -384,11 +377,17 @@ class WorkingCopyPart:
         raise NotImplementedError()
 
     def assert_matches_head_tree(self):
-        """Raises a WorkingCopyTreeMismatch if kart_state refers to a different tree and not the HEAD tree."""
+        """
+        Checks that this part of the working copy is based on the HEAD tree, according to the kart-state table.
+        Otherwise, tries to help the user fix the problem and/or raises BadStateError.
+        """
         self.assert_matches_tree(self.repo.head_tree)
 
     def assert_matches_tree(self, expected_tree):
-        """Raises a WorkingCopyTreeMismatch if kart_state refers to a different tree and not the given tree."""
+        """
+        Checks that this part of the working copy is based on the given tree, according to the kart-state table.
+        Otherwise, tries to help the user fix the problem and/or raises BadStateError.
+        """
         if expected_tree is None or isinstance(expected_tree, str):
             expected_tree_id = expected_tree
         else:
@@ -396,7 +395,9 @@ class WorkingCopyPart:
         actual_tree_id = self.get_tree_id()
 
         if actual_tree_id != expected_tree_id:
-            raise WorkingCopyTreeMismatch(actual_tree_id, expected_tree_id)
+            handle_working_copy_tree_mismatch(
+                self.WORKING_COPY_TYPE_NAME, actual_tree_id, expected_tree_id
+            )
 
     def get_tree_id(self):
         return self.get_kart_state_value("*", "tree")
@@ -462,3 +463,41 @@ class WorkingCopyPart:
                 "Sorry, this type of filter is not yet supported when there are structural changes."
                 f" Unfilterable structural changes are affecting:\n{unsupported_filters}"
             )
+
+
+def handle_working_copy_tree_mismatch(wc_type_name, actual_tree_id, expected_tree_id):
+    actual_tree_id = f"tree {actual_tree_id}" if actual_tree_id else "the empty tree"
+    expected_tree_id = (
+        f"tree {expected_tree_id}" if expected_tree_id else "the empty tree"
+    )
+
+    summary = (
+        f"The {wc_type_name} working copy appears to be out of sync with the repository"
+    )
+    message = [
+        f"{summary}:",
+        f"  * The working copy's own records show it is tracking {actual_tree_id};",
+        f"  * Based on the repository it should be tracking {expected_tree_id}.",
+        "The simplest fix is generally to recreate the working copy (losing any uncommitted changes in the process.)",
+    ]
+
+    if get_input_mode() != InputMode.INTERACTIVE:
+        message.append("\nTo do so, try the following command:")
+        message.append("\tkart create-workingcopy --delete-existing --discard-changes")
+        raise BadStateError("\n".join(message), exit_code=BAD_WORKING_COPY_STATE)
+
+    click.echo("\n".join(message))
+    click.echo()
+    if not click.confirm("Do you want to recreate the working copy?"):
+        raise BadStateError(f"{summary}.", exit_code=BAD_WORKING_COPY_STATE)
+
+    from kart.create_workingcopy import create_workingcopy
+
+    click.echo("Recreating working copy ...")
+    ctx = click.get_current_context()
+    subctx = click.Context(ctx.command, parent=ctx)
+    subctx.obj = ctx.obj
+    subctx.invoke(create_workingcopy, delete_existing=True, discard_changes=True)
+
+    orig_command = f"{ctx.command_path} {' '.join(ctx.unparsed_args)}"
+    click.echo(f"\nContinuing with the original command: {orig_command}\n")

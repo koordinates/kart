@@ -43,6 +43,8 @@ NO_SPATIAL_FILTER_INDEX = 53
 
 CONNECTION_ERROR = 60
 
+BAD_WORKING_COPY_STATE = 70
+
 SUBPROCESS_ERROR_FLAG = 128
 DEFAULT_SUBPROCESS_ERROR = 129
 
@@ -112,6 +114,10 @@ class DbConnectionError(BaseException):
 
     def __init__(self, message, db_error):
         super().__init__(f"{message}\nCaused by error:\n{db_error}")
+
+
+class BadStateError(BaseException):
+    pass
 
 
 class SubprocessError(BaseException):

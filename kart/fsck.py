@@ -7,7 +7,6 @@ from .cli_util import tool_environment, KartCommand
 from .exceptions import NO_WORKING_COPY, NotFound
 from .geometry import normalise_gpkg_geom
 from .sqlalchemy.gpkg import Db_GPKG
-from kart.working_copy import WorkingCopyTreeMismatch
 
 
 def _fsck_reset(repo, working_copy, dataset_paths):
@@ -64,18 +63,11 @@ def fsck(ctx, reset_datasets, fsck_args):
         tree = repo.head_tree
 
         # compare repo tree id to what's in the DB
-        try:
-            table_wc.assert_matches_tree(repo.head_tree)
-            click.secho(
-                f"✔︎ Working Copy tree id matches repository: {repo.head_tree}",
-                fg="green",
-            )
-        except WorkingCopyTreeMismatch as e:
-            # try and find the tree we _do_ have
-            click.secho(f"✘ Repository tree is: {tree.id}", fg="red")
-            click.secho(f"✘ Working Copy tree is: {e.working_copy_tree_id}", fg="red")
-            click.echo("This might be fixable via `checkout --force`")
-            raise click.Abort()
+        table_wc.assert_matches_tree(repo.head_tree)
+        click.secho(
+            f"✔︎ Working Copy tree id matches repository: {repo.head_tree}",
+            fg="green",
+        )
 
         has_err = False
         for dataset in repo.datasets():

@@ -1,5 +1,6 @@
-import os
+import functools
 import itertools
+import os
 import pygit2
 import re
 import subprocess
@@ -10,10 +11,15 @@ import click
 
 from kart.cli_util import KartGroup, add_help_subcommand, tool_environment
 from kart.exceptions import SubprocessError, InvalidOperation
-from kart.lfs_util import get_hash_from_pointer_file, get_local_path_from_lfs_hash
+from kart.lfs_util import (
+    pointer_file_bytes_to_dict,
+    get_hash_from_pointer_file,
+    get_local_path_from_lfs_hash,
+)
 from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
+from kart.structs import CommitWithReference
 
 EMPTY_SHA = "0" * 40
 
@@ -23,6 +29,63 @@ EMPTY_SHA = "0" * 40
 @click.pass_context
 def lfs_plus(ctx, **kwargs):
     """Git-LFS commands re-implemented in Kart to allow for spatial filtering."""
+
+
+@lfs_plus.command("ls-files")
+@click.pass_context
+@click.option(
+    "--size", "-s", "show_size", is_flag=True, help="Show the size of each LFS file"
+)
+@click.option("--all", is_flag=True, help="Scan all refs and HEAD")
+@click.argument("ref1", required=False)
+@click.argument("ref2", required=False)
+def ls_files(ctx, show_size, all, ref1, ref2):
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+
+    if all:
+        start_commits = ["--all"]
+        stop_commits = []
+    elif not ref1:
+        # No refs supplied: search current branch.
+        start_commits = ["HEAD"]
+        stop_commits = []
+    elif ref1 and not ref2:
+        # One ref supplied: search that commit.
+        start_commits = [ref1, "--no-walk"]
+        stop_commits = []
+    elif ref1 and ref2:
+        # Two refs supplied - search for changes between them.
+        ref1 = CommitWithReference.resolve(repo, ref1)
+        ref2 = CommitWithReference.resolve(repo, ref2)
+        ancestor_id = repo.merge_base(ref1.id, ref2.id)
+        if not ancestor_id:
+            raise InvalidOperation(f"Commits {ref1.id} and {ref2.id} aren't related.")
+        start_commits = [ref1.id.hex, ref2.id.hex]
+        stop_commits = [ancestor_id.hex]
+
+    @functools.lru_cache()
+    def is_present(lfs_hash):
+        return get_local_path_from_lfs_hash(repo, lfs_hash).is_file()
+
+    for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
+        repo, start_commits, stop_commits
+    ):
+
+        if show_size:
+            pointer_dict = pointer_file_bytes_to_dict(
+                pointer_blob, decode_extra_values=False
+            )
+            lfs_hash = get_hash_from_pointer_file(pointer_dict)
+            size = pointer_dict["size"]
+
+        lfs_hash = get_hash_from_pointer_file(pointer_blob)
+        indicator = "*" if is_present(lfs_hash) else "-"
+        filepath = path_match_result.group(0)
+
+        if show_size:
+            click.echo(f"{lfs_hash} {indicator} {filepath} ({size})")
+        else:
+            click.echo(f"{lfs_hash} {indicator} {filepath}")
 
 
 @lfs_plus.command()

@@ -126,7 +126,9 @@ def _dict_to_pointer_file_bytes_simple(pointer_dict):
     return blob
 
 
-def pointer_file_bytes_to_dict(pointer_file_bytes, result=None):
+def pointer_file_bytes_to_dict(
+    pointer_file_bytes, result=None, *, decode_extra_values=True
+):
     if hasattr(pointer_file_bytes, "data"):
         pointer_file_bytes = pointer_file_bytes.data
     pointer_file_str = pointer_file_bytes.decode("utf8")
@@ -142,7 +144,8 @@ def pointer_file_bytes_to_dict(pointer_file_bytes, result=None):
             L.warn(f"Error parsing pointer file:\n{line}")
         key, value = parts
         if key.startswith("ext-0-kart-encoded."):
-            result.update(_decode_extra_values(key[len("ext-0-kart-encoded.") :]))
+            if decode_extra_values:
+                result.update(_decode_extra_values(key[len("ext-0-kart-encoded.") :]))
         elif key == "size":
             result[key] = int(value)
         else:
@@ -152,6 +155,13 @@ def pointer_file_bytes_to_dict(pointer_file_bytes, result=None):
 
 def get_hash_from_pointer_file(pointer_file_bytes):
     """Given a pointer-file Blob or bytes object, extracts the sha256 hash from it."""
+    if isinstance(pointer_file_bytes, dict):
+        # Already decoded - just trim off the sha256:
+        oid = pointer_file_bytes["oid"]
+        if oid.startswith("sha256:"):
+            oid = oid[7:]  # len("sha256:")
+        return oid
+
     if isinstance(pointer_file_bytes, pygit2.Blob):
         pointer_file_bytes = memoryview(pointer_file_bytes)
     match = POINTER_PATTERN.search(pointer_file_bytes)
