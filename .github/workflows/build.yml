@@ -304,7 +304,7 @@ jobs:
       - name: "setup: python"
         run: |
           curl -sSfL -o ${{runner.temp}}/py.pkg "${PY_VER_INSTALLER}"
-          sudo installer -pkg ${{runner.temp}}/py.pkg -dumplog -target /
+          sudo installer -pkg ${{runner.temp}}/py.pkg -target /
           sudo ln -sf python3 /Library/Frameworks/Python.framework/Versions/${PY_VER}/bin/python
           export PATH="/Library/Frameworks/Python.framework/Versions/${PY_VER}/bin:$PATH"
           which python3
