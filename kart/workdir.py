@@ -449,7 +449,10 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 try:
                     # reflink doesn't like pathlib.Path
                     _copy(str(lfs_path), str(wc_tiles_dir / tilename))
-                except ReflinkImpossibleError:  # CoW not supported
+                except (
+                    ReflinkImpossibleError,
+                    NotImplementedError,
+                ):  # CoW not supported
                     _copy = shutil.copy
                     _copy(lfs_path, wc_tiles_dir / tilename)
 
