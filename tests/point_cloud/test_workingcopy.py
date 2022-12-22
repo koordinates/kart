@@ -12,9 +12,7 @@ from .fixtures import requires_pdal  # noqa
 from . import assert_lines_almost_equal
 
 
-def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
+def test_working_copy_edit(cli_runner, data_archive, requires_pdal):
     with data_archive("point-cloud/auckland.tgz") as repo_path:
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
@@ -105,11 +103,7 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
         assert r.stdout.splitlines() == []
 
 
-def test_working_copy_restore_reset(
-    cli_runner, data_archive, monkeypatch, requires_pdal
-):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
+def test_working_copy_restore_reset(cli_runner, data_archive, requires_pdal):
     def file_count(path):
         return len(list(path.iterdir()))
 
@@ -178,10 +172,8 @@ def test_working_copy_restore_reset(
 
 
 def test_working_copy_meta_edit(
-    cli_runner, data_archive, data_archive_readonly, monkeypatch, requires_pdal
+    cli_runner, data_archive, data_archive_readonly, requires_pdal
 ):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
     with data_archive_readonly("point-cloud/laz-autzen.tgz") as autzen:
         with data_archive("point-cloud/auckland.tgz") as repo_path:
             r = cli_runner.invoke(["diff"])
@@ -819,10 +811,8 @@ def test_working_copy_meta_edit(
 
 
 def test_working_copy_commit_las(
-    cli_runner, data_archive, data_archive_readonly, monkeypatch, requires_pdal
+    cli_runner, data_archive, data_archive_readonly, requires_pdal
 ):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
     with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
         with data_archive("point-cloud/auckland.tgz") as repo_path:
             tiles_path = repo_path / "auckland"
@@ -849,9 +839,8 @@ def test_working_copy_commit_las(
 
 
 def test_working_copy_commit_and_convert_to_copc(
-    cli_runner, data_archive, data_archive_readonly, monkeypatch, requires_pdal
+    cli_runner, data_archive, data_archive_readonly, requires_pdal
 ):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as data_dir:
         with data_archive("point-cloud/auckland.tgz") as repo_path:
             tiles_path = repo_path / "auckland"
@@ -956,9 +945,7 @@ def test_working_copy_commit_and_convert_to_copc(
             assert converted_tile_metadata["tile"]["pointCount"] == 4231
 
 
-def test_working_copy_mtime_updated(
-    cli_runner, data_archive, monkeypatch, requires_pdal
-):
+def test_working_copy_mtime_updated(cli_runner, data_archive, requires_pdal):
     # Tests the following:
     # 1. Diffs work properly when files have mtimes (modified-timestamps)
     # that make it look like the file has been modified, but in fact it has not.
@@ -967,7 +954,6 @@ def test_working_copy_mtime_updated(
     # means the next diff can run quicker since we can use the mtime check instead
     # of the comparing hashes, which involves hashing the file and takes longer).
 
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
     with data_archive("point-cloud/auckland.tgz") as repo_path:
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr
@@ -1014,8 +1000,7 @@ def test_working_copy_mtime_updated(
             assert pygit2.hashfile(laz_file) not in repo.odb
 
 
-def test_lfs_fetch(cli_runner, data_archive, monkeypatch):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+def test_lfs_fetch(cli_runner, data_archive):
     with data_archive("point-cloud/auckland.tgz") as repo_path:
         # Delete everything in the local LFS cache.
         shutil.rmtree(repo_path / ".kart" / "lfs")
@@ -1045,7 +1030,6 @@ def test_lfs_fetch(cli_runner, data_archive, monkeypatch):
 
 
 def test_lfs_gc(cli_runner, data_archive, monkeypatch):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
     with data_archive("point-cloud/auckland.tgz") as repo_path:
         # Delete everything in the local LFS cache.
         for file in (repo_path / "auckland").glob("auckland_3_*.copc.laz"):
@@ -1111,8 +1095,6 @@ def test_lfs_gc(cli_runner, data_archive, monkeypatch):
 def test_working_copy_progress_bar(
     cli_runner, data_archive, monkeypatch, requires_pdal
 ):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
     with data_archive("point-cloud/auckland.tgz") as repo_path:
         r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
         assert r.exit_code == 0, r.stderr

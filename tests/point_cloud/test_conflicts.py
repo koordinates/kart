@@ -7,11 +7,7 @@ from kart.repo import KartRepo
 from . import assert_lines_almost_equal
 
 
-def test_merge_and_resolve_conflicts(
-    cli_runner, data_archive, monkeypatch, requires_pdal
-):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
+def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
     with data_archive("point-cloud/conflicts.tgz") as repo_path:
         r = cli_runner.invoke(["merge", "theirs_branch"])
         assert r.exit_code == 0, r.stderr
@@ -137,11 +133,7 @@ def test_merge_and_resolve_conflicts(
         ) == ("9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312", 24480)
 
 
-def test_resolve_conflict_with_workingcopy(
-    cli_runner, data_archive, monkeypatch, requires_pdal
-):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
+def test_resolve_conflict_with_workingcopy(cli_runner, data_archive, requires_pdal):
     with data_archive("point-cloud/conflicts.tgz") as repo_path:
         repo = KartRepo(repo_path)
 
@@ -206,11 +198,7 @@ def test_resolve_conflict_with_workingcopy(
         ) == ("64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3", 2319)
 
 
-def test_resolve_conflict_with_file(
-    cli_runner, data_archive, monkeypatch, requires_pdal, tmpdir
-):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
+def test_resolve_conflict_with_file(cli_runner, data_archive, requires_pdal, tmpdir):
     with data_archive("point-cloud/conflicts.tgz") as repo_path:
         repo = KartRepo(repo_path)
 

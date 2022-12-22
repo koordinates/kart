@@ -1,5 +1,4 @@
 import re
-import os
 from pathlib import Path, PurePath
 from urllib.parse import urlsplit
 
@@ -172,16 +171,6 @@ def clone(
         spatial_filter_spec=spatial_filter_spec,
         spatial_filter_after_clone=spatial_filter_after_clone,
     )
-
-    # Experimental point-cloud datasets:
-    if os.environ.get("X_KART_POINT_CLOUDS"):
-        from kart.lfs_util import install_lfs_hooks
-
-        lfs_override = os.environ.get("X_KART_SET_LFS_FOR_NEW_REPOS")
-        if lfs_override:
-            repo.config["lfs.url"] = lfs_override
-
-        install_lfs_hooks(repo)
 
     # Create working copy, if needed.
     parts_to_create = (

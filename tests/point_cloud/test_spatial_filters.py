@@ -65,10 +65,8 @@ def _count_files_in_lfs_cache(repo):
 
 
 def test_clone_pc_with_spatial_filter(
-    data_archive, cli_runner, tmp_path, monkeypatch, requires_pdal
+    data_archive, cli_runner, tmp_path, requires_pdal
 ):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
     file_path = (tmp_path / "spatialfilter.txt").resolve()
     file_path.write_text(f"{CRS}\n\n{SOUTH_EAST_TRIANGLE}\n", encoding="utf-8")
 
@@ -102,10 +100,8 @@ def test_clone_pc_with_spatial_filter(
 
 
 def test_reclone_pc_with_larger_spatial_filter(
-    data_archive, cli_runner, tmp_path, monkeypatch, requires_pdal
+    data_archive, cli_runner, tmp_path, requires_pdal
 ):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
     with data_archive("point-cloud/auckland.tgz") as repo1_path:
         repo1_url = str(repo1_path.resolve())
         # Clone repo using spatial filter
@@ -156,11 +152,7 @@ def test_reclone_pc_with_larger_spatial_filter(
         )
 
 
-def test_spatial_filtered_diff(
-    data_archive, cli_runner, tmp_path, monkeypatch, requires_pdal
-):
-    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
-
+def test_spatial_filtered_diff(data_archive, cli_runner, tmp_path, requires_pdal):
     file_path = (tmp_path / "spatialfilter.txt").resolve()
     file_path.write_text(f"{CRS}\n\n{SOUTH_EAST_TRIANGLE}\n", encoding="utf-8")
 

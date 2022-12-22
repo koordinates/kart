@@ -21,7 +21,8 @@ from .exceptions import (
     SubprocessError,
     translate_subprocess_exit_code,
 )
-from .key_filters import RepoKeyFilter
+from kart.lfs_util import install_lfs_hooks
+from kart.key_filters import RepoKeyFilter
 from kart.tabular.version import (
     DEFAULT_NEW_REPO_VERSION,
     dataset_class_for_version,
@@ -283,6 +284,7 @@ class KartRepo(pygit2.Repository):
         kart_repo.write_attributes()
         kart_repo.write_readme()
         kart_repo.activate()
+        install_lfs_hooks(kart_repo)
         return kart_repo
 
     @classmethod
@@ -365,6 +367,7 @@ class KartRepo(pygit2.Repository):
         kart_repo.write_attributes()
         kart_repo.write_readme()
         kart_repo.activate()
+        install_lfs_hooks(kart_repo)
         return kart_repo
 
     @classmethod
@@ -448,8 +451,6 @@ class KartRepo(pygit2.Repository):
 
     def write_lfs_filter_config(self):
         # TODO - try to bundle this config with the bundled Git, instead of once per repo.
-        if not os.environ.get("X_KART_POINT_CLOUDS"):
-            return
         self.config["filter.lfs.process"] = "git-lfs filter-process"
         self.config["filter.lfs.required"] = True
         self.config["filter.lfs.clean"] = "filter.lfs.clean"

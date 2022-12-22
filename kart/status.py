@@ -134,20 +134,11 @@ def get_working_copy_status_json(repo):
         return None
 
     # TODO: this JSON needs to be updated now that the WC has more than one part.
+
     table_wc = repo.working_copy.tabular
     table_wc_path = table_wc.clean_location if table_wc else None
 
     result = {"path": table_wc_path, "changes": get_diff_status_json(repo)}
-
-    # If we're not doing experimental point clouds, keep the JSON how it was in Kart 0.11 and earlier...
-    if not os.environ.get("X_KART_POINT_CLOUDS"):
-        # Don't show any WC status at all if there's no "path" for the tabular part.
-        if result["path"] is None:
-            return None
-        # If there are no changes, show changes null rather than an empty dict.
-        if not result["changes"]:
-            result["changes"] = None
-
     return result
 
 
