@@ -687,7 +687,7 @@ jobs:
       - name: "package: tests"
         shell: pwsh
         run: |
-          Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\build\dist\Kart-*.msi' /quiet /norestart /l* install.log'
+          Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\build\dist\Kart-*.msi /quiet /norestart /l* install.log'
           if (Test-Path install.log -PathType leaf) { Get-Content install.log }
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
           & kart --version
