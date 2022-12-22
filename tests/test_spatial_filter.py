@@ -244,7 +244,7 @@ def test_init_with_spatial_filter(cli_runner, tmp_path):
 
     r = cli_runner.invoke(["-C", repo_path, "status", "-o", "json"])
     assert r.exit_code == 0, r.stderr
-    spatial_filter = json.loads(r.stdout)["kart.status/v1"]["spatialFilter"]
+    spatial_filter = json.loads(r.stdout)["kart.status/v2"]["spatialFilter"]
     assert spatial_filter["geometry"].startswith(
         "01030000000100000009000000E3A59BC420DC65401973D7"
     )
@@ -784,7 +784,7 @@ def test_reset_wc_with_spatial_filter(data_archive, cli_runner):
 
         r = cli_runner.invoke(["status", "-o", "json"])
         assert r.exit_code == 0, r.stderr
-        status = json.loads(r.stdout)["kart.status/v1"]
+        status = json.loads(r.stdout)["kart.status/v2"]
         assert (
             status["workingCopy"]["changes"][H.POINTS.LAYER]["feature"]["updates"] == 5
         )
@@ -808,7 +808,7 @@ def test_reset_wc_with_spatial_filter(data_archive, cli_runner):
 
         r = cli_runner.invoke(["status", "-o", "json"])
         assert r.exit_code == 0, r.stderr
-        status = json.loads(r.stdout)["kart.status/v1"]
+        status = json.loads(r.stdout)["kart.status/v2"]
         assert (
             status["workingCopy"]["changes"][H.POINTS.LAYER]["feature"]["updates"] == 2
         )
@@ -914,7 +914,7 @@ def test_pk_conflict_due_to_spatial_filter(
 
         r = cli_runner.invoke(["status", "-o", "json"])
         assert r.exit_code == 0, r.stderr
-        change_status = json.loads(r.stdout)["kart.status/v1"]["workingCopy"]["changes"]
+        change_status = json.loads(r.stdout)["kart.status/v2"]["workingCopy"]["changes"]
         feature_changes = change_status["nz_pa_points_topo_150k"]["feature"]
         assert feature_changes == {"inserts": 1, "spatialFilterConflicts": 1}
 

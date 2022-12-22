@@ -24,8 +24,8 @@ def json_status(cli_runner):
 
 
 def get_commit_ids(jdict):
-    commit = jdict["kart.status/v1"]["commit"]
-    abbrev_commit = jdict["kart.status/v1"]["abbrevCommit"]
+    commit = jdict["kart.status/v2"]["commit"]
+    abbrev_commit = jdict["kart.status/v2"]["abbrevCommit"]
     assert commit and abbrev_commit
     assert commit.startswith(abbrev_commit)
     return commit, abbrev_commit
@@ -46,14 +46,19 @@ def test_status(
             "",
             "Nothing to commit, working copy clean",
         ]
+
+        parts_status = {
+            "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
+            "workdir": {"status": "notFound"},
+        }
         assert json_status(cli_runner) == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "commit": H.POINTS.HEAD_SHA,
                 "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                 "branch": "main",
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": {}},
+                "workingCopy": {"parts": parts_status, "changes": {}},
             }
         }
 
@@ -66,13 +71,13 @@ def test_status(
             "Nothing to commit, working copy clean",
         ]
         assert json_status(cli_runner) == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "commit": H.POINTS.HEAD1_SHA,
                 "abbrevCommit": H.POINTS.HEAD1_SHA[:7],
                 "branch": None,
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": {}},
+                "workingCopy": {"parts": parts_status, "changes": {}},
             }
         }
 
@@ -99,7 +104,7 @@ def test_status(
         jdict = json_status(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "main",
@@ -109,7 +114,7 @@ def test_status(
                     "behind": 0,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": {}},
+                "workingCopy": {"parts": parts_status, "changes": {}},
             }
         }
 
@@ -134,8 +139,13 @@ def test_status(
             "",
             "Nothing to commit, working copy clean",
         ]
+
+        parts_status = {
+            "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
+            "workdir": {"status": "notFound"},
+        }
         assert json_status(cli_runner) == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "commit": H.POINTS.HEAD_SHA,
                 "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                 "branch": "main",
@@ -145,7 +155,7 @@ def test_status(
                     "behind": 1,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": {}},
+                "workingCopy": {"parts": parts_status, "changes": {}},
             }
         }
 
@@ -166,7 +176,7 @@ def test_status(
         jdict = json_status(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "main",
@@ -176,7 +186,7 @@ def test_status(
                     "behind": 1,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": {}},
+                "workingCopy": {"parts": parts_status, "changes": {}},
             }
         }
 
@@ -195,7 +205,7 @@ def test_status(
         jdict = json_status(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "main",
@@ -205,7 +215,7 @@ def test_status(
                     "behind": 0,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": {}},
+                "workingCopy": {"parts": parts_status, "changes": {}},
             }
         }
 
@@ -234,7 +244,7 @@ def test_status(
         jdict = json_status(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "main",
@@ -245,7 +255,7 @@ def test_status(
                 },
                 "spatialFilter": None,
                 "workingCopy": {
-                    "path": str(wc),
+                    "parts": parts_status,
                     "changes": {
                         "nz_pa_points_topo_150k": {
                             "feature": {
@@ -271,14 +281,18 @@ def test_status_empty(tmp_path, cli_runner, chdir):
             '  (use "kart import" to add some data)',
         ]
 
+        parts_status = {
+            "tabular": {"location": "wiz.gpkg", "type": "gpkg", "status": "notFound"},
+            "workdir": {"status": "notFound"},
+        }
         assert json_status(cli_runner) == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "commit": None,
                 "abbrevCommit": None,
                 "branch": "main",
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": {"path": None, "changes": {}},
+                "workingCopy": {"parts": parts_status, "changes": {}},
             }
         }
 
@@ -326,7 +340,7 @@ def test_status_merging(data_archive, cli_runner):
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
         assert json_status(cli_runner) == {
-            "kart.status/v1": {
+            "kart.status/v2": {
                 "abbrevCommit": ours.short_id,
                 "commit": ours.id.hex,
                 "branch": "ours_branch",
