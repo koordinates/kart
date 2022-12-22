@@ -53,7 +53,7 @@ def test_status(
                 "branch": "main",
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": None},
+                "workingCopy": {"path": str(wc), "changes": {}},
             }
         }
 
@@ -72,7 +72,7 @@ def test_status(
                 "branch": None,
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": None},
+                "workingCopy": {"path": str(wc), "changes": {}},
             }
         }
 
@@ -109,7 +109,7 @@ def test_status(
                     "behind": 0,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": None},
+                "workingCopy": {"path": str(wc), "changes": {}},
             }
         }
 
@@ -145,7 +145,7 @@ def test_status(
                     "behind": 1,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": None},
+                "workingCopy": {"path": str(wc), "changes": {}},
             }
         }
 
@@ -176,7 +176,7 @@ def test_status(
                     "behind": 1,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": None},
+                "workingCopy": {"path": str(wc), "changes": {}},
             }
         }
 
@@ -205,7 +205,7 @@ def test_status(
                     "behind": 0,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"path": str(wc), "changes": None},
+                "workingCopy": {"path": str(wc), "changes": {}},
             }
         }
 
@@ -278,7 +278,7 @@ def test_status_empty(tmp_path, cli_runner, chdir):
                 "branch": "main",
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": None,
+                "workingCopy": {"path": None, "changes": {}},
             }
         }
 

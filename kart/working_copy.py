@@ -111,8 +111,7 @@ class WorkingCopy:
 
     def _all_parts_inluding_nones(self):
         yield self.tabular
-        if os.environ.get("X_KART_POINT_CLOUDS"):
-            yield self.workdir
+        yield self.workdir
 
     @property
     def tabular(self):

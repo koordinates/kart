@@ -209,8 +209,6 @@ def all_supported_import_source_types():
     result = [r for r in ALL_IMPORT_SOURCE_TYPES if not r.hidden]
     if not is_shp_supported():
         result = [r for r in result if "Shapefile" not in r.name]
-    if not os.environ.get("X_KART_POINT_CLOUDS"):
-        result = [r for r in result if "LAS" not in r.name]
     return result
 
 
