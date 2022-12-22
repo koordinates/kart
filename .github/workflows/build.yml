@@ -685,12 +685,21 @@ jobs:
           if-no-files-found: error
 
       - name: "package: tests"
+        shell: pwsh
         run: |
           $ErrorView = 'NormalView'
-          Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\build\dist\Kart-*.msi /quiet /norestart /l* install.log'
-          if (Test-Path install.log -PathType leaf) { Get-Content install.log }
+          $msi = Resolve-Path -Path ".\build\dist\Kart-*.msi" | Select-Object -ExpandProperty Path
+          Write-Host "Installing $msi ..." -ForegroundColor Green
+          & "msiexec.exe" /I $msi /quiet /norestart /l* install.log | Out-Default
+          if (!$?) {
+            Get-Content install.log
+            throw "MSI install failed"
+          }
+          Write-Host "Refreshing system path..." -ForegroundColor Green
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
-          & kart --version
-          if (-not $?) {throw "Smoke test Failed"}
-          & tests\scripts\e2e-1.ps1
-          if (-not $?) {throw "E2E test Failed"}
+          Write-Host "Checking Kart runs..." -ForegroundColor Green
+          & "kart" --version  | Out-Default
+          if (!$?) {throw "Smoke test Failed"}
+          Write-Host "Running Kart E2E tests..." -ForegroundColor Green
+          & "tests\scripts\e2e-1.ps1" | Out-Default
+          if (!$?) {throw "E2E test Failed"}
