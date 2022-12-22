@@ -67,6 +67,17 @@ class DbType(Enum):
             return KartAdapter_MySql
         raise RuntimeError("Invalid DbType")
 
+    @property
+    def json_name(self):
+        if self is DbType.GPKG:
+            return "gpkg"
+        elif self is DbType.POSTGIS:
+            return "postgresql"
+        elif self is DbType.SQL_SERVER:
+            return "mssql"
+        elif self is DbType.MYSQL:
+            return "mysql"
+
     def path_length(self, spec):
         """
         Returns the number of identifiers included in the URI path that narrow down our focus to a particular

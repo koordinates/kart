@@ -105,11 +105,11 @@ class WorkingCopy:
         """Yields extant working-copy parts. Raises an error if a corrupt or uncontactable part is encountered."""
         if self.repo.is_bare:
             return
-        for part in self._all_parts_inluding_nones():
+        for part in self._all_parts_including_nones():
             if part is not None:
                 yield part
 
-    def _all_parts_inluding_nones(self):
+    def _all_parts_including_nones(self):
         yield self.tabular
         yield self.workdir
 
@@ -354,6 +354,21 @@ class WorkingCopy:
             if p.get_spatial_filter_hash() != spatial_filter_hash:
                 return False
         return True
+
+    def parts_status(self):
+        from kart.sqlalchemy import DbType
+
+        result = {
+            "tabular": {
+                "location": self.repo.workingcopy_location,
+                "type": DbType.from_spec(self.repo.workingcopy_location).json_name,
+                "status": "ok" if self.tabular else "notFound",
+            },
+            "workdir": {
+                "status": "ok" if self.workdir else "notFound",
+            },
+        }
+        return result
 
 
 class WorkingCopyPart:

@@ -1,4 +1,3 @@
-import os
 import sys
 
 import click
@@ -100,7 +99,7 @@ def status(ctx, output_format):
         jdict["workingCopy"] = get_working_copy_status_json(repo)
 
     if output_format == "json":
-        dump_json_output({"kart.status/v1": jdict}, sys.stdout)
+        dump_json_output({"kart.status/v2": jdict}, sys.stdout)
     else:
         click.echo(status_to_text(jdict))
 
@@ -133,12 +132,10 @@ def get_working_copy_status_json(repo):
     if repo.is_bare:
         return None
 
-    # TODO: this JSON needs to be updated now that the WC has more than one part.
-
-    table_wc = repo.working_copy.tabular
-    table_wc_path = table_wc.clean_location if table_wc else None
-
-    result = {"path": table_wc_path, "changes": get_diff_status_json(repo)}
+    result = {
+        "parts": repo.working_copy.parts_status(),
+        "changes": get_diff_status_json(repo),
+    }
     return result
 
 
