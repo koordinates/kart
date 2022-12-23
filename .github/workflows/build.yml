@@ -689,17 +689,22 @@ jobs:
         run: |
           $ErrorView = 'NormalView'
           $msi = Resolve-Path -Path ".\build\dist\Kart-*.msi" | Select-Object -ExpandProperty Path
+          $sqlitePath = Resolve-Path -Path ".\build\vcpkg_installed\x64-windows\tools" | Select-Object -ExpandProperty Path
+
           Write-Host "Installing $msi ..." -ForegroundColor Green
           & "msiexec.exe" /I $msi /quiet /norestart /l* install.log | Out-Default
           if (!$?) {
             Get-Content install.log
             throw "MSI install failed"
           }
+
           Write-Host "Refreshing system path..." -ForegroundColor Green
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User") + ";" + $sqlitePath
+
           Write-Host "Checking Kart runs..." -ForegroundColor Green
           & "kart" --version  | Out-Default
           if (!$?) {throw "Smoke test Failed"}
+
           Write-Host "Running Kart E2E tests..." -ForegroundColor Green
           & "tests\scripts\e2e-1.ps1" | Out-Default
           if (!$?) {throw "E2E test Failed"}
