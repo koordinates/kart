@@ -60,16 +60,17 @@ try {
     Exec { kart checkout }
     Exec { kart switch -c 'edit-1' }
     Write-Output "$  <updating working copy> sqlite3"
-    & sqlite3 -bail -echo test.gpkg "
-      SELECT load_extension('$SPATIALITE');
-      SELECT EnableGpkgMode();
-      INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
-      SELECT COUNT(*) FROM mylayer;
-    "
-    if (! $?) {
-        throw ("sqlite3: $LastExitCode")
-    }
 
+    $script_py = @"
+def main(ctx, args):
+    with ctx.obj.repo.working_copy.tabular.session() as sess:
+        sess.execute(
+            "INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));"
+        )
+"@
+
+    $script_py | Out-File "script.py";
+    Exec { kart ext-run script.py }
     Exec { kart status }
     Exec { kart diff --crs=EPSG:3857 }
     Exec { kart commit -m 'my-commit' }
