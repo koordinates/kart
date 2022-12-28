@@ -127,6 +127,7 @@ jobs:
           if [[ '${{ runner.arch }}' == 'ARM64' ]]; then
             # necessary for vcpkg on arm64
             echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
+            echo "VCPKG_MAX_CONCURRENCY=1" >> $GITHUB_ENV
           fi
 
       - name: "setup: vcpkg"
