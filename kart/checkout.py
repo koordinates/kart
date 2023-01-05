@@ -1,3 +1,4 @@
+import functools
 import subprocess
 
 import click
@@ -188,6 +189,7 @@ def checkout(
         )
 
 
+@functools.lru_cache
 def _git_fetch_supports_flag(repo, flag):
     r = subprocess.run(
         ["git", "fetch", "?", f"--{flag}"],

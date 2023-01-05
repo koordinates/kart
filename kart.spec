@@ -94,23 +94,6 @@ if is_linux or is_darwin:
     assert dylib.exclude_list.search('libodbc.so.1')
     assert dylib.exclude_list.search('libodbc.so.2')
 
-# if is_darwin:
-#     # on macOS every dylib dependency path gets rewritten to @loader_path/...,
-#     # which isn't much use wrt unixODBC. And PyInstaller has no useful hooks.
-#     # TODO: when we upgrade PyInstaller this probably needs redoing
-#     import macholib.util
-
-#     macholib.util._orig_in_system_path = macholib.util.in_system_path
-
-#     def kart__in_system_path(filename):
-#         if re.match(r'/usr/local(/opt/unixodbc)?/lib/libodbc\.\d+\.dylib$', filename):
-#             print(f"🏎️  Treating {filename} as a system library", file=sys.stderr)
-#             return True
-#         else:
-#             return macholib.util._orig_in_system_path(filename)
-
-#     macholib.util.in_system_path = kart__in_system_path
-
 VENV_BIN_DIR = "Scripts" if is_win else "bin"
 
 # Handled specially to avoid copies
@@ -136,7 +119,7 @@ if not is_win:
 kart_version_file = os.environ.get("KART_VERSION_FILE", "kart/VERSION")
 
 # Data files — these are copied in as-is
-datas=[
+datas = [
     (kart_version_file, 'share/kart'),
     ('kart/diff-view.html', 'share/kart'),
     ('README.md', '.'),
@@ -173,7 +156,10 @@ else:
 
             if fp.stat().st_mode & stat.S_IXUSR:
                 # shell scripts are executable, but can't be codesigned on macOS
-                typ = subprocess.check_output(['file', '-b', str(fp)], text=True).split(' ', maxsplit=1)[0]
+                proc_output = subprocess.check_output(
+                    ['file', '-b', str(fp)], text=True
+                )
+                typ = proc_output.split(' ', maxsplit=1)[0]
                 if typ in ('ELF', 'Mach-O'):
                     binaries.append((str(fp), dr))
                     continue
@@ -221,7 +207,9 @@ pyi_analysis = Analysis(
 )
 
 if is_linux or is_darwin:
-    pyi_analysis.exclude_system_libraries(list_of_exceptions=['libffi*', 'libreadline*'])
+    pyi_analysis.exclude_system_libraries(
+        list_of_exceptions=['libffi*', 'libreadline*']
+    )
 
 pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
@@ -245,7 +233,7 @@ pyi_exe = EXE(
     console=True,
     icon=exe_icon,
     version=os.path.join(workpath, 'kart_version_info.rc'),
-    entitlements_file="platforms/macos/entitlements.plist"
+    entitlements_file="platforms/macos/entitlements.plist",
 )
 pyi_coll = COLLECT(
     pyi_exe,
@@ -293,4 +281,6 @@ if symlinks:
         elif str(st) == st.name:  # git-foo -> git-bar
             (tp / sl.name).symlink_to(st.name)
         else:
-            raise ValueError("Found symlink I don't know how to handle: source={sl} -> {st}; dest={td}/{sl.name} -> ???")
+            raise ValueError(
+                "Found symlink I don't know how to handle: source={sl} -> {st}; dest={td}/{sl.name} -> ???"
+            )
