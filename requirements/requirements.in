@@ -1,11 +1,14 @@
 certifi
 Click~=8.1
-cryptography
+msgpack~=0.6.1
+pymysql
+Pygments
+sqlalchemy
+shellingham
 docutils<0.18
 msgpack~=0.6.1
 Pygments
 pymysql
-pyodbc ; platform_system!="Linux"
 rst2txt
 shellingham
 sqlalchemy
@@ -17,10 +20,20 @@ tqdm
 jsonschema<4.2
 
 
-# these are only here for dependencies
+# these are only here for dependencies, we build them in vcpkg-vendor,
+# and they're removed by CMake from the final requirements.txt files.
+# versions come from vcpkg-vendor/CMakeLists.txt
+cffi==1.15.1
+cryptography==38.0.3
+gdal==3.5.2
 psycopg2==2.8.5
 pygit2==1.3.0
+pysqlite3==0.4.5
+pyodbc==4.0.32
+
+# SQLAlchemy on Windows
+greenlet; os_name!="posix"
 
 # workaround weird import error with pyinstaller
 # https://github.com/pypa/setuptools/issues/1963#issuecomment-656811086
-setuptools~=49.1.1
+#setuptools~=49.1.1

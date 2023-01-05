@@ -833,6 +833,7 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     # empty dir
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
+    assert "templates not found" not in r.stderr
     assert (repo_path / ".kart" / "HEAD").exists()
 
     # makes dir tree
@@ -945,8 +946,9 @@ def test_init_import_home_resolve(
     with data_archive("gpkg-points") as source_path:
         with chdir(repo_path):
             monkeypatch.setenv("HOME", str(source_path))
+            monkeypatch.setenv("USERPROFILE", str(source_path))
 
-            # make sure we have a .gitconfig file in HOME,
+            # make sure we have a .gitconfig file in $HOME,
             # otherwise kart can't find the user information for the commit
             orig_home = git_user_config[2]
             shutil.copy2(orig_home / ".gitconfig", source_path)

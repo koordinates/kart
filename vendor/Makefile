@@ -25,7 +25,7 @@ vendor-Darwin-archive = dist/vendor-Darwin.tar.gz
 ifeq ($(PLATFORM),Darwin)
 	LIBINFIX = cpython-37m-darwin
 	LIBSUFFIX = dylib
-	WHEELTOOL = delocate==0.8.2
+	WHEELTOOL = delocate==0.10.3
 	PY3 ?= $(realpath /Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7)
 	WHEELID = macosx_*_x86_64
 	export LDFLAGS += -Wl,-rpath,'@loader_path'

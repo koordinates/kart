@@ -1,4 +1,5 @@
 import subprocess
+from kart.cli_util import tool_environment
 import pytest
 
 
@@ -7,7 +8,7 @@ import pytest
 @pytest.fixture(scope="session")
 def requires_pdal():
     try:
-        r = subprocess.run(["pdal", "--version"])
+        r = subprocess.run(["pdal", "--version"], env=tool_environment())
         has_pdal = r.returncode == 0
     except OSError:
         has_pdal = False
@@ -20,7 +21,7 @@ def requires_pdal():
 @pytest.fixture(scope="session")
 def requires_git_lfs():
     try:
-        r = subprocess.run(["git", "lfs", "--version"])
+        r = subprocess.run(["git", "lfs", "--version"], env=tool_environment())
         has_git_lfs = r.returncode == 0
     except OSError:
         has_git_lfs = False

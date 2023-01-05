@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+import kart
 from .base_diff_writer import BaseDiffWriter
 from .json_diff_writers import GeojsonDiffWriter
 from .output_util import ExtendedJsonEncoder, resolve_output_path
@@ -27,7 +28,7 @@ class HtmlDiffWriter(BaseDiffWriter):
 
     def write_diff(self):
         with open(
-            Path(__file__).resolve().with_name("diff-view.html"), "r", encoding="utf8"
+            Path(kart.package_data_path) / "diff-view.html", "r", encoding="utf8"
         ) as ft:
             template = string.Template(ft.read())
 

@@ -1,0 +1,219 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "ci-base",
+            "hidden": true,
+            "binaryDir": "build",
+            "cacheVariables": {
+                "USE_VCPKG": "ON",
+                "CMAKE_BUILD_TYPE": "Release",
+                "KART_VERSION": "$env{KART_VERSION}"
+            },
+            "environment": {
+                "CI": "true"
+            }
+        },
+        {
+            "name": "ci-linux",
+            "displayName": "CI: Linux",
+            "inherits": "ci-base",
+            "generator": "Unix Makefiles",
+            "environment": {
+                "CC": "gcc",
+                "CXX": "g++"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "CI: macOS",
+            "inherits": "ci-base",
+            "generator": "Unix Makefiles",
+            "cacheVariables": {
+                "MACOS_SIGN_BUNDLE": "$env{MACOS_SIGN_BUNDLE}",
+                "MACOS_SIGN_PKG": "$env{MACOS_SIGN_PKG}",
+                "MACOS_NOTARIZE": "$env{MACOS_NOTARIZE}"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI: Windows",
+            "inherits": "ci-base",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "WIN_SIGN_BUNDLE": "$env{WIN_SIGN_BUNDLE}",
+                "WIN_SIGN_INSTALLER": "$env{WIN_SIGN_INSTALLER}"
+            },
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "ci-linux",
+            "displayName": "CI: Linux",
+            "configurePreset": "ci-linux"
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "CI: macOS",
+            "configurePreset": "ci-macos"
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI: Windows",
+            "configurePreset": "ci-windows"
+        },
+        {
+            "name": "ci-bundle-linux",
+            "displayName": "CI bundle assembly: Linux",
+            "configurePreset": "ci-linux",
+            "targets": ["bundle"]
+        },
+        {
+            "name": "ci-bundle-macos",
+            "displayName": "CI bundle assembly: macOS",
+            "configurePreset": "ci-macos",
+            "targets": ["bundle"]
+        },
+        {
+            "name": "ci-bundle-windows",
+            "displayName": "CI bundle assembly: Windows",
+            "configurePreset": "ci-windows",
+            "targets": ["bundle"]
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "ci-base",
+            "hidden": true,
+            "output": {
+                "verbosity": "verbose"
+            },
+            "filter": {
+                "include": {
+                    "label": "pytest"
+                }
+            },
+            "environment": {
+                "CI": "true",
+                "KART_EXPECT_PDAL": "1",
+                "KART_EXPECT_GIT_LFS": "1"
+            }
+        },
+        {
+            "name": "ci-linux",
+            "displayName": "CI: Linux",
+            "inherits": "ci-base",
+            "configurePreset": "ci-linux"
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "CI: macOS",
+            "inherits": "ci-base",
+            "configurePreset": "ci-macos",
+            "environment": {
+                "KART_EXPECT_MSSQLDRIVER": "0"
+            }
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI: Windows",
+            "inherits": "ci-base",
+            "configurePreset": "ci-windows",
+            "environment": {
+                "KART_EXPECT_GITSPATIALFILTER": "0"
+            }
+        },
+        {
+            "name": "ci-e2e-base",
+            "hidden": true,
+            "output": {
+                "verbosity": "verbose"
+            },
+            "filter": {
+                "include": {
+                    "label": "e2e"
+                }
+            },
+            "environment": {
+                "CI": "true"
+            }
+        },
+        {
+            "name": "ci-e2e-linux",
+            "displayName": "CI E2E: Linux",
+            "inherits": "ci-e2e-base",
+            "configurePreset": "ci-linux"
+        },
+        {
+            "name": "ci-e2e-macos",
+            "displayName": "CI E2E: macOS",
+            "inherits": "ci-e2e-base",
+            "configurePreset": "ci-macos"
+        },
+        {
+            "name": "ci-e2e-windows",
+            "displayName": "CI E2E: Windows",
+            "inherits": "ci-e2e-base",
+            "configurePreset": "ci-windows"
+        }
+    ],
+    "packagePresets": [
+        {
+            "name": "ci-base",
+            "hidden": true,
+            "output": {
+                "verbose": true
+            },
+            "environment": {
+                "CI": "true"
+            },
+            "packageDirectory": "dist",
+            "packageVersion": "$env{KART_VERSION}"
+        },
+        {
+            "name": "ci-linux",
+            "displayName": "CI Packages: Linux",
+            "inherits": "ci-base",
+            "configurePreset": "ci-linux",
+            "generators": ["TGZ", "DEB", "RPM"]
+        },
+        {
+            "name": "ci-macos",
+            "displayName": "CI Packages: macOS",
+            "inherits": "ci-base",
+            "configurePreset": "ci-macos",
+            "generators": ["productbuild", "ZIP"]
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI Packages: Windows",
+            "inherits": "ci-base",
+            "configurePreset": "ci-windows",
+            "generators": ["WIX", "ZIP"]
+        }
+    ]
+}

@@ -17,6 +17,8 @@ from datetime import datetime
 from pathlib import Path
 import pytest
 
+# this sets up a bunch of package/lib/venv-related stuff
+import kart
 
 import click
 from click.testing import CliRunner
@@ -47,19 +49,23 @@ def pytest_addoption(parser):
     # disabled completely via -p no:xdist)
     # However, there's no way to *remove* an option that's in pytest.ini's addopts.
     xdist_parser = next((g for g in parser._groups if g.name == "xdist"), None)
-    if xdist_parser and any(
-        o for o in xdist_parser.options if "--numprocesses" in o._long_opts
-    ):
-        # xdist is enabled
-        pass
-    else:
-        # So here we just define the option so it parses, and then ignore it.
-        parser.addoption(
-            "--numprocesses",
-            action="store",
-            default=0,
-            help=argparse.SUPPRESS,
-        )
+    if xdist_parser:
+        if not any(o for o in xdist_parser.options if "--numprocesses" in o._long_opts):
+            # So here we just define the option so it parses, and then ignore it.
+            parser.addoption(
+                "--numprocesses",
+                action="store",
+                default=0,
+                help=argparse.SUPPRESS,
+            )
+        if not any(o for o in xdist_parser.options if "--dist" in o._long_opts):
+            # do the same thing for --dist
+            parser.addoption(
+                "--dist",
+                action="store",
+                default='no',
+                help=argparse.SUPPRESS,
+            )
 
     parser.addoption(
         "--preserve-data",

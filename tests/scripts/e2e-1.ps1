@@ -43,9 +43,8 @@ If ((Get-Item $KART_PATH).Directory.Name -eq 'Scripts') {
 }
 Write-Output "Kart is at: ${KART_PATH} (Prefix: ${KART_PREFIX})"
 
-# Spatialite / SQLite
+# Spatialite
 $SPATIALITE=("${KART_PREFIX}\mod_spatialite" -replace '\\', '/').ToLower()
-$SQLITE=(Join-Path $KART_PREFIX 'sqlite3.exe')
 
 New-Item -ItemType Directory -Path "${TMP_PATH}\test"
 Push-Location "${TMP_PATH}\test"
@@ -61,16 +60,17 @@ try {
     Exec { kart checkout }
     Exec { kart switch -c 'edit-1' }
     Write-Output "$  <updating working copy> sqlite3"
-    & $SQLITE -bail -echo test.gpkg "
-      SELECT load_extension('$SPATIALITE');
-      SELECT EnableGpkgMode();
-      INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
-      SELECT COUNT(*) FROM mylayer;
-    "
-    if (! $?) {
-        throw ("sqlite3: $LastExitCode")
-    }
 
+    $script_py = @"
+def main(ctx, args):
+    with ctx.obj.repo.working_copy.tabular.session() as sess:
+        sess.execute(
+            "INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));"
+        )
+"@
+
+    $script_py | Out-File "script.py";
+    Exec { kart ext-run script.py }
     Exec { kart status }
     Exec { kart diff --crs=EPSG:3857 }
     Exec { kart commit -m 'my-commit' }

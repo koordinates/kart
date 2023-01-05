@@ -18,7 +18,8 @@ Optional Arguments:
         Path to requirements.txt list to install with pip
     REQUIREMENTS (list of strings):
         Any additional requirements to install with pip that aren't part of
-        requirements.txt, e.g. local packages
+        requirements.txt, e.g. local packages. If you need to use additional
+        specifiers, use file(WRITE) to create a REQUIREMENTS_TXT file.
     SOURCES (list of string):
         Any sources that local packages depend on.
     PREFIX (string):
@@ -27,8 +28,6 @@ Optional Arguments:
     ENV_NAME (string)
         The name of the virtual environment. Unless otherwise specified, this
         is the same as TARGET.
-    NO_UPGRADE_PIP (bool)
-        Don't upgrade pip inside the virtualenv to the latest.
 
 
 Output Variables TARGET:
@@ -45,13 +44,14 @@ Output Variables TARGET:
         Stores the command to use to run pip in the virtualenv.
     ${TARGET}_VENV_DIR:
         Stores the root path of the virtual environment.
+    ${TARGET}_PURELIB_DIR:
+        Stores the site-packages path of the virtual environment.
 
 #]=============================================================================]
 
 # Create a Python virtual environment with specific requirements.
 function(CreateVirtualEnvironment TARGET)
   # cmake-lint: disable=R0915
-  set(SINGLE_ARGS NO_UPGRADE_PIP)
   set(KEYWORD_ARGS REQUIREMENTS_TXT PREFIX ENV_NAME)
   set(MULTI_ARGS SOURCES REQUIREMENTS)
 
@@ -61,7 +61,7 @@ function(CreateVirtualEnvironment TARGET)
     set(ARG_ENV_NAME ${TARGET})
   endif()
 
-  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  find_package(Python3 REQUIRED COMPONENTS Development Interpreter)
 
   if(ARG_PREFIX)
     if(IS_ABSOLUTE ${ARG_PREFIX})
@@ -75,25 +75,24 @@ function(CreateVirtualEnvironment TARGET)
 
   if(WIN32)
     set(BIN_DIR ${VENV}/Scripts)
-    set(EXEC ${CMAKE_COMMAND} -E env "PATH=${BIN_DIR};$ENV{PATH}")
-    set(PYTHON_EXE ${BIN_DIR}/python.exe)
-    set(PYTHON ${EXEC} ${PYTHON_EXE})
-    set(PIP ${EXEC} ${BIN_DIR}/pip)
   else()
     set(BIN_DIR ${VENV}/bin)
-    set(EXEC ${CMAKE_COMMAND} -E env "PATH=${BIN_DIR}:$ENV{PATH}")
-    set(PYTHON_EXE ${BIN_DIR}/python)
-    set(PYTHON ${EXEC} ${PYTHON_EXE})
-    set(PIP ${EXEC} ${BIN_DIR}/pip)
   endif()
 
+  set(PURELIB_DIR ${VENV}/${Python3_PURELIB_REL_PATH})
+
+  set(EXEC ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${BIN_DIR})
+  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Force compilation with the expected deployment target and architecture
+    list(APPEND EXEC "MACOSX_DEPLOYMENT_TARGET=${Python3_MACOSX_DEPLOYMENT_TARGET}")
+    list(APPEND EXEC "ARCHFLAGS=-arch ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+  endif()
+
+  set(PYTHON_EXE "${BIN_DIR}/python${CMAKE_EXECUTABLE_SUFFIX}")
+  set(PYTHON ${EXEC} ${PYTHON_EXE})
+
+  set(PIP ${PYTHON} -m pip -v)
   set(PIP_INSTALL ${PIP} install --isolated --quiet --disable-pip-version-check)
-
-  if(ARG_NO_UPGRADE_PIP)
-    set(PIP_UPGRADE "")
-  else()
-    set(PIP_UPGRADE ${PIP_INSTALL} --upgrade pip)
-  endif()
 
   if(ARG_REQUIREMENTS_TXT)
     set(REQUIREMENTS -r ${ARG_REQUIREMENTS_TXT})
@@ -111,12 +110,13 @@ function(CreateVirtualEnvironment TARGET)
   add_custom_command(
     OUTPUT ${CFG_FILE}
     COMMAND ${Python3_EXECUTABLE} -m venv --clear ${VENV}
+    DEPENDS Python3::Python
     COMMENT "${ARG_ENV_NAME}: creating virtualenv at ${VENV}...")
   set(OUTPUT_FILE ${VENV}/.requirements)
   add_custom_command(
     OUTPUT ${OUTPUT_FILE}
     DEPENDS ${CFG_FILE} ${ARG_SOURCES} ${ARG_REQUIREMENTS_TXT}
-    COMMAND ${PIP_UPGRADE}
+    COMMAND ${PIP_INSTALL} --upgrade pip setuptools
     COMMAND ${DEPS_INSTALL}
     COMMAND ${PIP} freeze > "${OUTPUT_FILE}"
     COMMENT "${ARG_ENV_NAME}: installing requirements...")
@@ -143,5 +143,8 @@ function(CreateVirtualEnvironment TARGET)
       PARENT_SCOPE)
   set(${TARGET}_VENV_DIR
       ${VENV_DIR}
+      PARENT_SCOPE)
+  set(${TARGET}_PURELIB_DIR
+      ${PURELIB_DIR}
       PARENT_SCOPE)
 endfunction()

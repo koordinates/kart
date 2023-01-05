@@ -41,7 +41,7 @@ def get_exact_diff_blob_count(repo, tree1, tree2):
     count = sum(1 for x in p.stdout)
     retcode = p.wait()
     if retcode != 0:
-        raise SubprocessError("Error calling git diff", retcode)
+        raise SubprocessError("Error calling git diff", exit_code=retcode)
     return count
 
 

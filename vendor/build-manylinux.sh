@@ -5,7 +5,7 @@ OUTPUT=$1
 shift
 
 yum install -y epel-release
-
+yum update -y ca-certificates
 yum install -y ccache openssl-devel gettext wget unixODBC-devel expat-devel
 
 export PATH=/opt/python/cp37-cp37m-shared/bin:${PATH}

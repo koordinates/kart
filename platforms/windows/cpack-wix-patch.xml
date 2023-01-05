@@ -1,0 +1,19 @@
+<CPackWiXPatch>
+  <CPackWiXFragment Id="CM_DP_bundle.share"> <!-- cmake doesn't let you use TARGETDIR/INSTALL_ROOT -->
+    <Component Id="KART_addToPath" KeyPath="yes" Guid="{2a47b421-e16c-479d-b1cd-435ccde79585}">
+      <Environment Id="KART_envPath" Name="PATH" Action="set" Part="last" Permanent="no" Value="[INSTALL_ROOT]"/>
+    </Component>
+  </CPackWiXFragment>
+
+  <CPackWiXFragment Id="#PRODUCTFEATURE">
+    <Feature Id="addToPathFeature" Title="Add to PATH" Level="1"
+             Description="Add Kart to the PATH so you can run it easily from the command prompt.">
+      <ComponentRef Id="KART_addToPath" />
+    </Feature>
+  </CPackWiXFragment>
+
+  <CPackWiXFragment Id="#PRODUCT">
+    <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
+      Value="To get started, run `kart` from your command prompt. An introductory tutorial is available at https://kartproject.org" />
+  </CPackWiXFragment>
+</CPackWiXPatch>

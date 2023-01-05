@@ -1,5 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+#
+# Run this via cmake --build build --target bundle
+#
+
 # pyinstaller injects globals into here
 # https://pyinstaller.readthedocs.io/en/stable/spec-files.html#globals-available-to-the-spec-file
 # flake8: noqa E13
@@ -8,17 +12,33 @@ import os
 import re
 import shutil
 import subprocess
+import stat
 import sys
 from pathlib import Path
 
 from PyInstaller.compat import is_win, is_darwin, is_linux
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 from PyInstaller.depend import dylib
 from PyInstaller.utils.hooks import collect_data_files
 
+BINARY_DIR = os.environ.get("BINARY_DIR", "build")
+USE_CLI_HELPER = os.environ.get("USE_CLI_HELPER", "ON") == "ON"
 
-with open(os.path.join('kart', 'VERSION')) as version_file:
-    kart_version = version_file.read().strip()
+if is_win:
+    lib_suffix_glob = 'dll'
+    exe_suffix = '.exe'
+elif is_darwin:
+    lib_suffix_glob = 'dylib'
+    exe_suffix = ''
+elif is_linux:
+    lib_suffix_glob = 'so*'
+    exe_suffix = ''
+
+if 'KART_VERSION' in os.environ:
+    kart_version = os.environ["KART_VERSION"]
+else:
+    with open(os.path.join('kart', 'VERSION')) as version_file:
+        kart_version = version_file.read().strip()
 
 if is_win:
     with open(os.path.join('platforms', 'windows', 'version_info.rc')) as vr_template:
@@ -74,22 +94,77 @@ if is_linux or is_darwin:
     assert dylib.exclude_list.search('libodbc.so.1')
     assert dylib.exclude_list.search('libodbc.so.2')
 
-if is_darwin:
-    # on macOS every dylib dependency path gets rewritten to @loader_path/...,
-    # which isn't much use wrt unixODBC. And PyInstaller has no useful hooks.
-    # TODO: when we upgrade PyInstaller this probably needs redoing
-    import macholib.util
+VENV_BIN_DIR = "Scripts" if is_win else "bin"
 
-    macholib.util._orig_in_system_path = macholib.util.in_system_path
+# Handled specially to avoid copies
+symlinks = []
 
-    def kart__in_system_path(filename):
-        if re.match(r'/usr/local(/opt/unixodbc)?/lib/libodbc\.\d+\.dylib$', filename):
-            print(f"🏎️  Treating {filename} as a system library", file=sys.stderr)
-            return True
-        else:
-            return macholib.util._orig_in_system_path(filename)
+# Binaries: these are signed, and put in the correct place on macOS
+binaries = [
+    (f'{BINARY_DIR}/venv/lib/*.{lib_suffix_glob}', '.'),
+    (f'{BINARY_DIR}/venv/lib/mod_spatialite.{lib_suffix_glob}', '.'),
+    (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs{exe_suffix}', '.'),
+    (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/pdal{exe_suffix}', '.'),
+]
+if not is_win:
+    binaries += [
+        (f'{BINARY_DIR}/venv/bin/git', '.'),
+    ]
+    if USE_CLI_HELPER:
+        binaries += [
+            (f'{BINARY_DIR}/cli_helper/kart', '.'),
+        ]
 
-    macholib.util.in_system_path = kart__in_system_path
+
+kart_version_file = os.environ.get("KART_VERSION_FILE", "kart/VERSION")
+
+# Data files — these are copied in as-is
+datas = [
+    (kart_version_file, 'share/kart'),
+    ('kart/diff-view.html', 'share/kart'),
+    ('README.md', '.'),
+    ('COPYING', '.'),
+    (f'{BINARY_DIR}/venv/share/gdal', 'share/gdal'),
+    (f'{BINARY_DIR}/venv/share/proj', 'share/proj'),
+    (f'{BINARY_DIR}/venv/pyodbc.pyi', '.'),
+    (f'{BINARY_DIR}/venv/help', 'help'),
+]
+
+if is_win:
+    # entire MinGit folder
+    datas += [
+        (f'{BINARY_DIR}/venv/git', 'git'),
+    ]
+else:
+    # find git binaries
+    datas += [
+        (f'{BINARY_DIR}/venv/share/git-core', 'share/git-core'),
+    ]
+
+    # add elf/macho binaries from git to binaries, symlinks to symlinks,
+    # and the rest to datas
+    git_libexec_core_root = f'{BINARY_DIR}/venv/libexec/git-core'
+    for r, dl, fl in os.walk(git_libexec_core_root):
+        for fn in fl:
+            fp = Path(r) / fn
+            rr = Path(r).relative_to(git_libexec_core_root)
+            dr = Path('libexec') / 'git-core' / rr
+            if fp.is_symlink():
+                fp.resolve(strict=True)
+                symlinks.append((str(fp), dr))
+                continue
+
+            if fp.stat().st_mode & stat.S_IXUSR:
+                # shell scripts are executable, but can't be codesigned on macOS
+                proc_output = subprocess.check_output(
+                    ['file', '-b', str(fp)], text=True
+                )
+                typ = proc_output.split(' ', maxsplit=1)[0]
+                if typ in ('ELF', 'Mach-O'):
+                    binaries.append((str(fp), dr))
+                    continue
+
+            datas.append((str(fp), dr))
 
 
 pyi_analysis = Analysis(
@@ -97,20 +172,18 @@ pyi_analysis = Analysis(
     pathex=[],
     # only set kart_cli_helper as a binary for Linux or MacOS, need to
     # do here as modifying after the Analysis instance is created fails
-    binaries=[
-        binary for binary in
-        (
-            ('vendor/dist/env/lib/*', '.'),
-            ('cli_helper/kart_cli_helper', '.')
-        ) if is_linux or is_darwin or is_win and binary[0] != "cli_helper/kart_cli_helper"
-    ],
-    datas=[
-        ('kart/VERSION', 'kart'),
-        ('kart/diff-view.html', 'kart'),
-        ('README.md', '.'),
-        ('COPYING', '.'),
-    ],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=[
+        # TODO: improve this somehow
+        *collect_submodules('kart'),
+        *collect_submodules('kart.annotations'),
+        *collect_submodules('kart.lfs_commands'),
+        *collect_submodules('kart.point_cloud'),
+        *collect_submodules('kart.sqlalchemy'),
+        *collect_submodules('kart.sqlalchemy.adapter'),
+        *collect_submodules('kart.tabular'),
+        *collect_submodules('kart.upgrade'),
         # via pygit2
         '_cffi_backend',
         # via a cython module ???
@@ -119,15 +192,13 @@ pyi_analysis = Analysis(
         *collect_submodules("logging"),
         'shellingham.posix',
         'shellingham.nt',
-        *collect_submodules('kart'),
         *collect_submodules('sqlalchemy'),
     ],
-    hookspath=[
-        'platforms/pyi-hooks',
-    ],
+    hookspath=[],
     runtime_hooks=[],
     excludes=[
         'ipdb',
+        "_kart_env",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -136,31 +207,18 @@ pyi_analysis = Analysis(
 )
 
 if is_linux or is_darwin:
-    pyi_analysis.exclude_system_libraries(list_of_exceptions=['libffi*', 'libreadline*'])
-
-if is_win:
-    pyi_analysis.datas += Tree('vendor/dist/git', prefix='git')
-    # GDAL/osgeo hook doesn't include Proj
-    pyi_analysis.datas += Tree(
-        'venv/Lib/site-packages/osgeo/data/proj',
-        prefix=os.path.join('osgeo', 'data', 'proj'),
+    pyi_analysis.exclude_system_libraries(
+        list_of_exceptions=['libffi*', 'libreadline*']
     )
-else:
-    pyi_analysis.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
-    libexec_root = 'vendor/dist/env/libexec'
-    pyi_analysis.datas += Tree('vendor/dist/env/share', prefix='share')
-
-if is_linux:
-    pyi_analysis.binaries += [('libcrypt.so.2', '/usr/local/lib/libcrypt.so.2', 'BINARY')]
 
 pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
 if is_win:
-    exe_name = 'kart'
     exe_icon = 'platforms/windows/kart.ico'
+    exe_name = 'kart'
 else:
-    exe_name = 'kart_cli'
     exe_icon = 'platforms/macos/kart.icns'
+    exe_name = 'kart_cli' if USE_CLI_HELPER else 'kart'
 
 pyi_exe = EXE(
     pyi_pyz,
@@ -175,6 +233,7 @@ pyi_exe = EXE(
     console=True,
     icon=exe_icon,
     version=os.path.join(workpath, 'kart_version_info.rc'),
+    entitlements_file="platforms/macos/entitlements.plist",
 )
 pyi_coll = COLLECT(
     pyi_exe,
@@ -198,99 +257,30 @@ pyi_app = BUNDLE(
     },
 )
 
-# PyInstaller by defaults dereferences symlinks in data directories
-# Git has about 200 so it's a big size loss
-# Fix it
-if is_darwin:
+# Ideally we'd do this before BUNDLE so it could sign it on macOS, but we
+# can do that ourselves later.
+if symlinks:
+    if is_darwin:
+        dist_bin_root = Path(DISTPATH) / 'Kart.app' / 'Contents' / 'MacOS'
+    elif is_linux:
+        dist_bin_root = Path(DISTPATH) / 'kart'
+        print("⚠️⚠️⚠️⚠️ 'symlinks' haven't been tested on Linux")
+    else:
+        raise RuntimeError("Symlinks don't work well on Windows!")
 
-    # fix symlinks/binaries in libexec/git-core/
-    dist_bin_root = os.path.join(DISTPATH, 'Kart.app', 'Contents', 'MacOS')
-    dist_resources_root = os.path.join(DISTPATH, 'Kart.app', 'Contents', 'Resources')
-    dist_libexec_root = os.path.join(dist_resources_root, 'libexec')
+    for sl, td in symlinks:
+        sl, td = Path(sl), Path(td)
+        tp = dist_bin_root / td
 
-    os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
-    os.symlink('../Resources/libexec', os.path.join(dist_bin_root, 'libexec'))
-    os.symlink('../../../MacOS/git', os.path.join(dist_libexec_root, 'git-core', 'git'))
+        st = sl.readlink()
 
-    for (dir_, dirs, files) in os.walk(libexec_root):
-        reldir = os.path.relpath(dir_, libexec_root)
-        for f in files:
-            fpath = os.path.join(dir_, f)
-            relpath = os.path.join(reldir, f)
-            if os.path.islink(fpath):
-                link_path = os.readlink(fpath)
-                if f == 'git':
-                    continue  # we already created it
-                if os.path.split(link_path)[1] == 'git':
-                    # this symlinks to git: rewrite it
-                    os.symlink(
-                        os.path.split(link_path)[1],
-                        os.path.join(dist_libexec_root, relpath),
-                    )
-                    continue
-                if re.search(r'\.dylib$', f):
-                    os.symlink(
-                        os.path.join('../../../MacOS', os.path.split(link_path)[1]),
-                        os.path.join(dist_libexec_root, relpath),
-                    )
-                    continue
-                if not os.path.exists(fpath) and not os.path.exists(
-                    os.path.join(dist_bin_root, link_path)
-                ):
-                    print(
-                        f"🏎️  ignoring broken link {relpath} -> {link_path}",
-                        file=sys.stderr,
-                    )
-                    # ignore broken symlinks (git-csvserver/git-shell)
-                    continue
-            elif subprocess.check_output(['file', '-b', fpath], text=True).startswith(
-                'Mach-O'
-            ):
-                print(f"🏎️  relocating {relpath} to MacOS/", file=sys.stderr)
-                shutil.move(fpath, dist_bin_root)
-                os.symlink(
-                    os.path.join('../../../MacOS', f),
-                    os.path.join(dist_libexec_root, relpath),
-                )
-                continue
-
-            os.makedirs(os.path.join(dist_libexec_root, reldir), exist_ok=True)
-            # copy anything else (keeps symlinks too)
-            shutil.copy(
-                fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False
-            )
-
-elif is_linux:
-    # fix symlinks/binaries in libexec/git-core/
-    dist_libexec_root = os.path.join(DISTPATH, 'kart', 'libexec')
-
-    dist_bin_root = os.path.join(DISTPATH, 'kart')
-    os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
-    for (dir_, dirs, files) in os.walk(libexec_root):
-        reldir = os.path.relpath(dir_, libexec_root)
-        for f in files:
-            fpath = os.path.join(dir_, f)
-            relpath = os.path.join(reldir, f)
-            if os.path.islink(fpath):
-                link_path = os.readlink(fpath)
-                if link_path == "../../bin/git":
-                    os.symlink(
-                        os.path.join('../../git'),
-                        os.path.join(dist_libexec_root, relpath),
-                    )
-                    continue
-                if not os.path.exists(fpath) and not os.path.exists(
-                    os.path.join(dist_bin_root, link_path)
-                ):
-                    print(
-                        f"🏎️  ignoring broken link {relpath} -> {link_path}",
-                        file=sys.stderr,
-                    )
-                    # ignore broken symlinks (git-csvserver/git-shell)
-                    continue
-
-            os.makedirs(os.path.join(dist_libexec_root, reldir), exist_ok=True)
-            # copy anything else (keeps symlinks too)
-            shutil.copy(
-                fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False
+        if sl.name == "git":  # git itself
+            (tp / sl.name).symlink_to("../../git")
+        elif str(st) == "../../bin/git":  # git-foo -> git
+            (tp / sl.name).symlink_to("../../git")
+        elif str(st) == st.name:  # git-foo -> git-bar
+            (tp / sl.name).symlink_to(st.name)
+        else:
+            raise ValueError(
+                "Found symlink I don't know how to handle: source={sl} -> {st}; dest={td}/{sl.name} -> ???"
             )

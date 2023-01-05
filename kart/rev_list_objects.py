@@ -1,7 +1,6 @@
 # Utility for scanning through all the objects in the commit graph, or in a particular part of the commit graph.
 # For example, reachable from commits A, B, C, but not from D, E, F (which have already been taken care of).
 
-import os
 import re
 import subprocess
 
@@ -58,7 +57,7 @@ def rev_list_object_oids(repo, start_commits, stop_commits, pathspecs):
             encoding="utf8",
             env=tool_environment(),
         ) as p:
-            p.stdin.write(os.linesep.join(["--", *pathspecs]))
+            p.stdin.write("\n".join(["--", *pathspecs]))
             p.stdin.close()
             yield from _parse_revlist_output(repo, p.stdout)
     except subprocess.CalledProcessError as e:

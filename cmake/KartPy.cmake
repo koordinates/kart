@@ -24,36 +24,49 @@ cmake_path(SET VENV_DOCS ${CMAKE_CURRENT_BINARY_DIR}/venv/help)
 cmake_path(NATIVE_PATH VENV_PYTEST VENV_PYTEST)
 
 add_custom_command(
-  OUTPUT venv.stamp
+  OUTPUT venv/.venv.stamp
   BYPRODUCTS venv
   COMMAND ${Python3_EXECUTABLE} -m venv --clear venv
-  COMMAND ${VENV_PIP_INSTALL} --quiet --upgrade pip
-  COMMAND ${CMAKE_COMMAND} -E touch venv.stamp
+  COMMAND ${VENV_PIP_INSTALL} --quiet --upgrade pip setuptools
+  COMMAND ${CMAKE_COMMAND} -E touch venv/.venv.stamp
   COMMENT "Creating Kart virtualenv...")
 
 add_custom_command(
-  OUTPUT vendor.stamp
+  OUTPUT venv/.vendor.stamp
   BYPRODUCTS vendor-tmp
-  DEPENDS venv.stamp ${VENDOR_TARGET}
+  DEPENDS venv/.venv.stamp ${VENDOR_ARCHIVE} ${VENDOR_TARGET}
+          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/extract_vendor_archive.cmake
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND} "-DVENDOR_ARCHIVE=${VENDOR_ARCHIVE}" -P
           ${CMAKE_CURRENT_SOURCE_DIR}/cmake/extract_vendor_archive.cmake
-  COMMAND ${CMAKE_COMMAND} -E touch vendor.stamp
+  COMMAND ${CMAKE_COMMAND} -E touch venv/.vendor.stamp
   COMMENT "Installing vendor dependencies...")
 
-# TODO: selectively install these
-add_custom_command(
-  OUTPUT pydeps.stamp
-  DEPENDS vendor.stamp requirements.txt requirements/dev.txt requirements/test.txt
-  COMMAND ${VENV_PIP_INSTALL} --no-deps -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt"
-  COMMAND ${VENV_PIP_INSTALL} --no-deps -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements/test.txt"
-  COMMAND ${VENV_PIP_INSTALL} --no-deps -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements/dev.txt"
-  COMMAND ${CMAKE_COMMAND} -E touch pydeps.stamp
+add_subdirectory("requirements")
+
+foreach(reqFile reqDep IN ZIP_LISTS REQUIREMENTS_FILES REQUIREMENTS_DEPS)
+  set(reqStamp "venv/.py-${reqFile}.stamp")
+  if(reqDep)
+    set(reqDep "venv/.py-${reqDep}.stamp")
+  endif()
+
+  add_custom_command(
+    OUTPUT ${reqStamp}
+    DEPENDS venv/.vendor.stamp requirements/${reqFile} ${reqDep}
+    COMMAND ${VENV_PIP_INSTALL} --no-deps -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements/${reqFile}"
+    COMMAND ${CMAKE_COMMAND} -E touch ${reqStamp}
+    COMMENT "Installing Python dependencies: ${reqFile}")
+
+  list(APPEND pydeps ${reqStamp})
+endforeach()
+add_custom_target(
+  py-dependencies
+  DEPENDS venv/.vendor.stamp ${pydeps}
   COMMENT "Installing Python dependencies...")
 
 add_custom_command(
   OUTPUT ${KART_EXE_VENV} ${KART_EXE_BUILD}
-  DEPENDS pydeps.stamp setup.py
+  DEPENDS py-dependencies setup.py
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${VENV_PIP_INSTALL} --force-reinstall --no-deps --editable "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMAND ${CMAKE_COMMAND} "-DTARGET:FILEPATH=${KART_EXE_VENV}" "-DLINK_NAME:FILEPATH=kart" -P

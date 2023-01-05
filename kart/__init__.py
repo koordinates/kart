@@ -5,8 +5,11 @@ __all__ = (
     "is_windows",
     "spatialite_path",
     "prefix",
+    "git_bin_path",
+    "package_data_path",
 )
 
+import importlib
 import logging
 import os
 import platform
@@ -37,11 +40,22 @@ else:
 # sys.prefix is correctly set by virtualenv (development) & PyInstaller (release)
 prefix = os.path.abspath(sys.prefix)
 
+if is_frozen:
+    package_data_path = os.path.join(prefix, "share", "kart")
+else:
+    package_data_path = os.path.split(__file__)[0]
+
+
+def _env_path(path):
+    p = os.path.normpath(path)
+    return p if os.path.isabs(p) else os.path.join(prefix, p)
+
+
 if _kart_env:
-    spatialite_path = os.path.splitext(_kart_env.SPATIALITE_EXTENSION)[0]
+    spatialite_path = os.path.splitext(_env_path(_kart_env.SPATIALITE_EXTENSION))[0]
 else:
     spatialite_path = os.path.join(
-        prefix, "" if (is_frozen or is_windows) else "lib", f"mod_spatialite"
+        prefix, "" if is_frozen else "lib", f"mod_spatialite"
     )
 if is_windows:
     # sqlite doesn't appear to like backslashes
@@ -49,36 +63,45 @@ if is_windows:
 
 # $PATH is used for DLL lookups on Windows
 path_extras = [prefix]
+if not is_frozen:
+    path_extras += [os.path.join(prefix, "scripts"), os.path.join(prefix, "lib")]
 
 # Git
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
 os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 os.environ["XDG_CONFIG_HOME"] = prefix
 if _kart_env:
-    path_extras.append(os.path.split(_kart_env.GIT_EXECUTABLE)[0])
+    git_bin_path = os.path.split(_env_path(_kart_env.GIT_EXECUTABLE))[0]
 elif is_windows:
-    path_extras.append(os.path.join(prefix, "git", "cmd"))
+    git_bin_path = os.path.join(prefix, "git", "cmd")
 else:
-    path_extras.append(os.path.join(prefix, "bin"))
+    git_bin_path = os.path.join(prefix, "bin")
+path_extras.append(os.path.normpath(git_bin_path))
 
-os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
-os.environ["GIT_TEMPLATE_DIR"] = os.path.join(prefix, "share", "git-core", "templates")
+# TODO - consider adding more of this to _kart_env.
+if is_windows:
+    os.environ["GIT_EXEC_PATH"] = os.path.join(
+        prefix, "git", "mingw64", "libexec", "git-core"
+    )
+    os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
+        prefix, "git", "mingw64", "share", "git-core", "templates"
+    )
+    path_extras.append(os.path.join(prefix, "git", "usr", "bin"))
+else:
+    os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
+    os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
+        prefix, "share", "git-core", "templates"
+    )
+
 # See locked_git_index in.repo.py:
 os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
 # GDAL Data
 if _kart_env:
-    os.environ["GDAL_DATA"] = _kart_env.GDAL_DATA
-    os.environ["PROJ_LIB"] = _kart_env.PROJ_LIB
+    os.environ["GDAL_DATA"] = _env_path(_kart_env.GDAL_DATA)
+    os.environ["PROJ_LIB"] = _env_path(_kart_env.PROJ_LIB)
 else:
-    if is_windows:
-        if prefix.endswith("venv"):
-            data_prefix = os.path.join(prefix, "Lib", "site-packages", "osgeo", "data")
-        else:
-            data_prefix = os.path.join(prefix, "osgeo", "data")
-    else:
-        data_prefix = os.path.join(prefix, "share")
-
+    data_prefix = os.path.join(prefix, "share")
     os.environ["GDAL_DATA"] = os.path.join(data_prefix, "gdal")
     os.environ["PROJ_LIB"] = os.path.join(data_prefix, "proj")
 
@@ -94,6 +117,14 @@ if "OGR_SQLITE_PRAGMA" not in os.environ:
 os.environ["PATH"] = (
     os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
 )
+if is_windows:
+    os.add_dll_directory(prefix if is_frozen else os.path.join(prefix, "lib"))
+    # FIXME: git2.dll is in the package directory, but isn't setup for ctypes to use
+    _pygit2_spec = importlib.util.find_spec("pygit2")
+    os.add_dll_directory(_pygit2_spec.submodule_search_locations[0])
+
+# Make sure our SQLite3 build is loaded before Python stdlib one
+import pysqlite3
 
 # GDAL Error Handling
 from osgeo import gdal, ogr, osr

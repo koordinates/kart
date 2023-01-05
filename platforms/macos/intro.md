@@ -1,4 +1,4 @@
-This package will install **Kart v%VERSION%** for **macOS 10.9 or later**.
+This package will install **Kart v@KART_VERSION@** for **macOS 10.15 or later**.
 
 [**Kart**](https://kartproject.org) is an open-source distributed
 version-control system for geospatial and tabular data.

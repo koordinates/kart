@@ -73,7 +73,7 @@ def test_clone_pc_with_spatial_filter(
     file_path.write_text(f"{CRS}\n\n{SOUTH_EAST_TRIANGLE}\n", encoding="utf-8")
 
     with data_archive("point-cloud/auckland.tgz") as repo1_path:
-        repo1_url = f"file://{repo1_path.resolve()}"
+        repo1_url = str(repo1_path.resolve())
         # Clone repo using spatial filter
         repo2_path = tmp_path / "repo2"
         r = cli_runner.invoke(
@@ -107,7 +107,7 @@ def test_reclone_pc_with_larger_spatial_filter(
     monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
 
     with data_archive("point-cloud/auckland.tgz") as repo1_path:
-        repo1_url = f"file://{repo1_path.resolve()}"
+        repo1_url = str(repo1_path.resolve())
         # Clone repo using spatial filter
         repo2_path = tmp_path / "repo2"
 

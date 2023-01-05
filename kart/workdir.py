@@ -129,7 +129,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             )
             raise NotFound(
                 f"File system working copy is corrupt - {missing_file} is missing",
-                NO_WORKING_COPY,
+                exit_code=NO_WORKING_COPY,
             )
 
     def create_and_initialise(self):
@@ -627,13 +627,13 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
         try:
-            cmd = ["git", "update-index", "--add", "--remove", "--stdin"]
+            cmd = ["git", "update-index", "--add", "--remove", "-z", "--stdin"]
             subprocess.run(
                 cmd,
                 check=True,
                 env=env,
                 cwd=self.path,
-                input="\n".join(file_paths),
+                input="\0".join(file_paths),
                 encoding="utf-8",
             )
         except subprocess.CalledProcessError as e:

@@ -4,7 +4,7 @@ set -eu
 if ! command -v realpath >/dev/null; then
     # MacOS doesn't have realpath or readlink -f by default
     function realpath() {
-        python -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+        python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
     }
 fi
 
@@ -24,6 +24,9 @@ function do_cleanup {
     rm -rf "$TMP_PATH"
 }
 trap do_cleanup EXIT
+
+mkdir "${TMP_PATH}/home"
+export HOME="${TMP_PATH}/home"
 
 KART_PATH=$(dirname "$(realpath "$(command -v kart)")")
 echo "Kart is at: ${KART_PATH}"

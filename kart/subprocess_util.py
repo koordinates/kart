@@ -131,12 +131,6 @@ def subprocess_tee(cmd, **kwargs):
     - but also *do* capture its output so that we can inspect it.
     Returns a tuple of (exit-code, stdout output string, stderr output string).
     """
-    if is_windows and not isinstance(
-        asyncio.get_event_loop(), asyncio.ProactorEventLoop
-    ):
-        loop = asyncio.ProactorEventLoop()  # for subprocess' pipes on Windows
-        asyncio.set_event_loop(loop)
-
     return_code, stdout, stderr = asyncio.run(read_and_display(cmd, **kwargs))
     return return_code, stdout, stderr
 

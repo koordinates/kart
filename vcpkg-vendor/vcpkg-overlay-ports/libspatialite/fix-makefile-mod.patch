@@ -1,0 +1,43 @@
+diff --git a/makefile_mod.vc b/makefile_mod.vc
+index 4815377..dbdbede 100644
+--- a/makefile_mod.vc
++++ b/makefile_mod.vc
+@@ -93,7 +93,7 @@ LIBOBJ = src\gaiaaux\gg_sqlaux.obj src\gaiaaux\gg_utf8.obj \
+ MOD_SPATIALITE_DLL = mod_spatialite$(VERSION).dll
+ 
+ CFLAGS = /nologo -I.\src\headers -I.\src\topology \
+-	-I. -IC:\OSGeo4W\include $(OPTFLAGS)
++	-I. $(OPTFLAGS)
+ 
+ default:	all
+ 
+@@ -107,12 +107,9 @@ mod_spatialite.lib:	$(LIBOBJ)
+ $(MOD_SPATIALITE_DLL):	mod_spatialite_i.lib
+ 
+ mod_spatialite_i.lib:     $(LIBOBJ)
+-	link /dll /out:$(MOD_SPATIALITE_DLL) \
++	link $(LINK_FLAGS) /dll /out:$(MOD_SPATIALITE_DLL) \
+ 		/implib:mod_spatialite_i.lib $(LIBOBJ) \
+-		C:\OSGeo4W\lib\proj_i.lib C:\OSGeo4W\lib\geos_c.lib \
+-		C:\OSGeo4w\lib\freexl_i.lib C:\OSGeo4w\lib\iconv.lib \
+-		C:\OSGeo4W\lib\sqlite3_i.lib C:\OSGeo4W\lib\zlib.lib \
+-		C:\OSGeo4W\lib\libxml2.lib C:\OSGeo4W\lib\librttopo.lib
++		$(LIBS_ALL)
+ 	if exist $(MOD_SPATIALITE_DLL).manifest mt -manifest \
+ 		$(MOD_SPATIALITE_DLL).manifest -outputresource:$(MOD_SPATIALITE_DLL);2
+ 		
+diff --git a/nmake_mod.opt b/nmake_mod.opt
+index 7772853..df6ec25 100644
+--- a/nmake_mod.opt
++++ b/nmake_mod.opt
+@@ -1,8 +1,8 @@
+ # Directory tree where SpatiaLite will be installed.
+-INSTDIR=C:\OSGeo4W
++INSTDIR=$(INST_DIR)
+ 
+ # Uncomment the first for an optimized build, or the second for debug.
+-OPTFLAGS=	/nologo /Ox /fp:precise /W4 /MD /D_CRT_SECURE_NO_WARNINGS \
++OPTFLAGS=	/nologo /fp:precise /W4 $(CL_FLAGS) /D_CRT_SECURE_NO_WARNINGS \
+ 		/DDLL_EXPORT /DLOADABLE_EXTENSION /DYY_NO_UNISTD_H
+ #OPTFLAGS=	/nologo /Zi /MD /Fdmod_spatialite.pdb /DDLL_EXPORT
+ 
