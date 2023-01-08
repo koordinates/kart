@@ -63,7 +63,7 @@ def pytest_addoption(parser):
             parser.addoption(
                 "--dist",
                 action="store",
-                default='no',
+                default="no",
                 help=argparse.SUPPRESS,
             )
 
@@ -187,29 +187,43 @@ def get_archive_path(name):
     return Path(__file__).parent / "data" / Path(name).with_suffix(".tgz")
 
 
+def is_within_directory(directory, target):
+    """
+    Returns a boolean indicating whether the target path exists and is contained inside
+    the given directory.
+
+    Relative paths are resolved to absolute paths first. Symlinks are *not* traversed.
+    """
+    abs_directory = os.path.abspath(directory)
+    abs_target = os.path.abspath(target)
+
+    prefix = os.path.commonprefix([abs_directory, abs_target])
+
+    return prefix == abs_directory
+
+
+def safe_tar_extract(tar, path=".", members=None, *, numeric_owner=False):
+    """
+    Extracts a tar file, but raises ValueError if any of the files will be extract outside
+    the given extraction directory (by default, the current working directory)
+
+    This is similar to TarFile.extractall(), but it avoids CVE-2007-4559
+    https://github.com/advisories/GHSA-gw9q-c7gh-j9vm
+    """
+    for member in tar.getmembers():
+        member_path = os.path.join(path, member.name)
+        if not is_within_directory(path, member_path):
+            raise ValueError(
+                f"Attempted Path Traversal in Tar File (path={member_path})"
+            )
+
+    tar.extractall(path, members, numeric_owner=numeric_owner)
+
+
 def extract_archive(archive_path, extract_dir):
     archive_path = get_archive_path(archive_path)
     with tarfile.open(archive_path) as archive:
-        def is_within_directory(directory, target):
-            
-            abs_directory = os.path.abspath(directory)
-            abs_target = os.path.abspath(target)
-        
-            prefix = os.path.commonprefix([abs_directory, abs_target])
-            
-            return prefix == abs_directory
-        
-        def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
-        
-            for member in tar.getmembers():
-                member_path = os.path.join(path, member.name)
-                if not is_within_directory(path, member_path):
-                    raise Exception("Attempted Path Traversal in Tar File")
-        
-            tar.extractall(path, members, numeric_owner) 
-            
-        
-        safe_extract(archive, extract_dir)
+        safe_tar_extract(archive, extract_dir)
 
     L.info("Extracted %s to %s", archive_path.name, extract_dir)
 
