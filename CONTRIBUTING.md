@@ -23,18 +23,22 @@ On Ubuntu:
 ```console
 $ apt-get install autoconf build-essential curl git golang libtool patchelf python3-pip python3-venv tar unzip zip
 ```
+On MacOS (with [Homebrew](https://brew.sh)):
+```console
+brew install automake autoconf cmake git python go ninja rust pandoc
 
 Clone Kart from Github:
 
 ```console
 $ git clone https://github.com/koordinates/kart.git
 $ cd kart
+$ git submodule update --init --recursive
 ```
 ### Building
 
 Then configure Kart:
 ```console
-$ cmake -B build -S . -DWITH_VCPKG=ON
+$ cmake -B build -S . -DUSE_VCPKG=ON
 ```
 
 Configuration builds all the dependencies using [VCPKG](https://github.com/microsoft/vcpkg)
