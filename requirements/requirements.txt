@@ -15,6 +15,7 @@ certifi==2022.12.7
     #   -r requirements.in
     #   cryptography
     #   pygit2
+    #   reflink
 click==8.1.3
     # via -r requirements.in
 colorama==0.4.6
@@ -53,6 +54,8 @@ pyodbc==4.0.32
     # via -r requirements.in
 pyrsistent==0.19.2
     # via jsonschema
+reflink==0.2.1
+    # via -r requirements.in
 #pysqlite3==0.4.5
     # via -r requirements.in
 rst2txt==1.1.0
