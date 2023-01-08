@@ -27,7 +27,7 @@ docutils==0.17.1
     # via
     #   -r requirements.in
     #   rst2txt
-#gdal==3.5.2
+#gdal==3.6.2
     # via -r requirements.in
 greenlet==2.0.1 ; os_name != "posix"
     # via

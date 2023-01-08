@@ -166,6 +166,22 @@ gdal_config=${CURRENT_PACKAGES_DIR}/tools/gdal/gdal-config
 
 message(STATUS "GDAL: Will download & build Python bindings for v${GDAL_VERSION}")
 
+if(MACOS)
+  # yucky patch otherwise compiling ends up with an extra empty path on the end of the include &
+  # library dir lists, causing the python module to not actually link to libgdal. Upstream
+  # https://github.com/OSGeo/gdal/pull/7032
+  file(
+    GENERATE
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/patch_setup_py.sh
+    CONTENT
+      "if ! patch --reverse --silent --force --dry-run -i \"${CMAKE_CURRENT_SOURCE_DIR}/gdal__setup.py.patch\" >/dev/null 2>&1
+then
+  patch -i \"${CMAKE_CURRENT_SOURCE_DIR}/gdal__setup.py.patch\"
+fi
+")
+  set(GDAL_PATCH_COMMAND bash ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/patch_setup_py.sh)
+endif()
+
 ExternalProject_Add(
   gdal_py
   URL https://pypi.org/packages/source/G/GDAL/GDAL-${GDAL_VERSION}.tar.gz
@@ -174,6 +190,7 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv GDAL::GDAL
   EXCLUDE_FROM_ALL ON
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
+  PATCH_COMMAND ${GDAL_PATCH_COMMAND}
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
