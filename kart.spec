@@ -43,7 +43,10 @@ else:
 if is_win:
     with open(os.path.join('platforms', 'windows', 'version_info.rc')) as vr_template:
         vr_doc = vr_template.read()
-        kart_version_nums = re.match(r'(\d+\.\d+(?:\.\d+)?)', kart_version).group(1)
+        match = re.match(r'(\d+\.\d+(?:\.\d+)?)', kart_version)
+        if not match:
+            raise RuntimeError(f'Bad kart version: "{kart_version}"')
+        kart_version_nums = match.group(1)
         kart_file_version = tuple(
             ([int(_v) for _v in kart_version_nums.split('.')] + [0, 0])[:4]
         )
