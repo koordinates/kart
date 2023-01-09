@@ -485,18 +485,6 @@ class OutputFormatType(click.ParamType):
         ]
 
 
-def parse_output_format(output_format, json_style):
-    output_type, fmt = output_format
-    if json_style is not None:
-        warnings.warn(
-            f"--json-style is deprecated and will be removed in Kart 0.12. use --output-format={output_type}:{json_style} instead",
-            RemovalInKart012Warning,
-        )
-        if output_type in ("json", "json-lines", "geojson"):
-            fmt = json_style
-    return output_type, fmt
-
-
 def find_param(ctx_or_params, name):
     """Given the click context / command / list of params - find the param with the given name."""
     ctx = ctx_or_params
@@ -511,10 +499,6 @@ def find_param(ctx_or_params, name):
         if param.name == name:
             return param
     raise RuntimeError(f"Couldn't find param: {name}")
-
-
-class RemovalInKart012Warning(UserWarning):
-    pass
 
 
 class RemovalInKart013Warning(UserWarning):

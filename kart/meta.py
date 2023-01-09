@@ -10,7 +10,6 @@ from .cli_util import (
     StringFromFile,
     KartCommand,
     add_help_subcommand,
-    parse_output_format,
     value_optionally_from_binary_file,
     value_optionally_from_text_file,
 )
@@ -49,11 +48,6 @@ def meta(ctx, **kwargs):
     ),
     default="text",
 )
-@click.option(
-    "--json-style",
-    type=click.Choice(["extracompact", "compact", "pretty"]),
-    help="[deprecated] How to format the JSON output. Only used with -o json",
-)
 @click.option("--ref", default="HEAD")
 @click.option(
     "--with-dataset-types",
@@ -63,7 +57,7 @@ def meta(ctx, **kwargs):
 @click.argument("dataset", required=False)
 @click.argument("keys", required=False, nargs=-1)
 @click.pass_context
-def meta_get(ctx, output_format, json_style, ref, with_dataset_types, dataset, keys):
+def meta_get(ctx, output_format, ref, with_dataset_types, dataset, keys):
     """
     Prints the value of meta keys.
 
@@ -94,7 +88,7 @@ def meta_get(ctx, output_format, json_style, ref, with_dataset_types, dataset, k
                 **all_items[ds.path],
             }
 
-    output_type, fmt = parse_output_format(output_format, json_style)
+    output_type, fmt = output_format
 
     if output_type == "text":
         for ds_path, items in all_items.items():
