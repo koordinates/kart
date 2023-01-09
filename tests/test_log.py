@@ -248,24 +248,6 @@ def test_log_arg_handling(data_archive, cli_runner, output_format):
         assert r.exit_code == 0, r.stderr
         assert num_commits(r) == 2
 
-        if output_format == "text":
-            # check that we support passing unknown options (e.g. `-g`) on to git log
-            r = cli_runner.invoke(["log", "-g"])
-            assert r.exit_code == 0, r.stderr
-            assert "Reflog" in r.stdout
-
-        # NOTE: this will fail the 0.12 release ; at that point we need to remove the code that
-        # generates the warning.
-        with pytest.warns(
-            UserWarning,
-            match="Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
-        ):
-            r = cli_runner.invoke(
-                ["log", "-o", output_format, "--", "--", "nz_pa_points_topo_150k"]
-            )
-            assert r.exit_code == 0, r.stderr
-            assert num_commits(r) == 2
-
 
 @pytest.mark.parametrize("output_format", ["text", "json"])
 def test_path_handling(data_archive, cli_runner, output_format):

@@ -3,7 +3,7 @@ import sys
 import click
 
 from kart import diff_estimation
-from kart.cli_util import OutputFormatType, parse_output_format
+from kart.cli_util import OutputFormatType
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
 from kart.output_util import dump_json_output
@@ -168,7 +168,7 @@ def diff(
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     options, commits, filters = parse_revisions_and_filters(repo, args)
-    output_type, fmt = parse_output_format(output_format, json_style)
+    output_type, fmt = output_format
 
     assert len(commits) <= 2
     if len(commits) == 2:

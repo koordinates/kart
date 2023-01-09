@@ -1,6 +1,6 @@
 import click
 from .conflicts_writer import BaseConflictsWriter
-from .cli_util import OutputFormatType, parse_output_format, KartCommand
+from .cli_util import OutputFormatType, KartCommand
 from .crs_util import CoordinateReferenceString
 from .repo import KartRepoState
 
@@ -74,7 +74,7 @@ def conflicts(
     To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.MERGING)
-    output_type, fmt = parse_output_format(output_format, json_style)
+    output_type, fmt = output_format
 
     conflicts_writer_class = BaseConflictsWriter.get_conflicts_writer_class(output_type)
     conflicts_writer = conflicts_writer_class(
