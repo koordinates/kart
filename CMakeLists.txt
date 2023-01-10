@@ -422,7 +422,7 @@ elseif(WIN32)
         execute_process(
           COMMAND
             \"${CMAKE_COMMAND}\" \"-DSIGNTOOL=${WIN_SIGNTOOL}\" \"-DAZURESIGNTOOL=${WIN_AZURESIGNTOOL}\"
-            \"-DFILES=\${CPACK_PACKAGE_DIRECTORY}/_CPack_Packages/win64/WIX/${CPACK_PACKAGE_FILE_NAME}.msi\" \"-DDESCRIPTION=Kart Installer\" -P
+            \"-DFILES=\${CPACK_PACKAGE_DIRECTORY}/\${CPACK_OUTPUT_FILE_NAME}\" \"-DDESCRIPTION=Kart Installer\" -P
             \"${CMAKE_CURRENT_LIST_DIR}/cmake/win_codesign.cmake\"
           COMMAND_ECHO STDERR
           COMMAND_ERROR_IS_FATAL ANY)
