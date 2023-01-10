@@ -108,7 +108,7 @@ function(PythonGetABIInfo)
     execute_process(
       COMMAND
         ${Python3_EXECUTABLE} -c
-        "import sysconfig,pathlib; print(pathlib.Path(sysconfig.get_path('purelib')).relative_to(sysconfig.get_path('data')).parent / 'site-packages')"
+        "import sysconfig,pathlib; print(pathlib.Path(sysconfig.get_path('purelib')).relative_to(pathlib.Path(sysconfig.get_path('scripts')).parent).parent / 'site-packages')"
         COMMAND_ERROR_IS_FATAL ANY
       OUTPUT_VARIABLE purelib_path
       OUTPUT_STRIP_TRAILING_WHITESPACE)
