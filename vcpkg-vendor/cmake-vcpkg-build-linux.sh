@@ -9,14 +9,21 @@ set -euo pipefail
 APT_DEPENDS=(
     autoconf
     build-essential
+    cargo
     ccache
     curl
     git
     golang
+    libodbc1
     libtool
     patchelf
+    python3.10
+    python3.10-dev
+    libpython3.10
+    libpython3.10-dev
+    python3.10-venv
     python3-pip
-    python3-venv
+    rustc
     tar
     unzip
     zip
@@ -28,7 +35,11 @@ PY_DEPENDS=(
 MIN_GOLANG_VERSION=1.17
 CMAKE_VERSION=3.25.0
 
+source /etc/os-release
 ARCH=$(dpkg --print-architecture)
+OSID="${ID}-${VERSION_ID}"
+
+echo "OS: ${OSID}/${ARCH}"
 
 echo "🌀  checking setup..."
 
@@ -38,11 +49,18 @@ else
     SUDO=sudo
 fi
 
+export DEBIAN_FRONTEND=noninteractive
+
+if [ "$UBUNTU_CODENAME" != "jammy" ]; then
+    $SUDO apt-get update -q -y
+    $SUDO apt install -q -y --no-install-recommends software-properties-common
+    $SUDO add-apt-repository -y ppa:deadsnakes/ppa
+fi
+
 if ! dpkg-query -f '${Package}\n' -W "${APT_DEPENDS[@]}" >/dev/null 2>&1; then
     echo "🌀  installing apt dependencies..."
-    export DEBIAN_FRONTEND=noninteractive
-    $SUDO apt-get update
-    $SUDO apt-get install -y "${APT_DEPENDS[@]}"
+    $SUDO apt-get update -q -y
+    $SUDO apt-get install -q -y "${APT_DEPENDS[@]}"
 fi
 
 for P in "${PY_DEPENDS[@]}"; do
@@ -81,10 +99,22 @@ if [ "$ARCH" == "arm64" ]; then
     export VCPKG_FORCE_SYSTEM_BINARIES=1
 fi
 
-export CC=gcc
-export CXX=g++
+# export CC=gcc
+# export CXX=g++
 
+echo "🌀  running kart cmake configuration..."
 cmake -B /build -S . -DUSE_VCPKG=ON
 
 echo "🌀  running kart cmake build..."
-cmake --build /build "$@"
+cmake --build /build --verbose
+
+echo "🌀  running kart-bundle cmake build..."
+cmake --build /build --target bundle --verbose
+
+if [ $# -eq 0 ]; then
+    echo "🌀  running cpack..."
+    cd /build
+    cpack -G "TGZ,DEB,RPM" --verbose
+    mkdir -p "/src/${OSID}-${ARCH}"
+    cp -v ./_CPack_Packages/*.{deb,rpm,tar.gz} "/src/${OSID}-${ARCH}/"
+fi
