@@ -416,7 +416,7 @@ jobs:
           MACOS_NOTARIZE_PW: ${{ secrets.MACOS_NOTARIZE_PW }}
         run: |
           xcrun notarytool store-credentials "$MACOS_NOTARIZE_KEYCHAIN_PROFILE" \
-              --keychain signing_temp \
+              --keychain signing_temp.keychain \
               --apple-id "$MACOS_NOTARIZE_USER" \
               --team-id "$MACOS_NOTARIZE_TEAMID" \
               --password "$MACOS_NOTARIZE_PW"
