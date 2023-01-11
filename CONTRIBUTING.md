@@ -5,11 +5,13 @@ We welcome all contributions, bug reports, and suggestions!
 * Ask support and usage questions in [Discussions](https://github.com/koordinates/kart/discussions)
 * Read and submit bug reports or feature requests at [Issues](https://github.com/koordinates/kart/issues)
 
-We're moving to CMake as a better system for building Kart and its
-dependencies. Currently CMake is still a work in progress and doesn't yet build
-all the vendor dependencies or create packages suitable for distribution.
+Kart now uses CMake as a better system for building Kart and its dependencies (compared to Makefiles which were used previously).
+This was was a major overhaul and there may still be documentation or unused snippets of code that need to be brought up to date - if you find them, let us know.
 
-## Building the development version with CMake
+[Building on macOS and Linux](#building-the-development-version-with-cmake-macos-and-linux)\
+[Building on Windows](#building-the-development-version-with-cmake-windows)
+
+## Building the development version with CMake (macOS and Linux)
 
 Requirements:
 * CMake >= v3.25
@@ -23,7 +25,7 @@ On Ubuntu:
 ```console
 $ apt-get install autoconf build-essential curl git golang libtool patchelf python3-pip python3-venv tar unzip zip
 ```
-On MacOS (with [Homebrew](https://brew.sh)):
+On macOS (with [Homebrew](https://brew.sh)):
 ```console
 brew install automake autoconf cmake git python go ninja rust pandoc
 
@@ -34,11 +36,21 @@ $ git clone https://github.com/koordinates/kart.git
 $ cd kart
 $ git submodule update --init --recursive
 ```
+
+### Setting Python3
+
+CMake will try to automatically find a Python3 install on your system with which to build Kart.
+However, to avoid any issues caused by different Python implementations, it is recommended to force CMake
+to use Python 3.10, by supplying the flag `-DPython3_EXECUTABLE` - for example:
+`-DPython3_EXECUTABLE=$(command -v python3.10)`
+
+When using CI artifacts to build this is not just recommended, but required.
+
 ### Building
 
 Then configure Kart:
 ```console
-$ cmake -B build -S . -DUSE_VCPKG=ON
+$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python310 -DUSE_VCPKG=ON
 ```
 
 Configuration builds all the dependencies using [VCPKG](https://github.com/microsoft/vcpkg)
@@ -62,18 +74,23 @@ $ cmake --install build
 
 ### Downloading vendor dependencies from CI
 
-If you're having issues with VCPKG in the above, you can download a [recent
-master-branch vendor CI artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess) for your platform (eg: `vendor-macos-X64-3.10`). Then:
+If you're having issues with VCPKG in the above, you can download a recent master-branch vendor CI artifact for your platform (eg: `vendor-macos-X64-py3.10.zip`).
+To do this, take the following steps:
+1. Start at the list of recent [successful builds on master](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess).
+1. Select a commit - ideally the commit that you have checked out locally, but if you don't see it, just choosing the top one will generally work.
+1. Click through the commit and scroll down to the bottom to see the artifacts.\
+(Scrolling down is best achieved with your mouse curson on the left side of the page - see this [GitHub ticket](https://support.github.com/ticket/personal/0/1962630))
+1. Download the vendor-archive artifact for your platform.
+
+Then:
 
 ```console
-$ cmake -B build -S . -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-Darwin.zip -DUSE_VCPKG=OFF
+$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python310 -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-macos-X64-py3.10.zip -DUSE_VCPKG=OFF
 $ cmake --build build
 $ build/kart --version
 ```
 
-Note you'll need to have the same version of Python that Kart CI currently uses
-(Python 3.10). Get CMake to pick up the right Python using `-DPython3_ROOT=...` -
-for example, `-DPython3_ROOT=$(which python3.10 | sed 's@/bin/.*@/@')`
+Note you'll need to have the same version of Python that Kart CI currently uses (Python 3.10).
 
 ### Running the tests
 
@@ -97,10 +114,21 @@ Clone Kart from Github:
 > cd kart
 ```
 
+### Setting Python3
+
+CMake will try to automatically find a Python3 install on your system with which to build Kart.
+However, to avoid any issues caused by different Python implementations, it is recommended to force CMake
+to use Python 3.10, by supplying the flag `-DPython3_EXECUTABLE` - for example:
+`-DPython3_EXECUTABLE="C:\Program Files\Python310\python.exe"`
+
+When using CI artifacts to build this is not just recommended, but required.
+
+### Building
+
 Configure and build Kart:
 
 ```console
-> cmake -B build -S . -DPython3_ROOT=C:\Program Files\Python310 -DUSE_VCPKG=ON
+> cmake -B build -S . -DPython3_EXECUTABLE=C:\path\to\python310.exe -DUSE_VCPKG=ON
 > cmake --build build
 > .\build\venv\Scripts\kart.exe --version
 ```
@@ -120,17 +148,23 @@ $ build\pyinstaller\dist\kart\kart.exe --version
 
 ### Downloading vendor dependencies from CI
 
-If you're having issues with VCPKG in the above, you can download a [recent
-master-branch vendor CI artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess) for your platform (eg: `vendor-windows-X64-3.10`). Then:
+If you're having issues with VCPKG in the above, you can download a recent master-branch vendor CI artifact for your platform (eg: `vendor-windows-X64-py3.10.zip`).
+To do this, take the following steps:
+1. Start at the list of recent [successful builds on master](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess).
+1. Select a commit - ideally the commit that you have checked out locally, but if you don't see it, just choosing the top one will generally work.
+1. Click through the commit and scroll down to the bottom to see the artifacts.\
+(Scrolling down is best achieved with your mouse curson on the left side of the page - see this [GitHub ticket](https://support.github.com/ticket/personal/0/1962630))
+1. Download the vendor-archive artifact for your platform.
+
+Then:
 
 ```console
-> cmake -B build -S . -DPython3_ROOT=C:\Program Files\Python310 -DVENDOR_ARCHIVE=D:\path\to\downloaded\vendor-windows-X64-3.10.zip -DUSE_VCPKG=OFF
+> cmake -B build -S . -DPython3_EXECUTABLE=C:\path\to\python310.exe -DVENDOR_ARCHIVE=D:\path\to\downloaded\vendor-windows-X64-py3.10.zip -DUSE_VCPKG=OFF
 > cmake --build build
 > .\build\venv\Scripts\kart.exe --version
 ```
 
-Note you'll need to have the same version of Python that Kart CI currently uses
-(Python 3.10).
+Note you'll need to have the same version of Python that Kart CI currently uses (Python 3.10).
 
 ### Running the tests
 
@@ -151,6 +185,6 @@ We use [Black](https://github.com/psf/black) to ensure consistent code formattin
 * Sublime Text: install [sublack](https://packagecontrol.io/packages/sublack) via Package Control
 * VSCode [instructions](https://code.visualstudio.com/docs/python/editing#_formatting)
 
-We use the default settings, and target python 3.7+.
+We use the default settings, and target python 3.8+.
 
 One easy solution is to install [pre-commit](https://pre-commit.com), run `pre-commit install --install-hooks` and it'll automatically validate your changes code as a git pre-commit hook.
