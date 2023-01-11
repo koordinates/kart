@@ -120,7 +120,7 @@ jobs:
         id: version
         run: |
           if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
-            VER="${{ github.ref_name }}"
+            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
             IS_RELEASE=1
           else
             VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
@@ -331,7 +331,7 @@ jobs:
           MACOS_NOTARIZE_TEAMID: ${{ secrets.MACOS_NOTARIZE_TEAMID }}
         run: |
           if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
-            VER="${{ github.ref_name }}"
+            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
             IS_RELEASE=1
           else
             VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
@@ -415,10 +415,9 @@ jobs:
           MACOS_NOTARIZE_USER: ${{ secrets.MACOS_NOTARIZE_USER }}
           MACOS_NOTARIZE_PW: ${{ secrets.MACOS_NOTARIZE_PW }}
         run: |
-          xcrun notarytool store-credentials "$MACOS_NOTARIZE_KEYCHAIN_PROFILE"
-              --keychain signing_temp
-              --apple-id "$MACOS_NOTARIZE_USER"
-              --team-id "$MACOS_NOTARIZE_TEAMID"
+          xcrun notarytool store-credentials "$MACOS_NOTARIZE_KEYCHAIN_PROFILE" \
+              --apple-id "$MACOS_NOTARIZE_USER" \
+              --team-id "$MACOS_NOTARIZE_TEAMID" \
               --password "$MACOS_NOTARIZE_PW"
 
       - name: "bundle: assemble"
@@ -548,7 +547,7 @@ jobs:
         shell: bash
         run: |
           if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
-            VER="${{ github.ref_name }}"
+            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
             IS_RELEASE=1
           else
             VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
