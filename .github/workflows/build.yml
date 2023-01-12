@@ -62,9 +62,6 @@ jobs:
           - 1433:1433
       mysql:
         image: mysql
-        credentials:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
