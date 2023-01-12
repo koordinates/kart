@@ -236,9 +236,9 @@ jobs:
           - 3306:3306
 
     env:
-      KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
-      KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
-      KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
+      KART_POSTGRES_URL: "postgresql://postgres:@postgis:5432/postgres"
+      KART_SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
+      KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
       ARCH: "amd64"
       ARCH_TRIPLET: "x64-linux"
       GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
