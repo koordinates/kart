@@ -24,10 +24,6 @@
             "displayName": "CI: Linux",
             "inherits": "ci-base",
             "generator": "Unix Makefiles",
-            "environment": {
-                "CC": "gcc",
-                "CXX": "g++"
-            },
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",

@@ -37,6 +37,7 @@ APT_DEPENDS=(
 )
 YUM_DEPENDS=(
     perl-IPC-Cmd
+    rpm-build
     unixODBC
     zip
 )
@@ -109,7 +110,6 @@ else
     fi
 
     echo "🌀  installing yum dependencies..."
-    yum groupinstall -y "Development Tools"
     yum install -y "${YUM_DEPENDS[@]}"
 
     if [ "$NEED_RUST" == 1 ]; then
@@ -179,9 +179,6 @@ echo "🌀  installing pkg-config via vcpkg..."
 (cd /tmp && /src/vcpkg-vendor/vcpkg/vcpkg install pkgconf --overlay-triplets=/src/vcpkg-vendor/vcpkg-overlay-triplets --triplet=x64-linux)
 export PKG_CONFIG=/src/vcpkg-vendor/vcpkg/installed/${ARCH}-linux/tools/pkgconf/pkgconf
 
-# echo "🌀  installing Python3 via vcpkg..."
-# (cd /tmp && /src/vcpkg-vendor/vcpkg/vcpkg install python3 --overlay-triplets=/src/vcpkg-vendor/vcpkg-overlay-triplets --triplet=x64-linux)
-
 BACKUP_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 if [ -n "$LD_LIBRARY_PATH" ]; then
     echo "🌀  override LD_LIBRARY_PATH for vcpkg run..."
@@ -197,7 +194,7 @@ echo "🌀  running kart cmake configuration..."
 cmake -B /build -S . -DUSE_VCPKG=ON \
     -DPython3_EXECUTABLE=/build/vcpkg_installed/${ARCH}-linux/tools/python3/python${PYVER} \
     -DPython3_ROOT=/build/vcpkg_installed/${ARCH}-linux \
-    -DPKG_CONFIG_EXECUTABLE=/src/vcpkg-vendor/vcpkg/installed/${ARCH}-linux/tools/pkgconf/pkgconf
+    -DPKG_CONFIG_EXECUTABLE=/src/vcpkg-vendor/vcpkg/installed/${ARCH}-linux/tools/pkgconf/pkgconf \
     ${EXTRA_CMAKE_OPTIONS-}
 
 export LD_LIBRARY_PATH=${BACKUP_LD_LIBRARY_PATH}

@@ -12,13 +12,188 @@ jobs:
   #
   # Linux via CMake+VCPKG
   #
-  Linux:
-    strategy:
-      matrix:
-        os: [{id: ubuntu-22.04, label: ubuntu-22.04/amd64}]
+  # Linux:
+  #   strategy:
+  #     matrix:
+  #       os: [{id: ubuntu-22.04, label: ubuntu-22.04/amd64}]
 
-    name: Linux ${{ matrix.os.label }}
-    runs-on: ${{ matrix.os.id }}
+  #   name: Linux ${{ matrix.os.label }}
+  #   runs-on: ${{ matrix.os.id }}
+
+  #   # We want to run on external PRs, but not on our own internal PRs as they'll be run
+  #   # by the push to the branch.
+  #   # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+  #   # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
+  #   if: >
+  #     (
+  #       github.event_name == 'push'
+  #       || github.event.pull_request.head.repo.full_name != github.repository
+  #     ) && (
+  #       startsWith(github.ref, 'refs/tags/v')
+  #       || github.ref == 'refs/heads/master'
+  #       || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
+  #     )
+
+  #   env:
+  #     CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+  #     CCACHE_COMPRESS: "1"
+  #     KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
+  #     KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
+  #     KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
+
+  #   services:
+  #     postgis:
+  #       # https://github.com/postgis/docker-postgis/issues/216
+  #       image: ghcr.io/baosystems/postgis
+  #       options: >-
+  #         --health-cmd pg_isready
+  #         --health-interval 2s
+  #         --health-timeout 2s
+  #         --health-retries 5
+  #         -e POSTGRES_HOST_AUTH_METHOD=trust
+  #       ports:
+  #         - 5432:5432
+  #     sqlserver:
+  #       image: mcr.microsoft.com/mssql/server
+  #       options: >-
+  #         -e ACCEPT_EULA=Y
+  #         -e SA_PASSWORD=PassWord1
+  #       ports:
+  #         - 1433:1433
+  #     mysql:
+  #       image: mysql
+  #       options: >-
+  #         -e MYSQL_ROOT_PASSWORD=PassWord1
+  #       ports:
+  #         - 3306:3306
+
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         submodules: recursive
+
+  #     #
+  #     # setup
+  #     #
+
+  #     - name: "setup: python"
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: ${{ env.PY_VER }}
+  #         cache: 'pip'
+  #         cache-dependency-path: 'requirements/*.txt'
+
+  #     - name: "setup: cmake & ninja"
+  #       uses: lukka/get-cmake@arm64-win-linux
+  #       with:
+  #         cmakeVersion: "${{ env.CMAKE_VERSION }}"
+
+  #     - name: "setup: ccache"
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: ${{ env.CCACHE_DIR }}
+  #         key: vendor-ccache-${{ matrix.os.id }}-cmake-vcpkg
+
+  #     - name: "setup: misc"
+  #       run: |
+  #         sudo apt-get update -q -y
+  #         sudo apt-get install -q -y --no-install-recommends ccache
+  #         mkdir -p ${{ env.CCACHE_DIR }}
+  #         echo "/usr/lib/ccache" >> $GITHUB_PATH
+
+  #     - name: "setup: vcpkg"
+  #       uses: lukka/run-vcpkg@v10
+  #       with:
+  #         vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
+  #         vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
+  #         prependedCacheKey: "20221110a-${{ matrix.os.id }}"
+  #         appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+
+  #     #
+  #     # App Build
+  #     #
+
+  #     - name: "app: version"
+  #       id: version
+  #       run: |
+  #         if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+  #           VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
+  #           IS_RELEASE=1
+  #         else
+  #           VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+  #           IS_RELEASE=0
+  #         fi
+  #         echo "App Version: $VER"
+  #         echo "Is Release? $IS_RELEASE"
+  #         echo "value=$VER" >> $GITHUB_OUTPUT
+  #         echo "KART_VERSION=$VER" >> $GITHUB_ENV
+  #         echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+
+  #     - name: "app: configuration & vendor dependencies"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-linux
+
+  #     - name: "check for vcpkg errors"
+  #       if: "failure() || cancelled()"
+  #       run: |
+  #         echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
+
+  #     - name: "app: build"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-linux
+  #         buildPreset: ci-linux
+
+  #     #
+  #     # App tests & checks
+  #     #
+
+  #     - name: "test: smoke test"
+  #       run: |
+  #         ./build/kart --version
+
+  #     - name: "test: install database drivers for tests"
+  #       run: |
+  #         curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+  #         curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
+  #         sudo apt-get update -q -y
+  #         sudo ACCEPT_EULA=Y apt-get install -q -y msodbcsql17
+
+  #     - name: "test: unit tests"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-linux
+  #         testPreset: ci-linux
+
+  #     - name: "test: dependency license check"
+  #       run: |
+  #         cmake --build build --target py-license-check
+
+  #     #
+  #     # Packaging
+  #     #
+
+  #     - name: "bundle: assemble"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-linux
+  #         buildPreset: ci-bundle-linux
+
+  #     - name: "bundle: smoke test"
+  #       shell: bash
+  #       run: |
+  #         ./build/pyinstaller/dist/kart/kart --version
+
+  #     - name: "bundle: e2e tests"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-linux
+  #         testPreset: ci-e2e-linux
+
+  Linux-Packaging:
+    name: Linux Packaging
+    runs-on: ubuntu-22.04
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -34,38 +209,53 @@ jobs:
         || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
 
-    env:
-      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
-      CCACHE_COMPRESS: "1"
-      KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
-      KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
-      KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
+    # services:
+    #   postgis:
+    #     # https://github.com/postgis/docker-postgis/issues/216
+    #     image: ghcr.io/baosystems/postgis
+    #     options: >-
+    #       --health-cmd pg_isready
+    #       --health-interval 2s
+    #       --health-timeout 2s
+    #       --health-retries 5
+    #       -e POSTGRES_HOST_AUTH_METHOD=trust
+    #     ports:
+    #       - 5432:5432
+    #   sqlserver:
+    #     image: mcr.microsoft.com/mssql/server
+    #     options: >-
+    #       -e ACCEPT_EULA=Y
+    #       -e SA_PASSWORD=PassWord1
+    #     ports:
+    #       - 1433:1433
+    #   mysql:
+    #     image: mysql
+    #     options: >-
+    #       -e MYSQL_ROOT_PASSWORD=PassWord1
+    #     ports:
+    #       - 3306:3306
 
-    services:
-      postgis:
-        # https://github.com/postgis/docker-postgis/issues/216
-        image: ghcr.io/baosystems/postgis
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 2s
-          --health-timeout 2s
-          --health-retries 5
-          -e POSTGRES_HOST_AUTH_METHOD=trust
-        ports:
-          - 5432:5432
-      sqlserver:
-        image: mcr.microsoft.com/mssql/server
-        options: >-
-          -e ACCEPT_EULA=Y
-          -e SA_PASSWORD=PassWord1
-        ports:
-          - 1433:1433
-      mysql:
-        image: mysql
-        options: >-
-          -e MYSQL_ROOT_PASSWORD=PassWord1
-        ports:
-          - 3306:3306
+    env:
+      # KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
+      # KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
+      # KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
+      ARCH: "amd64"
+      ARCH_TRIPLET: "x64-linux"
+      GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
+      CMAKE_CONFIGURE_ARGS: >-
+        [
+        '-DPython3_EXECUTABLE=/__w/kart/kart/build/vcpkg_installed/x64-linux/tools/python3/python3.10',
+        '-DPython3_ROOT=/__w/kart/kart/build/vcpkg_installed/x64-linux',
+        '-DPKG_CONFIG_EXECUTABLE=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/x64-linux/tools/pkgconf/pkgconf',
+        '-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=amd64'
+        ]
+
+    container:
+      image: quay.io/pypa/manylinux2014_x86_64
+      env:
+        ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
+        PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/x64-linux/tools/pkgconf/pkgconf"
+        PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
       - uses: actions/checkout@v3
@@ -75,39 +265,37 @@ jobs:
       #
       # setup
       #
-
-      - name: "setup: python"
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PY_VER }}
-          cache: 'pip'
-          cache-dependency-path: 'requirements/*.txt'
-
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@arm64-win-linux
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
-      - name: "setup: ccache"
-        uses: actions/cache@v3
+      - name: "setup: rust"
+        uses: ATiltedTree/setup-rust@v1
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-${{ matrix.os.id }}-cmake-vcpkg
+          rust-version: stable
 
       - name: "setup: misc"
         run: |
-          sudo apt-get update -q -y
-          sudo apt-get install -q -y --no-install-recommends ccache
-          mkdir -p ${{ env.CCACHE_DIR }}
-          echo "/usr/lib/ccache" >> $GITHUB_PATH
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
+
+          yum install -y perl-IPC-Cmd rpm-build unixODBC zip
+
+          curl -qL "https://go.dev/dl/go1.19.2.linux-${ARCH}.tar.gz" | tar xz -C /usr/local/
+          ln -sf /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/
 
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v10
         with:
-          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
+          vcpkgDirectory: "vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a-${{ matrix.os.id }}"
+          prependedCacheKey: "20221110a-linux-centos7"
           appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+
+      - name: "setup: pkgconf"
+        run: |
+          cd /__w/_temp
+          ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf --overlay-triplets=${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg-overlay-triplets --triplet=x64-linux
 
       #
       # App Build
@@ -131,24 +319,35 @@ jobs:
 
       - name: "app: configuration & vendor dependencies"
         uses: lukka/run-cmake@v10
+        env:
+          LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
         with:
           configurePreset: ci-linux
+          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
 
       - name: "check for vcpkg errors"
         if: "failure() || cancelled()"
         run: |
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
+      - name: "vcpkg: save error logs"
+        uses: actions/upload-artifact@v3
+        if: "failure()"
+        with:
+          name: vcpkg-linux-logs
+          path: vcpkg-vendor/vcpkg/buildtrees/*/*.log
+
       - name: "app: build"
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-linux
+          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
           buildPreset: ci-linux
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
         with:
-          name: vendor-linux-${{ runner.arch }}-py${{ env.PY_VER }}
+          name: vendor-linux-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
           if-no-files-found: error
 
@@ -162,20 +361,15 @@ jobs:
 
       - name: "test: install database drivers for tests"
         run: |
-          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-          curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
-          sudo apt-get update -q -y
-          sudo ACCEPT_EULA=Y apt-get install -q -y msodbcsql17
+          curl https://packages.microsoft.com/config/rhel/7/prod.repo > /etc/yum.repos.d/mssql-release.repo
+          ACCEPT_EULA=Y yum install -y msodbcsql18 mssql-tools
 
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-linux
+          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
           testPreset: ci-linux
-
-      - name: "test: dependency license check"
-        run: |
-          cmake --build build --target py-license-check
 
       #
       # Packaging
@@ -185,6 +379,7 @@ jobs:
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-linux
+          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
           buildPreset: ci-bundle-linux
 
       - name: "bundle: smoke test"
@@ -196,6 +391,7 @@ jobs:
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-linux
+          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
           testPreset: ci-e2e-linux
 
       - name: "package: TGZ & DEB & RPM"
@@ -227,455 +423,455 @@ jobs:
   #
   # macOS via CMake+VCPKG
   #
-  macOS:
-    strategy:
-      matrix:
-        os: [{id: macos-12, label: "12/x86_64"}]
-    runs-on: ${{ matrix.os.id }}
-    name: macOS ${{ matrix.os.label }}
+  # macOS:
+  #   strategy:
+  #     matrix:
+  #       os: [{id: macos-12, label: "12/x86_64"}]
+  #   runs-on: ${{ matrix.os.id }}
+  #   name: macOS ${{ matrix.os.label }}
 
-    # We want to run on external PRs, but not on our own internal PRs as they'll be run
-    # by the push to the branch.
-    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
-    # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
-    if: >
-      (
-        github.event_name == 'push'
-        || github.event.pull_request.head.repo.full_name != github.repository
-      ) && (
-        startsWith(github.ref, 'refs/tags/v')
-        || github.ref == 'refs/heads/master'
-        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only linux]'))
-      )
+  #   # We want to run on external PRs, but not on our own internal PRs as they'll be run
+  #   # by the push to the branch.
+  #   # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+  #   # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
+  #   if: >
+  #     (
+  #       github.event_name == 'push'
+  #       || github.event.pull_request.head.repo.full_name != github.repository
+  #     ) && (
+  #       startsWith(github.ref, 'refs/tags/v')
+  #       || github.ref == 'refs/heads/master'
+  #       || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only linux]'))
+  #     )
 
-    env:
-      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
-      CCACHE_COMPRESS: "1"
-      HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
-      HOMEBREW_NO_INSTALL_CLEANUP: "1"
-      MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
-      MACOS_PKGSIGN_ID: ${{ secrets.MACOS_PKGSIGN_ID }}
-      MACOS_NOTARIZE_KEYCHAIN_PROFILE: "NOTARIZE_AUTH"
-      # X.Y version needs to match PY_VER:
-      PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.10.9/python-3.10.9-macos11.pkg"
+  #   env:
+  #     CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+  #     CCACHE_COMPRESS: "1"
+  #     HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
+  #     HOMEBREW_NO_INSTALL_CLEANUP: "1"
+  #     MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
+  #     MACOS_PKGSIGN_ID: ${{ secrets.MACOS_PKGSIGN_ID }}
+  #     MACOS_NOTARIZE_KEYCHAIN_PROFILE: "NOTARIZE_AUTH"
+  #     # X.Y version needs to match PY_VER:
+  #     PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.10.9/python-3.10.9-macos11.pkg"
 
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         submodules: recursive
 
-      #
-      # setup
-      #
+  #     #
+  #     # setup
+  #     #
 
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
+  #     - uses: maxim-lobanov/setup-xcode@v1
+  #       with:
+  #         xcode-version: latest-stable
 
-      # TODO: cache
-      - name: "setup: python"
-        run: |
-          curl -sSfL -o ${{runner.temp}}/py.pkg "${PY_VER_INSTALLER}"
-          sudo installer -pkg ${{runner.temp}}/py.pkg -target /
-          sudo ln -sf python3 /Library/Frameworks/Python.framework/Versions/${PY_VER}/bin/python
-          export PATH="/Library/Frameworks/Python.framework/Versions/${PY_VER}/bin:$PATH"
-          which python3
-          python3 -V --version
-          which python
-          python -V --version
-          echo /Library/Frameworks/Python.framework/Versions/${PY_VER}/bin >> $GITHUB_PATH
+  #     # TODO: cache
+  #     - name: "setup: python"
+  #       run: |
+  #         curl -sSfL -o ${{runner.temp}}/py.pkg "${PY_VER_INSTALLER}"
+  #         sudo installer -pkg ${{runner.temp}}/py.pkg -target /
+  #         sudo ln -sf python3 /Library/Frameworks/Python.framework/Versions/${PY_VER}/bin/python
+  #         export PATH="/Library/Frameworks/Python.framework/Versions/${PY_VER}/bin:$PATH"
+  #         which python3
+  #         python3 -V --version
+  #         which python
+  #         python -V --version
+  #         echo /Library/Frameworks/Python.framework/Versions/${PY_VER}/bin >> $GITHUB_PATH
 
-      - name: "setup: homebrew cache"
-        id: cache-brew
-        uses: actions/cache@v3
-        with:
-          path: .cache/brew
-          key: brew-cmake-${{ matrix.os.id }}-vcpkg
+  #     - name: "setup: homebrew cache"
+  #       id: cache-brew
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: .cache/brew
+  #         key: brew-cmake-${{ matrix.os.id }}-vcpkg
 
-      - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@latest
-        with:
-          cmakeVersion: "${{ env.CMAKE_VERSION }}"
+  #     - name: "setup: cmake & ninja"
+  #       uses: lukka/get-cmake@latest
+  #       with:
+  #         cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
-      - name: "setup: ccache"
-        uses: actions/cache@v3
-        if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-${{ matrix.os.id }}-vcpkg
+  #     - name: "setup: ccache"
+  #       uses: actions/cache@v3
+  #       if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
+  #       with:
+  #         path: ${{ env.CCACHE_DIR }}
+  #         key: vendor-ccache-${{ matrix.os.id }}-vcpkg
 
-      - name: "setup: misc"
-        run: |
-          brew install -q autoconf automake ccache pandoc
-          mkdir -p ${{ env.CCACHE_DIR }}
-          echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
+  #     - name: "setup: misc"
+  #       run: |
+  #         brew install -q autoconf automake ccache pandoc
+  #         mkdir -p ${{ env.CCACHE_DIR }}
+  #         echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
-      - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
-        with:
-          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
-          vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+  #     - name: "setup: vcpkg"
+  #       uses: lukka/run-vcpkg@v10
+  #       with:
+  #         vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
+  #         vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
+  #         prependedCacheKey: "20221110a"
+  #         appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
-      #
-      # App Build
-      #
+  #     #
+  #     # App Build
+  #     #
 
-      - name: "app: version"
-        id: version
-        env:
-          MACOS_NOTARIZE_TEAMID: ${{ secrets.MACOS_NOTARIZE_TEAMID }}
-        run: |
-          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
-            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
-            IS_RELEASE=1
-          else
-            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
-            IS_RELEASE=0
-          fi
-          echo "App Version: $VER"
-          echo "Is Release? $IS_RELEASE"
-          echo "value=$VER" >> $GITHUB_OUTPUT
-          echo "KART_VERSION=$VER" >> $GITHUB_ENV
-          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+  #     - name: "app: version"
+  #       id: version
+  #       env:
+  #         MACOS_NOTARIZE_TEAMID: ${{ secrets.MACOS_NOTARIZE_TEAMID }}
+  #       run: |
+  #         if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+  #           VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
+  #           IS_RELEASE=1
+  #         else
+  #           VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+  #           IS_RELEASE=0
+  #         fi
+  #         echo "App Version: $VER"
+  #         echo "Is Release? $IS_RELEASE"
+  #         echo "value=$VER" >> $GITHUB_OUTPUT
+  #         echo "KART_VERSION=$VER" >> $GITHUB_ENV
+  #         echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
-          if [[ -n "$MACOS_CODESIGN_ID" ]]; then
-            echo "MACOS_SIGN_BUNDLE=ON" >> $GITHUB_ENV
-          else
-            echo "MACOS_SIGN_BUNDLE=OFF" >> $GITHUB_ENV
-          fi
-          if (( $IS_RELEASE )) && [[ -n "$MACOS_PKGSIGN_ID" ]]; then
-            echo "MACOS_SIGN_PKG=ON" >> $GITHUB_ENV
-          else
-            echo "MACOS_SIGN_PKG=OFF" >> $GITHUB_ENV
-          fi
-          if (( $IS_RELEASE )) && [[ -n "$MACOS_NOTARIZE_TEAMID" ]]; then
-            echo "MACOS_NOTARIZE=ON" >> $GITHUB_ENV
-          else
-            echo "MACOS_NOTARIZE=OFF" >> $GITHUB_ENV
-          fi
+  #         if [[ -n "$MACOS_CODESIGN_ID" ]]; then
+  #           echo "MACOS_SIGN_BUNDLE=ON" >> $GITHUB_ENV
+  #         else
+  #           echo "MACOS_SIGN_BUNDLE=OFF" >> $GITHUB_ENV
+  #         fi
+  #         if (( $IS_RELEASE )) && [[ -n "$MACOS_PKGSIGN_ID" ]]; then
+  #           echo "MACOS_SIGN_PKG=ON" >> $GITHUB_ENV
+  #         else
+  #           echo "MACOS_SIGN_PKG=OFF" >> $GITHUB_ENV
+  #         fi
+  #         if (( $IS_RELEASE )) && [[ -n "$MACOS_NOTARIZE_TEAMID" ]]; then
+  #           echo "MACOS_NOTARIZE=ON" >> $GITHUB_ENV
+  #         else
+  #           echo "MACOS_NOTARIZE=OFF" >> $GITHUB_ENV
+  #         fi
 
-      - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-macos
+  #     - name: "app: configuration & vendor dependencies"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-macos
 
-      - name: "check for vcpkg errors"
-        if: failure() || cancelled()
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
+  #     - name: "check for vcpkg errors"
+  #       if: failure() || cancelled()
+  #       run: |
+  #         echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
-      - name: "app: build"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-macos
-          buildPreset: ci-macos
+  #     - name: "app: build"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-macos
+  #         buildPreset: ci-macos
 
-      - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
-        with:
-          name: vendor-macos-${{ runner.arch }}-py${{ env.PY_VER }}
-          path: build/vcpkg-vendor/kart-vendor.*.tar.gz
-          if-no-files-found: error
+  #     - name: "vendor: save archive"
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: vendor-macos-${{ runner.arch }}-py${{ env.PY_VER }}
+  #         path: build/vcpkg-vendor/kart-vendor.*.tar.gz
+  #         if-no-files-found: error
 
-      #
-      # App tests & checks
-      #
+  #     #
+  #     # App tests & checks
+  #     #
 
-      - name: "test: smoke test"
-        run: |
-          ./build/kart --version
+  #     - name: "test: smoke test"
+  #       run: |
+  #         ./build/kart --version
 
-      - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-macos
-          testPreset: ci-macos
+  #     - name: "test: unit tests"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-macos
+  #         testPreset: ci-macos
 
-      #
-      # Packaging
-      #
+  #     #
+  #     # Packaging
+  #     #
 
-      - name: "bundle: setup app signing certificate"
-        id: keychain
-        uses: apple-actions/import-codesign-certs@v1
-        if: env.MACOS_SIGN_BUNDLE == 'ON'
-        with:
-          p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
-          p12-password: ${{ secrets.MACOS_CERT_PW }}
+  #     - name: "bundle: setup app signing certificate"
+  #       id: keychain
+  #       uses: apple-actions/import-codesign-certs@v1
+  #       if: env.MACOS_SIGN_BUNDLE == 'ON'
+  #       with:
+  #         p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
+  #         p12-password: ${{ secrets.MACOS_CERT_PW }}
 
-      - name: "bundle: setup notarization auth"
-        if: env.MACOS_NOTARIZE == 'ON'
-        env:
-          MACOS_NOTARIZE_TEAMID: ${{ secrets.MACOS_NOTARIZE_TEAMID }}
-          MACOS_NOTARIZE_USER: ${{ secrets.MACOS_NOTARIZE_USER }}
-          MACOS_NOTARIZE_PW: ${{ secrets.MACOS_NOTARIZE_PW }}
-        run: |
-          xcrun notarytool store-credentials "$MACOS_NOTARIZE_KEYCHAIN_PROFILE" \
-              --apple-id "$MACOS_NOTARIZE_USER" \
-              --team-id "$MACOS_NOTARIZE_TEAMID" \
-              --password "$MACOS_NOTARIZE_PW"
+  #     - name: "bundle: setup notarization auth"
+  #       if: env.MACOS_NOTARIZE == 'ON'
+  #       env:
+  #         MACOS_NOTARIZE_TEAMID: ${{ secrets.MACOS_NOTARIZE_TEAMID }}
+  #         MACOS_NOTARIZE_USER: ${{ secrets.MACOS_NOTARIZE_USER }}
+  #         MACOS_NOTARIZE_PW: ${{ secrets.MACOS_NOTARIZE_PW }}
+  #       run: |
+  #         xcrun notarytool store-credentials "$MACOS_NOTARIZE_KEYCHAIN_PROFILE" \
+  #             --apple-id "$MACOS_NOTARIZE_USER" \
+  #             --team-id "$MACOS_NOTARIZE_TEAMID" \
+  #             --password "$MACOS_NOTARIZE_PW"
 
-      - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-macos
-          buildPreset: ci-bundle-macos
+  #     - name: "bundle: assemble"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-macos
+  #         buildPreset: ci-bundle-macos
 
-      - name: "bundle: smoke test"
-        shell: bash
-        run: |
-          ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
+  #     - name: "bundle: smoke test"
+  #       shell: bash
+  #       run: |
+  #         ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
 
-      - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-macos
-          testPreset: ci-e2e-macos
+  #     - name: "bundle: e2e tests"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-macos
+  #         testPreset: ci-e2e-macos
 
-      - name: "package: setup installer signing certificate"
-        uses: apple-actions/import-codesign-certs@v1
-        if: env.MACOS_SIGN_PKG == 'ON'
-        with:
-          create-keychain: false
-          keychain-password: ${{ steps.keychain.outputs.keychain-password }}
-          p12-file-base64: ${{ secrets.MACOS_INSTALLER_CERT }}
-          p12-password: ${{ secrets.MACOS_CERT_PW }}
+  #     - name: "package: setup installer signing certificate"
+  #       uses: apple-actions/import-codesign-certs@v1
+  #       if: env.MACOS_SIGN_PKG == 'ON'
+  #       with:
+  #         create-keychain: false
+  #         keychain-password: ${{ steps.keychain.outputs.keychain-password }}
+  #         p12-file-base64: ${{ secrets.MACOS_INSTALLER_CERT }}
+  #         p12-password: ${{ secrets.MACOS_CERT_PW }}
 
-      - name: "package: ZIP & PKG"
-        shell: bash
-        run: |
-          cpack --preset=ci-macos
+  #     - name: "package: ZIP & PKG"
+  #       shell: bash
+  #       run: |
+  #         cpack --preset=ci-macos
 
-      - name: "package: save ZIP"
-        uses: actions/upload-artifact@v3
-        with:
-          name: Kart-macOS-${{ runner.arch }}-bundle
-          path: build/dist/Kart-*.zip
-          if-no-files-found: error
+  #     - name: "package: save ZIP"
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: Kart-macOS-${{ runner.arch }}-bundle
+  #         path: build/dist/Kart-*.zip
+  #         if-no-files-found: error
 
-      - name: "package: save PKG"
-        uses: actions/upload-artifact@v3
-        with:
-          name: Kart-macOS-${{ runner.arch }}-installer
-          path: build/dist/Kart-*.pkg
-          if-no-files-found: error
+  #     - name: "package: save PKG"
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: Kart-macOS-${{ runner.arch }}-installer
+  #         path: build/dist/Kart-*.pkg
+  #         if-no-files-found: error
 
-      - name: "package: tests"
-        run: |
-          sudo installer -pkg build/dist/Kart-*.pkg -dumplog -target /
-          readlink $(which kart)
-          # make sure good sqlite is in path
-          export PATH="$(pwd)/build/vcpkg_installed/x64-osx/tools:$PATH"
-          tests/scripts/e2e-1.sh
+  #     - name: "package: tests"
+  #       run: |
+  #         sudo installer -pkg build/dist/Kart-*.pkg -dumplog -target /
+  #         readlink $(which kart)
+  #         # make sure good sqlite is in path
+  #         export PATH="$(pwd)/build/vcpkg_installed/x64-osx/tools:$PATH"
+  #         tests/scripts/e2e-1.sh
 
-  #
-  # Windows via CMake+VCPKG
-  #
-  Windows:
-    strategy:
-      matrix:
-        os: [{id: windows-2019, label: "2019/x64"}]
-    runs-on: ${{ matrix.os.id }}
-    name: Windows ${{ matrix.os.label }}
+  # #
+  # # Windows via CMake+VCPKG
+  # #
+  # Windows:
+  #   strategy:
+  #     matrix:
+  #       os: [{id: windows-2019, label: "2019/x64"}]
+  #   runs-on: ${{ matrix.os.id }}
+  #   name: Windows ${{ matrix.os.label }}
 
-    env:
-      NINJA_VERSION: "~1.10.2"  # workaround for python logging output buffering noise
-      SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
+  #   env:
+  #     NINJA_VERSION: "~1.10.2"  # workaround for python logging output buffering noise
+  #     SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
 
-    # We want to run on external PRs, but not on our own internal PRs as they'll be run
-    # by the push to the branch.
-    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
-    # Skip Windows builds with eg: `[ci only linux]` unless it's master or a release tag.
-    if: >
-      (
-        github.event_name == 'push'
-        || github.event.pull_request.head.repo.full_name != github.repository
-      ) && (
-        startsWith(github.ref, 'refs/tags/v')
-        || github.ref == 'refs/heads/master'
-        || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
-      )
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
+  #   # We want to run on external PRs, but not on our own internal PRs as they'll be run
+  #   # by the push to the branch.
+  #   # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+  #   # Skip Windows builds with eg: `[ci only linux]` unless it's master or a release tag.
+  #   if: >
+  #     (
+  #       github.event_name == 'push'
+  #       || github.event.pull_request.head.repo.full_name != github.repository
+  #     ) && (
+  #       startsWith(github.ref, 'refs/tags/v')
+  #       || github.ref == 'refs/heads/master'
+  #       || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
+  #     )
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         submodules: recursive
 
-      # Setup
+  #     # Setup
 
-      - name: "msvc setup"
-        uses: ilammy/msvc-dev-cmd@v1
+  #     - name: "msvc setup"
+  #       uses: ilammy/msvc-dev-cmd@v1
 
-      - name: "setup: cmake"
-        uses: lukka/get-cmake@latest
-        with:
-          cmakeVersion: "${{ env.CMAKE_VERSION }}"
-          ninjaVersion: "${{ env.NINJA_VERSION }}"
+  #     - name: "setup: cmake"
+  #       uses: lukka/get-cmake@latest
+  #       with:
+  #         cmakeVersion: "${{ env.CMAKE_VERSION }}"
+  #         ninjaVersion: "${{ env.NINJA_VERSION }}"
 
-      - name: "setup: python"
-        uses: actions/setup-python@v4
-        with:
-          python-version: "${{ env.PY_VER }}"
-          architecture: x64
-          cache: 'pip'
-          cache-dependency-path: 'requirements/*.txt'
+  #     - name: "setup: python"
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: "${{ env.PY_VER }}"
+  #         architecture: x64
+  #         cache: 'pip'
+  #         cache-dependency-path: 'requirements/*.txt'
 
-      - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
-        with:
-          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
-          vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221201a"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:N${{ env.NINJA_VERSION }}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+  #     - name: "setup: vcpkg"
+  #       uses: lukka/run-vcpkg@v10
+  #       with:
+  #         vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
+  #         vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
+  #         prependedCacheKey: "20221201a"
+  #         appendedCacheKey: "C${{ env.CMAKE_VERSION}}:N${{ env.NINJA_VERSION }}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
-      - name: "setup: misc"
-        shell: pwsh
-        run: |
-          & dotnet tool install --global AzureSignTool --version 3.0.0
-          & choco install sqlite.shell
+  #     - name: "setup: misc"
+  #       shell: pwsh
+  #       run: |
+  #         & dotnet tool install --global AzureSignTool --version 3.0.0
+  #         & choco install sqlite.shell
 
-      #
-      # App Build
-      #
+  #     #
+  #     # App Build
+  #     #
 
-      - name: "app: version"
-        id: version
-        shell: bash
-        run: |
-          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
-            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
-            IS_RELEASE=1
-          else
-            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
-            IS_RELEASE=0
-          fi
-          echo "App Version: $VER"
-          echo "Is Release? $IS_RELEASE"
-          echo "value=$VER" >> $GITHUB_OUTPUT
-          echo "KART_VERSION=$VER" >> $GITHUB_ENV
-          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+  #     - name: "app: version"
+  #       id: version
+  #       shell: bash
+  #       run: |
+  #         if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+  #           VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
+  #           IS_RELEASE=1
+  #         else
+  #           VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+  #           IS_RELEASE=0
+  #         fi
+  #         echo "App Version: $VER"
+  #         echo "Is Release? $IS_RELEASE"
+  #         echo "value=$VER" >> $GITHUB_OUTPUT
+  #         echo "KART_VERSION=$VER" >> $GITHUB_ENV
+  #         echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
-          if (( $IS_RELEASE )) && [[ -n "$SIGN_AZURE_CERTIFICATE" ]]; then
-            echo "WIN_SIGN_BUNDLE=ON" >> $GITHUB_ENV
-            echo "WIN_SIGN_INSTALLER=ON" >> $GITHUB_ENV
-          else
-            echo "WIN_SIGN_BUNDLE=OFF" >> $GITHUB_ENV
-            echo "WIN_SIGN_INSTALLER=OFF" >> $GITHUB_ENV
-          fi
+  #         if (( $IS_RELEASE )) && [[ -n "$SIGN_AZURE_CERTIFICATE" ]]; then
+  #           echo "WIN_SIGN_BUNDLE=ON" >> $GITHUB_ENV
+  #           echo "WIN_SIGN_INSTALLER=ON" >> $GITHUB_ENV
+  #         else
+  #           echo "WIN_SIGN_BUNDLE=OFF" >> $GITHUB_ENV
+  #           echo "WIN_SIGN_INSTALLER=OFF" >> $GITHUB_ENV
+  #         fi
 
-      - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-windows
+  #     - name: "app: configuration & vendor dependencies"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-windows
 
-      - name: "check for vcpkg errors"
-        if: failure() || cancelled()
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
+  #     - name: "check for vcpkg errors"
+  #       if: failure() || cancelled()
+  #       run: |
+  #         echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
-      - name: "app: build"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-windows
-          buildPreset: ci-windows
+  #     - name: "app: build"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-windows
+  #         buildPreset: ci-windows
 
-      - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
-        with:
-          name: vendor-windows-${{ runner.arch }}-py${{ env.PY_VER }}
-          path: build/vcpkg-vendor/kart-vendor.*.zip
-          if-no-files-found: error
+  #     - name: "vendor: save archive"
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: vendor-windows-${{ runner.arch }}-py${{ env.PY_VER }}
+  #         path: build/vcpkg-vendor/kart-vendor.*.zip
+  #         if-no-files-found: error
 
-      #
-      # App tests & checks
-      #
+  #     #
+  #     # App tests & checks
+  #     #
 
-      - name: "test: smoke test"
-        shell: bash
-        run: |
-          ./build/kart.cmd --version
+  #     - name: "test: smoke test"
+  #       shell: bash
+  #       run: |
+  #         ./build/kart.cmd --version
 
-      - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-windows
-          testPreset: ci-windows
+  #     - name: "test: unit tests"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-windows
+  #         testPreset: ci-windows
 
-      #
-      # Packaging
-      #
+  #     #
+  #     # Packaging
+  #     #
 
-      - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
-        env:
-          SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
-          SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
-          SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}
-          SIGN_AZURE_TENANTID: ${{ secrets.WIN_SIGN_AZURE_TENANTID }}
-        with:
-          configurePreset: ci-windows
-          buildPreset: ci-bundle-windows
+  #     - name: "bundle: assemble"
+  #       uses: lukka/run-cmake@v10
+  #       env:
+  #         SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
+  #         SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
+  #         SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}
+  #         SIGN_AZURE_TENANTID: ${{ secrets.WIN_SIGN_AZURE_TENANTID }}
+  #       with:
+  #         configurePreset: ci-windows
+  #         buildPreset: ci-bundle-windows
 
-      - name: "bundle: smoke test"
-        shell: bash
-        run: |
-          ./build/pyinstaller/dist/kart/kart.exe --version
+  #     - name: "bundle: smoke test"
+  #       shell: bash
+  #       run: |
+  #         ./build/pyinstaller/dist/kart/kart.exe --version
 
-      - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-windows
-          testPreset: ci-e2e-windows
+  #     - name: "bundle: e2e tests"
+  #       uses: lukka/run-cmake@v10
+  #       with:
+  #         configurePreset: ci-windows
+  #         testPreset: ci-e2e-windows
 
-      - name: "package: ZIP & MSI"
-        env:
-          SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
-          SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
-          SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}
-          SIGN_AZURE_TENANTID: ${{ secrets.WIN_SIGN_AZURE_TENANTID }}
-        shell: bash
-        run: |
-          if ! cpack --preset=ci-windows; then
-            cat build/dist/_CPack_Packages/win64/WIX/wix.log
-            exit 1
-          fi
+  #     - name: "package: ZIP & MSI"
+  #       env:
+  #         SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
+  #         SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
+  #         SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}
+  #         SIGN_AZURE_TENANTID: ${{ secrets.WIN_SIGN_AZURE_TENANTID }}
+  #       shell: bash
+  #       run: |
+  #         if ! cpack --preset=ci-windows; then
+  #           cat build/dist/_CPack_Packages/win64/WIX/wix.log
+  #           exit 1
+  #         fi
 
-      - name: "package: save ZIP"
-        uses: actions/upload-artifact@v3
-        with:
-          name: Kart-windows-${{ runner.arch }}-bundle
-          path: build/dist/Kart-*.zip
-          if-no-files-found: error
+  #     - name: "package: save ZIP"
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: Kart-windows-${{ runner.arch }}-bundle
+  #         path: build/dist/Kart-*.zip
+  #         if-no-files-found: error
 
-      - name: "package: save MSI"
-        uses: actions/upload-artifact@v3
-        with:
-          name: Kart-windows-${{ runner.arch }}-installer
-          path: build/dist/Kart-*.msi
-          if-no-files-found: error
+  #     - name: "package: save MSI"
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: Kart-windows-${{ runner.arch }}-installer
+  #         path: build/dist/Kart-*.msi
+  #         if-no-files-found: error
 
-      - name: "package: tests"
-        shell: pwsh
-        run: |
-          $ErrorView = 'NormalView'
-          $msi = Resolve-Path -Path ".\build\dist\Kart-*.msi" | Select-Object -ExpandProperty Path
-          $sqlitePath = Resolve-Path -Path ".\build\vcpkg_installed\x64-windows\tools" | Select-Object -ExpandProperty Path
+  #     - name: "package: tests"
+  #       shell: pwsh
+  #       run: |
+  #         $ErrorView = 'NormalView'
+  #         $msi = Resolve-Path -Path ".\build\dist\Kart-*.msi" | Select-Object -ExpandProperty Path
+  #         $sqlitePath = Resolve-Path -Path ".\build\vcpkg_installed\x64-windows\tools" | Select-Object -ExpandProperty Path
 
-          Write-Host "Installing $msi ..." -ForegroundColor Green
-          & "msiexec.exe" /I $msi /quiet /norestart /l* install.log | Out-Default
-          if (!$?) {
-            Get-Content install.log
-            throw "MSI install failed"
-          }
+  #         Write-Host "Installing $msi ..." -ForegroundColor Green
+  #         & "msiexec.exe" /I $msi /quiet /norestart /l* install.log | Out-Default
+  #         if (!$?) {
+  #           Get-Content install.log
+  #           throw "MSI install failed"
+  #         }
 
-          Write-Host "Refreshing system path..." -ForegroundColor Green
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User") + ";" + $sqlitePath
+  #         Write-Host "Refreshing system path..." -ForegroundColor Green
+  #         $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User") + ";" + $sqlitePath
 
-          Write-Host "Checking Kart runs..." -ForegroundColor Green
-          & "kart" --version  | Out-Default
-          if (!$?) {throw "Smoke test Failed"}
+  #         Write-Host "Checking Kart runs..." -ForegroundColor Green
+  #         & "kart" --version  | Out-Default
+  #         if (!$?) {throw "Smoke test Failed"}
 
-          Write-Host "Running Kart E2E tests..." -ForegroundColor Green
-          & "tests\scripts\e2e-1.ps1" | Out-Default
-          if (!$?) {throw "E2E test Failed"}
+  #         Write-Host "Running Kart E2E tests..." -ForegroundColor Green
+  #         & "tests\scripts\e2e-1.ps1" | Out-Default
+  #         if (!$?) {throw "E2E test Failed"}
