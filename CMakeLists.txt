@@ -384,13 +384,12 @@ elseif(LINUX)
 
   set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
   set(CPACK_RPM_PACKAGE_LICENSE "GPLv2")
-  set(CPACK_RPM_PACKAGE_REQUIRES
-      "openssh-clients, libstdc++, libgcc, bzip2-libs, expat, xz-libs, libstdc++, ncurses-libs, zlib"
-  )
+  set(CPACK_RPM_PACKAGE_REQUIRES "openssh-clients")
   set(CPACK_RPM_PACKAGE_AUTOREQPROV OFF)
   set(CPACK_RPM_PACKAGE_RELOCATABLE OFF)
   set(CPACK_RPM_SPEC_CHANGELOG ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md)
-  set(CPACK_RPM_SPEC_MORE_DEFINE "%define _build_id_links none")
+  set(CPACK_RPM_SPEC_MORE_DEFINE
+      "%define _build_id_links none\n%define __python ${Python3_EXECUTABLE}")
 
   # https://gitlab.kitware.com/cmake/cmake/-/issues/21520
   file(

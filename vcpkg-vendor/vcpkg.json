@@ -12,7 +12,10 @@
         {
             "name": "libpq",
             "features": [
-                "client"
+                "client",
+                "lz4",
+                "openssl",
+                "zlib"
             ]
         },
         {
@@ -61,6 +64,10 @@
         },
         {
             "name": "libffi"
+        },
+        {
+            "name": "python3",
+            "platform": "linux"
         }
     ]
 }
