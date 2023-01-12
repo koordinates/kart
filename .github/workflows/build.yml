@@ -209,36 +209,36 @@ jobs:
         || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
 
-    # services:
-    #   postgis:
-    #     # https://github.com/postgis/docker-postgis/issues/216
-    #     image: ghcr.io/baosystems/postgis
-    #     options: >-
-    #       --health-cmd pg_isready
-    #       --health-interval 2s
-    #       --health-timeout 2s
-    #       --health-retries 5
-    #       -e POSTGRES_HOST_AUTH_METHOD=trust
-    #     ports:
-    #       - 5432:5432
-    #   sqlserver:
-    #     image: mcr.microsoft.com/mssql/server
-    #     options: >-
-    #       -e ACCEPT_EULA=Y
-    #       -e SA_PASSWORD=PassWord1
-    #     ports:
-    #       - 1433:1433
-    #   mysql:
-    #     image: mysql
-    #     options: >-
-    #       -e MYSQL_ROOT_PASSWORD=PassWord1
-    #     ports:
-    #       - 3306:3306
+    services:
+      postgis:
+        # https://github.com/postgis/docker-postgis/issues/216
+        image: ghcr.io/baosystems/postgis
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 5
+          -e POSTGRES_HOST_AUTH_METHOD=trust
+        ports:
+          - 5432:5432
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server
+        options: >-
+          -e ACCEPT_EULA=Y
+          -e SA_PASSWORD=PassWord1
+        ports:
+          - 1433:1433
+      mysql:
+        image: mysql
+        options: >-
+          -e MYSQL_ROOT_PASSWORD=PassWord1
+        ports:
+          - 3306:3306
 
     env:
-      # KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
-      # KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
-      # KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
+      KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
+      KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
+      KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
       ARCH: "amd64"
       ARCH_TRIPLET: "x64-linux"
       GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
