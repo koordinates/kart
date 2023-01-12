@@ -139,9 +139,11 @@ def helper(ctx, socket_filename, timeout, args):
 
                 try:
                     calling_environment = json.loads(payload)
-                except (TypeError, ValueError) as e:
-                    click.echo(
-                        "kart helper: Unable to read command from kart_cli_helper", e
+                except (TypeError, ValueError, json.decoder.JSONDecodeError) as e:
+                    raise RuntimeError(
+                        "kart helper: Unable to read command from kart_cli_helper",
+                        e,
+                        f"Payload:\n{repr(payload)}",
                     )
                 else:
                     sys.argv[1:] = calling_environment["argv"][1:]
