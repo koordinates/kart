@@ -110,7 +110,7 @@ def helper(ctx, socket_filename, timeout, args):
         try:
             client, info = sock.accept()
             if os.fork() == 0:
-                payload, fds = recv_fds(client, 8164, 4)
+                payload, fds = recv_fds(client, 81640, 4)
                 if not payload or len(fds) != 4:
                     click.echo("No payload or fds passed from kart_cli_helper")
                     sys.exit(-1)
