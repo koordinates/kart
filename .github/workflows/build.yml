@@ -293,6 +293,8 @@ jobs:
 
       - name: "setup: misc"
         run: |
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
           yum install -y perl-IPC-Cmd rpm-build unixODBC zip
@@ -377,7 +379,7 @@ jobs:
         run: |
           curl https://packages.microsoft.com/config/rhel/7/prod.repo > /etc/yum.repos.d/mssql-release.repo
           ACCEPT_EULA=Y yum install -y msodbcsql18 mssql-tools
-          echo "KART_SQLSERVER_URL=${SQLSERVER_URL" >> $GITHUB_ENV
+          echo "KART_SQLSERVER_URL=${SQLSERVER_URL}" >> $GITHUB_ENV
 
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
