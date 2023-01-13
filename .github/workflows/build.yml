@@ -260,20 +260,18 @@ jobs:
       GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
       PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf"
       PKG_CONFIG_PATH: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/lib/pkgconfig"
+      ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
+      PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
       OPTIONS_FOR_CMAKE: >-
         [
         '-DPython3_EXECUTABLE=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}/tools/python3/python3.10',
         '-DPython3_ROOT=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}',
         '-DPKG_CONFIG_EXECUTABLE=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf',
-        '-DPKG_CONFIG_PATH=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/lib/pkgconfig',
         '-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=${{ matrix.os.arch }}'
         ]
 
     container:
       image: ${{ matrix.os.image }}
-      env:
-        ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
-        PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
       - uses: actions/checkout@v3
@@ -294,6 +292,7 @@ jobs:
           rust-version: stable
 
       - name: "setup: misc"
+        shell: bash
         run: |
           echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
@@ -318,6 +317,7 @@ jobs:
 
       - name: "setup: pkgconf"
         working-directory: /__w/_temp
+        shell: bash
         run: |
           ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf
 
@@ -327,6 +327,7 @@ jobs:
 
       - name: "app: version"
         id: version
+        shell: bash
         run: |
           if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
             VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
@@ -351,14 +352,18 @@ jobs:
 
       - name: "check for vcpkg errors"
         if: "failure() || cancelled()"
+        shell: bash
         run: |
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
+        shell: bash
         run: |
+          set -x
+          echo "UNAME=[$(uname -m)]"
           find /__w/kart/kart/build -type f -name python3.10
           ldd /__w/kart/kart/build/vcpkg_installed/${ARCH_TRIPLET}/tools/python3/python3.10
-          readelf -d /build/vcpkg_installed/arm64-linux/tools/python3/python3.10 | head -20
+          readelf -d /__w/kart/kart/build/vcpkg_installed/arm64-linux/tools/python3/python3.10 | head -20
           /__w/kart/kart/build/vcpkg_installed/${ARCH_TRIPLET}/tools/python3/python3.10 -V
 
           cmake --build --preset=ci-linux --verbose
@@ -375,17 +380,20 @@ jobs:
       #
 
       - name: "test: smoke test"
+        shell: bash
         run: |
           ./build/kart --version
 
       - name: "test: install MSSQL database drivers for tests"
         if: matrix.os.arch != 'arm64'
+        shell: bash
         run: |
           curl https://packages.microsoft.com/config/rhel/7/prod.repo > /etc/yum.repos.d/mssql-release.repo
           ACCEPT_EULA=Y yum install -y msodbcsql18 mssql-tools
           echo "KART_SQLSERVER_URL=${SQLSERVER_URL}" >> $GITHUB_ENV
 
       - name: "test: unit tests"
+        shell: bash
         run: |
           ctest --preset=ci-linux
 
@@ -394,6 +402,7 @@ jobs:
       #
 
       - name: "bundle: assemble"
+        shell: bash
         run: |
           cmake --build --preset=ci-bundle-linux --verbose
 
@@ -403,6 +412,7 @@ jobs:
           ./build/pyinstaller/dist/kart/kart --version
 
       - name: "bundle: e2e tests"
+        shell: bash
         run: |
           ctest --preset=ci-e2e-linux
 

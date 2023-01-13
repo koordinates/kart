@@ -191,11 +191,10 @@ if ! command -v dpkg >/dev/null 2>&1; then
 fi
 
 echo "🌀  running kart cmake configuration..."
-cmake -B /build -S . -DUSE_VCPKG=ON \
+cmake -B /build -S . --preset=ci-linux \
     -DPython3_EXECUTABLE=/build/vcpkg_installed/${ARCH}-linux/tools/python3/python${PYVER} \
     -DPython3_ROOT=/build/vcpkg_installed/${ARCH}-linux \
     -DPKG_CONFIG_EXECUTABLE=${PKG_CONFIG} \
-    -DPKG_CONFIG_PATH=${PKG_CONFIG_PATH} \
     ${EXTRA_CMAKE_OPTIONS-}
 
 export LD_LIBRARY_PATH=${BACKUP_LD_LIBRARY_PATH}
