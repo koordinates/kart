@@ -313,7 +313,7 @@ jobs:
         with:
           vcpkgDirectory: "vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a-linux-${{ matrix.os.label }}"
+          prependedCacheKey: "20230113a-linux-${{ matrix.os.label }}"
           appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       - name: "setup: pkgconf"
