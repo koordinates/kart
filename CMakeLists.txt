@@ -173,17 +173,21 @@ if(BUILD_TESTING)
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     set_property(TEST pytest PROPERTY LABELS "pytest")
 
-    add_test(
-      NAME pytest-mssql
-      COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    set_property(TEST pytest-mssql PROPERTY LABELS "pytest")
+    if(DEFINED ENV{KART_SQLSERVER_URL})
+      add_test(
+        NAME pytest-mssql
+        COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+      set_property(TEST pytest-mssql PROPERTY LABELS "pytest")
+    endif()
 
-    add_test(
-      NAME pytest-mysql
-      COMMAND ${VENV_PYTEST} -v -p no:xdist -m mysql ${PYTEST_ARGS}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    set_property(TEST pytest-mysql PROPERTY LABELS "pytest")
+    if(DEFINED ENV{KART_MYSQL_URL})
+      add_test(
+        NAME pytest-mysql
+        COMMAND ${VENV_PYTEST} -v -p no:xdist -m mysql ${PYTEST_ARGS}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+      set_property(TEST pytest-mysql PROPERTY LABELS "pytest")
+    endif()
   else()
     add_test(
       NAME pytest
