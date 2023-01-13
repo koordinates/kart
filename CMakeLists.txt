@@ -164,12 +164,12 @@ if(BUILD_TESTING)
   #
   # Main unit tests (label=pytest)
   #
-  if(DEFINED LINUX AND DEFINED ENV{KART_SQLSERVER_URL})
-    # pytest-xdist causes some weird behaviour with pyodbc on Linux. Split MSSQL tests out into a
+  if(DEFINED LINUX AND (DEFINED ENV{KART_SQLSERVER_URL} OR DEFINED ENV{KART_MYSQL_URL}))
+    # pytest-xdist causes some weird behaviour with pyodbc/mysqldb on Linux. Split tests out into a
     # separate pytest run.
     add_test(
       NAME pytest
-      COMMAND ${VENV_PYTEST} -v -m "not\ mssql" ${PYTEST_ARGS}
+      COMMAND ${VENV_PYTEST} -v -m "not\ mssql\ and\ not\ mysql" ${PYTEST_ARGS}
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     set_property(TEST pytest PROPERTY LABELS "pytest")
 
@@ -178,6 +178,12 @@ if(BUILD_TESTING)
       COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS}
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     set_property(TEST pytest-mssql PROPERTY LABELS "pytest")
+
+    add_test(
+      NAME pytest-mysql
+      COMMAND ${VENV_PYTEST} -v -p no:xdist -m mysql ${PYTEST_ARGS}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_property(TEST pytest-mysql PROPERTY LABELS "pytest")
   else()
     add_test(
       NAME pytest
