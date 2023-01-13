@@ -260,7 +260,7 @@ jobs:
       GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
       PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf"
       PKG_CONFIG_PATH: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/lib/pkgconfig"
-      CMAKE_CONFIGURE_ARGS: >-
+      OPTIONS_FOR_CMAKE: >-
         [
         '-DPython3_EXECUTABLE=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}/tools/python3/python3.10',
         '-DPython3_ROOT=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}',
@@ -347,7 +347,7 @@ jobs:
           LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
         with:
           configurePreset: ci-linux
-          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
+          configurePresetAdditionalArgs: ${{ env.OPTIONS_FOR_CMAKE }}
 
       - name: "check for vcpkg errors"
         if: "failure() || cancelled()"
@@ -356,6 +356,11 @@ jobs:
 
       - name: "app: build"
         run: |
+          find /__w/kart/kart/build -type f -name python3.10
+          ldd /__w/kart/kart/build/vcpkg_installed/${ARCH_TRIPLET}/tools/python3/python3.10
+          readelf -d /build/vcpkg_installed/arm64-linux/tools/python3/python3.10 | head -20
+          /__w/kart/kart/build/vcpkg_installed/${ARCH_TRIPLET}/tools/python3/python3.10 -V
+
           cmake --build --preset=ci-linux --verbose
 
       - name: "vendor: save archive"
