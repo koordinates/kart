@@ -192,8 +192,24 @@ jobs:
   #         testPreset: ci-e2e-linux
 
   Linux-Packaging:
-    name: Linux Packaging
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - base: ubuntu-22.04
+            label: centos7/amd64
+            image: quay.io/pypa/manylinux2014_x86_64
+            arch: amd64
+            arch_triplet: x64-linux
+
+          - base: buildjet-2vcpu-ubuntu-2204-arm
+            label: centos7/arm64
+            image: quay.io/pypa/manylinux2014_aarch64
+            arch: arm64
+            arch_triplet: arm64-linux
+
+    name: Linux ${{ matrix.os.label }}
+    runs-on: ${{ matrix.os.base }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -237,24 +253,24 @@ jobs:
 
     env:
       KART_POSTGRES_URL: "postgresql://postgres:@postgis:5432/postgres"
-      KART_SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
+      SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
       KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
-      ARCH: "amd64"
-      ARCH_TRIPLET: "x64-linux"
+      ARCH: "${{ matrix.os.arch }}"
+      ARCH_TRIPLET: "${{ matrix.os.arch_triplet }}"
       GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
       CMAKE_CONFIGURE_ARGS: >-
         [
-        '-DPython3_EXECUTABLE=/__w/kart/kart/build/vcpkg_installed/x64-linux/tools/python3/python3.10',
-        '-DPython3_ROOT=/__w/kart/kart/build/vcpkg_installed/x64-linux',
-        '-DPKG_CONFIG_EXECUTABLE=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/x64-linux/tools/pkgconf/pkgconf',
-        '-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=amd64'
+        '-DPython3_EXECUTABLE=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}/tools/python3/python3.10',
+        '-DPython3_ROOT=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}',
+        '-DPKG_CONFIG_EXECUTABLE=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf',
+        '-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=${{ matrix.os.arch }}'
         ]
 
     container:
-      image: quay.io/pypa/manylinux2014_x86_64
+      image: ${{ matrix.os.image }}
       env:
         ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
-        PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/x64-linux/tools/pkgconf/pkgconf"
+        PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf"
         PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
@@ -284,18 +300,22 @@ jobs:
           curl -qL "https://go.dev/dl/go1.19.2.linux-${ARCH}.tar.gz" | tar xz -C /usr/local/
           ln -sf /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/
 
+          if [ "${ARCH}" == "arm64" ]; then
+            echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
+          fi
+
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v10
         with:
           vcpkgDirectory: "vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a-linux-centos7"
+          prependedCacheKey: "20221110a-linux-${{ matrix.os.label }}"
           appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       - name: "setup: pkgconf"
         run: |
           cd /__w/_temp
-          ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf --overlay-triplets=${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg-overlay-triplets --triplet=x64-linux
+          ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf --overlay-triplets=${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg-overlay-triplets --triplet=${ARCH_TRIPLET}
 
       #
       # App Build
@@ -330,13 +350,6 @@ jobs:
         run: |
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
-      - name: "vcpkg: save error logs"
-        uses: actions/upload-artifact@v3
-        if: "failure()"
-        with:
-          name: vcpkg-linux-logs
-          path: vcpkg-vendor/vcpkg/buildtrees/*/*.log
-
       - name: "app: build"
         uses: lukka/run-cmake@v10
         with:
@@ -359,10 +372,12 @@ jobs:
         run: |
           ./build/kart --version
 
-      - name: "test: install database drivers for tests"
+      - name: "test: install MSSQL database drivers for tests"
+        if: matrix.os.arch != 'arm64'
         run: |
           curl https://packages.microsoft.com/config/rhel/7/prod.repo > /etc/yum.repos.d/mssql-release.repo
           ACCEPT_EULA=Y yum install -y msodbcsql18 mssql-tools
+          echo "KART_SQLSERVER_URL=${SQLSERVER_URL" >> $GITHUB_ENV
 
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
@@ -402,21 +417,21 @@ jobs:
       - name: "package: save TGZ"
         uses: actions/upload-artifact@v3
         with:
-          name: Kart-linux-${{ runner.arch }}-tgz
+          name: Kart-linux-${{ matrix.os.arch }}-tgz
           path: build/dist/Kart-*.tar.gz
           if-no-files-found: error
 
       - name: "package: save DEB"
         uses: actions/upload-artifact@v3
         with:
-          name: Kart-linux-${{ runner.arch }}-deb
+          name: Kart-linux-${{ matrix.os.arch }}-deb
           path: build/dist/kart_*.deb
           if-no-files-found: error
 
       - name: "package: save RPM"
         uses: actions/upload-artifact@v3
         with:
-          name: Kart-linux-${{ runner.arch }}-rpm
+          name: Kart-linux-${{ matrix.os.arch }}-rpm
           path: build/dist/kart-*.rpm
           if-no-files-found: error
 
