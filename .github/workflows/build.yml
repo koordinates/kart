@@ -258,11 +258,14 @@ jobs:
       ARCH: "${{ matrix.os.arch }}"
       ARCH_TRIPLET: "${{ matrix.os.arch_triplet }}"
       GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
+      PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf"
+      PKG_CONFIG_PATH: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/lib/pkgconfig"
       CMAKE_CONFIGURE_ARGS: >-
         [
         '-DPython3_EXECUTABLE=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}/tools/python3/python3.10',
         '-DPython3_ROOT=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}',
         '-DPKG_CONFIG_EXECUTABLE=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf',
+        '-DPKG_CONFIG_PATH=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/lib/pkgconfig',
         '-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=${{ matrix.os.arch }}'
         ]
 
@@ -270,7 +273,6 @@ jobs:
       image: ${{ matrix.os.image }}
       env:
         ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
-        PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf"
         PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
@@ -315,9 +317,9 @@ jobs:
           appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       - name: "setup: pkgconf"
+        working-directory: /__w/_temp
         run: |
-          cd /__w/_temp
-          ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf --overlay-triplets=${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg-overlay-triplets --triplet=${ARCH_TRIPLET}
+          ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf
 
       #
       # App Build
