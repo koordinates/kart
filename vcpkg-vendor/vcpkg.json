@@ -1,7 +1,7 @@
 {
     "name": "kart-vendor",
     "version-string": "0.1.2",
-    "builtin-baseline": "739824a6d3179d85820eedc0637e81c0c68b874c",
+    "builtin-baseline": "f19e7e3386bee6d432948b34b406bd0dd8b02be5",
     "dependencies": [
         {
             "name": "sqlite3",
@@ -12,10 +12,7 @@
         {
             "name": "libpq",
             "features": [
-                "client",
-                "lz4",
-                "openssl",
-                "zlib"
+                "client"
             ]
         },
         {

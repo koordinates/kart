@@ -359,13 +359,6 @@ jobs:
       - name: "app: build"
         shell: bash
         run: |
-          set -x
-          echo "UNAME=[$(uname -m)]"
-          find /__w/kart/kart/build -type f -name python3.10
-          ldd /__w/kart/kart/build/vcpkg_installed/${ARCH_TRIPLET}/tools/python3/python3.10
-          readelf -d /__w/kart/kart/build/vcpkg_installed/arm64-linux/tools/python3/python3.10 | head -20
-          /__w/kart/kart/build/vcpkg_installed/${ARCH_TRIPLET}/tools/python3/python3.10 -V
-
           cmake --build --preset=ci-linux --verbose
 
       - name: "vendor: save archive"
