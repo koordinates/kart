@@ -1,12 +1,12 @@
-Datasets V1 (& earlier)
-=======================
+Table Datasets V1 (& earlier)
+=============================
 
-`Datasets V3 </pages/development/datasets_v3>`__ is the current repository structure
-Kart uses - Datasets V1 is no longer supported except that Kart can
-upgrade an old repo from Datasets V1 to Datasets V3, using
+`Table Datasets V3 </pages/development/table_v3>`_ is the current repository structure
+Kart uses - Table Datasets V1 is no longer supported except that Kart can
+upgrade an old repo from Table Datasets V1 to Table Datasets V3, using
 ``kart upgrade SOURCE DEST``.
 
-Nevertheless, documentation for Datasets V1 follows.
+Nevertheless, rough original documentation for Table Datasets V1 follows.
 
 Repository Layout:
 
