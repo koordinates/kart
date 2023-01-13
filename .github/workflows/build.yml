@@ -355,13 +355,8 @@ jobs:
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
-        uses: lukka/run-cmake@v10
-        env:
-          LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
-        with:
-          configurePreset: ci-linux
-          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
-          buildPreset: ci-linux
+        run: |
+          cmake --build --preset=ci-linux --verbose
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
@@ -386,24 +381,16 @@ jobs:
           echo "KART_SQLSERVER_URL=${SQLSERVER_URL}" >> $GITHUB_ENV
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-linux
-          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
-          testPreset: ci-linux
+        run: |
+          ctest --preset=ci-linux
 
       #
       # Packaging
       #
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
-        env:
-          LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
-        with:
-          configurePreset: ci-linux
-          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
-          buildPreset: ci-bundle-linux
+        run: |
+          cmake --build --preset=ci-bundle-linux --verbose
 
       - name: "bundle: smoke test"
         shell: bash
@@ -411,11 +398,8 @@ jobs:
           ./build/pyinstaller/dist/kart/kart --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ci-linux
-          configurePresetAdditionalArgs: ${{ env.CMAKE_CONFIGURE_ARGS }}
-          testPreset: ci-e2e-linux
+        run: |
+          ctest --preset=ci-e2e-linux
 
       - name: "package: TGZ & DEB & RPM"
         shell: bash
