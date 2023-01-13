@@ -260,8 +260,6 @@ jobs:
       GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
       PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf"
       PKG_CONFIG_PATH: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/lib/pkgconfig"
-      ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
-      PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
       OPTIONS_FOR_CMAKE: >-
         [
         '-DPython3_EXECUTABLE=/__w/kart/kart/build/vcpkg_installed/${{ matrix.os.arch_triplet }}/tools/python3/python3.10',
@@ -272,6 +270,9 @@ jobs:
 
     container:
       image: ${{ matrix.os.image }}
+      env:
+        ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
+        PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
       - uses: actions/checkout@v3
