@@ -91,9 +91,11 @@ else
     case "$(arch)" in
         "x86_64")
             ARCH=amd64
+            TRIPLET=x64-linux
             ;;
         "aarch64")
             ARCH=arm64
+            TRIPLET=arm64-linux
             ;;
         *)
             echo "Unknown arch: $(arch)"
@@ -176,13 +178,13 @@ fi
 
 echo "🌀  installing pkg-config via vcpkg..."
 (cd /tmp && /src/vcpkg-vendor/vcpkg/vcpkg install pkgconf)
-export PKG_CONFIG=/src/vcpkg-vendor/vcpkg/installed/${ARCH}-linux/tools/pkgconf/pkgconf
-export PKG_CONFIG_PATH=/src/vcpkg-vendor/vcpkg/installed/${ARCH}-linux/lib/pkgconfig
+export PKG_CONFIG=/src/vcpkg-vendor/vcpkg/installed/${TRIPLET}/tools/pkgconf/pkgconf
+export PKG_CONFIG_PATH=/src/vcpkg-vendor/vcpkg/installed/${TRIPLET}/lib/pkgconfig
 
 BACKUP_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 if [ -n "$LD_LIBRARY_PATH" ]; then
     echo "🌀  override LD_LIBRARY_PATH for vcpkg run..."
-    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/build/vcpkg_installed/${ARCH}-linux/lib
+    export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/build/vcpkg_installed/${TRIPLET}/lib
 fi
 
 if ! command -v dpkg >/dev/null 2>&1; then
@@ -192,8 +194,8 @@ fi
 
 echo "🌀  running kart cmake configuration..."
 cmake -B /build -S . --preset=ci-linux \
-    -DPython3_EXECUTABLE=/build/vcpkg_installed/${ARCH}-linux/tools/python3/python${PYVER} \
-    -DPython3_ROOT=/build/vcpkg_installed/${ARCH}-linux \
+    -DPython3_EXECUTABLE=/build/vcpkg_installed/${TRIPLET}/tools/python3/python${PYVER} \
+    -DPython3_ROOT=/build/vcpkg_installed/${TRIPLET} \
     -DPKG_CONFIG_EXECUTABLE=${PKG_CONFIG} \
     ${EXTRA_CMAKE_OPTIONS-}
 
