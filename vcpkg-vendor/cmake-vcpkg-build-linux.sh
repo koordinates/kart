@@ -3,12 +3,13 @@ set -euo pipefail
 
 #
 # invoke via
-#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it ubuntu:focal
+#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it quay.io/pypa/manylinux2014_x86_64
 #   mycontainer $ vcpkg-vendor/cmake-vcpkg-build-linux.sh [--verbose]
 #
-# manylinux images:
+# manylinux images are per-arch
 # - quay.io/pypa/manylinux2014_x86_64
 # - quay.io/pypa/manylinux2014_aarch64
+# should also work with most other OS images too (eg: ubuntu:jammy, ubuntu:focal)
 
 PYVER=3.10
 APT_DEPENDS=(
@@ -45,6 +46,7 @@ PY_DEPENDS=(
     ninja
 )
 MIN_GOLANG_VERSION=1.17
+MIN_PATCHELF_VERSION=0.17.2
 CMAKE_VERSION=3.25.0
 PYTHON=python${PYVER}
 
@@ -176,10 +178,12 @@ if ! [ -f vcpkg-vendor/vcpkg/vcpkg ] || ! [[ "$(file vcpkg-vendor/vcpkg/vcpkg)" 
     vcpkg-vendor/vcpkg/bootstrap-vcpkg.sh
 fi
 
-
-echo "🌀  installing patchelf 0.17.2..."
-curl -L https://github.com/NixOS/patchelf/releases/download/0.17.2/patchelf-0.17.2-$(arch).tar.gz | tar xz -C /usr/local
-patchelf --version
+PATCHELF_VERSION=$(patchelf --version | awk '{print $2}')
+if [ "${MIN_PATCHELF_VERSION}" != "$(echo -e "${MIN_PATCHELF_VERSION}\\n${PATCHELF_VERSION}" | sort -V | head -n1)" ]; then
+    echo "🌀  installing patchelf 0.17.2..."
+    curl -L https://github.com/NixOS/patchelf/releases/download/0.17.2/patchelf-0.17.2-$(arch).tar.gz | tar xz -C /usr/local
+    patchelf --version
+fi
 
 echo "🌀  installing pkg-config via vcpkg..."
 (cd /tmp && /src/vcpkg-vendor/vcpkg/vcpkg install pkgconf)
@@ -209,8 +213,12 @@ export LD_LIBRARY_PATH=${BACKUP_LD_LIBRARY_PATH}
 echo "🌀  running kart cmake build..."
 cmake --build /build --verbose
 
+/build/kart --version
+
 echo "🌀  running kart-bundle cmake build..."
 cmake --build /build --target bundle --verbose
+
+/build/pyinstaller/dist/kart/kart --version
 
 if [ $# -eq 0 ]; then
     echo "🌀  running cpack..."
