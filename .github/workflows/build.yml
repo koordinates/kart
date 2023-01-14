@@ -202,19 +202,20 @@ jobs:
             arch: amd64
             arch_triplet: x64-linux
 
-          - base: buildjet-2vcpu-ubuntu-2204-arm
+          - base: buildjet-4vcpu-ubuntu-2204-arm
             label: centos7/arm64
             image: quay.io/pypa/manylinux2014_aarch64
             arch: arm64
             arch_triplet: arm64-linux
 
-    name: Linux ${{ matrix.os.label }}
+    name: Linux ${{ matrix.os.arch }}
     runs-on: ${{ matrix.os.base }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
     # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
+    # BuildJet for arm64 is only available on the Kx repo
     if: >
       (
         github.event_name == 'push'
@@ -224,6 +225,10 @@ jobs:
         || github.ref == 'refs/heads/master'
         || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
+
+#      ) && ! (
+#          matrix.os.arch == 'arm64' && github.repository != 'koordinates/kart'
+#      )
 
     services:
       postgis:
@@ -435,6 +440,100 @@ jobs:
           name: Kart-linux-${{ matrix.os.arch }}-rpm
           path: build/dist/kart-*.rpm
           if-no-files-found: error
+
+  Linux-packaging-tests:
+    needs: ["Linux-Packaging"]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - label: amd64
+            runner: ubuntu-22.04
+          - label: arm64
+            runner: buildjet-2vcpu-ubuntu-2204-arm
+        os:
+          - label: "ubuntu-22.04"
+            image: "ubuntu:jammy"
+            type: "deb"
+          - label: "ubuntu-20.04"
+            image: "ubuntu:focal"
+            type: "deb"
+          - label: "ubuntu-18.04"
+            image: "ubuntu:bionic"
+            type: "deb"
+          - label: "debian-stable"
+            image: "debian:stable-slim"
+            type: "deb"
+          - label: "debian-oldstable"
+            image: "debian:oldstable-slim"
+            type: "deb"
+          - label: "debian-oldoldstable"
+            image: "debian:oldoldstable-slim"
+            type: "deb"
+          - label: "fedora-latest"
+            image: "fedora:latest"
+            type: "rpm"
+          - label: "almalinux-9"
+            image: "almalinux:9-minimal"
+            type: "rpm"
+          - label: "almalinux-8"
+            image: "almalinux:8-minimal"
+            type: "rpm"
+
+    runs-on: ${{ matrix.arch.runner }}
+    name: ${{ matrix.os.label }}/${{ matrix.arch.label }}
+    container:
+      image: ${{ matrix.os.image }}
+      env:
+        DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: setup
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os.type }}" == "deb" ]]; then
+            apt update -q
+            apt install -q -y --no-install-recommends sqlite3
+          else
+            yum install -y sqlite
+          fi
+
+      - name: get kart installer
+        uses: actions/download-artifact@v3
+        with:
+          name: Kart-linux-${{ matrix.arch.label }}-${{ matrix.os.type }}
+
+      - name: install kart
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os.type }}" == "deb" ]]; then
+            apt install -y ./kart_*.deb
+          else
+            yum install -y ./kart-*.rpm
+          fi
+
+      - name: smoke test
+        shell: bash
+        run: |
+          /opt/kart/kart --version
+          command -v kart
+          kart --version
+
+      - uses: actions/checkout@v3
+
+      - name: e2e test (no helper)
+        env:
+          KART_USE_HELPER: "0"
+        shell: bash
+        run: |
+          time tests/scripts/e2e-1.sh
+
+      - name: e2e test (helper)
+        env:
+          KART_USE_HELPER: "1"
+        shell: bash
+        run: |
+          time tests/scripts/e2e-1.sh
 
   #
   # macOS via CMake+VCPKG
