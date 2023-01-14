@@ -484,7 +484,7 @@ jobs:
             type: "rpm"
 
     runs-on: ${{ matrix.arch.runner }}
-    name: "Installer tests: Linux ${{ matrix.os.label }}/${{ matrix.arch.label }}"
+    name: "Install-check: ${{ matrix.os.label }}/${{ matrix.arch.label }}"
 
     container:
       image: ${{ matrix.os.image }}
