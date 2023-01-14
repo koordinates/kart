@@ -208,7 +208,7 @@ jobs:
             arch: arm64
             arch_triplet: arm64-linux
 
-    name: Linux ${{ matrix.os.arch }}
+    name: Build Linux ${{ matrix.os.arch }}
     runs-on: ${{ matrix.os.base }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
@@ -365,7 +365,7 @@ jobs:
       - name: "app: build"
         shell: bash
         run: |
-          cmake --build --preset=ci-linux --verbose
+          cmake --build --preset=ci-linux --verbose --parallel
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
@@ -452,6 +452,9 @@ jobs:
           - label: arm64
             runner: buildjet-2vcpu-ubuntu-2204-arm
         os:
+          - label: "tgz-ubuntu-22.04"
+            image: "ubuntu:jammy"
+            type: "tgz"
           - label: "ubuntu-22.04"
             image: "ubuntu:jammy"
             type: "deb"
@@ -474,14 +477,15 @@ jobs:
             image: "fedora:latest"
             type: "rpm"
           - label: "almalinux-9"
-            image: "almalinux:9-minimal"
+            image: "almalinux:9"
             type: "rpm"
           - label: "almalinux-8"
-            image: "almalinux:8-minimal"
+            image: "almalinux:8"
             type: "rpm"
 
     runs-on: ${{ matrix.arch.runner }}
-    name: ${{ matrix.os.label }}/${{ matrix.arch.label }}
+    name: "Installer tests: Linux ${{ matrix.os.label }}/${{ matrix.arch.label }}"
+
     container:
       image: ${{ matrix.os.image }}
       env:
@@ -491,12 +495,20 @@ jobs:
       - name: setup
         shell: bash
         run: |
-          if [[ "${{ matrix.os.type }}" == "deb" ]]; then
-            apt update -q
-            apt install -q -y --no-install-recommends sqlite3
-          else
-            yum install -y sqlite
-          fi
+          case "${{ matrix.os.type }}" in
+            deb | tgz)
+              apt update -q
+              apt install -q -y --no-install-recommends sqlite3
+              ;;
+
+            rpm)
+              yum install -y sqlite
+              ;;
+
+            *)
+              exit 1
+              ;;
+          esac
 
       - name: get kart installer
         uses: actions/download-artifact@v3
@@ -506,11 +518,24 @@ jobs:
       - name: install kart
         shell: bash
         run: |
-          if [[ "${{ matrix.os.type }}" == "deb" ]]; then
-            apt install -y ./kart_*.deb
-          else
-            yum install -y ./kart-*.rpm
-          fi
+          case "${{ matrix.os.type }}" in
+            deb)
+              apt install -y ./kart_*.deb
+              ;;
+
+            rpm)
+              yum install -y ./kart-*.rpm
+              ;;
+
+            tgz)
+              tar -xz -C /opt --strip-components=1 -f ./Kart-*.tar.gz
+              ln -sf /opt/kart/kart /usr/local/bin/kart
+              ;;
+
+            *)
+              exit 1
+              ;;
+          esac
 
       - name: smoke test
         shell: bash
