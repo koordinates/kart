@@ -473,6 +473,9 @@ jobs:
           - label: "debian-oldoldstable"
             image: "debian:oldoldstable-slim"
             type: "deb"
+          - label: "amazonlinux-2"
+            image: "amazonlinux:2"
+            type: "rpm"
           - label: "fedora-latest"
             image: "fedora:latest"
             type: "rpm"
@@ -482,31 +485,6 @@ jobs:
           - label: "almalinux-8"
             image: "almalinux:8"
             type: "rpm"
-        include:
-          - os:
-              label: "fedora-latest"
-              image: "fedora:latest"
-              type: "rpm"
-            arch:
-              label: amd64
-              runner: ubuntu-22.04
-            xfail: true
-          - os:
-              label: "almalinux-9"
-              image: "almalinux:9"
-              type: "rpm"
-            arch:
-              label: amd64
-              runner: ubuntu-22.04
-            xfail: true
-          - os:
-              label: "almalinux-8"
-              image: "almalinux:8"
-              type: "rpm"
-            arch:
-              label: amd64
-              runner: ubuntu-22.04
-            xfail: true
 
     runs-on: ${{ matrix.arch.runner }}
     name: "Install-check: ${{ matrix.os.label }}/${{ matrix.arch.label }}"
