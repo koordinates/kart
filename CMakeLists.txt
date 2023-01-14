@@ -386,7 +386,6 @@ elseif(LINUX)
   set(CPACK_GENERATOR "TGZ;DEB;RPM")
   # overridden to "" for TGZ
   set(CPACK_PACKAGING_INSTALL_PREFIX "/opt")
-  set(CPACK_STRIP_FILES OFF)
 
   set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
   set(CPACK_DEBIAN_PACKAGE_DEPENDS openssh-client)
@@ -399,10 +398,9 @@ elseif(LINUX)
   set(CPACK_RPM_PACKAGE_AUTOREQPROV OFF)
   set(CPACK_RPM_PACKAGE_RELOCATABLE OFF)
   set(CPACK_RPM_SPEC_CHANGELOG ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md)
-  # drop build-id links; python as python3; don't strip
+  # drop build-id links; python as python3
   set(CPACK_RPM_SPEC_MORE_DEFINE
-      "%define _build_id_links none\n%define __python ${Python3_EXECUTABLE}\n%define __strip /bin/true"
-  )
+      "%define _build_id_links none\n%define __python ${Python3_EXECUTABLE}")
 
   # https://gitlab.kitware.com/cmake/cmake/-/issues/21520
   file(
