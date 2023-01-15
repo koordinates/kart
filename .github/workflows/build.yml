@@ -507,7 +507,7 @@ jobs:
               ;;
 
             rpm)
-              yum install -y sqlite
+              yum install -y sqlite tar
               ;;
 
             *)
