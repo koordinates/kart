@@ -1,4 +1,5 @@
 import logging
+import os
 import platform
 import shutil
 import stat
@@ -21,6 +22,9 @@ def make_immutable(path: Path):
     """
     if platform.system() == "Windows":
         pytest.skip("does not run on windows")
+    if os.geteuid() == 0:
+        pytest.skip("doesn't work as root")
+
     mode = path.stat().st_mode
     # remove the 'w' bits
     path.chmod(mode ^ (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))

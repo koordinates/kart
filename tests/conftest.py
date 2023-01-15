@@ -148,6 +148,11 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
             f"\tallowFilter = true\n"
         )
 
+        if os.name == "posix":
+            if os.geteuid() == 0:
+                # running as root (container) - disable git ownership checks
+                f.write("[safe]\n" "\tdirectory = *\n")
+
     L.debug("Temporary HOME for git config: %s", home)
 
     with pytest.raises(IOError):

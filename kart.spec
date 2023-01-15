@@ -55,28 +55,7 @@ if is_win:
         ) as vr:
             vr.write(vr_doc)
 
-if is_linux:
-    # TODO - these don't actually exclude these files as the check is run in
-    #  a separate process
-    # This needs to match the OS dependencies in platforms/linux/fpm.sh
-    # We want to treat libstdc++ as a system dependency
-    dylib._excludes |= {r'libstdc\+\+\.so(\..*)?'}
-    # We want to treat libgcc1 as a system dependency
-    dylib._excludes |= {r'libgcc_s\.so(\..*)?'}
-
-    dylib.exclude_list = dylib.ExcludeList()
-
-    print(
-        "🏎️  Configured binary exclude-list overrides for libstdc++ & libgcc1",
-        file=sys.stderr,
-    )
-    assert dylib.exclude_list.search('libstdc++.so.6.0.20')
-    assert dylib.exclude_list.search('libgcc_s.so.1')
-
-
 if is_linux or is_darwin:
-    # TODO - these don't actually exclude these files as the check is run in
-    #  a separate process
     # We want to treat unixODBC (libodbc) as a system dependency, since the MSSQL
     # drivers depend on it, and we don't want two different versions imported
     # in the same process.
@@ -264,7 +243,6 @@ if symlinks:
         dist_bin_root = Path(DISTPATH) / 'Kart.app' / 'Contents' / 'MacOS'
     elif is_linux:
         dist_bin_root = Path(DISTPATH) / 'kart'
-        print("⚠️⚠️⚠️⚠️ 'symlinks' haven't been tested on Linux")
     else:
         raise RuntimeError("Symlinks don't work well on Windows!")
 

@@ -71,6 +71,7 @@ add_custom_command(
   COMMAND ${VENV_PIP_INSTALL} --force-reinstall --no-deps --editable "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMAND ${CMAKE_COMMAND} "-DTARGET:FILEPATH=${KART_EXE_VENV}" "-DLINK_NAME:FILEPATH=kart" -P
           ${CMAKE_CURRENT_SOURCE_DIR}/cmake/link.cmake
+  COMMAND ${KART_EXE_BUILD} --version
   COMMENT "Installing Kart...")
 
 add_custom_command(

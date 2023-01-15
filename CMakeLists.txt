@@ -164,20 +164,30 @@ if(BUILD_TESTING)
   #
   # Main unit tests (label=pytest)
   #
-  if(DEFINED LINUX AND DEFINED ENV{KART_SQLSERVER_URL})
-    # pytest-xdist causes some weird behaviour with pyodbc on Linux. Split MSSQL tests out into a
+  if(DEFINED LINUX AND (DEFINED ENV{KART_SQLSERVER_URL} OR DEFINED ENV{KART_MYSQL_URL}))
+    # pytest-xdist causes some weird behaviour with pyodbc/mysqldb on Linux. Split tests out into a
     # separate pytest run.
     add_test(
       NAME pytest
-      COMMAND ${VENV_PYTEST} -v -m "not\ mssql" ${PYTEST_ARGS}
+      COMMAND ${VENV_PYTEST} -v -m "not\ mssql\ and\ not\ mysql" ${PYTEST_ARGS}
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     set_property(TEST pytest PROPERTY LABELS "pytest")
 
-    add_test(
-      NAME pytest-mssql
-      COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-    set_property(TEST pytest-mssql PROPERTY LABELS "pytest")
+    if(DEFINED ENV{KART_SQLSERVER_URL})
+      add_test(
+        NAME pytest-mssql
+        COMMAND ${VENV_PYTEST} -v -p no:xdist -m mssql ${PYTEST_ARGS}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+      set_property(TEST pytest-mssql PROPERTY LABELS "pytest")
+    endif()
+
+    if(DEFINED ENV{KART_MYSQL_URL})
+      add_test(
+        NAME pytest-mysql
+        COMMAND ${VENV_PYTEST} -v -p no:xdist -m mysql ${PYTEST_ARGS}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+      set_property(TEST pytest-mysql PROPERTY LABELS "pytest")
+    endif()
   else()
     add_test(
       NAME pytest
@@ -376,6 +386,7 @@ elseif(LINUX)
   set(CPACK_GENERATOR "TGZ;DEB;RPM")
   # overridden to "" for TGZ
   set(CPACK_PACKAGING_INSTALL_PREFIX "/opt")
+  set(CPACK_STRIP_FILES OFF)
 
   set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
   set(CPACK_DEBIAN_PACKAGE_DEPENDS openssh-client)
@@ -384,13 +395,14 @@ elseif(LINUX)
 
   set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
   set(CPACK_RPM_PACKAGE_LICENSE "GPLv2")
-  set(CPACK_RPM_PACKAGE_REQUIRES
-      "openssh-clients, libstdc++, libgcc, bzip2-libs, expat, xz-libs, libstdc++, ncurses-libs, zlib"
-  )
+  set(CPACK_RPM_PACKAGE_REQUIRES "openssh-clients")
   set(CPACK_RPM_PACKAGE_AUTOREQPROV OFF)
   set(CPACK_RPM_PACKAGE_RELOCATABLE OFF)
   set(CPACK_RPM_SPEC_CHANGELOG ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md)
-  set(CPACK_RPM_SPEC_MORE_DEFINE "%define _build_id_links none")
+  # drop build-id links; python as python3; don't strip
+  set(CPACK_RPM_SPEC_MORE_DEFINE
+      "%define _build_id_links none\n%define __python ${Python3_EXECUTABLE}\n%define __strip /bin/true"
+  )
 
   # https://gitlab.kitware.com/cmake/cmake/-/issues/21520
   file(

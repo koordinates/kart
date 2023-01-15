@@ -9,6 +9,7 @@ from kart.sqlalchemy.adapter.mysql import KartAdapter_MySql
 from kart.tabular.working_copy.base import TableWorkingCopyStatus
 from test_working_copy import compute_approximated_types
 
+pytestmark = pytest.mark.mysql
 
 H = pytest.helpers.helpers()
 
@@ -37,7 +38,7 @@ def test_checkout_workingcopy(
     cli_runner,
     new_mysql_db_schema,
 ):
-    """ Checkout a working copy """
+    """Checkout a working copy"""
     with data_archive(archive) as repo_path:
         repo = KartRepo(repo_path)
         H.clear_working_copy()
@@ -85,7 +86,7 @@ def test_init_import(
     tmp_path,
     cli_runner,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
+    """Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository."""
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
@@ -133,7 +134,7 @@ def test_commit_edits(
     edit_polygons,
     edit_table,
 ):
-    """ Checkout a working copy and make some edits """
+    """Checkout a working copy and make some edits"""
     with data_archive(archive) as repo_path:
         repo = KartRepo(repo_path)
         H.clear_working_copy()

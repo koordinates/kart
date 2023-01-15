@@ -10,28 +10,19 @@ env:
 
 jobs:
   #
-  # Linux via CMake+VCPKG
+  # Linux development build on modern Ubuntu
   #
-  Linux:
-    strategy:
-      matrix:
-        os: [{id: ubuntu-22.04, label: ubuntu-22.04/amd64}]
-
-    name: Linux ${{ matrix.os.label }}
-    runs-on: ${{ matrix.os.id }}
+  Linux-dev:
+    name: "Build Linux dev"
+    runs-on: ubuntu-22.04
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
-    # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
     if: >
       (
         github.event_name == 'push'
         || github.event.pull_request.head.repo.full_name != github.repository
-      ) && (
-        startsWith(github.ref, 'refs/tags/v')
-        || github.ref == 'refs/heads/master'
-        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
 
     env:
@@ -62,9 +53,6 @@ jobs:
           - 1433:1433
       mysql:
         image: mysql
-        credentials:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -79,13 +67,6 @@ jobs:
       # setup
       #
 
-      - name: "setup: python"
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PY_VER }}
-          cache: 'pip'
-          cache-dependency-path: 'requirements/*.txt'
-
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@arm64-win-linux
         with:
@@ -95,7 +76,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-${{ matrix.os.id }}-cmake-vcpkg
+          key: vendor-ccache-ubuntu-22.04-cmake-vcpkg
 
       - name: "setup: misc"
         run: |
@@ -109,7 +90,7 @@ jobs:
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a-${{ matrix.os.id }}"
+          prependedCacheKey: "20221110a-ubuntu-22.04"
           appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
 
       #
@@ -147,13 +128,6 @@ jobs:
         with:
           configurePreset: ci-linux
           buildPreset: ci-linux
-
-      - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
-        with:
-          name: vendor-linux-${{ runner.arch }}-py${{ env.PY_VER }}
-          path: build/vcpkg-vendor/kart-vendor.*.tar.gz
-          if-no-files-found: error
 
       #
       # App tests & checks
@@ -201,6 +175,240 @@ jobs:
           configurePreset: ci-linux
           testPreset: ci-e2e-linux
 
+      #
+      # Install
+      #
+      - name: "install"
+        shell: bash
+        run: |
+          cmake --install ./build --verbose
+
+          /opt/kart/kart --version
+          command -v kart
+          kart --version
+
+      - name: "install: e2e tests"
+        shell: bash
+        run: |
+          time tests/scripts/e2e-1.sh
+
+  #
+  # Linux build for installers
+  # Runs on centos 7 for maximum compatibility
+  #
+  Linux-Package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - base: ubuntu-22.04
+            label: centos7/amd64
+            image: quay.io/pypa/manylinux2014_x86_64
+            arch: amd64
+            arch_triplet: x64-linux
+
+          - base: buildjet-4vcpu-ubuntu-2204-arm
+            label: centos7/arm64
+            image: quay.io/pypa/manylinux2014_aarch64
+            arch: arm64
+            arch_triplet: arm64-linux
+
+    name: Build Linux package ${{ matrix.os.arch }}
+    runs-on: ${{ matrix.os.base }}
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      )
+
+    services:
+      postgis:
+        # https://github.com/postgis/docker-postgis/issues/216
+        image: ghcr.io/baosystems/postgis
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 5
+          -e POSTGRES_HOST_AUTH_METHOD=trust
+        ports:
+          - 5432:5432
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server
+        options: >-
+          -e ACCEPT_EULA=Y
+          -e SA_PASSWORD=PassWord1
+        ports:
+          - 1433:1433
+      mysql:
+        image: mysql
+        options: >-
+          -e MYSQL_ROOT_PASSWORD=PassWord1
+        ports:
+          - 3306:3306
+
+    env:
+      KART_POSTGRES_URL: "postgresql://postgres:@postgis:5432/postgres"
+      SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
+      KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
+      ARCH: "${{ matrix.os.arch }}"
+      ARCH_TRIPLET: "${{ matrix.os.arch_triplet }}"
+      GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
+      PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf"
+      PKG_CONFIG_PATH: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/lib/pkgconfig"
+      OPTIONS_FOR_CMAKE: >-
+        [
+        '-DPKG_CONFIG_EXECUTABLE=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf',
+        '-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=${{ matrix.os.arch }}'
+        ]
+
+    container:
+      image: ${{ matrix.os.image }}
+      env:
+        ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
+        PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      #
+      # setup
+      #
+      - name: "setup: cmake & ninja"
+        uses: lukka/get-cmake@arm64-win-linux
+        with:
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
+
+      - name: "setup: rust"
+        uses: ATiltedTree/setup-rust@v1
+        with:
+          rust-version: stable
+
+      - name: "setup: misc"
+        shell: bash
+        run: |
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
+
+          yum install -y perl-IPC-Cmd rpm-build unixODBC zip
+
+          echo "installing golang..."
+          curl -qL "https://go.dev/dl/go1.19.2.linux-${ARCH}.tar.gz" | tar xz -C /usr/local/
+          ln -sf /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/
+
+          if [ "${ARCH}" == "arm64" ]; then
+            echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
+          fi
+
+      - name: "setup: vcpkg"
+        uses: lukka/run-vcpkg@v10
+        with:
+          vcpkgDirectory: "vcpkg-vendor/vcpkg"
+          vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
+          prependedCacheKey: "20230113a-linux-${{ matrix.os.label }}"
+          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+
+      - name: "setup: pkgconf"
+        working-directory: /__w/_temp
+        shell: bash
+        run: |
+          ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf
+
+      #
+      # App Build
+      #
+
+      - name: "app: version"
+        id: version
+        shell: bash
+        run: |
+          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "KART_VERSION=$VER" >> $GITHUB_ENV
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+
+      - name: "app: configuration & vendor dependencies"
+        uses: lukka/run-cmake@v10
+        env:
+          LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
+        with:
+          configurePreset: ci-linux
+          configurePresetAdditionalArgs: ${{ env.OPTIONS_FOR_CMAKE }}
+
+      - name: "check for vcpkg errors"
+        if: "failure() || cancelled()"
+        shell: bash
+        run: |
+          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
+
+      - name: "app: build"
+        shell: bash
+        run: |
+          cmake --build --preset=ci-linux --verbose --parallel
+
+      - name: "vendor: save archive"
+        uses: actions/upload-artifact@v3
+        with:
+          name: vendor-linux-${{ env.ARCH }}-py${{ env.PY_VER }}
+          path: build/vcpkg-vendor/kart-vendor.*.tar.gz
+          if-no-files-found: error
+
+      #
+      # App tests & checks
+      #
+
+      - name: "test: smoke test"
+        shell: bash
+        run: |
+          ./build/kart --version
+
+      - name: "test: install MSSQL database drivers for tests"
+        if: matrix.os.arch != 'arm64'
+        shell: bash
+        run: |
+          curl https://packages.microsoft.com/config/rhel/7/prod.repo > /etc/yum.repos.d/mssql-release.repo
+          ACCEPT_EULA=Y yum install -y msodbcsql18 mssql-tools
+          echo "KART_SQLSERVER_URL=${SQLSERVER_URL}" >> $GITHUB_ENV
+
+      - name: "test: unit tests"
+        shell: bash
+        run: |
+          ctest --preset=ci-linux
+
+      #
+      # Packaging
+      #
+
+      - name: "bundle: assemble"
+        shell: bash
+        run: |
+          cmake --build --preset=ci-bundle-linux --verbose
+
+      - name: "bundle: smoke test"
+        shell: bash
+        run: |
+          ./build/pyinstaller/dist/kart/kart --version
+
+      - name: "bundle: e2e tests"
+        shell: bash
+        run: |
+          ctest --preset=ci-e2e-linux
+
       - name: "package: TGZ & DEB & RPM"
         shell: bash
         run: |
@@ -209,26 +417,272 @@ jobs:
       - name: "package: save TGZ"
         uses: actions/upload-artifact@v3
         with:
-          name: Kart-linux-${{ runner.arch }}-tgz
+          name: Kart-linux-${{ matrix.os.arch }}-tgz
           path: build/dist/Kart-*.tar.gz
           if-no-files-found: error
 
       - name: "package: save DEB"
         uses: actions/upload-artifact@v3
         with:
-          name: Kart-linux-${{ runner.arch }}-deb
+          name: Kart-linux-${{ matrix.os.arch }}-deb
           path: build/dist/kart_*.deb
           if-no-files-found: error
 
       - name: "package: save RPM"
         uses: actions/upload-artifact@v3
         with:
-          name: Kart-linux-${{ runner.arch }}-rpm
+          name: Kart-linux-${{ matrix.os.arch }}-rpm
           path: build/dist/kart-*.rpm
           if-no-files-found: error
 
   #
-  # macOS via CMake+VCPKG
+  # Linux Package tests
+  # Install on a wide variety of Linux distributions and run E2E tests
+  #
+  Linux-Package-Tests:
+    needs: ["Linux-Package"]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - label: amd64
+            runner: ubuntu-22.04
+          - label: arm64
+            runner: buildjet-2vcpu-ubuntu-2204-arm
+        os:
+          - label: "tgz-ubuntu-22.04"
+            image: "ubuntu:jammy"
+            type: "tgz"
+          - label: "ubuntu-22.04"
+            image: "ubuntu:jammy"
+            type: "deb"
+          - label: "ubuntu-20.04"
+            image: "ubuntu:focal"
+            type: "deb"
+          - label: "ubuntu-18.04"
+            image: "ubuntu:bionic"
+            type: "deb"
+          - label: "debian-stable"
+            image: "debian:stable-slim"
+            type: "deb"
+          - label: "debian-oldstable"
+            image: "debian:oldstable-slim"
+            type: "deb"
+          - label: "debian-oldoldstable"
+            image: "debian:oldoldstable-slim"
+            type: "deb"
+          - label: "amazonlinux-2"
+            image: "amazonlinux:2"
+            type: "rpm"
+          - label: "fedora-latest"
+            image: "fedora:latest"
+            type: "rpm"
+          - label: "almalinux-9"
+            image: "almalinux:9"
+            type: "rpm"
+          - label: "almalinux-8"
+            image: "almalinux:8"
+            type: "rpm"
+
+    runs-on: ${{ matrix.arch.runner }}
+    name: "Install-check: ${{ matrix.os.label }}/${{ matrix.arch.label }}"
+    continue-on-error: ${{ !!matrix.os.xfail }}
+
+    container:
+      image: ${{ matrix.os.image }}
+      env:
+        DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: setup
+        shell: bash
+        run: |
+          case "${{ matrix.os.type }}" in
+            deb | tgz)
+              apt update -q
+              apt install -q -y --no-install-recommends sqlite3
+              ;;
+
+            rpm)
+              yum install -y sqlite tar
+              ;;
+
+            *)
+              exit 1
+              ;;
+          esac
+
+      - name: get kart installer
+        uses: actions/download-artifact@v3
+        with:
+          name: Kart-linux-${{ matrix.arch.label }}-${{ matrix.os.type }}
+
+      - name: install kart
+        shell: bash
+        run: |
+          case "${{ matrix.os.type }}" in
+            deb)
+              apt install -y ./kart_*.deb
+              ;;
+
+            rpm)
+              yum install -y ./kart-*.rpm
+              ;;
+
+            tgz)
+              tar -xz -C /opt --strip-components=1 -f ./Kart-*.tar.gz
+              ln -sf /opt/kart/kart /usr/local/bin/kart
+              ;;
+
+            *)
+              exit 1
+              ;;
+          esac
+
+      - name: smoke test
+        shell: bash
+        run: |
+          /opt/kart/kart --version
+          command -v kart
+          kart --version
+
+      - uses: actions/checkout@v3
+
+      - name: e2e test (no helper)
+        env:
+          KART_USE_HELPER: "0"
+        shell: bash
+        run: |
+          time tests/scripts/e2e-1.sh
+
+      - name: e2e test (helper)
+        env:
+          KART_USE_HELPER: "1"
+        shell: bash
+        run: |
+          time tests/scripts/e2e-1.sh
+
+  #
+  # Linux development build using vendor archive & host python
+  #
+  Linux-dev-vendor:
+    name: "Build Linux dev+vendor"
+    needs: ["Linux-Package"]
+    runs-on: ubuntu-22.04
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      )
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_COMPRESS: "1"
+      PY_VER_ID: "cp310-cp310"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      #
+      # setup
+      #
+
+      - name: "setup: python"
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PY_VER }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements/*.txt'
+
+      - name: "setup: cmake & ninja"
+        uses: lukka/get-cmake@arm64-win-linux
+        with:
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
+
+      - name: "setup: ccache"
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: vendor-ccache-ubuntu-22.04-cmake-vcpkg
+
+      - name: "setup: misc"
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get install -q -y --no-install-recommends ccache unixodbc file sqlite3
+          mkdir -p ${{ env.CCACHE_DIR }}
+          echo "/usr/lib/ccache" >> $GITHUB_PATH
+
+      #
+      # App Build
+      #
+
+      - name: "app: version"
+        id: version
+        run: |
+          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "KART_VERSION=$VER" >> $GITHUB_ENV
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+
+      - name: "app: get vendor archive"
+        uses: actions/download-artifact@v3
+        with:
+          name: vendor-linux-amd64-py${{ env.PY_VER }}
+
+      - name: "app: configuration & vendor dependencies"
+        shell: bash
+        run: |
+          cmake -B ./build -S . \
+          -DUSE_VCPKG=NO \
+          -DVENDOR_ARCHIVE=./kart-vendor.${PY_VER_ID}-linux_x86_64.tar.gz \
+          -DBUILD_TESTING=YES
+
+      - name: "app: build"
+        shell: bash
+        run: |
+          cmake --build ./build --verbose
+
+      #
+      # App tests & checks
+      #
+
+      - name: "test: smoke test"
+        shell: bash
+        run: |
+          ./build/kart --version
+
+      - name: "bundle: assemble"
+        shell: bash
+        run: |
+          cmake --build ./build --target bundle --verbose
+
+      - name: "bundle: smoke test"
+        shell: bash
+        run: |
+          ./build/pyinstaller/dist/kart/kart --version
+
+      - name: "bundle: e2e tests"
+        shell: bash
+        working-directory: ./build
+        run: |
+          ctest -V -L e2e
+
+  #
+  # macOS
   #
   macOS:
     strategy:
@@ -240,15 +694,10 @@ jobs:
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
-    # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
     if: >
       (
         github.event_name == 'push'
         || github.event.pull_request.head.repo.full_name != github.repository
-      ) && (
-        startsWith(github.ref, 'refs/tags/v')
-        || github.ref == 'refs/heads/master'
-        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only linux]'))
       )
 
     env:
@@ -474,7 +923,7 @@ jobs:
           tests/scripts/e2e-1.sh
 
   #
-  # Windows via CMake+VCPKG
+  # Windows
   #
   Windows:
     strategy:
@@ -490,16 +939,12 @@ jobs:
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
-    # Skip Windows builds with eg: `[ci only linux]` unless it's master or a release tag.
     if: >
       (
         github.event_name == 'push'
         || github.event.pull_request.head.repo.full_name != github.repository
-      ) && (
-        startsWith(github.ref, 'refs/tags/v')
-        || github.ref == 'refs/heads/master'
-        || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
+
     steps:
       - uses: actions/checkout@v3
         with:

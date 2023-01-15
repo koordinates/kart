@@ -1,7 +1,7 @@
 {
     "name": "kart-vendor",
     "version-string": "0.1.2",
-    "builtin-baseline": "739824a6d3179d85820eedc0637e81c0c68b874c",
+    "builtin-baseline": "41ea03f7700a30f2f136806dabe0cd179bb581f0",
     "dependencies": [
         {
             "name": "sqlite3",
@@ -61,6 +61,10 @@
         },
         {
             "name": "libffi"
+        },
+        {
+            "name": "python3",
+            "platform": "linux"
         }
     ]
 }

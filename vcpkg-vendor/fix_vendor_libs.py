@@ -162,27 +162,14 @@ elif PLATFORM == "Linux":
         "ld-linux-x86-64.so.2",
         "ld-linux-aarch64.so.1",
         "libc.so.6",
-        "libcrypto.so.10",
         "libdl.so.2",
-        "libexpat.so.1",
         "libgcc_s.so.1",
         "libm.so.6",
-        "libodbc.so.2",
-        "libpcre.so.1",
-        "libpcreposix.so.0",
         "libpthread.so.0",
-        "libpython3.7m.so.1.0",
-        "libresolv.so.2",
         "librt.so.1",
-        "libssl.so.10",
         "libstdc++.so.6",
-        "libz.so.1",
-        # ??? dunno about these
-        "libcrypt.so.1",
-        "libnsl.so.1",
-        "libnsl.so.2",
-        "libtirpc.so.3",
-        "libutil.so.1",
+        # special: ODBC drivers link to it, so don't bundle our own
+        "libodbc.so.2",
     ]
 
 IGNORE_LIST = ["git-lfs"]

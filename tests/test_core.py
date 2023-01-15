@@ -231,6 +231,9 @@ def test_walk_tree_3(data_archive):
         assert i == count
 
 
+@pytest.mark.skipif(
+    os.name == "posix" and os.geteuid() == 0, reason="doesn't work as root"
+)
 def test_check_user_config(git_user_config, monkeypatch, data_archive, tmp_path):
     # this is set by the global git_user_config fixture
     u_email, u_name = check_git_user(repo=None)
@@ -255,8 +258,10 @@ def test_check_user_config(git_user_config, monkeypatch, data_archive, tmp_path)
                 check_git_user(repo=r)
             assert "Please tell me who you are" in str(e)
 
-            subprocess.run(["git", "config", "user.name", "Alice"])
-            subprocess.run(["git", "config", "user.email", "alice@example.com"])
+            subprocess.check_call(["git", "config", "--local", "user.name", "Alice"])
+            subprocess.check_call(
+                ["git", "config", "--local", "user.email", "alice@example.com"]
+            )
 
             check_git_user(repo=r)
 
