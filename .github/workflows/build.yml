@@ -614,7 +614,7 @@ jobs:
       - name: "setup: misc"
         run: |
           sudo apt-get update -q -y
-          sudo apt-get install -q -y --no-install-recommends ccache
+          sudo apt-get install -q -y --no-install-recommends ccache unixodbc file sqlite3
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "/usr/lib/ccache" >> $GITHUB_PATH
 
@@ -646,12 +646,15 @@ jobs:
       - name: "app: configuration & vendor dependencies"
         shell: bash
         run: |
-          cmake -B build -S . -DUSE_VCPKG=NO -DVENDOR_ARCHIVE=./kart-vendor.${PY_VER_ID}-linux_x86_64.tar.gz --verbose
+          cmake -B ./build -S . \
+          -DUSE_VCPKG=NO \
+          -DVENDOR_ARCHIVE=./kart-vendor.${PY_VER_ID}-linux_x86_64.tar.gz \
+          -DBUILD_TESTING=YES
 
       - name: "app: build"
         shell: bash
         run: |
-          cmake --build build --verbose
+          cmake --build ./build --verbose
 
       #
       # App tests & checks
@@ -665,7 +668,7 @@ jobs:
       - name: "bundle: assemble"
         shell: bash
         run: |
-          cmake --build --target bundle --verbose
+          cmake --build ./build --target bundle --verbose
 
       - name: "bundle: smoke test"
         shell: bash
@@ -674,8 +677,9 @@ jobs:
 
       - name: "bundle: e2e tests"
         shell: bash
+        working-directory: ./build
         run: |
-          ctest --preset=ci-e2e-linux
+          ctest -V -L e2e
 
   #
   # macOS
