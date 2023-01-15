@@ -13,7 +13,7 @@ jobs:
   # Linux development build on modern Ubuntu
   #
   Linux-dev:
-    name: "Build Linux dev: ubuntu/amd64"
+    name: "Build Linux dev"
     runs-on: ubuntu-22.04
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
@@ -66,13 +66,6 @@ jobs:
       #
       # setup
       #
-
-      - name: "setup: python"
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PY_VER }}
-          cache: 'pip'
-          cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@arm64-win-linux
@@ -182,6 +175,23 @@ jobs:
           configurePreset: ci-linux
           testPreset: ci-e2e-linux
 
+      #
+      # Install
+      #
+      - name: "install"
+        shell: bash
+        run: |
+          cmake --install ./build --verbose
+
+          /opt/kart/kart --version
+          command -v kart
+          kart --version
+
+      - name: "install: e2e tests"
+        shell: bash
+        run: |
+          time tests/scripts/e2e-1.sh
+
   #
   # Linux build for installers
   # Runs on centos 7 for maximum compatibility
@@ -203,7 +213,7 @@ jobs:
             arch: arm64
             arch_triplet: arm64-linux
 
-    name: Build Linux ${{ matrix.os.arch }}
+    name: Build Linux package ${{ matrix.os.arch }}
     runs-on: ${{ matrix.os.base }}
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
@@ -354,7 +364,7 @@ jobs:
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
         with:
-          name: vendor-linux-py${{ env.PY_VER }}
+          name: vendor-linux-${{ env.ARCH }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
           if-no-files-found: error
 
@@ -551,6 +561,121 @@ jobs:
         shell: bash
         run: |
           time tests/scripts/e2e-1.sh
+
+  #
+  # Linux development build using vendor archive & host python
+  #
+  Linux-dev-vendor:
+    name: "Build Linux dev+vendor"
+    needs: ["Linux-Package"]
+    runs-on: ubuntu-22.04
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      )
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_COMPRESS: "1"
+      PY_VER_ID: "cp310-cp310"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      #
+      # setup
+      #
+
+      - name: "setup: python"
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PY_VER }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements/*.txt'
+
+      - name: "setup: cmake & ninja"
+        uses: lukka/get-cmake@arm64-win-linux
+        with:
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
+
+      - name: "setup: ccache"
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: vendor-ccache-ubuntu-22.04-cmake-vcpkg
+
+      - name: "setup: misc"
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get install -q -y --no-install-recommends ccache
+          mkdir -p ${{ env.CCACHE_DIR }}
+          echo "/usr/lib/ccache" >> $GITHUB_PATH
+
+      #
+      # App Build
+      #
+
+      - name: "app: version"
+        id: version
+        run: |
+          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "KART_VERSION=$VER" >> $GITHUB_ENV
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+
+      - name: "app: get vendor archive"
+        uses: actions/download-artifact@v3
+        with:
+          name: vendor-linux-amd64-py${{ env.PY_VER }}
+
+      - name: "app: configuration & vendor dependencies"
+        shell: bash
+        run: |
+          cmake -B build -S . -DUSE_VCPKG=NO -DVENDOR_ARCHIVE=./kart-vendor.${PY_VER_ID}-linux_x86_64.tar.gz --verbose
+
+      - name: "app: build"
+        shell: bash
+        run: |
+          cmake --build build --verbose
+
+      #
+      # App tests & checks
+      #
+
+      - name: "test: smoke test"
+        shell: bash
+        run: |
+          ./build/kart --version
+
+      - name: "bundle: assemble"
+        shell: bash
+        run: |
+          cmake --build --target bundle --verbose
+
+      - name: "bundle: smoke test"
+        shell: bash
+        run: |
+          ./build/pyinstaller/dist/kart/kart --version
+
+      - name: "bundle: e2e tests"
+        shell: bash
+        run: |
+          ctest --preset=ci-e2e-linux
 
   #
   # macOS
