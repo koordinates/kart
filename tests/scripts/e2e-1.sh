@@ -27,7 +27,9 @@ trap do_cleanup EXIT
 
 mkdir -p "${TMP_PATH}/home"
 export HOME="${TMP_PATH}/home"
-cp -a /etc/skel/. "$HOME/"
+if [ "$(uname -s)" == "Linux" ]; then
+    cp -a /etc/skel/. "$HOME/"
+fi
 export SHELL=/bin/bash
 
 KART_PATH=$(dirname "$(realpath "$(command -v kart)")")
