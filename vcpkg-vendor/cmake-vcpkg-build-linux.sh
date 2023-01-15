@@ -176,6 +176,11 @@ if ! [ -f vcpkg-vendor/vcpkg/vcpkg ] || ! [[ "$(file vcpkg-vendor/vcpkg/vcpkg)" 
     vcpkg-vendor/vcpkg/bootstrap-vcpkg.sh
 fi
 
+
+echo "🌀  installing patchelf 0.17.2..."
+curl -L https://github.com/NixOS/patchelf/releases/download/0.17.2/patchelf-0.17.2-$(arch).tar.gz | tar xz -C /usr/local
+patchelf --version
+
 echo "🌀  installing pkg-config via vcpkg..."
 (cd /tmp && /src/vcpkg-vendor/vcpkg/vcpkg install pkgconf)
 export PKG_CONFIG=/src/vcpkg-vendor/vcpkg/installed/${TRIPLET}/tools/pkgconf/pkgconf

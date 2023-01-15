@@ -306,8 +306,13 @@ jobs:
 
           yum install -y perl-IPC-Cmd rpm-build unixODBC zip
 
+          echo "installing golang..."
           curl -qL "https://go.dev/dl/go1.19.2.linux-${ARCH}.tar.gz" | tar xz -C /usr/local/
           ln -sf /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/
+
+          echo "installing patchelf..."
+          curl -qL https://github.com/NixOS/patchelf/releases/download/0.17.2/patchelf-0.17.2-$(arch).tar.gz | tar xz -C /usr/local
+          patchelf --version
 
           if [ "${ARCH}" == "arm64" ]; then
             echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
