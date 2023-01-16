@@ -9,7 +9,7 @@ import traceback
 
 import click
 
-from .socket_utils import recv_fds
+from .socket_utils import recv_json_and_fds
 from .cli import load_commands_from_args, cli, is_windows, is_darwin, is_linux
 
 
@@ -110,7 +110,7 @@ def helper(ctx, socket_filename, timeout, args):
         try:
             client, info = sock.accept()
             if os.fork() == 0:
-                payload, fds = recv_fds(client, 81640, 4)
+                payload, fds = recv_json_and_fds(client, maxfds=4)
                 if not payload or len(fds) != 4:
                     click.echo("No payload or fds passed from kart_cli_helper")
                     sys.exit(-1)
