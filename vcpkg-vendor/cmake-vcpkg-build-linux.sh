@@ -61,9 +61,23 @@ else
     SUDO=sudo
 fi
 
+case "$(arch)" in
+    "x86_64")
+        ARCH=amd64
+        TRIPLET=x64-linux
+        ;;
+    "aarch64")
+        ARCH=arm64
+        TRIPLET=arm64-linux
+        ;;
+    *)
+        echo "Unknown arch: $(arch)"
+        exit 1
+        ;;
+esac
+
 if [ "${ID_LIKE}" == "debian" ]; then
     export DEBIAN_FRONTEND=noninteractive
-    ARCH=$(dpkg --print-architecture)
 
     if [ "$UBUNTU_CODENAME" != "jammy" ]; then
         $SUDO apt-get update -q -y
@@ -90,21 +104,6 @@ if [ "${ID_LIKE}" == "debian" ]; then
     fi
 
 else
-    case "$(arch)" in
-        "x86_64")
-            ARCH=amd64
-            TRIPLET=x64-linux
-            ;;
-        "aarch64")
-            ARCH=arm64
-            TRIPLET=arm64-linux
-            ;;
-        *)
-            echo "Unknown arch: $(arch)"
-            exit 1
-            ;;
-    esac
-
     if command -v dnf >/dev/null; then
         YUM_DEPENDS+=('rustc' 'cargo' 'golang')
         NEED_RUST=0
@@ -190,8 +189,8 @@ echo "🌀  installing pkg-config via vcpkg..."
 export PKG_CONFIG=/src/vcpkg-vendor/vcpkg/installed/${TRIPLET}/tools/pkgconf/pkgconf
 export PKG_CONFIG_PATH=/src/vcpkg-vendor/vcpkg/installed/${TRIPLET}/lib/pkgconfig
 
-BACKUP_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
-if [ -n "$LD_LIBRARY_PATH" ]; then
+BACKUP_LD_LIBRARY_PATH=${LD_LIBRARY_PATH-}
+if [ -n "${LD_LIBRARY_PATH-}" ]; then
     echo "🌀  override LD_LIBRARY_PATH for vcpkg run..."
     export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/build/vcpkg_installed/${TRIPLET}/lib
 fi
