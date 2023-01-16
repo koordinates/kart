@@ -1,25 +1,30 @@
 
-#define _XOPEN_SOURCE 1
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <locale.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
-#include <spawn.h>
-#include <sys/socket.h>
-#include <signal.h>
-#include <sys/un.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/sem.h>
 #include <errno.h>
-#include <time.h>
-#include <limits.h>
+#include <fcntl.h>
 #include <fcntl.h>
 #include <libgen.h>
+#include <limits.h>
+#include <locale.h>
+#include <signal.h>
+#include <spawn.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/sem.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+#if __APPLE__
+#include <mach-o/dyld.h>
+#elif __linux__
+#define _GNU_SOURCE
+#endif
+
 
 int nanosleep(const struct timespec *req, struct timespec *rem);
 
@@ -27,11 +32,23 @@ int nanosleep(const struct timespec *req, struct timespec *rem);
 
 int semid;
 
+#ifndef DEBUG
+#define DEBUG 0
+#endif
+#define debug(fmt, ...) \
+        do { if (DEBUG && getenv("KART_HELPER_DEBUG") != NULL) { \
+            fprintf(stderr, "HELPER:%d:%s(): " fmt, __LINE__, \
+                    __func__, ##__VA_ARGS__); }} while (0)
+
+/**
+ * @brief Exit signal handler for SIGALRM
+ */
 void exit_on_alarm(int sig)
 {
     int semval = semctl(semid, 0, GETVAL);
     int exit_code = semval - 1000;
     semctl(semid, 0, IPC_RMID);
+    debug("exit: %d\n", exit_code);
     exit(exit_code);
 }
 
@@ -53,6 +70,8 @@ int main(int argc, char **argv, char **environ)
 
     if (use_helper != NULL && *use_helper != '\0' && *use_helper != ' ' && *use_helper != '0')
     {
+        debug("enabled %s\n", cmd_path);
+
         // start or use an existing helper process
         char **env_ptr;
 
@@ -66,19 +85,19 @@ int main(int argc, char **argv, char **environ)
         cJSON *payload = cJSON_CreateObject();
         cJSON_AddNumberToObject(payload, "pid", getpid());
         env = cJSON_AddObjectToObject(payload, "environ");
-        
+
         int found = 0;
         // filter the environment so that KART_USE_HELPER isn't passed to the
         // spawned process and so getting into a loop
         for (env_ptr = environ; *env_ptr != NULL; env_ptr++)
-        {   
+        {
             char *key = malloc(strlen(*env_ptr));
             char *val = malloc(strlen(*env_ptr));
 
             if (sscanf(*env_ptr, "%[^=]=%s", key, val) != 2) {
                 // not found with two values in a key=value pair
                 if (sscanf(*env_ptr, "%[^=]=", key) != 1) {
-                    printf("error reading environment variable where only name is present\n");
+                    fprintf(stderr, "error reading environment variable where only name is present\n");
                 }
             }
             if (strcmp(key, "KART_USE_HELPER"))
@@ -107,11 +126,12 @@ int main(int argc, char **argv, char **environ)
         addr.sun_family = AF_UNIX;
         strcpy(addr.sun_path, socket_filename);
 
-        // if there is no open socket perform a double fork and spawn to 
+        // if there is no open socket perform a double fork and spawn to
         // detach the helper, wait till the first forked child has completed
         // then attempt to connect to the socket the helper will open
         if (connect(socket_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
         {
+            debug("no open socket found @%s\n", socket_filename);
             int status;
             if (fork() == 0)
             {
@@ -121,7 +141,7 @@ int main(int argc, char **argv, char **environ)
                 if (fork() == 0)
                 {
                     setsid();
-                    
+
                     // start helper in background and wait
                     char *helper_argv[] = {&cmd_path[0], "helper", "--socket", socket_filename, NULL};
 
@@ -130,11 +150,12 @@ int main(int argc, char **argv, char **environ)
                     for (int fd = 0; fd < 3; fd++){
                         fcntl(fd, F_SETFD, FD_CLOEXEC);
                     }
+                    debug("grandchild: execvp: %s helper --socket %s\n", cmd_path, socket_filename);
                     status = execvp(helper_argv[0], helper_argv);
 
                     if (status < 0)
                     {
-                        printf("Error running kart helper, %s: %s", cmd_path, strerror(status));
+                        fprintf(stderr, "Error running kart helper, %s: %s", cmd_path, strerror(status));
                         exit(1);
                     }
                 }
@@ -145,6 +166,8 @@ int main(int argc, char **argv, char **environ)
                 wait(&status);
             }
 
+            debug("parent: waiting for socket\n");
+
             int rtc, max_retry = 50;
             struct timespec sleep_for = {0, 250 * 1000 * 1000};
             while ((rtc = connect(socket_fd, (struct sockaddr *)&addr, sizeof addr)) != 0 && --max_retry >= 0)
@@ -153,20 +176,24 @@ int main(int argc, char **argv, char **environ)
             }
             if (rtc < 0)
             {
-                printf("Timeout connecting to kart helper\n");
+                fprintf(stderr, "Timeout connecting to kart helper\n");
                 return 2;
             }
+        } else {
+            debug("open socket found @%s\n", socket_filename);
         }
 
         // set up exit code semaphore
         if ((semid = semget(IPC_PRIVATE, 1, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR)) < 0)
         {
-            printf("Error setting up result communication with helper %s\n", strerror(errno));
+            fprintf(stderr, "Error setting up result communication with helper %s\n", strerror(errno));
             return 5;
         };
 
         cJSON_AddNumberToObject(payload, "semid", semid);
-        char *payload_string = cJSON_Print(payload);
+        char *payload_string = cJSON_PrintUnformatted(payload);
+
+        debug("payload (%lub): %s\n", strlen(payload_string), payload_string);
 
         struct iovec iov = {
             .iov_base = payload_string,
@@ -198,17 +225,20 @@ int main(int argc, char **argv, char **environ)
 
         if (sendmsg(socket_fd, &msg, 0) < 0)
         {
-            printf("Error sending command to kart helper %s\n", strerror(errno));
+            fprintf(stderr, "Error sending command to kart helper %s\n", strerror(errno));
             return 3;
-        }; 
-        
+        };
+
+        debug("complete, sleeping until exit\n");
+
         // The process needs to sleep for as long as the longest command, clone etc. could take.
-        sleep(86400); 
-        printf("Timed out, no response from kart helper\n");
+        sleep(86400);
+        fprintf(stderr, "Timed out, no response from kart helper\n");
         return 4;
     }
     else
     {
+        debug("disabled, execvp(%s)\n", cmd_path);
         // run the full application as normal
         execvp(&cmd_path[0], argv);
     }
