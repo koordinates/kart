@@ -178,6 +178,17 @@ int find_kart_cli(char **argv, char *cmd_path)
 }
 
 /**
+ * @brief Check whether helper is enabled via KART_USE_HELPER
+ * Defaults on, turn off via KART_USE_HELPER=0
+ * @return 0 no, 1 yes
+ */
+int is_helper_enabled()
+{
+    char *env = getenv("KART_USE_HELPER");
+    return (env == NULL || *env != '0');
+}
+
+/**
  * @brief Exit signal handler for SIGALRM
  */
 void exit_on_alarm(int sig)
@@ -197,9 +208,7 @@ int main(int argc, char **argv, char **environ)
         exit(1);
     }
 
-    char *use_helper = getenv("KART_USE_HELPER");
-
-    if (use_helper != NULL && *use_helper != '\0' && *use_helper != ' ' && *use_helper != '0')
+    if (is_helper_enabled())
     {
         debug("enabled %s\n", cmd_path);
 
