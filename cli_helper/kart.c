@@ -41,6 +41,143 @@ int semid;
                     __func__, ##__VA_ARGS__); }} while (0)
 
 /**
+ * @brief find the path to the current executable
+ * @param[in] argv process argv
+ * @param[out] exe_path path to the executable, absolute or relative to cwd. len=PATH_MAX
+ * @return 0 success, 1 error
+ */
+int find_executable(char **argv, char *exe_path)
+{
+    exe_path[0] = '\0';
+
+#if __linux__
+    ssize_t r = readlink("/proc/self/exe", exe_path, PATH_MAX);
+    if(r == -1)
+    {
+        debug("Error calling readlink(/proc/self/exe): %d\n", errno);
+    }
+    else
+    {
+        exe_path[r] = '\0';
+        debug("readlink(/proc/self/exe)=%s\n", exe_path);
+    }
+#elif __APPLE__
+    uint32_t bufsize = PATH_MAX;
+    int e = _NSGetExecutablePath(exe_path, &bufsize);
+    if (e)
+    {
+        debug("Error calling _NSGetExecutablePath(): %d (bufsize=%d)\n", e, bufsize);
+    }
+    else
+    {
+        debug("_NSGetExecutablePath=%s\n", exe_path);
+    }
+#endif
+
+    // that didn't work for some reason, try argv[0]
+    if (!exe_path[0])
+    {
+        if (!realpath(argv[0], exe_path))
+        {
+            debug("Error calling realpath(argv[0]=%s)\n", argv[0]);
+            return 1;
+        }
+        debug("realpath(argv[0])=%s\n", exe_path);
+    }
+
+    return 0;
+}
+
+/**
+ * @brief find the path to the kart_cli executable
+ * @param[in] source absolute or relative path to existing file
+ * @param[in] name sibling filename
+ * @param[out] sibling_path sibling path name. len=PATH_MAX
+ * @return 0 success, 1 error
+ */
+int find_sibling(char* source, char* name, char* sibling_path)
+{
+    (void)memset(sibling_path, 0, PATH_MAX);
+
+    // look for a sibling of the executable
+    char *p = strrchr(source, '/');
+    if(p == NULL)
+    {
+        (void)strncpy(sibling_path, name, PATH_MAX-1);
+    }
+    else
+    {
+        char buf[PATH_MAX];
+        if (snprintf(buf, PATH_MAX, "/%s", name) < 0)
+        {
+            fprintf(stderr, "Error calculating sibling path\n");
+            return 1;
+        }
+
+        (void)strncpy(sibling_path, source, p - source);
+        (void)strncat(sibling_path, buf, PATH_MAX - strlen(buf) - 1);
+    }
+    debug("sibling path: %s\n", sibling_path);
+
+    return 0;
+}
+
+/**
+ * @brief find the path to the kart_cli executable
+ * @param[in] argv process argv
+ * @param[out] exe_path path to the executable, absolute or relative to cwd. len=PATH_MAX
+ * @return 0 success, 1 error
+ */
+int find_kart_cli(char **argv, char *cmd_path)
+{
+    char exe_path[PATH_MAX];
+    int r;
+    r = find_executable(argv, exe_path);
+    if (r)
+    {
+        return r;
+    }
+    debug("executable=%s\n", exe_path);
+
+    r = find_sibling(exe_path, "kart_cli", cmd_path);
+    if (r)
+    {
+        return r;
+    }
+
+    if (access(cmd_path, F_OK) == 0) {
+        // found it
+        return 0;
+    }
+
+    // file doesn't exist
+    debug("%s doesn't exist\n", cmd_path);
+
+    // if kart is a symlink, try resolving it then finding the symlink
+    char buf[PATH_MAX];
+    if (!realpath(exe_path, buf))
+    {
+        fprintf(stderr, "Error resolving kart_cli path\n");
+        return 1;
+    }
+    debug("realpath(%s)=%s\n", exe_path, buf);
+
+    r = find_sibling(buf, "kart_cli", cmd_path);
+    if (r)
+    {
+        return r;
+    }
+
+    if (access(cmd_path, F_OK) == 0) {
+        // found it
+        return 0;
+    }
+
+    debug("%s doesn't exist\n", cmd_path);
+    return 1;
+}
+
+/**
  * @brief Exit signal handler for SIGALRM
  */
 void exit_on_alarm(int sig)
@@ -54,16 +191,10 @@ void exit_on_alarm(int sig)
 
 int main(int argc, char **argv, char **environ)
 {
-    // find the appropriate kart_cli to run based on whether argv[0]
-    // is absolute, relative or bare, meaning on the path
-    char *cmd = "kart_cli";
     char cmd_path[PATH_MAX];
-    char buf[PATH_MAX];
-    if (strchr(argv[0], '/')) {
-        realpath(argv[0], buf);
-        sprintf(cmd_path, "%s/%s", dirname(&buf[0]), cmd);
-    } else {
-        strcpy(cmd_path, cmd);
+    if (find_kart_cli(argv, cmd_path)) {
+        fprintf(stderr, "Couldn't find kart_cli\n");
+        exit(1);
     }
 
     char *use_helper = getenv("KART_USE_HELPER");
