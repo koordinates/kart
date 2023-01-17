@@ -61,3 +61,7 @@
 .. _custom_git_for_win: https://github.com/koordinates/git/releases/tag/kart-0.11.0-windows
 .. _libgit2: https://github.com/koordinates/libgit2/tree/kx-latest
 .. _pygit2: https://github.com/koordinates/pygit2/tree/kx-latest
+
+.. _copc: https://copc.io/
+.. _pdal: https://pdal.io/
+.. _git_lfs: https://git-lfs.com/

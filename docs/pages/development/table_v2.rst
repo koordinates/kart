@@ -1,15 +1,15 @@
-Datasets V2
-===========
+Table Datasets V2
+=================
 
-:ref:`Datasets V3` is the current repository structure
-Kart uses, and is a good starting point for learning about Datasets V2.
-Kart 0.10 continues to support Datasets V2, but all newly created repos
-will use Datasets V3.
+`Table Datasets V3 </pages/development/table_v3>`_ is the current table dataset storage format
+Kart uses, and is a good starting point for learning about Table Datasets V2.
+Kart 0.10 continues to support Table Datasets V2, but all newly created repos
+will use Table Datasets V3.
 
 Differences
 ~~~~~~~~~~~
 
-A V2 dataset is exactly like a V3 dataset, except:
+A V2 table dataset is exactly like a V3 table dataset, except:
 
 -  The folder that contains the entire dataset is called
    ``.sno-dataset`` instead of ``.table-dataset``.
