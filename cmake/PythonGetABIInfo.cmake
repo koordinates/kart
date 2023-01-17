@@ -73,6 +73,11 @@ function(PythonGetABIInfo)
         set(py_MACOSX_DEPLOYMENT_TARGET "${py_INTERPRETER_MACOSX_DEPLOYMENT_TARGET}")
       endif()
 
+      if(py_MACOSX_DEPLOYMENT_TARGET MATCHES "^[0-9]+$")
+        # We need MAJOR.MINOR - if we have MAJOR but not .MINOR, append ".0" to the end.
+        set(py_MACOSX_DEPLOYMENT_TARGET "${py_MACOSX_DEPLOYMENT_TARGET}.0")
+      endif()
+
       set(Python3_MACOSX_DEPLOYMENT_TARGET
           ${py_MACOSX_DEPLOYMENT_TARGET}
           CACHE INTERNAL "Python3 interpreter macOS deployment target")
