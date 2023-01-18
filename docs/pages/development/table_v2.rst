@@ -1,7 +1,7 @@
 Table Datasets V2
 =================
 
-`Table Datasets V3 </pages/development/table_v3>`_ is the current table dataset storage format
+:doc:`Table Datasets V3 </pages/development/table_v3>` is the current table dataset storage format
 Kart uses, and is a good starting point for learning about Table Datasets V2.
 Kart 0.10 continues to support Table Datasets V2, but all newly created repos
 will use Table Datasets V3.

@@ -7,7 +7,7 @@ Background
 Kart's internal structure for storing vector or tabular datasets - currently called "Table Datasets V3" -
 has been through a few iterations. These are now mostly of historical interest since in practice,
 every table dataset you will encounter now uses Table Datasets V3.
-For more information, see `Legacy Datasets </pages/development/legacy_datasets>`_.
+For more information, see :doc:`Legacy Datasets </pages/development/legacy_datasets>`.
 
 The following is a technical description of Datasets V3.
 
@@ -632,4 +632,4 @@ Table Datasets V2 structure uses the following path-structure parameters
      "encoding": "hex"
    }
 
-See `Table Datasets V2 </pages/development/table_v2>`_.
+See :doc:`Table Datasets V2 </pages/development/table_v2>`.

@@ -22,7 +22,7 @@ changed.
 v0.8 (last "Sno" release)
 -------------------------
 
-As of Sno 0.8, :doc:`Datasets V1 </pages/development/datasets_v1>`
+As of Sno 0.8, :ref:`Table Datasets V1`
 is no longer supported. Any repositories you have that are still using
 this format can still be upgraded as described in the v0.5 release,
 using ``sno upgrade /path/to/old-repo /path/to/new-repo``.
@@ -32,7 +32,7 @@ v0.5
 
 Repositories created with Sno 0.2 or higher can be used with 0.5,
 however *some* new functionality requires that you upgrade your
-repositories to the new format (:ref:`Datasets V2`).
+repositories to the new format (:ref:`Table Datasets V2`).
 A future release of Sno will drop support for v1 repositories.
 
 To upgrade your repositories to the new format, run

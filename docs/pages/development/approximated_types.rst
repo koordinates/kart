@@ -2,7 +2,7 @@ Approximated Types
 ------------------
 
 Kart has a particular set of data types that it supports (see
-:ref:`Datasets V2`). The different types of working copies that Kart
+:ref:`Table Datasets V3`). The different types of working copies that Kart
 supports also have their own sets of data types that they support. Most
 Kart data types are well-supported by most working copies, but for those
 data types that are not, they have to be "approximated" by the closest

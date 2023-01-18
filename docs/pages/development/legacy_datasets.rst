@@ -25,13 +25,13 @@ using git-style version control, resulting in a database-table which has version
 The main improvement of Table Datasets V3 is how the rows are divided into
 different folders (or "trees" in git terminology) for more efficient
 storage when there are a large number of revisions and features. See
-`Table Datasets V1 </pages/development/table_v2>`_ for more information on the preivous
+:doc:`Table Datasets V2 </pages/development/table_v2>` for more information on the preivous
 system.
 
 The main improvement of Table Datasets V2 is that the schema of a table can be
 changed in isolation without having to rewrite every row in the table.
 Rows that were written with a previous schema are adapted to fit the
-current schema when read. See `Table Datasets V1 </pages/development/table_v1>`_ for more
+current schema when read. See :doc:`Table Datasets V1 </pages/development/table_v1>` for more
 information on the previous system.
 
 Legacy Repositories

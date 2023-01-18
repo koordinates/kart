@@ -54,7 +54,7 @@ markdown in the title.
 
 Contains information about constraints that the LAS tiles must follow.
 All the tiles must be LAS files, but there are various versions and flavours of LAS and one dataset cannot contain a mixture of all of them.
-At a minimum, the dataset's tiles must be constrained in such a way that every tile has the same schema (see :ref:`meta/schema.json` below).
+At a minimum, the dataset's tiles must be constrained in such a way that every tile has the same schema (see :ref:` ``meta/schema.json`` ` below).
 Datasets may optionally have further constraints - for instance, they may be constrained to conform to the `COPC specification <copc_>`_,
 which is a subtype of LAS file which allows for fasting seeking and rendering of whichever part of the point cloud is currently within the user's viewport.
 
@@ -194,7 +194,7 @@ This is the Coordinate Reference System used to interpret each point, stored in 
 Tiles
 ~~~~~
 
-The tiles folder contains one or more tiles in the LAS format. The name of each tile, and the tiling system used, is chosen by the user - these are not specified by Kart. Point cloud tiles are often large files, and Kart uses Git object storage which is poorly suited for dealing with large files. So, point cloud tiles are stored using `Git Large File Storage <_git_lfs>`_.
+The tiles folder contains one or more tiles in the LAS format. The name of each tile, and the tiling system used, is chosen by the user - these are not specified by Kart. Point cloud tiles are often large files, and Kart uses Git object storage which is poorly suited for dealing with large files. So, point cloud tiles are stored using `Git Large File Storage <git_lfs_>`_.
 
 Git LFS details
 ^^^^^^^^^^^^^^^
@@ -213,7 +213,7 @@ Kart follows these same principles when storing tiles as LFS files, but makes th
 Path to the pointer file
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-Strictly speaking, this is the path to the pointer file of the tile - see :ref:`Git LFS`.
+Strictly speaking, this is the path to the pointer file of the tile - see :ref:`Git LFS details`.
 
 For technical reasons, it is best if only a relatively small number of pointer files are stored together in a single directory. This is why, rather than all being stored in a single flat directory, these pointer files are sharded into several directories, with the directory chosen based on the hash of the filename.
 

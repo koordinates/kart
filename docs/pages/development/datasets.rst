@@ -10,13 +10,13 @@ Types of Datasets
 
 Kart supports the following types of datasets:
 
-+--------------------+----------------------------------------------------------------+-------------------+
-| Dataset type       | Storage format specification                                   | Supported since   |
-+====================+================================================================+===================+
-| Table (or vector)  | `Table Datasets V3 </pages/development/table_v3>`_             | Kart 0.10         |
-+--------------------+----------------------------------------------------------------+-------------------+
-| Point Cloud        | `Point Cloud Datasets V1 </pages/development/pointcloud_v1>`_  | Kart 0.12         |
-+--------------------+----------------------------------------------------------------+-------------------+
++--------------------+--------------------------------------------------------------------+-------------------+
+| Dataset type       | Storage format specification                                       | Supported since   |
++====================+====================================================================+===================+
+| Table (or vector)  | :doc:`Table Datasets V3 </pages/development/table_v3>`             | Kart 0.10         |
++--------------------+--------------------------------------------------------------------+-------------------+
+| Point Cloud        | :doc:`Point Cloud Datasets V1 </pages/development/pointcloud_v1>`  | Kart 0.12         |
++--------------------+--------------------------------------------------------------------+-------------------+
 
 There are some older variants of the table storage format (hence the V3), but most users will not encounter these any more.
 
