@@ -76,8 +76,8 @@ Import point cloud tiles into an existing repository
 - ``kart import --dataset=<dataset_name> <tile> [<tile>] [<tile>]``
 
 This command imports one or more point-cloud tiles into the kart repository in the
-working directory. All tiles are importet into the same dataset - in contrast to
-importing vectors / tables, where multiple datasets can be importet simultaneously.
+working directory. All tiles are imported into the same dataset (in contrast to
+importing vectors / tables, where multiple datasets can be imported simultaneously).
 To import more than one point cloud dataset, run the import command more than once.
 
 -  ``<tile>`` path to a LAS or LAZ file.
