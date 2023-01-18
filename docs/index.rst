@@ -53,7 +53,8 @@ Documentation
    pages/quick_guide
    pages/basic_usage_tutorial
    pages/command_reference
-   pages/upgrading
+   pages/spatial_filtering
    pages/wc_formats
    pages/development
    pages/meta_items
+   pages/upgrading
