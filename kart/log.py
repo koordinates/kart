@@ -137,11 +137,6 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     default="text",
 )
 @click.option(
-    "--json-style",
-    type=click.Choice(["extracompact", "compact", "pretty"]),
-    help="[deprecated] How to format the output. Only used with --output-format=json",
-)
-@click.option(
     "--dataset-changes",
     is_flag=True,
     help="Shows which datasets were changed at each commit. Only works with --output-format-json",
@@ -243,7 +238,6 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
 def log(
     ctx,
     output_format,
-    json_style,
     dataset_changes,
     with_feature_count,
     args,
@@ -264,7 +258,7 @@ def log(
     )
 
     paths = convert_user_patterns_to_raw_paths(filters, repo, commits)
-    output_type, fmt = parse_output_format(output_format, json_style)
+    output_type, fmt = output_format
 
     # TODO: should we check paths exist here? git doesn't!
     if output_type == "text":

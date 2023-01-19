@@ -1,6 +1,6 @@
 import click
 from .conflicts_writer import BaseConflictsWriter
-from .cli_util import OutputFormatType, parse_output_format, KartCommand
+from .cli_util import OutputFormatType, KartCommand
 from .crs_util import CoordinateReferenceString
 from .repo import KartRepoState
 
@@ -27,11 +27,6 @@ from .repo import KartRepoState
     "--exit-code",
     is_flag=True,
     help="Make the program exit with 1 if there are conflicts and 0 means no conflicts.",
-)
-@click.option(
-    "--json-style",
-    type=click.Choice(["extracompact", "compact", "pretty"]),
-    help="[deprecated] How to format the output. Only used with `-o json` and `-o geojson`",
 )
 @click.option(
     "--exit-code",
@@ -62,7 +57,6 @@ def conflicts(
     output_format,
     output_path,
     exit_code,
-    json_style,
     summarise,
     flat,
     crs,
@@ -74,7 +68,7 @@ def conflicts(
     To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.MERGING)
-    output_type, fmt = parse_output_format(output_format, json_style)
+    output_type, fmt = output_format
 
     conflicts_writer_class = BaseConflictsWriter.get_conflicts_writer_class(output_type)
     conflicts_writer = conflicts_writer_class(

@@ -92,11 +92,6 @@ def feature_count_diff(
     type=click.Path(writable=True, allow_dash=True),
 )
 @click.option(
-    "--json-style",
-    type=click.Choice(["extracompact", "compact", "pretty"]),
-    help="[deprecated] How to format the output. Only used with -o json or -o geojson",
-)
-@click.option(
     "--only-feature-count",
     default=None,
     type=click.Choice(diff_estimation.ACCURACY_CHOICES),
@@ -141,7 +136,6 @@ def diff(
     crs,
     output_path,
     exit_code,
-    json_style,
     only_feature_count,
     add_feature_count_estimate,
     convert_to_dataset_format,
@@ -168,7 +162,7 @@ def diff(
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     options, commits, filters = parse_revisions_and_filters(repo, args)
-    output_type, fmt = parse_output_format(output_format, json_style)
+    output_type, fmt = output_format
 
     assert len(commits) <= 2
     if len(commits) == 2:

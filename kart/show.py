@@ -55,11 +55,6 @@ from kart.repo import KartRepoState
     type=click.Path(writable=True, allow_dash=True),
 )
 @click.option(
-    "--json-style",
-    type=click.Choice(["extracompact", "compact", "pretty"]),
-    help="[deprecated] How to format the output. Only used with -o json",
-)
-@click.option(
     "--only-feature-count",
     default=None,
     type=click.Choice(diff_estimation.ACCURACY_CHOICES),
@@ -88,7 +83,6 @@ def show(
     crs,
     output_path,
     exit_code,
-    json_style,
     only_feature_count,
     diff_files,
     args,
@@ -113,7 +107,7 @@ def show(
 
     commit_spec = f"{commit}^?...{commit}"
 
-    output_type, fmt = parse_output_format(output_format, json_style)
+    output_type, fmt = output_format
 
     if only_feature_count:
         from .diff import feature_count_diff
