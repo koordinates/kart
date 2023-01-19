@@ -8,8 +8,10 @@ import stat
 import uuid
 
 import pygit2
+from reflink import ReflinkImpossibleError
 
 from kart.serialise_util import msg_pack, msg_unpack
+from kart.reflink_util import reflink
 
 L = logging.getLogger(__name__)
 
@@ -193,19 +195,24 @@ def copy_file_to_local_lfs_cache(
     lfs_tmp_path.mkdir(parents=True, exist_ok=True)
 
     tmp_object_path = lfs_tmp_path / str(uuid.uuid4())
-    if conversion_func is None:
-        if oid_and_size:
-            oid, size = oid_and_size
-            shutil.copy(source_path, tmp_object_path)
-        else:
-            # We can find the hash while copying in this case.
-            # TODO - check if this is actually any faster.
-            oid, size = get_hash_and_size_of_file_while_copying(
-                source_path, tmp_object_path
-            )
-    else:
+    if conversion_func is not None:
         conversion_func(source_path, tmp_object_path)
-        oid, size = get_hash_and_size_of_file(tmp_object_path)
+    else:
+        try:
+            reflink(source_path, tmp_object_path)
+        except (ReflinkImpossibleError, NotImplementedError):
+            if oid_and_size:
+                shutil.copy(source_path, tmp_object_path)
+            else:
+                # We can find the hash while copying in this case.
+                # TODO - check if this is actually any faster.
+                oid_and_size = get_hash_and_size_of_file_while_copying(
+                    source_path, tmp_object_path
+                )
+
+    if not oid_and_size:
+        oid_and_size = get_hash_and_size_of_file(tmp_object_path)
+    oid, size = oid_and_size
 
     actual_object_path = get_local_path_from_lfs_hash(repo, oid)
     actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)

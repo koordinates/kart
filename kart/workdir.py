@@ -7,7 +7,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-from reflink import reflink, ReflinkImpossibleError
 
 import pygit2
 import sqlalchemy as sa
@@ -29,8 +28,10 @@ from kart.exceptions import (
 from kart.lfs_util import get_local_path_from_lfs_hash
 from kart.lfs_commands import fetch_lfs_blobs_for_pointer_files
 from kart.key_filters import RepoKeyFilter
+from kart.output_util import InputMode, get_input_mode
 from kart.point_cloud.v1 import PointCloudV1
 from kart.point_cloud.tilename_util import remove_tile_extension, get_tile_path_pattern
+from kart.reflink_util import try_reflink
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.working_copy import WorkingCopyPart
@@ -132,6 +133,39 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 f"File system working copy is corrupt - {missing_file} is missing",
                 exit_code=NO_WORKING_COPY,
             )
+
+    def check_if_reflink_okay(self):
+        """Makes sure that reflink is working, or failing that, that the user has been made aware that reflink is not working."""
+        if self.repo.get_config_str("kart.reflink.warningShown"):
+            # User has been warned that reflink is not supported and they have okayed it.
+            return True
+
+        import reflink
+
+        if reflink.supported_at(self.path):
+            # Reflink is supported - no need to warn user about anything.
+            return True
+
+        msg = [
+            "Copy-on-write is not supported on this filesystem.",
+            "Currently Kart must create two copies of point cloud tiles to support full distributed version control features.",
+            "For more info, see https://docs.kartproject.org/en/latest/pages/git_lfs.html#disk-usage",
+        ]
+        click.echo("\n".join(msg), err=True)
+
+        if get_input_mode() is not InputMode.INTERACTIVE:
+            # Can't ask the user what they think - we've logged a warning, carry on regardless.
+            return True
+
+        if not click.confirm("Do you wish to continue?"):
+            click.echo("Aborting file-system working copy checkout.", err=True)
+            return False
+
+        try:
+            self.repo.config.get_global_config()["kart.reflink.warningShown"] = True
+        except Exception:
+            self.repo.config["kart.reflink.warningShown"] = True
+        return True
 
     def create_and_initialise(self):
         index = pygit2.Index(str(self.index_path))
@@ -425,7 +459,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
     def write_full_datasets_to_workdir(self, datasets, track_changes_as_dirty=False):
         dataset_count = len(datasets)
-        _copy = reflink  # assume CoW filesystem
+        _copy = try_reflink()  # assume CoW filesystem
         for i, dataset in enumerate(datasets):
             assert isinstance(dataset, PointCloudV1)
 
@@ -446,15 +480,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                         f"Couldn't find tile {tilename} locally - skipping...", err=True
                     )
                     continue
-                try:
-                    # reflink doesn't like pathlib.Path
-                    _copy(str(lfs_path), str(wc_tiles_dir / tilename))
-                except (
-                    ReflinkImpossibleError,
-                    NotImplementedError,
-                ):  # CoW not supported
-                    _copy = shutil.copy
-                    _copy(lfs_path, wc_tiles_dir / tilename)
+                _copy(lfs_path, wc_tiles_dir / tilename)
 
         if not track_changes_as_dirty:
             self._reset_workdir_index_for_datasets(datasets)
@@ -537,6 +563,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         tile_diff = diff_to_apply.get("tile")
         if not tile_diff:
             return
+
+        _copy = try_reflink()
         for tile_delta in tile_diff.values():
             if tile_delta.type in ("update", "delete"):
                 tilename = tile_delta.old_value["name"]
@@ -556,7 +584,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                         f"Couldn't find tile {tilename} locally - skipping...", err=True
                     )
                     continue
-                shutil.copy(lfs_path, ds_tiles_dir / tilename)
+                try_reflink(lfs_path, ds_tiles_dir / tilename)
                 if not do_update_all:
                     reset_index_files.append(f"{ds_path}/{tilename}")
 
@@ -690,7 +718,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         if not lfs_path.is_file():
             click.echo(f"Couldn't find tile {tilename} locally - skipping...", err=True)
         else:
-            shutil.copy(lfs_path, ds_tiles_dir / tilename)
+            try_reflink(lfs_path, ds_tiles_dir / tilename)
 
     def soft_reset_after_commit(
         self,

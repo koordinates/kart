@@ -1,7 +1,6 @@
 import copy
 import json
 import os
-import shutil
 from pathlib import Path
 
 import click
@@ -15,6 +14,7 @@ from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
 from .geometry import geojson_to_gpkg_geom
 from .merge_util import MergeContext, MergedIndex, RichConflict, WorkingCopyMerger
 from .point_cloud.tilename_util import set_tile_extension
+from .reflink_util import try_reflink
 from .repo import KartRepoState
 
 
@@ -100,8 +100,9 @@ def _load_file_resolve_for_tile(rich_conflict, file_path):
         )
 
     path_in_lfs_cache = get_local_path_from_lfs_hash(repo, tile_summary["oid"])
-    path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
-    shutil.copy(file_path, path_in_lfs_cache)
+    if not path_in_lfs_cache.is_file():
+        path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
+        try_reflink(file_path, path_in_lfs_cache)
     pointer_dict = format_tile_for_pointer_file(tile_summary)
     pointer_data = dict_to_pointer_file_bytes(pointer_dict)
     blob_path = dataset.tilename_to_blob_path(tilename)
@@ -254,7 +255,7 @@ def update_workingcopy_with_resolve(
             workdir_path = workdir.path / dataset.path / filename
             if workdir_path.is_file():
                 workdir_path.unlink()
-            shutil.copy(lfs_path, workdir_path)
+            try_reflink(lfs_path, workdir_path)
 
 
 @click.command(cls=KartCommand)

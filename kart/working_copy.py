@@ -206,6 +206,8 @@ class WorkingCopy:
 
         w = self.get_workdir(allow_uncreated=True)
         if w and not (w.status() == FileSystemWorkingCopyStatus.CREATED):
+            if not w.check_if_reflink_okay():
+                return False
             click.echo(
                 f"Creating {w.WORKING_COPY_TYPE_NAME} working copy in {w.path.stem} folder"
             )

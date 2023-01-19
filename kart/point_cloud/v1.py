@@ -1,5 +1,4 @@
 import functools
-import shutil
 import os
 
 from kart.base_dataset import BaseDataset
@@ -32,6 +31,7 @@ from kart.point_cloud.tilename_util import (
     set_tile_extension,
     get_tile_path_pattern,
 )
+from kart.reflink_util import try_reflink
 from kart.serialise_util import hexhash
 from kart.spatial_filter import SpatialFilter
 from kart.working_copy import PartType
@@ -491,6 +491,7 @@ class PointCloudV1(BaseDataset):
         lfs_tmp_path = lfs_objects_path / "tmp"
         lfs_tmp_path.mkdir(parents=True, exist_ok=True)
 
+        _copy = try_reflink()
         with object_builder.chdir(self.inner_path):
             for delta in tile_diff.values():
 
@@ -518,8 +519,11 @@ class PointCloudV1(BaseDataset):
                         path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
                         oid = delta.new_value["oid"]
                         path_in_lfs_cache = get_local_path_from_lfs_hash(self.repo, oid)
-                        path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
-                        shutil.copy(path_in_wc, path_in_lfs_cache)
+                        if not path_in_lfs_cache.is_file():
+                            path_in_lfs_cache.parents[0].mkdir(
+                                parents=True, exist_ok=True
+                            )
+                            _copy(path_in_wc, path_in_lfs_cache)
                         pointer_dict = format_tile_for_pointer_file(delta.new_value)
 
                     tilename = delta.new_value["name"]
