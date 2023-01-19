@@ -224,6 +224,16 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     default=False,
     help="Doesn't print out the ref names of any commits that are shown. The option --no-decorate is short-hand for --decorate=no.",
 )
+@click.option(
+    "--decorate-refs",
+    multiple=True,
+    help=(
+        "Overrides the default list of refs to decorate commits with.\n"
+        "By default, references are used as decoration if they match "
+        "HEAD, refs/heads/, refs/remotes/, refs/stash/, or refs/tags/. "
+        "Can be used multiple times."
+    ),
+)
 @click.argument(
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
