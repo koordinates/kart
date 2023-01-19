@@ -224,6 +224,16 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     default=False,
     help="Doesn't print out the ref names of any commits that are shown. The option --no-decorate is short-hand for --decorate=no.",
 )
+@click.option(
+    "--decorate-refs",
+    multiple=True,
+    help=(
+        "Overrides the default list of refs to decorate commits with.\n"
+        "By default, references are used as decoration if they match "
+        "HEAD, refs/heads/, refs/remotes/, refs/stash/, or refs/tags/. "
+        "Can be used multiple times."
+    ),
+)
 @click.argument(
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
@@ -236,6 +246,7 @@ def log(
     json_style,
     dataset_changes,
     with_feature_count,
+    decorate_refs,
     args,
     **kwargs,
 ):
@@ -255,6 +266,9 @@ def log(
 
     paths = convert_user_patterns_to_raw_paths(filters, repo, commits)
     output_type, fmt = parse_output_format(output_format, json_style)
+
+    if decorate_refs:
+        options += [f"--decorate-refs={r}" for r in decorate_refs]
 
     # TODO: should we check paths exist here? git doesn't!
     if output_type == "text":
