@@ -9,30 +9,17 @@ filesystem directory, which contains the versioned data, the current
 revision, a log of changes, etc. It is highly recommended that you do
 not manually edit the contents of the repository directory.
 
-Create a Repository from a GeoPackage or Postgres Database
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Create an empty repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``kart init --import <source> [<repository>]``
+``kart init [<repository>]``
 
-This command creates a new repository and imports all tables from the
-given database. (For more fine grained control, use ``kart init`` to
-create an empty repository, and then use ``kart import``.)
-
--  ``<source>``: Path to the
-   `GeoPackage <gpkg_>`_, or `PostgreSQL Connection URI <postgres_conn_>`_
-   to be imported.
 -  ``<repository>`` Path to the directory where the repository will be
    created. If not specified, defaults to the current directory.
 
-.. code:: bash
 
-   kart init   # init empty repository
-   kart init --import my-data-store.gpkg
-   kart init --import my-data-store.gpkg ./my-new-repository/
-   kart init --import postgresql://username:password@hostname/databasename
-
-Import into Existing Repository
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Import vectors / tables into an existing repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``kart import <source> [<table>] [<table>]``
 
@@ -71,8 +58,37 @@ database.
 You can also specify ``--all-tables`` to import all tables from a
 particular datasource.
 
-Clone Existing Repositories
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Import vectors / tables while creating a repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``kart init [<repository>] --import <import_source>``
+
+This creates a new repository, then imports every table found within the specified import source.
+It is equivalent to running the following two commands:
+
+- ``kart init [<repository>]``
+- ``kart [--repo=<repository>] import <import_source> --all-tables``
+
+Import point cloud tiles into an existing repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``kart import <tile> [<tile>] [<tile>]``
+- ``kart import --dataset=<dataset_name> <tile> [<tile>] [<tile>]``
+
+This command imports one or more point-cloud tiles into the kart repository in the
+working directory. All tiles are imported into the same dataset (in contrast to
+importing vectors / tables, where multiple datasets can be imported simultaneously).
+To import more than one point cloud dataset, run the import command more than once.
+
+-  ``<tile>`` path to a LAS or LAZ file.
+   Note that multiple tiles can be specified at once using your shell's wildcard operator, eg ``kart import <directory>/*.laz``
+-  ``<dataset_name>`` the name of the newly created dataset
+
+By default, all tiles are converted to COPC (`Cloud Optimized Point Cloud <copc_>`_) as they are imported.
+You can specify ``--keep-existing-format`` to keep them as they are.
+
+Cloning an existing repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``kart clone <repository> [<directory>]``
 
@@ -319,3 +335,50 @@ Other resolutions are also possible, but must be supplied in a file.
    Merging branch "my_work" into master
    No conflicts!
    Merge committed as 2a645ba3987625b723f0f4bc406e7da877bd30c2
+
+Working with LFS files
+----------------------
+
+Certain files - point cloud tiles - are considered too large to store in the
+Git Object Database (ODB) that forms the backend of a Kart repository.
+These are stored instead using `Git Large File Storage <git_lfs_>` - the ODB
+need only contain "pointer files" that reference where the file can be found
+remotely in the LFS server, or locally in the LFS cache.
+
+Generally, there is no need for the user to take any special action when
+dealing with LFS files - Kart commands that deal with remote storage, local
+storage and working copy checkout should make sure that each file ends up
+in the appropriate storage backend, and is found when required. However, the
+following commands are available.
+
+List LFS files referenced by a commit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``kart lfs+ ls-files [<commit>]``
+
+-  ``<commit>`` The OID of the commit to scan for references to LFS files.
+   If omitted, defaults to HEAD.
+
+You can also specify ``--all`` to list all LFS files referenced by any commit.
+
+Fetch LFS files referenced by a commit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``kart lfs+ fetch [<commit>] [<commit>]``
+
+-  ``<commit>`` The OID of the commit(s) to scan for references to LFS files,
+   If omitted, defaults to HEAD.
+
+The files are fetched from the LFS remote and written to the local LFS cache.
+Next time they are required, they will not need to be fetched, since they are
+now already present locally.
+
+Clean up LFS files not currently being used
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``kart lfs+ gc``
+
+This deletes and LFS files from the LFS cache that are not currently
+checked out, and in doing so, frees up space on your filesystem.
+If they are needed again at a later date - for instance, if a commit
+which references them is checked out - they will be refetched from the LFS remote.
