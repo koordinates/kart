@@ -17,24 +17,14 @@ class PreserveDoubleDash(KartCommand):
     """
 
     def parse_args(self, ctx, args):
-        from kart.cli import get_version_tuple
-
         args = list(args)
         for i in range(len(args)):
             arg = args[i]
             if arg == "--":
-                if "--" in args[i + 1 :] and get_version_tuple() <= ("0", "12"):
-                    # Before we added this shim, we had users using a workaround (adding the `--` twice themselves),
-                    # which ideally we'd like them to stop doing.
-                    warnings.warn(
-                        "Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
-                        RemovalInKart012Warning,
-                    )
-                else:
-                    # Insert a second `--` arg.
-                    # One of the `--` gets consumed by Click during super() below.
-                    # Then the second one gets left alone and we can pass it to git.
-                    args.insert(i + 1, "--")
+                # Insert a second `--` arg.
+                # One of the `--` gets consumed by Click during super() below.
+                # Then the second one gets left alone and we can pass it to git.
+                args.insert(i + 1, "--")
                 break
 
         return super(PreserveDoubleDash, self).parse_args(ctx, args)
