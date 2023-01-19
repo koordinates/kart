@@ -65,3 +65,5 @@
 .. _copc: https://copc.io/
 .. _pdal: https://pdal.io/
 .. _git_lfs: https://git-lfs.com/
+.. _copy_on_write: https://en.wikipedia.org/wiki/Copy-on-write
+.. _kart_github_issue_772: https://github.com/koordinates/kart/issues/772

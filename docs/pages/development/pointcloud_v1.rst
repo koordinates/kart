@@ -194,7 +194,7 @@ This is the Coordinate Reference System used to interpret each point, stored in 
 Tiles
 ~~~~~
 
-The tiles folder contains one or more tiles in the LAS format. The name of each tile, and the tiling system used, is chosen by the user - these are not specified by Kart. Point cloud tiles are often large files, and Kart uses Git object storage which is poorly suited for dealing with large files. So, point cloud tiles are stored using `Git Large File Storage <git_lfs_>`_.
+The tiles folder contains one or more tiles in the LAS format. The name of each tile, and the tiling system used, is chosen by the user - these are not specified by Kart. Point cloud tiles are often large files, and Kart uses Git object storage which is poorly suited for dealing with large files. So, point cloud tiles are stored using `Git Large File Storage <git_lfs_>`_. For more information, see the section on :doc:`Git LFS </pages/git_lfs>`.
 
 Git LFS details
 ^^^^^^^^^^^^^^^
