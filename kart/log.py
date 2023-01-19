@@ -246,7 +246,6 @@ def log(
     json_style,
     dataset_changes,
     with_feature_count,
-    decorate_refs,
     args,
     **kwargs,
 ):
@@ -266,9 +265,6 @@ def log(
 
     paths = convert_user_patterns_to_raw_paths(filters, repo, commits)
     output_type, fmt = parse_output_format(output_format, json_style)
-
-    if decorate_refs:
-        options += [f"--decorate-refs={r}" for r in decorate_refs]
 
     # TODO: should we check paths exist here? git doesn't!
     if output_type == "text":
