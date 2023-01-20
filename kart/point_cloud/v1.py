@@ -491,7 +491,6 @@ class PointCloudV1(BaseDataset):
         lfs_tmp_path = lfs_objects_path / "tmp"
         lfs_tmp_path.mkdir(parents=True, exist_ok=True)
 
-        _copy = try_reflink()
         with object_builder.chdir(self.inner_path):
             for delta in tile_diff.values():
 
@@ -523,7 +522,7 @@ class PointCloudV1(BaseDataset):
                             path_in_lfs_cache.parents[0].mkdir(
                                 parents=True, exist_ok=True
                             )
-                            _copy(path_in_wc, path_in_lfs_cache)
+                            try_reflink(path_in_wc, path_in_lfs_cache)
                         pointer_dict = format_tile_for_pointer_file(delta.new_value)
 
                     tilename = delta.new_value["name"]

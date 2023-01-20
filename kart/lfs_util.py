@@ -215,8 +215,16 @@ def copy_file_to_local_lfs_cache(
     oid, size = oid_and_size
 
     actual_object_path = get_local_path_from_lfs_hash(repo, oid)
-    actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
-    tmp_object_path.rename(actual_object_path)
+
+    # Move tmp_object_path to actual_object_path in a robust way -
+    # check to see if its already there:
+    if actual_object_path.is_file():
+        if actual_object_path.stat().st_size != size:
+            actual_object_path.unlink()
+
+    if not actual_object_path.is_file():
+        actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
+        tmp_object_path.rename(actual_object_path)
 
     return {
         "version": "https://git-lfs.github.com/spec/v1",

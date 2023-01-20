@@ -918,7 +918,6 @@ class WorkingCopyMerger:
         if not self.repo.working_copy.workdir:
             return
 
-        _copy = try_reflink()
         for conflict in merged_index.unresolved_conflicts.values():
             rich_conflict = RichConflict(conflict, self.merge_context)
             dataset_path, dataset_part, item_path = rich_conflict.decoded_path
@@ -943,7 +942,7 @@ class WorkingCopyMerger:
                     filename = set_tile_extension(
                         f"{tilename}.{version_name}", tile_format=pointer_dict["format"]
                     )
-                    _copy(
+                    try_reflink(
                         lfs_path,
                         self.repo.working_copy.workdir.path / dataset_path / filename,
                     )

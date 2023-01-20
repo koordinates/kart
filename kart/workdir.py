@@ -459,7 +459,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
     def write_full_datasets_to_workdir(self, datasets, track_changes_as_dirty=False):
         dataset_count = len(datasets)
-        _copy = try_reflink()  # assume CoW filesystem
         for i, dataset in enumerate(datasets):
             assert isinstance(dataset, PointCloudV1)
 
@@ -480,7 +479,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                         f"Couldn't find tile {tilename} locally - skipping...", err=True
                     )
                     continue
-                _copy(lfs_path, wc_tiles_dir / tilename)
+                try_reflink(lfs_path, wc_tiles_dir / tilename)
 
         if not track_changes_as_dirty:
             self._reset_workdir_index_for_datasets(datasets)
@@ -564,7 +563,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         if not tile_diff:
             return
 
-        _copy = try_reflink()
         for tile_delta in tile_diff.values():
             if tile_delta.type in ("update", "delete"):
                 tilename = tile_delta.old_value["name"]
