@@ -1,7 +1,6 @@
 import functools
 import json
 import re
-import shutil
 from collections import namedtuple
 
 import click
@@ -15,6 +14,7 @@ from .tabular.feature_output import feature_as_geojson, feature_as_json, feature
 from .utils import ungenerator
 from kart.lfs_commands import fetch_lfs_blobs_for_commits
 from kart.point_cloud.tilename_util import set_tile_extension
+from kart.reflink_util import try_reflink
 
 
 MERGE_HEAD = KartRepoFiles.MERGE_HEAD
@@ -942,7 +942,7 @@ class WorkingCopyMerger:
                     filename = set_tile_extension(
                         f"{tilename}.{version_name}", tile_format=pointer_dict["format"]
                     )
-                    shutil.copy(
+                    try_reflink(
                         lfs_path,
                         self.repo.working_copy.workdir.path / dataset_path / filename,
                     )

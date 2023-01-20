@@ -1092,6 +1092,16 @@ def test_lfs_gc(cli_runner, data_archive, monkeypatch):
         ]
 
 
+def _remove_copy_on_write_warning(stderr_output):
+    if len(stderr_output) > 3 and stderr_output[0:3] == [
+        "Copy-on-write is not supported on this filesystem.",
+        "Currently Kart must create two copies of point cloud tiles to support full distributed version control features.",
+        "For more info, see https://docs.kartproject.org/en/latest/pages/git_lfs.html#disk-usage",
+    ]:
+        return stderr_output[3:]
+    return stderr_output
+
+
 def test_working_copy_progress_bar(
     cli_runner, data_archive, monkeypatch, requires_pdal
 ):
@@ -1099,6 +1109,7 @@ def test_working_copy_progress_bar(
         r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
         assert r.exit_code == 0, r.stderr
         progress_output = r.stderr.splitlines()
+        progress_output = _remove_copy_on_write_warning(progress_output)
         assert progress_output == ["Writing tiles for dataset 1 of 1: auckland"]
 
         # Since stderr is not atty during testing, we have to force progress to show using KART_SHOW_PROGRESS.
@@ -1106,6 +1117,7 @@ def test_working_copy_progress_bar(
         r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
         assert r.exit_code == 0, r.stderr
         progress_output = r.stderr.splitlines()
+        progress_output = _remove_copy_on_write_warning(progress_output)
         assert progress_output[0] == "Writing tiles for dataset 1 of 1: auckland"
         assert re.fullmatch(
             r"auckland: 100%\|█+\| 16/16 \[[0-9:<]+, [0-9\.]+tile/s\]",
