@@ -121,6 +121,7 @@ set(CFFI_WHEEL_VER 1.15.1)
 ExternalProject_Add(
   cffi
   URL https://files.pythonhosted.org/packages/2b/a8/050ab4f0c3d4c1b8aaa805f70e26e84d0e27004907c5b8ecc1d31815f92a/cffi-1.15.1.tar.gz
+  URL_HASH SHA256=d400bfb9a37b1351253cb402671cea7e89bdecc294e8016a707f6d1d8ac934f9
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv libffi
@@ -226,6 +227,7 @@ set(PYSCOPG2_WHEEL_VER 2.8.5)
 ExternalProject_Add(
   psycopg2
   URL https://files.pythonhosted.org/packages/a8/8f/1c5690eebf148d1d1554fc00ccf9101e134636553dbb75bdfef4f85d7647/psycopg2-2.8.5.tar.gz
+  URL_HASH SHA256=f7d46240f7a1ae1dd95aab38bd74f7428d46531f69219954266d669da60c0818
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
@@ -297,6 +299,7 @@ ExternalProject_Add(
   pyodbc
   # if you build from a git repository, pyodbc adds +commit0c0ffee to the wheel version
   URL https://files.pythonhosted.org/packages/d1/21/755f5fa373d01d1803d992c7611799dc4e9fcbb5db7d0852990d6ab3c9ad/pyodbc-4.0.32.tar.gz
+  URL_HASH SHA256=9be5f0c3590655e1968488410fe3528bb8023d527e7ccec1f663d64245071a6b
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
@@ -474,7 +477,7 @@ endif()
 ExternalProject_Add(
   git-lfs
   GIT_REPOSITORY https://github.com/git-lfs/git-lfs
-  GIT_TAG main
+  GIT_TAG 02ac3de0e19fbfeea7f8ddb079cfe074367a48d3 # main @ 2023-01-06 (>v3.3.0)
   GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
   EXCLUDE_FROM_ALL ON
@@ -496,7 +499,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   ExternalProject_Add(
     git
     URL https://github.com/koordinates/git/releases/download/kart-0.11.0-windows/MinGit-v2.34.0.windows.1.13-64-bit.zip
-    URL_HASH MD5=abe020e6ac70c6a6c2566d2c1b2b3d8a
+    URL_HASH SHA256=7dcbf2826721bde668bdc809539bf8cdaf49c11d5a66dd3a003949e95e992687
     DOWNLOAD_NO_PROGRESS ON
     BUILD_IN_SOURCE 1 # avoid creation of a build directory
     INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/git
