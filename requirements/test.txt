@@ -13,10 +13,7 @@ attrs==22.1.0
     #   -c requirements.txt
     #   pytest
 colorama==0.4.6
-    # via
-    #   -c requirements.txt
-    #   -r test.in
-    #   pytest
+    # via -r test.in
 coverage[toml]==6.5.0
     # via pytest-cov
 exceptiongroup==1.0.4
