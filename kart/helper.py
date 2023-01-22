@@ -157,6 +157,9 @@ def helper(ctx, socket_filename, timeout, args):
                 sys.stdout = os.fdopen(fds[1], "w")
                 sys.stderr = os.fdopen(fds[2], "w")
 
+                # re-enable SIGCHLD so subprocess handling works
+                signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+
                 try:
                     calling_environment = json.loads(payload)
                 except (TypeError, ValueError, json.decoder.JSONDecodeError) as e:
