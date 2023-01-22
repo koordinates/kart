@@ -53,7 +53,9 @@ Documentation
    pages/quick_guide
    pages/basic_usage_tutorial
    pages/command_reference
-   pages/upgrading
-   pages/wc_formats
+   pages/spatial_filtering
+   pages/wc_types
+   pages/git_lfs
    pages/development
    pages/meta_items
+   pages/upgrading

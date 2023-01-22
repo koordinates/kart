@@ -1,10 +1,9 @@
 import re
-import warnings
 
 import click
 import pygit2
 
-from kart.cli_util import KartCommand, RemovalInKart012Warning
+from kart.cli_util import KartCommand
 from kart.exceptions import NotFound
 from kart.import_sources import from_spec
 
@@ -17,59 +16,30 @@ class PreserveDoubleDash(KartCommand):
     """
 
     def parse_args(self, ctx, args):
-        from kart.cli import get_version_tuple
-
         args = list(args)
         for i in range(len(args)):
             arg = args[i]
             if arg == "--":
-                if "--" in args[i + 1 :] and get_version_tuple() <= ("0", "12"):
-                    # Before we added this shim, we had users using a workaround (adding the `--` twice themselves),
-                    # which ideally we'd like them to stop doing.
-                    warnings.warn(
-                        "Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
-                        RemovalInKart012Warning,
-                    )
-                else:
-                    # Insert a second `--` arg.
-                    # One of the `--` gets consumed by Click during super() below.
-                    # Then the second one gets left alone and we can pass it to git.
-                    args.insert(i + 1, "--")
+                # Insert a second `--` arg.
+                # One of the `--` gets consumed by Click during super() below.
+                # Then the second one gets left alone and we can pass it to git.
+                args.insert(i + 1, "--")
                 break
 
         return super(PreserveDoubleDash, self).parse_args(ctx, args)
 
 
-def _separate_options(args, allow_options):
-    options = []
-    others = []
+def _assert_no_options(args):
     for arg in args:
-        if not arg.startswith("-"):
-            others.append(arg)
-        elif not allow_options:
+        if arg.startswith("-"):
             raise click.UsageError(f"No such option: {arg}")
-        else:
-            # It's not explicitly stated by https://git-scm.com/docs/git-check-ref-format
-            # but this isn't a valid commit-ish.
-            #    $ git branch -c -- -x
-            #    fatal: '-x' is not a valid branch name.
-            # So we can assume it's a CLI flag, presumably for git rather than kart.
-            # It *could* be a path, but in that case the user should add a `--` before this option
-            # to disambiguate, and they haven't done so here.
-            issue_link = "https://github.com/koordinates/kart/issues/508"
-            warnings.warn(
-                f"{arg!r} is unknown to Kart and will be passed directly to git. "
-                f"This will be removed in Kart 0.12! Please comment on {issue_link} if you need to use this option.",
-                RemovalInKart012Warning,
-            )
-            options.append(arg)
-    return options, others
 
 
-def _append_kwargs_to_options(options, kwargs, allow_options):
+def _kwargs_as_options(kwargs):
+    options = []
+
     if not kwargs:
-        return
-    assert allow_options
+        return options
 
     for option_name, option_val in kwargs.items():
         option_name = option_name.replace("_", "-", 1)
@@ -80,6 +50,8 @@ def _append_kwargs_to_options(options, kwargs, allow_options):
             options.append(f"--{option_name}={option_val}")
         elif isinstance(option_val, tuple):
             options.extend([f"--{option_name}={o}" for o in option_val])
+
+    return options
 
 
 HEAD_PATTERN = re.compile(r"^HEAD\b")
@@ -158,15 +130,11 @@ def parse_revisions_and_filters(
     repo,
     args,
     kwargs=None,
-    allow_options=False,
 ):
     """
     Interprets positional args for kart diff, show, and log, including "--", commits/refs/ranges, and filters.
     Returns a three-tuple: (options, commits/refs/ranges, filters)
     """
-
-    # If kwargs are passed, allow_options must be set.
-    assert allow_options or not kwargs
 
     # As soon as we encounter a filter, we assume all remaining args are also filters.
     # i.e. the filters must be given *last*.
@@ -177,13 +145,13 @@ def parse_revisions_and_filters(
     if "--" in args:
         dash_index = args.index("--")
         filters = list(args[dash_index + 1 :])
-        args = args[:dash_index]
-        options, revisions = _separate_options(args, allow_options)
-        _append_kwargs_to_options(options, kwargs, allow_options)
+        revisions = args[:dash_index]
+        _assert_no_options(revisions)
+        options = _kwargs_as_options(kwargs)
         return options, revisions, filters
     else:
-        options, args = _separate_options(args, allow_options)
-        _append_kwargs_to_options(options, kwargs, allow_options)
+        _assert_no_options(args)
+        options = _kwargs_as_options(kwargs)
         revisions, filters = _disambiguate_revisions_and_filters(repo, args)
         return options, revisions, filters
 

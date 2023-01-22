@@ -37,37 +37,15 @@ need to specify which table to import.
    $ mkdir buildings-project
    $ cd buildings-project
    $ kart init --import=GPKG:../wellington-building-outlines.gpkg
+   Initialized empty Git repository in buildings-project/.kart/
    Starting git-fast-import...
-   Importing 75,408 features from GPKG:../wellington-building-outlines.gpkg:wellington_building_outlines to wellington_building_outlines/ ...
-   Added 75,408 Features to index in 2.6s
-   Overall rate: 29198 features/s)
-   /Users/me/code/kart/venv/libexec/git-core/git-fast-import statistics:
-   ---------------------------------------------------------------------
-   Alloc'd objects:     125000
-   Total objects:       120522 (         0 duplicates                  )
-         blobs  :        75431 (         0 duplicates      73930 deltas of      73936 attempts)
-         trees  :        45090 (         0 duplicates          0 deltas of          0 attempts)
-         commits:            1 (         0 duplicates          0 deltas of          0 attempts)
-         tags   :            0 (         0 duplicates          0 deltas of          0 attempts)
-   Total branches:           1 (         1 loads     )
-         marks:           1024 (         0 unique    )
-         atoms:          75691
-   Memory total:         26402 KiB
-          pools:         18590 KiB
-        objects:          7812 KiB
-   ---------------------------------------------------------------------
-   pack_report: getpagesize()            =       4096
-   pack_report: core.packedGitWindowSize = 1073741824
-   pack_report: core.packedGitLimit      = 35184372088832
-   pack_report: pack_used_ctr            =          2
-   pack_report: pack_mmap_calls          =          1
-   pack_report: pack_open_windows        =          1 /          1
-   pack_report: pack_mapped              =   16667668 /   16667668
-   ---------------------------------------------------------------------
-
-   Closed in 1s
-   Checkout to /Users/me/kart-tutorial/buildings-project/buildings-project.gpkg as GPKG ...
-   Commit: dd4d5159a020d1c7a661d6fe7a8e099a92cba7e1
+   Importing 75,409 features from wellington-building-outlines.gpkg:wellington_building_outlines to wellington_building_outlines/ ...
+   Added 75,409 Features to index in 9.4s
+   Overall rate: 8028 features/s)
+   Closed in 0s
+   Creating GPKG working copy at buildings-project.gpkg ...
+   Writing features for dataset 1 of 1: wellington_building_outlines
+   wellington_building_outlines: 100%|████████████████████████████████████████████████| 75409/75409 [00:09<00:00, 7783.25F/s]
 
 Once the import is complete, you will have an initialised repository
 with your data imported. Check its current status:
@@ -75,7 +53,7 @@ with your data imported. Check its current status:
 .. code:: console
 
    $ kart status
-   On branch master
+   On branch main
 
    Nothing to commit, working copy clean
 
@@ -126,11 +104,11 @@ From your terminal, use ``kart status`` to see the effect of the edit.
 .. code:: console
 
    $ kart status
-   On branch master
+   On branch main
 
    Changes in working copy:
      (use "kart commit" to commit)
-     (use "kart reset" to discard changes)
+     (use "kart restore" to discard changes)
 
      wellington_building_outlines/
        modified:  1 feature
@@ -153,7 +131,7 @@ message - a human readable description of the change.
 .. code:: console
 
    $ kart commit -m "Updated stadium usage attribute for the Kart usage tutorial."
-   [master 094b328] Updated stadium usage attribute for the Kart usage tutorial.
+   [main 094b328] Updated stadium usage attribute for the Kart usage tutorial.
      wellington_building_outlines/
        modified:  1 feature
      Date: Fri Jun 19 12:11:40 2020 +1200
@@ -164,7 +142,7 @@ Running ``status`` will show the new 'clean' state of your working copy:
 .. code:: console
 
    $ kart status
-   On branch master
+   On branch main
 
    Nothing to commit, working copy clean
 
@@ -172,7 +150,7 @@ Resetting Changes
 -----------------
 
 Kart provides a simple method to undo the changes you've made since your
-last commit, called ``reset``.
+last commit, called ``restore``.
 
 Switch back to your QGIS window. Toggle editing back on, select a large
 number of features and delete them. Toggle editing off in QGIS, saving
@@ -186,21 +164,21 @@ copy data:
 .. code:: console
 
    $ kart status
-   On branch master
+   On branch main
 
    Changes in working copy:
      (use "kart commit" to commit)
-     (use "kart reset" to discard changes)
+     (use "kart restore" to discard changes)
 
      wellington_building_outlines/
        deleted:   199 features
 
 Rather than save this edit, roll the data back to the previous commit
-with ``kart reset``:
+with ``kart restore``:
 
 .. code:: console
 
-   $ kart reset
+   $ kart restore
    Updating buildings-project.gpkg ...
 
 In QGIS, press ``f5`` or click the 'refresh' button. The layer will be

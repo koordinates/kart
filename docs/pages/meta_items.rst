@@ -47,5 +47,5 @@ Here are some example meta items.
 The possible meta items are named: - ``title`` - ``description`` - ``schema.json`` - ``crs/<some-identifier>.wkt``
 
 For a more complete specification, see Kart's
-:ref:`Datasets V3`
+:ref:`Table Datasets V3`
 documentation.

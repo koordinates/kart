@@ -9,8 +9,8 @@ Why Kart
 -  **Synchronize data** - accurately synchronize datasets between
    systems in seconds. Kart moves and applies a minimal compressed set
    of changes.
--  Interact directly from within `QGIS <https://qgis.org_>`_ with the `Kart Plugin <https://github.com/koordinates/kart-qgis-plugin_>`_.
--  `And much more... <https://kartproject.org_>`_
+-  Interact directly from within `QGIS <https://qgis.org/>`_ with the `Kart Plugin <https://github.com/koordinates/kart-qgis-plugin/>`_.
+-  `And much more... <https://kartproject.org/>`_
 
 
 Project Status
@@ -24,7 +24,7 @@ Reporting Bugs & Feature Suggestions
 ------------------------------------
 
 Please report bugs and feature suggestions to the Kart issue tracker
-`here <https://github.com/koordinates/kart/issues_>`_. Please include any relevant system information (e.g.operating system)
+`here <https://github.com/koordinates/kart/issues/>`_. Please include any relevant system information (e.g.operating system)
 and Kart version (``kart --version``), and as much information about the
 issue as possible. Screenshots, debugging outputs and detailed
 explanations help us fix issues promptly.

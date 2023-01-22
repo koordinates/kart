@@ -28,9 +28,8 @@ $ apt-get install autoconf build-essential curl git golang libtool patchelf pyth
 On macOS (with [Homebrew](https://brew.sh)):
 ```console
 brew install automake autoconf cmake git python go ninja rust pandoc
-
+```
 Clone Kart from Github:
-
 ```console
 $ git clone https://github.com/koordinates/kart.git
 $ cd kart
