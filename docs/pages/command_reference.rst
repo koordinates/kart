@@ -341,9 +341,10 @@ Working with LFS files
 
 Certain files - point cloud tiles - are considered too large to store in the
 Git Object Database (ODB) that forms the backend of a Kart repository.
-These are stored instead using `Git Large File Storage <git_lfs_>` - the ODB
+These are stored instead using `Git Large File Storage <git_lfs_>`_ - the ODB
 need only contain "pointer files" that reference where the file can be found
-remotely in the LFS server, or locally in the LFS cache.
+remotely in the LFS server, or locally in the LFS cache. For more information,
+see the section on :doc:`Git LFS </pages/git_lfs>`.
 
 Generally, there is no need for the user to take any special action when
 dealing with LFS files - Kart commands that deal with remote storage, local

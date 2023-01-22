@@ -54,7 +54,8 @@ Documentation
    pages/basic_usage_tutorial
    pages/command_reference
    pages/spatial_filtering
-   pages/wc_formats
+   pages/wc_types
+   pages/git_lfs
    pages/development
    pages/meta_items
    pages/upgrading

@@ -1,8 +1,8 @@
 Geopackage Working Copy
 -----------------------
 
-The default format for the working copy of a Kart repository is a
-`GeoPackage <gpkg_>`_, or GPKG. Creating a Kart
+The default format for the tabular part of the working copy of a Kart
+repository is a `GeoPackage <gpkg_>`_, or GPKG. Creating a Kart
 repository and importing data will generally cause a GPKG working copy
 to be created automatically in the same directory as the Kart
 repository, unless you specify a different working copy configuration.

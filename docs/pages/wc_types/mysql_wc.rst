@@ -19,8 +19,8 @@ databases.
    different databases.
 
 MySQL has only a single layer of data separation - the *database*.
-(Contrast to :doc:`PostgreSQL </pages/formats/postgis_wc>` and
-:doc:`Microsoft SQLServer </pages/formats/mysql_wc>` which have two layers,
+(Contrast to :doc:`PostgreSQL </pages/wc_types/postgis_wc>` and
+:doc:`Microsoft SQLServer </pages/wc_types/sql_server_wc>` which have two layers,
 *database* and *schema*). A Kart MySQL working copy can share a server with any other
 app, but it expects to be given its own database to manage (just as Kart
 expects to manage its own GPKG working copy, not share it with data from
