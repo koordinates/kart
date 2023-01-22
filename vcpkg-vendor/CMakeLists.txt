@@ -640,6 +640,6 @@ add_custom_target(
   COMMENT "Vendor dependency archive")
 
 add_custom_target(
-  vendor
+  vendor ALL
   DEPENDS vendor_archive
   COMMENT "Vendor dependencies")
