@@ -57,7 +57,7 @@ message(STATUS "Kart build version: ${KART_VERSION}")
 option(USE_VCPKG "Use vcpkg for vendor dependencies")
 
 if(MACOS OR LINUX)
-  option(CLI_HELPER "Default to the CLI helper on macOS & Linux" ON)
+  option(CLI_HELPER "Enable the CLI helper on macOS & Linux" OFF)
 endif()
 
 set(VENDOR_ARCHIVE
