@@ -21,8 +21,10 @@
 
 #if __APPLE__
 #include <mach-o/dyld.h>
+const int SEM_FLAGS = IPC_CREAT | IPC_EXCL | SEM_R | SEM_A;
 #elif __linux__
 #define _GNU_SOURCE
+const int SEM_FLAGS = IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR;
 #endif
 
 
@@ -31,14 +33,15 @@ int nanosleep(const struct timespec *req, struct timespec *rem);
 #include "cJSON.h"
 
 int semid;
+const int SEMNUM = 0;
 
 #ifndef DEBUG
 #define DEBUG 0
 #endif
 #define debug(fmt, ...) \
         do { if (DEBUG && getenv("KART_HELPER_DEBUG") != NULL) { \
-            fprintf(stderr, "HELPER:%d:%s(): " fmt, __LINE__, \
-                    __func__, ##__VA_ARGS__); }} while (0)
+            fprintf(stderr, "HELPER[%d]:%d:%s(): " fmt, getpid(), \
+                    __LINE__, __func__, ##__VA_ARGS__); }} while (0)
 
 /**
  * @brief find the path to the current executable
@@ -193,10 +196,16 @@ int is_helper_enabled()
  */
 void exit_on_alarm(int sig)
 {
-    int semval = semctl(semid, 0, GETVAL);
+    int semval = semctl(semid, SEMNUM, GETVAL);
+    if (semval < 0)
+    {
+        debug("sigalrm: error getting semval, semid=%d, errno=%d\n", semid, errno);
+        exit(5);
+    }
+
     int exit_code = semval - 1000;
-    semctl(semid, 0, IPC_RMID);
-    debug("exit: %d\n", exit_code);
+    semctl(semid, SEMNUM, IPC_RMID);
+    debug("sigalrm: semid=%d semval=%d exit_code=%d\n", semid, semval, exit_code);
     exit(exit_code);
 }
 
@@ -210,7 +219,7 @@ int main(int argc, char **argv, char **environ)
 
     if (is_helper_enabled())
     {
-        debug("enabled %s\n", cmd_path);
+        debug("enabled %s, pid=%d\n", cmd_path, getpid());
 
         // start or use an existing helper process
         char **env_ptr;
@@ -324,11 +333,11 @@ int main(int argc, char **argv, char **environ)
         }
 
         // set up exit code semaphore
-        if ((semid = semget(IPC_PRIVATE, 1, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR)) < 0)
+        if ((semid = semget(IPC_PRIVATE, 1, SEM_FLAGS)) < 0)
         {
             fprintf(stderr, "Error setting up result communication with helper %s\n", strerror(errno));
             return 5;
-        };
+        }
 
         cJSON_AddNumberToObject(payload, "semid", semid);
         char *payload_string = cJSON_PrintUnformatted(payload);
