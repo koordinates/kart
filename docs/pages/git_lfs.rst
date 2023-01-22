@@ -4,7 +4,7 @@ Git Large File Storage
 Git recommends against committing large files to its object database.
 The solution, for users who want version controlled large files, is to
 install an extension called `Git Large File Storage <git_lfs_>`_ (Git LFS).
-This extension is tied into Git using Git's clean/smude filter mechanism,
+This extension is tied into Git using Git's clean/smudge filter mechanism,
 and provides another storage location better suited to large files,
 separate from the standard Object Database (ODB).
 
