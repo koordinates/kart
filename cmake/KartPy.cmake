@@ -7,6 +7,7 @@ if(WIN32)
 
   cmake_path(SET KART_EXE_VENV ${VENV_BIN}/kart.exe)
   cmake_path(SET KART_EXE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/kart.cmd)
+  set(KART_EXE_NAME "kart")
 else()
   set(VENV_BIN ${CMAKE_CURRENT_BINARY_DIR}/venv/bin)
   # this is needed sometimes for bad setup.py files that invoke Python again seems ok without it on
