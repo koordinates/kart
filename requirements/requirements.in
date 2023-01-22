@@ -14,12 +14,7 @@ shellingham
 sqlalchemy
 tqdm
 reflink
-
-# jsonschema>=4.2 pulls in importlib_resources, which breaks PyInstaller<4.8
-# https://github.com/pyinstaller/pyinstaller/pull/6195
-# https://github.com/koordinates/kart/issues/425
-jsonschema<4.2
-
+jsonschema>=4.3
 
 # these are only here for dependencies, we build them in vcpkg-vendor,
 # and they're removed by CMake from the final requirements.txt files.

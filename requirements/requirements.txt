@@ -26,7 +26,7 @@ docutils==0.17.1
     # via -r vendor-wheels.txt
 greenlet==2.0.1 ; os_name != "posix"
     # via sqlalchemy
-jsonschema==4.1.2
+jsonschema==4.17.3
     # via -r requirements.in
 msgpack==0.6.2
     # via -r requirements.in
