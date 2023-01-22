@@ -19,8 +19,12 @@ echo "Test data is at: ${TEST_GPKG}"
 
 TMP_PATH=$(mktemp -q -d -t "kart-e2e.XXXXXX")
 echo "Using temp folder: ${TMP_PATH}"
+export KART_HELPER_LOG=${TMP_PATH}/kart-helper.log
 
 function do_cleanup {
+    if [ -f "$KART_HELPER_LOG" ]; then
+        cat "$KART_HELPER_LOG"
+    fi
     rm -rf "$TMP_PATH"
 }
 trap do_cleanup EXIT
@@ -38,7 +42,7 @@ mkdir "${TMP_PATH}/test"
 cd "${TMP_PATH}/test"
 set -x
 
-echo "Using helper mode: ${KART_USE_HELPER:-0}"
+echo "Using helper mode: ${KART_USE_HELPER:-?}"
 
 kart -vvvv install tab-completion --shell auto
 
