@@ -62,8 +62,14 @@
 .. _libgit2: https://github.com/koordinates/libgit2/tree/kx-latest
 .. _pygit2: https://github.com/koordinates/pygit2/tree/kx-latest
 
+.. _las: https://en.wikipedia.org/wiki/LAS_file_format
 .. _copc: https://copc.io/
 .. _pdal: https://pdal.io/
 .. _git_lfs: https://git-lfs.com/
 .. _copy_on_write: https://en.wikipedia.org/wiki/Copy-on-write
 .. _kart_github_issue_772: https://github.com/koordinates/kart/issues/772
+
+.. _sqlite3_tool: https://sqlite.org/cli.html
+.. _psql_tool: https://www.postgresql.org/docs/current/app-psql.html
+.. _sqlcmd_tool: https://learn.microsoft.com/en-us/sql/tools/sqlcmd-utility
+.. _mysql_tool: https://dev.mysql.com/doc/refman/8.0/en/mysql.html

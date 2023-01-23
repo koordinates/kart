@@ -40,7 +40,7 @@ Data can be imported from any of the following types of databases:
 
 - `GeoPackage <gpkg_>`_
 - `PostGIS <postgis_>`_
-- `SQLServer <sql_server_>`_
+- `Microst SQL Server <sql_server_>`_
 - `MySQL <mysql_>`_
 - `Shapefiles <shapefiles_>`_
 
@@ -116,7 +116,7 @@ currently:
 
 - `GeoPackage <gpkg_>`_
 - `PostGIS <postgis_>`_
-- `SQLServer <sql_server_>`_
+- `Microsoft SQL Server <sql_server_>`_
 - `MySQL <mysql_>`_
 
 Creating different types of Working Copy
