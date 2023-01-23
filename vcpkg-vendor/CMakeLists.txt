@@ -378,7 +378,7 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS cryptographyWheelBuildEnv OpenSSL::SSL OpenSSL::Crypto
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ${GIT_EXECUTABLE} restore setup.cfg
+  CONFIGURE_COMMAND ${GIT_EXECUTABLE} checkout -- setup.cfg
   COMMAND ${CMAKE_COMMAND} -E cat <INSTALL_DIR>/setup.cfg.inc >> setup.cfg
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND
