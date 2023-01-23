@@ -4,7 +4,14 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.11.6 (UNRELEASED)
+## 0.12.0
+
+### Major changes
+
+- First and foremost: point cloud datasets! Kart now supports point cloud datasets which track changes to a set of LAS files. This required the addition of a file-system working copy (as opposed to the existing database working copy types), and integrating Git LFS to store the large files. To get started with point cloud datasets, see
+ [Point Cloud Datasets](https://docs.kartproject.org/en/latest/pages/pointcloud_datasets.html) [#565](https://github.com/koordinates/kart/issues/565)
+
+### Other changes
 
 - Install tab completion using `kart install tab-completion` instead of `kart config --install-tab-completion`. [#701](https://github.com/koordinates/kart/issues/701)
 - "Primary key conflicts" - conflicts caused by reusing a primary key which is already assigned to a feature outside the spatial filter - are renamed to "spatial filter conflicts" for future proofing with other dataset types. Consequently, commit option `--allow-pk-conflicts` is renamed to `--allow-spatial-filter-conflicts`.
