@@ -6,6 +6,7 @@ import click
 
 
 from .cli_util import StringFromFile, RemovalInKart013Warning, KartCommand
+from .completion_shared import file_path_completer
 from .core import check_git_user
 from .dataset_util import validate_dataset_paths
 from .exceptions import InvalidOperation
@@ -25,6 +26,7 @@ from .working_copy import PartType
     "--import",
     "import_from",
     help='Import a database (all tables): "FORMAT:PATH" eg. "GPKG:my.gpkg"',
+    shell_complete=file_path_completer,
 )
 @click.option(
     "--checkout/--no-checkout",
