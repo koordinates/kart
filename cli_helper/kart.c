@@ -243,7 +243,7 @@ int main(int argc, char **argv, char **environ)
             char *key = malloc(strlen(*env_ptr));
             char *val = malloc(strlen(*env_ptr));
 
-            if (sscanf(*env_ptr, "%[^=]=%s", key, val) != 2) {
+            if (sscanf(*env_ptr, "%[^=]=%[^\x04]", key, val) != 2) {
                 // not found with two values in a key=value pair
                 if (sscanf(*env_ptr, "%[^=]=", key) != 1) {
                     fprintf(stderr, "error reading environment variable where only name is present\n");
