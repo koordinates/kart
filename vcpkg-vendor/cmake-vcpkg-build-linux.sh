@@ -127,15 +127,20 @@ fi
 echo "🌀  OS: ${OSID}/${ARCH}"
 gcc --version
 
-
 PYTHON=$(realpath "$(command -v "$PYTHON")")
 PYROOT=$(dirname "$(dirname "$PYTHON")")
 PIP="${PYTHON} -m pip"
 IS_MANYLINUX=$(test -n "${AUDITWHEEL_ARCH-}" && echo true || echo false)
-PATH="$(dirname "$PYTHON"):${PATH}"
-export PATH
+if [ "$(dirname "$PYTHON")" != /usr/bin ]; then
+    PATH="$(dirname "$PYTHON"):${PATH}"
+    export PATH
+fi
 ln -sf python3 "$(dirname "$PYTHON")/python"
+ln -sf "$PYTHON" /usr/local/bin/python3
+ln -sf "$PYTHON" /usr/local/bin/python
 echo "🌀  updated PATH=$PATH"
+echo "python3=$(command -v python3)"
+echo "python=$(command -v python)"
 
 for P in "${PY_DEPENDS[@]}"; do
     if ! $PIP show --quiet "$P" >/dev/null 2>&1; then
