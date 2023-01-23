@@ -57,5 +57,4 @@ Documentation
    pages/wc_types
    pages/git_lfs
    pages/development
-   pages/meta_items
    pages/upgrading
