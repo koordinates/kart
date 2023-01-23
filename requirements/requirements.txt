@@ -6,44 +6,36 @@
 #
 attrs==22.1.0
     # via jsonschema
-cached-property==1.5.2
-    # via pygit2
 certifi==2022.12.7
     # via -r requirements.in
 #cffi==1.15.1
     # via
-    #   -r requirements.in
+    #   -r vendor-wheels.txt
     #   cryptography
     #   pygit2
     #   reflink
 click==8.1.3
     # via -r requirements.in
-colorama==0.4.6
-    # via
-    #   click
-    #   tqdm
 #cryptography==38.0.3
-    # via -r requirements.in
+    # via -r vendor-wheels.txt
 docutils==0.17.1
     # via
     #   -r requirements.in
     #   rst2txt
 #gdal==3.6.2
-    # via -r requirements.in
+    # via -r vendor-wheels.txt
 greenlet==2.0.1 ; os_name != "posix"
-    # via
-    #   -r requirements.in
-    #   sqlalchemy
-jsonschema==4.1.2
+    # via sqlalchemy
+jsonschema==4.17.3
     # via -r requirements.in
 msgpack==0.6.2
     # via -r requirements.in
 #psycopg2==2.8.5
-    # via -r requirements.in
+    # via -r vendor-wheels.txt
 pycparser==2.21
     # via cffi
-#pygit2==1.3.0
-    # via -r requirements.in
+#pygit2==1.9.0
+    # via -r vendor-wheels.txt
 pygments==2.13.0
     # via
     #   -r requirements.in
@@ -51,12 +43,12 @@ pygments==2.13.0
 pymysql==1.0.2
     # via -r requirements.in
 pyodbc==4.0.32
-    # via -r requirements.in
+    # via -r vendor-wheels.txt
 pyrsistent==0.19.2
     # via jsonschema
-reflink==0.2.1
-    # via -r requirements.in
 #pysqlite3==0.4.5
+    # via -r vendor-wheels.txt
+reflink==0.2.1
     # via -r requirements.in
 rst2txt==1.1.0
     # via -r requirements.in

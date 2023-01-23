@@ -16,9 +16,7 @@ charset-normalizer==2.1.1
     # via requests
 colorama==0.4.6
     # via
-    #   -c requirements.txt
     #   -c test.txt
-    #   sphinx
     #   sphinx-autobuild
 docutils==0.17.1
     # via

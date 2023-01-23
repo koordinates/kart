@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 
 import click
-import jsonschema
 import pygit2
 from click.core import Argument
 from click.shell_completion import CompletionItem
@@ -382,6 +381,8 @@ class JsonFromFile(StringFromFile):
                 ctx,
             )
         if self.schema:
+            # jsonschema is quite a heavyweight import
+            import jsonschema
             try:
                 jsonschema.validate(instance=value, schema=self.schema)
             except jsonschema.ValidationError as e:

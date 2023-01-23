@@ -1,0 +1,7 @@
+cffi==1.15.1
+cryptography==38.0.3
+gdal==3.6.2
+psycopg2==2.8.5
+pygit2==1.9.0
+pyodbc==4.0.32
+pysqlite3==0.4.5

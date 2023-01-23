@@ -19,7 +19,7 @@ set(WHEEL_DEPS cryptography psycopg2 pygit2 gdal cffi pysqlite3
 set(PIP_COMPILE_COMMAND
     ${CMAKE_COMMAND} -E env CUSTOM_COMPILE_COMMAND="cmake --build build --target py-requirements"
     ${requirementsEnv_EXEC} pip-compile -v --annotate --no-emit-index-url --no-emit-trusted-host
-    --allow-unsafe)
+    --allow-unsafe --find-links "${CMAKE_BINARY_DIR}/vendor-tmp/wheelhouse" --no-emit-find-links)
 
 # Strip out wheels we provide:
 string(JOIN "|" wheelDepRegex ${WHEEL_DEPS})
