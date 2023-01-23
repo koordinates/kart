@@ -70,4 +70,16 @@ kart log
 # Briefly try a remote to ensure the CA cert bundle is working
 kart git ls-remote https://github.com/koordinates/kart.git HEAD
 
+# ext-run error handling
+# this should work consistently with/without helper
+kart ext-run "$HERE/ext-run-test.py" 0
+if kart ext-run "$HERE/ext-run-test.py" 1; then
+    echo "ext-run-failure.py expected to exit with 1; got $?"
+    exit 1
+fi
+if kart ext-run "$HERE/ext-run-test.py" throw; then
+    echo "ext-run-failure.py expected to exit with 1 via exception; got $?"
+    exit 1
+fi
+
 { echo -e "\n✅ E2E: Success"; } 2>/dev/null
