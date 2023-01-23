@@ -53,9 +53,10 @@ Documentation
    pages/quick_guide
    pages/basic_usage_tutorial
    pages/command_reference
+   pages/table_datasets
+   pages/pointcloud_datasets
    pages/spatial_filtering
    pages/wc_types
    pages/git_lfs
    pages/development
-   pages/meta_items
    pages/upgrading
