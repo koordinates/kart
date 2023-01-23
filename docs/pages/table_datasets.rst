@@ -5,7 +5,7 @@ Working with Vector / Table Datasets
 
 Dataset type
 ~~~~~~~~~~~~
-Both spatial and non-spatial tabular datasets are stored as "Table Datasets", currently implemented as :doc:`Table Datasets V3 </pages/development/table_v3>`. Version controlled table rows are stored in an abstract way, not unlike JSON, and independent of any of the supported working copy types, and so are converted to fit into a specific type of database table during checkout.
+Both spatial and non-spatial tabular datasets are stored as "Table Datasets", currently implemented as :doc:`Table Datasets V3 </pages/development/table_v3>`. Version controlled table rows are stored in an abstract way, independent of any of the supported working copy types, and so are converted to fit into a specific type of database table during checkout.
 
 Importing vector / table datasets
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

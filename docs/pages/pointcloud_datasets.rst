@@ -17,7 +17,8 @@ This command imports one or more point-cloud tiles into the kart repository in t
 working directory. All tiles are imported into the same dataset.
 
 The tiles to import must be LAS files of some variant - compressed tiles (LAZ) and cloud-optized tiles (COPC) are allowed.
-By default, all tiles are converted to COPC (`Cloud Optimized Point Cloud <copc_>`_) as they are imported.
+By default, all tiles are converted to COPC (`Cloud Optimized Point Cloud <copc_>`_) as they are imported - this storage format
+is preferred as it greatly improves the efficiency with which apps and cloud services can access large point cloud datasets.
 You can specify ``--keep-existing-format`` to keep them as they are.
 
 For more information, see :ref:`Import vectors / tables into an existing repository`.
