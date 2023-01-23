@@ -253,10 +253,10 @@ def helper(ctx, socket_filename, timeout, args):
                                 f"Error setting semid {semid}[{SEMNUM}]=1000+{system_exit.code}: "
                                 f"{errno.errorcode.get(ctypes.get_errno(), ctypes.get_errno())}"
                             )
-                    except Exception as e:
+                    except Exception:
                         # TODO - should ext-run capture/handle this?
                         _helper_log(
-                            f"unhandled exception from cli() semval=1001: {traceback.format_exc(e)}"
+                            f"unhandled exception from cli() semval=1001: {traceback.format_exc()}"
                         )
                         print("kart helper: unhandled exception", file=sys.stderr)
                         traceback.print_exc(file=sys.stderr)
