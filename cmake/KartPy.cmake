@@ -7,6 +7,7 @@ if(WIN32)
 
   cmake_path(SET KART_EXE_VENV ${VENV_BIN}/kart.exe)
   cmake_path(SET KART_EXE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/kart.cmd)
+  set(KART_EXE_NAME "kart")
 else()
   set(VENV_BIN ${CMAKE_CURRENT_BINARY_DIR}/venv/bin)
   # this is needed sometimes for bad setup.py files that invoke Python again seems ok without it on
@@ -14,7 +15,14 @@ else()
   set(VENV_EXEC_ENV ${CMAKE_COMMAND} -E env "PATH=${VENV_BIN}:$ENV{PATH}")
   set(VENV_PY ${VENV_EXEC_ENV} ${VENV_BIN}/python)
   cmake_path(SET KART_EXE_VENV ${VENV_BIN}/kart)
-  cmake_path(SET KART_EXE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/kart)
+
+  if(CLI_HELPER)
+    set(KART_EXE_NAME "kart_cli")
+    cmake_path(SET KART_EXE_HELPER ${CMAKE_CURRENT_BINARY_DIR}/kart)
+  else()
+    set(KART_EXE_NAME "kart")
+  endif()
+  cmake_path(SET KART_EXE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/${KART_EXE_NAME})
 endif()
 
 set(VENV_PIP_INSTALL ${VENV_PY} -m pip install --isolated --disable-pip-version-check)
@@ -64,13 +72,29 @@ add_custom_target(
   DEPENDS venv/.vendor.stamp ${pydeps}
   COMMENT "Installing Python dependencies...")
 
+set(CLI_DEPS ${KART_EXE_BUILD})
+if(CLI_HELPER)
+  add_custom_command(
+    OUTPUT ${KART_EXE_HELPER}
+    DEPENDS kart_cli_helper
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} "-DTARGET:FILEPATH=$<TARGET_FILE:kart_cli_helper>"
+            "-DLINK_NAME:FILEPATH=kart" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/link.cmake
+    COMMAND
+      ${CMAKE_COMMAND} "-DTARGET:FILEPATH=${KART_EXE_VENV}"
+      "-DLINK_NAME:FILEPATH=cli_helper/${KART_EXE_NAME}" -P
+      ${CMAKE_CURRENT_SOURCE_DIR}/cmake/link.cmake
+    COMMENT "Installing Kart Helper...")
+  list(APPEND CLI_DEPS ${KART_EXE_HELPER})
+endif()
+
 add_custom_command(
   OUTPUT ${KART_EXE_VENV} ${KART_EXE_BUILD}
   DEPENDS py-dependencies setup.py
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${VENV_PIP_INSTALL} --force-reinstall --no-deps --editable "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMAND ${CMAKE_COMMAND} "-DTARGET:FILEPATH=${KART_EXE_VENV}" "-DLINK_NAME:FILEPATH=kart" -P
-          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/link.cmake
+  COMMAND ${CMAKE_COMMAND} "-DTARGET:FILEPATH=${KART_EXE_VENV}"
+          "-DLINK_NAME:FILEPATH=${KART_EXE_NAME}" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/link.cmake
   COMMAND ${KART_EXE_BUILD} --version
   COMMENT "Installing Kart...")
 
@@ -83,5 +107,5 @@ add_custom_command(
 
 add_custom_target(
   cli ALL
-  DEPENDS ${KART_EXE_BUILD} ${VENV_DOCS}
+  DEPENDS ${VENV_DOCS} ${CLI_DEPS}
   COMMENT "Kart CLI")

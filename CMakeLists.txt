@@ -55,7 +55,11 @@ message(STATUS "Kart build version: ${KART_VERSION}")
 #
 
 option(USE_VCPKG "Use vcpkg for vendor dependencies")
-option(CLI_HELPER "Default to the CLI helper on macOS & Linux")
+
+if(MACOS OR LINUX)
+  option(CLI_HELPER "Enable the CLI helper on macOS & Linux" OFF)
+endif()
+
 set(VENDOR_ARCHIVE
     ""
     CACHE
@@ -215,6 +219,7 @@ if(BUILD_TESTING)
       NAME e2e-1
       COMMAND tests/scripts/e2e-1.sh
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(e2e-1 PROPERTIES ENVIRONMENT "KART_USE_HELPER=0")
 
     if(CLI_HELPER)
       # Run the same test under Linux & Mac using the cli helper

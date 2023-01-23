@@ -24,6 +24,9 @@
             "displayName": "CI: Linux",
             "inherits": "ci-base",
             "generator": "Unix Makefiles",
+            "cacheVariables": {
+                "CLI_HELPER": "ON"
+            },
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -36,6 +39,7 @@
             "inherits": "ci-base",
             "generator": "Unix Makefiles",
             "cacheVariables": {
+                "CLI_HELPER": "ON",
                 "MACOS_SIGN_BUNDLE": "$env{MACOS_SIGN_BUNDLE}",
                 "MACOS_SIGN_PKG": "$env{MACOS_SIGN_PKG}",
                 "MACOS_NOTARIZE": "$env{MACOS_NOTARIZE}"

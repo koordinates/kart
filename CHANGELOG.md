@@ -19,6 +19,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Improved progress reporting during working-copy checkout. [#738](https://github.com/koordinates/kart/pull/738)
 - Support for changing the primary key column of an existing dataset. [#238](https://github.com/koordinates/kart/issues/238)
 - Help for the user get the working copy back into a valid state if a crash or similar causes it to become out of sync with the Kart repo. [#751](https://github.com/koordinates/kart/pull/751)
+- Enable the background CLI helper on Linux & macOS in CI builds. The helper improves CLI performance significantly. [#776](https://github.com/koordinates/kart/pull/776)
 
 ## 0.11.5
 

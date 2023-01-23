@@ -1,16 +1,26 @@
-from pathlib import Path
-import socket
-import signal
+import errno
 import json
-import io
 import os
+import signal
+import socket
 import sys
 import traceback
+from datetime import datetime
+from pathlib import Path
 
 import click
 
-from .socket_utils import recv_fds
+from .socket_utils import recv_json_and_fds
 from .cli import load_commands_from_args, cli, is_windows, is_darwin, is_linux
+
+
+log_filename = None
+
+
+def _helper_log(msg):
+    if log_filename:
+        with open(log_filename, "at") as log_file:
+            log_file.write(f"{datetime.now()} [{os.getpid()}]: {msg}\n")
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True))
@@ -46,6 +56,10 @@ def helper(ctx, socket_filename, timeout, args):
 
     load_commands_from_args(["--help"])
 
+    if os.environ.get("KART_HELPER_LOG"):
+        global log_filename
+        log_filename = os.path.abspath(os.environ["KART_HELPER_LOG"])
+
     # stash the required environment for used libs
     # TODO - this should be checked to ensure it is all that is needed
     #  is there anything beyond these which is needed, eg. PWD, USER, etc.
@@ -70,6 +84,7 @@ def helper(ctx, socket_filename, timeout, args):
             "GIT_TEMPLATE_DIR",
             "GIT_INDEX_FILE",
             "SSL_CERT_FILE",
+            "KART_HELPER_LOG",
         ]
     }
 
@@ -82,6 +97,7 @@ def helper(ctx, socket_filename, timeout, args):
             os.unlink(socket_filename)
 
         sock.bind(str(socket_filename))
+        _helper_log(f"Bound socket: {socket_filename}")
     except OSError as e:
         click.echo(f"Unable to bind to socket [{socket_filename}] [{e.strerror}]")
         ctx.exit(1)
@@ -108,18 +124,21 @@ def helper(ctx, socket_filename, timeout, args):
         # The helper will exit if no command received within timeout
         sock.settimeout(timeout)
         try:
+            _helper_log(f"socket ready, waiting for messages (timeout={timeout})")
             client, info = sock.accept()
-            if os.fork() == 0:
-                payload, fds = recv_fds(client, 8164, 4)
+            _helper_log("pre-fork messaged received")
+            if os.fork() != 0:
+                # parent
+                continue
+            else:
+                # child
+                _helper_log("post-fork")
+                payload, fds = recv_json_and_fds(client, maxfds=4)
                 if not payload or len(fds) != 4:
-                    click.echo("No payload or fds passed from kart_cli_helper")
+                    click.echo(
+                        "No payload or fds passed from kart_cli_helper: exit(-1)"
+                    )
                     sys.exit(-1)
-
-                kart_helper_log = os.environ.get("KART_HELPER_LOG")
-                if kart_helper_log:
-                    kart_helper_log = open(kart_helper_log, "a")
-                else:
-                    kart_helper_log = io.StringIO()
 
                 # as there is a new process the child could drop permissions here or use a security system to set up
                 # controls, chroot etc.
@@ -127,6 +146,7 @@ def helper(ctx, socket_filename, timeout, args):
                 # change to the calling processes working directory
                 # TODO - pass as path for windows
                 os.fchdir(fds[3])
+                _helper_log(f"cwd={os.getcwd()}")
 
                 # set this processes stdin/stdout/stderr to the calling processes passed in fds
                 # TODO - have these passed as named pipes paths, will work on windows as well
@@ -137,17 +157,20 @@ def helper(ctx, socket_filename, timeout, args):
                 sys.stdout = os.fdopen(fds[1], "w")
                 sys.stderr = os.fdopen(fds[2], "w")
 
+                # re-enable SIGCHLD so subprocess handling works
+                signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+
                 try:
                     calling_environment = json.loads(payload)
-                except (TypeError, ValueError) as e:
-                    click.echo(
-                        "kart helper: Unable to read command from kart_cli_helper", e
+                except (TypeError, ValueError, json.decoder.JSONDecodeError) as e:
+                    raise RuntimeError(
+                        "kart helper: Unable to read command from kart_cli_helper",
+                        e,
+                        f"Payload:\n{repr(payload)}",
                     )
                 else:
                     sys.argv[1:] = calling_environment["argv"][1:]
-                    kart_helper_log.write(
-                        f"PID={calling_environment['pid']} CWD={os.getcwd()} CMD={' '.join(calling_environment['argv'])}\n"
-                    )
+                    _helper_log(f"cmd={' '.join(calling_environment['argv'])}")
                     os.environ.clear()
                     os.environ.update(
                         {
@@ -157,66 +180,114 @@ def helper(ctx, socket_filename, timeout, args):
                         }
                     )
 
+                    # setup the semctl() function
                     import ctypes
                     import ctypes.util
 
                     libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
-                    #
                     if is_darwin:
                         SETVAL = 8
+
+                        #  union semun {
+                        #          int     val;            /* value for SETVAL */
+                        #          struct  semid_ds *buf;  /* buffer for IPC_STAT & IPC_SET */
+                        #          u_short *array;         /* array for GETALL & SETALL */
+                        #  };
+                        class C_SEMUN(ctypes.Union):
+                            _fields_ = (
+                                ("val", ctypes.c_int),
+                                ("semid_ds", ctypes.c_void_p),
+                                ("array", ctypes.POINTER(ctypes.c_ushort)),
+                            )
+
                     elif is_linux:
                         SETVAL = 16
 
-                    class struct_semid_ds(ctypes.Structure):
-                        pass
+                        # union semun {
+                        #     int              val;    /* Value for SETVAL */
+                        #     struct semid_ds *buf;    /* Buffer for IPC_STAT, IPC_SET */
+                        #     unsigned short  *array;  /* Array for GETALL, SETALL */
+                        #     struct seminfo  *__buf;  /* Buffer for IPC_INFO
+                        # };
+                        class C_SEMUN(ctypes.Union):
+                            _fields_ = (
+                                ("val", ctypes.c_int),
+                                ("semid_ds", ctypes.c_void_p),
+                                ("array", ctypes.POINTER(ctypes.c_ushort)),
+                                ("seminfo", ctypes.c_void_p),
+                            )
 
-                    class struct_semun(ctypes.Union):
-                        _fields_ = [
-                            ("val", ctypes.c_uint32),
-                            (
-                                "buf",
-                                ctypes.POINTER(struct_semid_ds),
-                            ),
-                            (
-                                "array",
-                                ctypes.POINTER(ctypes.c_uint16),
-                            ),
-                        ]
+                    # arg (union semun) is a variadic arg. On macOS/arm64 the
+                    # calling convention differs between fixed & variadic args
+                    # so we _must_ treat it as variadic.
+                    libc.semctl.argtypes = (
+                        ctypes.c_int,
+                        ctypes.c_int,
+                        ctypes.c_int,
+                    )
+                    libc.semctl.restype = ctypes.c_int
 
-                    libc.semctl.argtypes = [
-                        ctypes.c_int,
-                        ctypes.c_int,
-                        ctypes.c_int,
-                        struct_semun,
-                    ]
-                    libc.semget.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
                     semid = calling_environment["semid"]
+                    SEMNUM = 0
+
+                    _helper_log(f"semid={semid}")
                     try:
+                        _helper_log("invoking cli()...")
                         cli()
                     except SystemExit as system_exit:
                         """exit is called in the commands but we ignore as we need to clean up the caller"""
-
                         # TODO - do we ever see negative exit codes from cli (git etc)?
-                        libc.semctl(
-                            semid, 0, SETVAL, struct_semun(val=system_exit.code + 1000)
+                        _helper_log(
+                            f"SystemExit from cli(): {system_exit.code} semval={1000+system_exit.code}"
                         )
-
+                        if (
+                            libc.semctl(
+                                semid,
+                                SEMNUM,
+                                SETVAL,
+                                C_SEMUN(val=system_exit.code + 1000),
+                            )
+                            < 0
+                        ):
+                            raise RuntimeError(
+                                f"Error setting semid {semid}[{SEMNUM}]=1000+{system_exit.code}: "
+                                f"{errno.errorcode.get(ctypes.get_errno(), ctypes.get_errno())}"
+                            )
                     except Exception as e:
-                        print(
-                            f"kart helper: unhandled exception"
-                        )  # TODO - should ext-run capture/handle this?
+                        # TODO - should ext-run capture/handle this?
+                        _helper_log(
+                            f"unhandled exception from cli() semval=1001: {traceback.format_exc(e)}"
+                        )
+                        print("kart helper: unhandled exception", file=sys.stderr)
                         traceback.print_exc(file=sys.stderr)
-                        libc.semctl(semid, 0, SETVAL, struct_semun(val=1001))
+                        if libc.semctl(semid, SEMNUM, SETVAL, C_SEMUN(val=1001)) < 0:
+                            raise RuntimeError(
+                                f"Error setting semid {semid}[{SEMNUM}]=1001: "
+                                f"{errno.errorcode.get(ctypes.get_errno(), ctypes.get_errno())}"
+                            )
+                    else:
+                        _helper_log("return from cli() without SystemExit semval=1000")
+                        if libc.semctl(semid, SEMNUM, SETVAL, C_SEMUN(val=1000)) < 0:
+                            raise RuntimeError(
+                                f"Error setting semid {semid}[{SEMNUM}]=1000: "
+                                f"{errno.errorcode.get(ctypes.get_errno(), ctypes.get_errno())}"
+                            )
+
                     try:
                         # send a signal to caller that we are done
+                        _helper_log(
+                            f"sending SIGALRM to pid {calling_environment['pid']}"
+                        )
                         os.kill(calling_environment["pid"], signal.SIGALRM)
                     except ProcessLookupError as e:
+                        _helper_log(f"error signalling caller: {e}")
                         pass
 
-                kart_helper_log.close()
+                _helper_log("bye(0)")
                 sys.exit()
 
         except socket.timeout:
+            _helper_log("socket timeout, bye (0)")
             try:
                 os.unlink(socket_filename)
             except FileNotFoundError:

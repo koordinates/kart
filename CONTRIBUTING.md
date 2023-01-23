@@ -71,6 +71,10 @@ $ cmake --build build --target bundle
 $ cmake --install build
 ```
 
+Kart includes a background helper for improved command-line performance, but this
+feature is disabled by default in development builds. To enable it, configure
+Kart with `-DCLI_HELPER=ON`.
+
 ### Downloading vendor dependencies from CI
 
 If you're having issues with VCPKG in the above, you can download a recent master-branch vendor CI artifact for your platform (eg: `vendor-macos-X64-py3.10.zip`).
