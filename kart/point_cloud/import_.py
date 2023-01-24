@@ -258,13 +258,18 @@ def point_cloud_import(
 
     ds_inner_path = f"{ds_path}/.point-cloud-dataset.v1"
 
+    # Metadata in this dict is updated as we convert some or all tiles to COPC.
+    source_to_imported_metadata = {**source_to_metadata}
+
     def convert_tile_to_copc_and_reextract_metadata(source, dest):
-        nonlocal source_to_metadata
+        nonlocal source_to_imported_metadata
 
         convert_tile_to_copc(source, dest)
-        source_to_metadata[source] = extract_pc_tile_metadata(dest, extract_schema=True)
+        source_to_imported_metadata[source] = extract_pc_tile_metadata(
+            dest, extract_schema=True
+        )
         source_hash = "sha256:" + source_to_hash_and_size[source][0]
-        source_to_metadata[source]["tile"]["sourceOid"] = source_hash
+        source_to_imported_metadata[source]["tile"]["sourceOid"] = source_hash
 
     # fast-import doesn't really have a way to amend a commit.
     # So we'll use a temporary branch for this fast-import,
@@ -363,23 +368,23 @@ def point_cloud_import(
                             blob_path,
                             (existing_dataset.inner_tree / rel_blob_path).data,
                         )
-                        del source_to_metadata[source]
+                        del source_to_imported_metadata[source]
                         continue
 
             tile_is_copc = source_metadata["format"]["optimization"] == "copc"
-            conversion_func = None
 
             if convert_to_copc and not tile_is_copc:
                 conversion_func = convert_tile_to_copc_and_reextract_metadata
+                oid_and_size = None
+            else:
+                conversion_func = None
+                oid_and_size = source_to_hash_and_size[source]
 
             pointer_dict = copy_file_to_local_lfs_cache(
-                repo,
-                source,
-                conversion_func,
-                oid_and_size=source_to_hash_and_size[source],
+                repo, source, conversion_func, oid_and_size=oid_and_size
             )
             pointer_dict = format_tile_for_pointer_file(
-                source_to_metadata[source]["tile"], pointer_dict
+                source_to_imported_metadata[source]["tile"], pointer_dict
             )
 
             write_blob_to_stream(
@@ -389,7 +394,7 @@ def point_cloud_import(
         rewrite_metadata = (
             None if convert_to_copc else RewriteMetadata.DROP_OPTIMIZATION
         )
-        all_metadatas.extend(source_to_metadata.values())
+        all_metadatas.extend(source_to_imported_metadata.values())
         merged_metadata = rewrite_and_merge_metadata(all_metadatas, rewrite_metadata)
         check_for_non_homogenous_metadata(merged_metadata)
 
