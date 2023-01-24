@@ -22,6 +22,7 @@ For example, here is the basic folder structure of a dataset named
    lidar/alpine-fault/.point-cloud-dataset.v1/meta/
    lidar/alpine-fault/.point-cloud-dataset.v1/meta/title              # Title of the dataset
    lidar/alpine-fault/.point-cloud-dataset.v1/meta/description        # Description of the dataset
+   lidar/alpine-fault/.point-cloud-dataset.v1/meta/format.json        # Format of the dataset
    lidar/alpine-fault/.point-cloud-dataset.v1/meta/schema.json        # Schema of the dataset
    lidar/alpine-fault/.point-cloud-dataset.v1/meta/crs.wkt            # CRS of the dataset
    lidar/alpine-fault/.point-cloud-dataset.v1/meta/...                # Other dataset metadata
@@ -54,7 +55,7 @@ markdown in the title.
 
 Contains information about constraints that the LAS tiles must follow.
 All the tiles must be LAS files, but there are various versions and flavours of LAS and one dataset cannot contain a mixture of all of them.
-At a minimum, the dataset's tiles must be constrained in such a way that every tile has the same schema (see :ref:` ``meta/schema.json`` ` below).
+At a minimum, the dataset's tiles must be constrained in such a way that every tile has the same schema (see :ref:`meta/schema.json <pointcloud-meta-schema-json>` below).
 Datasets may optionally have further constraints - for instance, they may be constrained to conform to the `COPC specification <copc_>`_,
 which is a subtype of LAS file which allows for fasting seeking and rendering of whichever part of the point cloud is currently within the user's viewport.
 
@@ -72,6 +73,8 @@ For example, here is the format of a dataset that is constrained to use ``LAZ`` 
     }
 
 If certain constraints are relaxed - for example, if any LAS version is allowed - then the relevant fields are ommitted.
+
+.. _pointcloud-meta-schema-json:
 
 ``meta/schema.json``
 ^^^^^^^^^^^^^^^^^^^^
