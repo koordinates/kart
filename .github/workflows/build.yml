@@ -562,6 +562,22 @@ jobs:
         run: |
           time tests/scripts/e2e-1.sh
 
+      #
+      # Github release
+      #
+
+      - name: release
+        uses: softprops/action-gh-release@v1
+        if: "steps.version.outputs.is_release == 1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: |
+            build/dist/Kart-*.tar.gz
+            build/dist/kart_*.deb
+            build/dist/kart-*.rpm
+
   #
   # Linux development build using vendor archive & host python
   #
@@ -922,6 +938,17 @@ jobs:
           export PATH="$(pwd)/build/vcpkg_installed/x64-osx/tools:$PATH"
           tests/scripts/e2e-1.sh
 
+      - name: "release"
+        uses: softprops/action-gh-release@v1
+        if: "steps.version.outputs.is_release == 1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: |
+            build/dist/Kart-*.zip
+            build/dist/Kart-*.pkg
+
   #
   # Windows
   #
@@ -1127,3 +1154,14 @@ jobs:
           Write-Host "Running Kart E2E tests..." -ForegroundColor Green
           & "tests\scripts\e2e-1.ps1" | Out-Default
           if (!$?) {throw "E2E test Failed"}
+
+      - name: "release"
+        uses: softprops/action-gh-release@v1
+        if: "steps.version.outputs.is_release == 1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: |
+            build/dist/Kart-*.zip
+            build/dist/Kart-*.msi
