@@ -24,7 +24,7 @@ class TagsJsonFileType:
             assert isinstance(meta_item, list)
             for tag in meta_item:
                 assert isinstance(tag, str)
-        except AssertionError as e:
+        except AssertionError:
             raise AssertionError("tags.json should be a list of strings")
         return meta_item
 
@@ -37,13 +37,13 @@ class SchemaJsonFileType:
     def decode_from_bytes(self, data):
         if data is None:
             return None
-        return Schema.normalise_column_dicts(json_unpack(data))
+        return Schema.loads(data)
 
     def encode_to_bytes(self, meta_item):
         if meta_item is None:
             return None
         if not isinstance(meta_item, Schema):
-            meta_item = Schema.from_column_dicts(meta_item)
+            meta_item = Schema(meta_item)
         return meta_item.dumps()
 
 

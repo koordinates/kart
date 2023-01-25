@@ -257,7 +257,7 @@ class RepoStructure:
                 continue
 
             if schema_delta and schema_delta.type == "insert":
-                schema = Schema.from_column_dicts(schema_delta.new_value)
+                schema = Schema(schema_delta.new_value)
                 dataset = dataset_class_for_version(
                     self.repo.table_dataset_version
                 ).new_dataset_for_writing(ds_path, schema, self.repo)
@@ -306,7 +306,7 @@ class RepoStructure:
                 elif schema_delta.type == "delete":
                     new_schema = None
                 else:
-                    new_schema = Schema.from_column_dicts(schema_delta.new_value)
+                    new_schema = Schema(schema_delta.new_value)
             else:
                 ds = self.datasets()[ds_path]
                 # TODO - check schema for point-clouds as well as table datasets.

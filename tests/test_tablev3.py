@@ -45,7 +45,7 @@ def test_raw_dict_to_value_tuples():
 
 
 def abcdef_schema():
-    return Schema.from_column_dicts(
+    return Schema(
         [
             {
                 "id": "a",
@@ -142,10 +142,16 @@ GEOM_TYPE_INFO = {"geometryType": "MULTIPOLYGON ZM", "geometryCRS": "EPSG:2193"}
 def test_schema_roundtrip(gen_uuid):
     orig = Schema(
         [
-            ColumnSchema(gen_uuid(), "geom", "geometry", None, **GEOM_TYPE_INFO),
-            ColumnSchema(gen_uuid(), "id", "integer", 1, size=64),
-            ColumnSchema(gen_uuid(), "artist", "text", 0, length=200),
-            ColumnSchema(gen_uuid(), "recording", "blob", None),
+            ColumnSchema(
+                id=gen_uuid(), name="geom", data_type="geometry", **GEOM_TYPE_INFO
+            ),
+            ColumnSchema(
+                id=gen_uuid(), name="id", data_type="integer", pk_index=1, size=64
+            ),
+            ColumnSchema(
+                id=gen_uuid(), name="artist", data_type="text", pk_index=0, length=200
+            ),
+            ColumnSchema(id=gen_uuid(), name="recording", data_type="blob"),
         ]
     )
 
@@ -168,10 +174,16 @@ def test_schema_roundtrip(gen_uuid):
 def test_feature_roundtrip(gen_uuid):
     schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "geom", "geometry", None, **GEOM_TYPE_INFO),
-            ColumnSchema(gen_uuid(), "id", "integer", 1, size=64),
-            ColumnSchema(gen_uuid(), "artist", "text", 0, length=200),
-            ColumnSchema(gen_uuid(), "recording", "blob", None),
+            ColumnSchema(
+                id=gen_uuid(), name="geom", data_type="geometry", **GEOM_TYPE_INFO
+            ),
+            ColumnSchema(
+                id=gen_uuid(), name="id", data_type="integer", pk_index=1, size=64
+            ),
+            ColumnSchema(
+                id=gen_uuid(), name="artist", data_type="text", pk_index=0, length=200
+            ),
+            ColumnSchema(id=gen_uuid(), name="recording", data_type="blob"),
         ]
     )
     empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, schema, MemoryRepo())
@@ -208,19 +220,24 @@ def test_feature_roundtrip(gen_uuid):
 def test_schema_change_roundtrip(gen_uuid):
     old_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "ID", "integer", 0),
-            ColumnSchema(gen_uuid(), "given_name", "text", None),
-            ColumnSchema(gen_uuid(), "surname", "text", None),
-            ColumnSchema(gen_uuid(), "date_of_birth", "date", None),
+            ColumnSchema(id=gen_uuid(), name="ID", data_type="integer", pk_index=0),
+            ColumnSchema(id=gen_uuid(), name="given_name", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="surname", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="date_of_birth", data_type="date"),
         ]
     )
     new_schema = Schema(
         [
-            ColumnSchema(old_schema[0].id, "personnel_id", "integer", 0),
-            ColumnSchema(gen_uuid(), "tax_file_number", "text", None),
-            ColumnSchema(old_schema[2].id, "last_name", "text", None),
-            ColumnSchema(old_schema[1].id, "first_name", "text", None),
-            ColumnSchema(gen_uuid(), "middle_names", "text", None),
+            ColumnSchema(
+                id=old_schema[0].id,
+                name="personnel_id",
+                data_type="integer",
+                pk_index=0,
+            ),
+            ColumnSchema(id=gen_uuid(), name="tax_file_number", data_type="text"),
+            ColumnSchema(id=old_schema[2].id, name="last_name", data_type="text"),
+            ColumnSchema(id=old_schema[1].id, name="first_name", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="middle_names", data_type="text"),
         ]
     )
     # Updating the schema without updating features is only possible

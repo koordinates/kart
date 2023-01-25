@@ -93,9 +93,7 @@ class PkGeneratingTableImportSource(TableImportSource):
         self.similarity_detection_limit = similarity_detection_limit
 
         self.load_data_from_repo()
-        self._schema_with_pk = Schema.from_column_dicts(
-            [self.pk_col] + self.delegate.schema.to_column_dicts()
-        )
+        self._schema_with_pk = Schema([self.pk_col] + list(self.delegate.schema))
 
     def load_data_from_repo(self):
         self.repo.ensure_supported_version()
@@ -407,7 +405,7 @@ class PkGeneratingTableImportSource(TableImportSource):
 
     def get_meta_item(self, name, missing_ok=True):
         if name == "schema.json":
-            return self._schema_with_pk.to_column_dicts()
+            return self._schema_with_pk
         elif name == self.GENERATED_PKS_ITEM:
             return self.to_dict()
         else:
@@ -416,7 +414,7 @@ class PkGeneratingTableImportSource(TableImportSource):
     def meta_items(self):
         return {
             **self.delegate.meta_items(),
-            "schema.json": self._schema_with_pk.to_column_dicts(),
+            "schema.json": self._schema_with_pk,
             self.GENERATED_PKS_ITEM: self.to_dict(),
         }
 

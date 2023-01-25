@@ -190,7 +190,7 @@ def get_identifier_int_from_dataset(dataset, crs_name=None):
         if num_geom_columns == 0:
             return None
         elif num_geom_columns == 1:
-            crs_name = geom_columns[0].extra_type_info.get("geometryCRS", None)
+            crs_name = geom_columns[0].get("geometryCRS", None)
         else:
             raise ValueError("Dataset has more than one geometry column")
 

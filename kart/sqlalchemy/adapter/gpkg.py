@@ -128,14 +128,13 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
     def v2_type_to_sql_type(cls, col, v2_obj=None):
         sql_type = super().v2_type_to_sql_type(col, v2_obj)
 
-        extra_type_info = col.extra_type_info
         if sql_type == "GEOMETRY":
             # Return the geometryType, minus the Z or M specifiers.
-            return extra_type_info.get("geometryType", "GEOMETRY").split(" ", 1)[0]
+            return col.get("geometryType", "GEOMETRY").split(" ", 1)[0]
 
         if sql_type in ("TEXT", "BLOB"):
             # Add length specifier if present.
-            length = extra_type_info.get("length", None)
+            length = col.get("length", None)
             return f"{sql_type}({length})" if length else sql_type
 
         return sql_type
@@ -200,7 +199,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
             gpkg_meta_items, "gpkg_contents", "table_name"
         )
         schema = cls._gpkg_to_v2_schema(gpkg_meta_items, id_salt)
-        yield "schema.json", schema.to_column_dicts() if schema else None
+        yield "schema.json", schema
 
         gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys")
         for gsrs in gpkg_spatial_ref_sys:
@@ -271,7 +270,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         if not geom_columns:
             return None
 
-        geometry_type = geom_columns[0].extra_type_info.get("geometryType", "GEOMETRY")
+        geometry_type = geom_columns[0].get("geometryType", "GEOMETRY")
         type_name, *zm = geometry_type.split(" ", 1)
         zm = zm[0] if zm else ""
         z = 1 if "Z" in zm else 0
@@ -293,7 +292,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         if not geom_columns:
             return []
 
-        crs_pathname = geom_columns[0].extra_type_info.get("geometryCRS")
+        crs_pathname = geom_columns[0].get("geometryCRS")
         if not crs_pathname:
             return []
         wkt = v2_obj.get_crs_definition(crs_pathname)
@@ -371,7 +370,13 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
 
         pk_index = 0 if sqlite_col_info["pk"] == 1 else None
         col_id = ColumnSchema.deterministic_id(name, data_type, id_salt)
-        return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
+        return ColumnSchema(
+            id=col_id,
+            name=name,
+            data_type=data_type,
+            pk_index=pk_index,
+            **extra_type_info,
+        )
 
     @classmethod
     def sql_type_to_v2_type(cls, sql_type):
@@ -650,7 +655,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
             return BooleanType
         elif col.data_type == "timestamp":
             # Add and strip Z suffix from timestamps:
-            return TimestampType(col.extra_type_info.get("timezone"))
+            return TimestampType(col.get("timezone"))
         # Don't need to specify type information for other columns at present, since we just pass through the values.
         return None
 

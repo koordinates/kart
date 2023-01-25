@@ -332,7 +332,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         # Fix up anything we may have done to the primary key before calling super()
         if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
-            self._restore_approximated_primary_key(
+            wc_meta_items["schema.json"] = self._restore_approximated_primary_key(
                 ds_meta_items["schema.json"], wc_meta_items["schema.json"]
             )
 
@@ -357,38 +357,47 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         If the dataset had a primary key of another type, then this will have been approximated.
         If the PK remains this same type when roundtripped, we remove this diff and treat it as the same.
         """
-        ds_pk = self._find_pk(ds_schema)
-        wc_pk = self._find_pk(wc_schema)
+        ds_pk = ds_schema.first_pk_column
+        wc_pk = wc_schema.first_pk_column
         if not ds_pk or not wc_pk:
-            return
+            return wc_schema
 
         if wc_pk["dataType"] != "integer":
             # This isn't a compliant GPKG that we would create, maybe the user edited it.
             # Keep the diff as it is.
-            return
+            return wc_schema
 
         if ds_pk["dataType"] == "integer":
+            if wc_pk.get("size") == ds_pk.get("size"):
+                return wc_schema
+
             # Dataset PK type of int8, int16, int32 was approximated as int64.
             # Restore it to its original size
-            if wc_pk.get("size") != ds_pk.get("size"):
-                wc_pk["size"] = ds_pk.get("size")
+            wc_schema = list(wc_schema)
+            index = wc_schema.index(wc_pk)
+            wc_schema[index] = dict(wc_schema[index])
+            wc_schema[index]["size"] = ds_pk.get("size")
+            return Schema(wc_schema)
         else:
             # Dataset PK has non-integer PK type, which would be approximated by demoting it to a non-PK
             # and adding another column of type INTEGER PK that is not found in the dataset.
             # If the working copy still has this structure, restore the original PK as a PK.
-            demoted_pk = self._find_by_name(wc_schema, ds_pk["name"])
-            if demoted_pk and demoted_pk["dataType"] == ds_pk["dataType"]:
-                # Remove auto-generated PK column
-                wc_schema.remove(wc_pk)
-                # Restore demoted-PK as PK again
-                demoted_pk["primaryKeyIndex"] = 0
+            demoted_pk = wc_schema.get_by_name(ds_pk["name"])
+            if demoted_pk is None or demoted_pk["dataType"] != ds_pk["dataType"]:
+                return wc_schema
+
+            # Remove auto-generated PK column
+            wc_schema = list(wc_schema)
+            wc_schema.remove(wc_pk)
+            # Restore demoted-PK as PK again
+            index = wc_schema.index(demoted_pk)
+            wc_schema[index] = dict(wc_schema[index])
+            wc_schema[index]["primaryKeyIndex"] = 0
+            return Schema(wc_schema)
 
     def _is_builtin_crs(self, crs):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name == "EPSG" and auth_code == "4326"
-
-    def _find_pk(self, schema_cols):
-        return next((c for c in schema_cols if c.get("primaryKeyIndex") == 0), None)
 
     def _find_by_name(self, schema_cols, name):
         return next((c for c in schema_cols if c["name"] == name), None)
@@ -561,8 +570,8 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         if not schema_delta.old_value or not schema_delta.new_value:
             return False
 
-        old_schema = Schema.from_column_dicts(schema_delta.old_value)
-        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        old_schema = Schema(schema_delta.old_value)
+        new_schema = Schema(schema_delta.new_value)
         dt = old_schema.diff_type_counts(new_schema)
         # We do support name_updates, but we don't support any other type of schema update
         # - except by rewriting the entire table.
@@ -586,8 +595,8 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         )
 
     def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):
-        src_schema = Schema.from_column_dicts(src_value)
-        dest_schema = Schema.from_column_dicts(dest_value)
+        src_schema = Schema(src_value)
+        dest_schema = Schema(dest_value)
 
         diff_types = src_schema.diff_types(dest_schema)
         name_updates = diff_types.pop("name_updates")

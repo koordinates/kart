@@ -87,17 +87,16 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
     def v2_type_to_sql_type(cls, col, v2_obj=None):
         sql_type = super().v2_type_to_sql_type(col, v2_obj)
 
-        extra_type_info = col.extra_type_info
         if sql_type == "GEOMETRY":
             return cls._v2_geometry_type_to_sql_type(col, v2_obj)
 
         if sql_type == "TEXT":
-            length = extra_type_info.get("length")
+            length = col.get("length")
             return f"VARCHAR({length})" if length is not None else "TEXT"
 
         if sql_type == "NUMERIC":
-            precision = extra_type_info.get("precision")
-            scale = extra_type_info.get("scale")
+            precision = col.get("precision")
+            scale = col.get("scale")
             if precision is not None and scale is not None:
                 return f"NUMERIC({precision},{scale})"
             elif precision is not None:
@@ -109,15 +108,14 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
 
     @classmethod
     def _v2_geometry_type_to_sql_type(cls, col, v2_obj=None):
-        extra_type_info = col.extra_type_info
-        geometry_type = extra_type_info.get("geometryType")
+        geometry_type = col.get("geometryType")
         if geometry_type is None:
             return "GEOMETRY"
 
         geometry_type = geometry_type.replace(" ", "")
 
         crs_id = None
-        crs_name = extra_type_info.get("geometryCRS")
+        crs_name = col.get("geometryCRS")
         if crs_name is not None and v2_obj is not None:
             crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
         if crs_id is None:
@@ -210,7 +208,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
                 col_info.update({**sampled_info, **col_info})
 
         schema = cls.postgis_to_v2_schema(pg_table_info, geom_cols_info, id_salt)
-        yield "schema.json", schema.to_column_dicts() if schema else None
+        yield "schema.json", schema
 
         for col_info in geom_cols_info:
             try:
@@ -252,7 +250,13 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         )
 
         col_id = ColumnSchema.deterministic_id(name, data_type, id_salt)
-        return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
+        return ColumnSchema(
+            id=col_id,
+            name=name,
+            data_type=data_type,
+            pk_index=pk_index,
+            **extra_type_info,
+        )
 
     @classmethod
     def _pg_type_to_v2_type(cls, pg_col_info, geom_cols_info):
@@ -355,7 +359,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         elif col.data_type == "time":
             return TimeType
         elif col.data_type == "timestamp":
-            return TimestampType(col.extra_type_info.get("timezone"))
+            return TimestampType(col.get("timezone"))
         elif col.data_type == "text":
             return TextType
         else:

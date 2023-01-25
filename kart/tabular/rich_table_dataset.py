@@ -75,7 +75,7 @@ class RichTableDataset(TableDataset):
     def _cols_to_crs_ids(self):
         result = {}
         for col in self.schema.geometry_columns:
-            crs_name = col.extra_type_info.get("geometryCRS", None)
+            crs_name = col.get("geometryCRS", None)
             crs_id = crs_util.get_identifier_int_from_dataset(self, crs_name)
             if crs_id:
                 result[col.name] = crs_id
@@ -161,7 +161,7 @@ class RichTableDataset(TableDataset):
             )
 
             if "schema.json" in meta_diff and meta_diff["schema.json"].new_value:
-                schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+                schema = Schema(meta_diff["schema.json"].new_value)
 
         feature_diff = dataset_diff.get("feature")
         if feature_diff:

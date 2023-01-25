@@ -21,7 +21,7 @@ def pki(gen_uuid):
     def _pki(pk_index):
         # Returns an arbitrary ColumnSchema, but with the given pk_index property.
         id = gen_uuid()
-        return ColumnSchema(id, id[:8], "integer", pk_index)
+        return ColumnSchema(id=id, name=id[:8], data_type="integer", pk_index=pk_index)
 
     return _pki
 
@@ -44,19 +44,21 @@ def test_invalid_schemas(pki):
 def test_align_schema(gen_uuid):
     old_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "ID", "integer", 0),
-            ColumnSchema(gen_uuid(), "first_name", "text", None),
-            ColumnSchema(gen_uuid(), "last_name", "text", None),
-            ColumnSchema(gen_uuid(), "date_of_birth", "date", None),
+            ColumnSchema(id=gen_uuid(), name="ID", data_type="integer", pk_index=0),
+            ColumnSchema(id=gen_uuid(), name="first_name", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="last_name", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="date_of_birth", data_type="date"),
         ]
     )
     new_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "personnel_id", "integer", 0),
-            ColumnSchema(gen_uuid(), "tax_file_number", "text", None),
-            ColumnSchema(gen_uuid(), "last_name", "text", None),
-            ColumnSchema(gen_uuid(), "first_name", "text", None),
-            ColumnSchema(gen_uuid(), "middle_names", "text", None),
+            ColumnSchema(
+                id=gen_uuid(), name="personnel_id", data_type="integer", pk_index=0
+            ),
+            ColumnSchema(id=gen_uuid(), name="tax_file_number", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="last_name", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="first_name", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="middle_names", data_type="text"),
         ]
     )
     aligned_schema = old_schema.align_to_self(new_schema)
@@ -108,14 +110,14 @@ def test_align_schema_type_changed(gen_uuid):
     # Make sure we don't align columns if they are different types:
     old_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "ID", "integer", 0),
-            ColumnSchema(gen_uuid(), "col1", "numeric", None),
+            ColumnSchema(id=gen_uuid(), name="ID", data_type="integer", pk_index=0),
+            ColumnSchema(id=gen_uuid(), name="col1", data_type="numeric"),
         ]
     )
     new_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "ID", "integer", 0),
-            ColumnSchema(gen_uuid(), "col1", "timestamp", None),
+            ColumnSchema(id=gen_uuid(), name="ID", data_type="integer", pk_index=0),
+            ColumnSchema(id=gen_uuid(), name="col1", data_type="timestamp"),
         ]
     )
     aligned_schema = old_schema.align_to_self(
@@ -135,8 +137,8 @@ def test_align_schema_type_changed(gen_uuid):
     # But we do align them if they are approximated:
     new_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "ID", "integer", 0),
-            ColumnSchema(gen_uuid(), "col1", "text", None),
+            ColumnSchema(id=gen_uuid(), name="ID", data_type="integer", pk_index=0),
+            ColumnSchema(id=gen_uuid(), name="col1", data_type="text"),
         ]
     )
     aligned_schema = old_schema.align_to_self(
@@ -1055,42 +1057,48 @@ def check_polygons_diff_output(r, output_format):
 def test_schema_diff_as_text(gen_uuid):
     old_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "fid", "integer", 0, size=64),
             ColumnSchema(
-                gen_uuid(),
-                "geom",
-                "geometry",
-                None,
+                id=gen_uuid(), name="fid", data_type="integer", pk_index=0, size=64
+            ),
+            ColumnSchema(
+                id=gen_uuid(),
+                name="geom",
+                data_type="geometry",
                 geometryType="MULTIPOLYGON",
                 geometryCRS="EPSG:2193",
             ),
-            ColumnSchema(gen_uuid(), "building_id", "integer", None, size=32),
-            ColumnSchema(gen_uuid(), "name", "text", None),
-            ColumnSchema(gen_uuid(), "use", "text", None),
-            ColumnSchema(gen_uuid(), "suburb_locality", "text", None),
-            ColumnSchema(gen_uuid(), "town_city", "text", None),
-            ColumnSchema(gen_uuid(), "territorial_authority", "text", None),
-            ColumnSchema(gen_uuid(), "last_modified", "date", None),
+            ColumnSchema(
+                id=gen_uuid(), name="building_id", data_type="integer", size=32
+            ),
+            ColumnSchema(id=gen_uuid(), name="name", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="use", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="suburb_locality", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="town_city", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="territorial_authority", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="last_modified", data_type="date"),
         ]
     )
     new_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "fid", "integer", 0, size=64),
-            ColumnSchema(gen_uuid(), "building_id", "integer", None, size=64),
-            ColumnSchema(gen_uuid(), "name", "text", None, size=40),
-            ColumnSchema(gen_uuid(), "territorial_authority", "text", None),
-            ColumnSchema(gen_uuid(), "use", "text", None),
-            ColumnSchema(gen_uuid(), "colour", "integer", None, size=32),
-            ColumnSchema(gen_uuid(), "town_city", "text", None),
             ColumnSchema(
-                gen_uuid(),
-                "geom",
-                "geometry",
-                None,
+                id=gen_uuid(), name="fid", data_type="integer", pk_index=0, size=64
+            ),
+            ColumnSchema(
+                id=gen_uuid(), name="building_id", data_type="integer", size=64
+            ),
+            ColumnSchema(id=gen_uuid(), name="name", data_type="text", size=40),
+            ColumnSchema(id=gen_uuid(), name="territorial_authority", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="use", data_type="text"),
+            ColumnSchema(id=gen_uuid(), name="colour", data_type="integer", size=32),
+            ColumnSchema(id=gen_uuid(), name="town_city", data_type="text"),
+            ColumnSchema(
+                id=gen_uuid(),
+                name="geom",
+                data_type="geometry",
                 geometryType="MULTIPOLYGON",
                 geometryCRS="EPSG:2193",
             ),
-            ColumnSchema(gen_uuid(), "last_modified", "date", None),
+            ColumnSchema(id=gen_uuid(), name="last_modified", data_type="date"),
         ]
     )
     aligned_schema = old_schema.align_to_self(new_schema)
@@ -1176,14 +1184,16 @@ def test_schema_diff_as_text(gen_uuid):
 def test_validate(gen_uuid):
     schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "i", "integer", 0, size=32),
-            ColumnSchema(gen_uuid(), "g", "geometry", None),
-            ColumnSchema(gen_uuid(), "t", "text", None, length=10),
-            ColumnSchema(gen_uuid(), "b", "blob", None, length=10),
-            ColumnSchema(gen_uuid(), "ts", "timestamp", None),
-            ColumnSchema(gen_uuid(), "d", "date", None),
-            ColumnSchema(gen_uuid(), "ti", "time", None),
-            ColumnSchema(gen_uuid(), "i6l", "interval", None),
+            ColumnSchema(
+                id=gen_uuid(), name="i", data_type="integer", pk_index=0, size=32
+            ),
+            ColumnSchema(id=gen_uuid(), name="g", data_type="geometry"),
+            ColumnSchema(id=gen_uuid(), name="t", data_type="text", length=10),
+            ColumnSchema(id=gen_uuid(), name="b", data_type="blob", length=10),
+            ColumnSchema(id=gen_uuid(), name="ts", data_type="timestamp"),
+            ColumnSchema(id=gen_uuid(), name="d", data_type="date"),
+            ColumnSchema(id=gen_uuid(), name="ti", data_type="time"),
+            ColumnSchema(id=gen_uuid(), name="i6l", data_type="interval"),
         ]
     )
 

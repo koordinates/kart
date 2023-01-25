@@ -80,7 +80,7 @@ class BaseKartAdapter:
         v2_type = col.data_type
 
         # This implementation just looks up V2_TYPE_TO_SQL_TYPE.
-        # Any extra work to be done (eg handling of extra_type_info) must be performed by the subclass.
+        # Any extra work to be done (eg handling any further extra type info) must be performed by the subclass.
 
         subtype_key = cls.SUBTYPE_KEYS.get(v2_type)
         if subtype_key:
@@ -88,7 +88,7 @@ class BaseKartAdapter:
             if not sql_type_options:
                 raise ValueError(f"Unrecognised V2 data type: {v2_type}")
 
-            v2_subtype_value = col.extra_type_info.get(
+            v2_subtype_value = col.get(
                 subtype_key, cls.DEFAULT_SUBTYPE_VALUES.get(subtype_key)
             )
             sql_type = sql_type_options.get(v2_subtype_value)
@@ -113,7 +113,7 @@ class BaseKartAdapter:
         """
 
         # This implementation just looks up SQL_TYPE_TO_V2_TYPE.
-        # Any extra work to be done (eg handling of extra_type_info) must be performed by the subclass.
+        # Any extra work to be done (eg handling any further extra type info) must be performed by the subclass.
         sql_type = sql_type.upper()
         v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(sql_type)
         if v2_type_info is None:

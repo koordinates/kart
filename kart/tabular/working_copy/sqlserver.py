@@ -291,8 +291,8 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         if not schema_delta.old_value or not schema_delta.new_value:
             return False
 
-        old_schema = Schema.from_column_dicts(schema_delta.old_value)
-        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        old_schema = Schema(schema_delta.old_value)
+        new_schema = Schema(schema_delta.new_value)
         dt = old_schema.diff_type_counts(new_schema)
 
         # We support deletes, name_updates, and type_updates -
@@ -313,8 +313,8 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         )
 
     def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):
-        src_schema = Schema.from_column_dicts(src_value)
-        dest_schema = Schema.from_column_dicts(dest_value)
+        src_schema = Schema(src_value)
+        dest_schema = Schema(dest_value)
 
         diff_types = src_schema.diff_types(dest_schema)
 

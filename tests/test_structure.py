@@ -778,9 +778,7 @@ def test_pk_encoder_legacy_hashed(data_archive_readonly):
 
 
 def test_pk_encoder_string_pk():
-    schema = Schema.from_column_dicts(
-        [{"name": "mypk", "dataType": "text", "id": "abc123"}]
-    )
+    schema = Schema([{"name": "mypk", "dataType": "text", "id": "abc123"}])
     ds = TableV3.new_dataset_for_writing("mytable", schema, MemoryRepo())
     e = ds.feature_path_encoder
     assert isinstance(e, MsgpackHashPathEncoder)
@@ -795,7 +793,7 @@ def test_pk_encoder_string_pk():
 
 
 def test_pk_encoder_int_pk():
-    schema = Schema.from_column_dicts(
+    schema = Schema(
         [
             {
                 "name": "mypk",
@@ -1079,6 +1077,6 @@ def test_postgis_import_with_sampled_geometry_dimension(
         repo = KartRepo(tmp_path / "repo")
         dataset = repo.datasets()["points_xyz"]
         [geom_col] = dataset.schema.geometry_columns
-        assert geom_col.extra_type_info["geometryType"] == "GEOMETRY Z"
+        assert geom_col["geometryType"] == "GEOMETRY Z"
 
         conn.execute("""DROP TABLE IF EXISTS points_xyz CASCADE;""")

@@ -552,7 +552,9 @@ class TableWorkingCopy(WorkingCopyPart):
         if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
             ds_schema = ds_meta_items["schema.json"]
             wc_schema = wc_meta_items["schema.json"]
-            Schema.align_schema_cols(ds_schema, wc_schema, roundtrip_ctx=self)
+            wc_meta_items["schema.json"] = ds_schema.align_to_self(
+                wc_schema, roundtrip_ctx=self
+            )
 
         # Remove any spurious diffs caused by the WC having built-in CRS's that we can't / shouldn't modify:
         self._remove_builtin_crs_diffs(ds_meta_items, wc_meta_items)
@@ -732,7 +734,7 @@ class TableWorkingCopy(WorkingCopyPart):
             and "schema.json" in meta_diff
             and meta_diff["schema.json"].new_value
         ):
-            return Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+            return Schema(meta_diff["schema.json"].new_value)
         else:
             return dataset.schema
 
@@ -855,8 +857,8 @@ class TableWorkingCopy(WorkingCopyPart):
         if not schema_delta.old_value or not schema_delta.new_value:
             return False
 
-        old_schema = Schema.from_column_dicts(schema_delta.old_value)
-        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        old_schema = Schema(schema_delta.old_value)
+        new_schema = Schema(schema_delta.new_value)
         dt = old_schema.diff_type_counts(new_schema)
         # We could still recognise a renamed feature in the case of type updates (eg int32 -> int64),
         # but basically any other type of schema modification means there's no point looking for renames.

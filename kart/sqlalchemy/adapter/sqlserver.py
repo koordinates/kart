@@ -133,8 +133,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
 
         constraints = []
 
-        extra_type_info = col.extra_type_info
-        geometry_type = extra_type_info.get("geometryType")
+        geometry_type = col.get("geometryType")
         if geometry_type is not None:
             geometry_type = geometry_type.split(" ")[0].upper()
             if geometry_type != "GEOMETRY":
@@ -143,7 +142,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
                 )
 
         if v2_obj is not None:
-            crs_name = extra_type_info.get("geometryCRS")
+            crs_name = col.get("geometryCRS")
             crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
             if crs_id is not None:
                 constraints.append(cls._geometry_crs_constraint(col.name, crs_id))
@@ -154,14 +153,13 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     def v2_type_to_sql_type(cls, col, v2_obj=None):
         sql_type = super().v2_type_to_sql_type(col, v2_obj)
 
-        extra_type_info = col.extra_type_info
         if sql_type in ("VARCHAR", "NVARCHAR", "VARBINARY"):
-            length = extra_type_info.get("length")
+            length = col.get("length")
             return f"{sql_type}({length})" if length is not None else f"{sql_type}(max)"
 
         if sql_type == "NUMERIC":
-            precision = extra_type_info.get("precision")
-            scale = extra_type_info.get("scale")
+            precision = col.get("precision")
+            scale = col.get("scale")
             if precision is not None and scale is not None:
                 return f"NUMERIC({precision},{scale})"
             elif precision is not None:
@@ -241,7 +239,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         schema = KartAdapter_SqlServer.sqlserver_to_v2_schema(
             ms_table_info, ms_spatial_ref_sys, id_salt
         )
-        yield "schema.json", schema.to_column_dicts() if schema else None
+        yield "schema.json", schema
 
         for crs_info in ms_spatial_ref_sys:
             auth_name = crs_info["authority_name"]
@@ -303,7 +301,13 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             data_type, extra_type_info = cls._ms_type_to_v2_type(ms_col_info)
 
         col_id = ColumnSchema.deterministic_id(name, data_type, id_salt)
-        return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
+        return ColumnSchema(
+            id=col_id,
+            name=name,
+            data_type=data_type,
+            pk_index=pk_index,
+            **extra_type_info,
+        )
 
     @classmethod
     def _ms_type_to_v2_type(cls, ms_col_info):
@@ -342,7 +346,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     @classmethod
     def _type_def_for_column_schema(cls, col, dataset):
         if col.data_type == "geometry":
-            crs_name = col.extra_type_info.get("geometryCRS")
+            crs_name = col.get("geometryCRS")
             crs_id = None
             if dataset is not None:
                 crs_id = (
@@ -357,7 +361,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         elif col.data_type == "time":
             return TimeType
         elif col.data_type == "timestamp":
-            return TimestampType(col.extra_type_info.get("timezone"))
+            return TimestampType(col.get("timezone"))
         elif col.data_type == "text":
             return TextType
         else:

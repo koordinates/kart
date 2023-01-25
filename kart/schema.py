@@ -1,11 +1,11 @@
 import functools
 import re
 import uuid
-from collections import namedtuple
 
 import pygit2
 
 from kart.geometry import Geometry
+from kart.diff_structs import Delta
 from kart.serialise_util import (
     hexhash,
     json_pack,
@@ -126,24 +126,51 @@ ALL_DATA_TYPES = {
 }
 
 
-class ColumnSchema(
-    # namedtuple for Immutability
-    namedtuple(
-        "ColumnSchema", ("id", "name", "data_type", "pk_index", "extra_type_info")
-    )
-):
+class ColumnSchema(dict):
     """
-    The schema for a single column.
+    The schema for a single column. Immutable.
+    When normalised, JSON-style names are used - not python-style ones - and Nones are not stored.
+    Not setting a key is considered the canonical way of storing None.
 
-    - A column may have a unique ID that is constant for the columns lifetime - even if the column is moved or renamed.
-    This ID is Kart-specific and doesn't reflect anything in the working copy, since working copies don't provide
-    a way of uniquely tracking columns through renames.
-    - A column has a name - that is externally considered to be its unique identifier, but it can change from
-    version to version. For working copy types where renames are not possible, the ID is None and the name is
-    effectively the ID.
-    - A column also has a datatype, info about whether this column is one of the primary keys, and potentially extra
-    info about the specific datatype.
+    Types of schema for different datasets:
+    - Tabular column-schemas have the following fields: id, name, dataType, and optionally primaryKeyIndex,
+      optionally some more data-type information.
+    - Point cloud cloumn-schemas have the following fields: name, dataType, optionally some more data-type information.
+
+    Column fields:
+    - The ID is an identifier that is constant for the columns lifetime - even if the column is moved or renamed.
+      This ID is Kart-specific and doesn't reflect anything in the working copy, since working copies don't provide
+      a way of uniquely tracking columns through renames.
+    - The name is its user-visible  unique identifier, but it can change from commit to commit if the user renames it.
+      For dataset types where renames are not possible, the ID is None and the name is effectively the ID.
+    - A column always has a data-type. Some data-types require or optionally have extra information - eg "integer" is
+      a data-type, but this would require extra data describing how many bits of integer it is.
+    - For dataset types which support primary keys, one or more columns can be marked as the primary key using the
+      primaryKeyIndex field.
     """
+
+    PYTHON_TO_JSON_NAME = {
+        "data_type": "dataType",
+        "pk_index": "primaryKeyIndex",
+    }
+
+    SORT_ORDER = (
+        "id",
+        "name",
+        "dataType",
+        "primaryKeyIndex",
+        "geometryType",
+        "geometryCRS",
+    )
+
+    @classmethod
+    @property
+    @functools.lru_cache(maxsize=1)
+    def sort_order_dict(cls):
+        return {
+            k: cls.SORT_ORDER.index(cls.PYTHON_TO_JSON_NAME.get(k, k))
+            for k in cls.SORT_ORDER + tuple(cls.PYTHON_TO_JSON_NAME.keys())
+        }
 
     @staticmethod
     def new_id():
@@ -155,84 +182,108 @@ class ColumnSchema(
         bytes16 = sha256(*data).digest()[:16]
         return str(uuid.UUID(bytes=bytes16))
 
-    def __new__(cls, id, name, data_type, pk_index, **extra_type_info):
-        assert data_type in ALL_DATA_TYPES, data_type
-        return super().__new__(cls, id, name, data_type, pk_index, extra_type_info)
-
-    @classmethod
-    def from_dict(cls, d):
-        d = d.copy()
-        id_ = d.pop("id", None)
-        name = d.pop("name")
-        data_type = d.pop("dataType")
-        pk_index = d.pop("primaryKeyIndex", None)
-        extra_type_info = dict((k, v) for k, v in d.items() if v is not None)
-        return cls(id_, name, data_type, pk_index, **extra_type_info)
+    def __init__(self, dict_=None, **kwargs):
+        assert not (dict_ and kwargs)
+        dict_ = dict_ or kwargs
+        return super().__init__(self, **self._normalised(dict_))
 
     def to_dict(self):
-        result = {"id": self.id, "name": self.name, "dataType": self.data_type}
-        if self.id is None:
-            del result["id"]
-        if self.pk_index is not None:
-            result["primaryKeyIndex"] = self.pk_index
-        for key, value in self.extra_type_info.items():
-            if value is not None:
-                result[key] = value
-        return result
-
-    def __eq__(self, other):
-        if not isinstance(other, ColumnSchema):
-            return False
-        return (
-            self.id == other.id
-            and self.name == other.name
-            and self.data_type == other.data_type
-            and self.pk_index == other.pk_index
-            and self.extra_type_info == other.extra_type_info
-        )
+        return {**self}
 
     def __hash__(self):
-        return hash(
-            (
-                self.id,
-                self.name,
-                self.data_type,
-                self.pk_index,
-                frozenset(self.extra_type_info.items()),
-            )
-        )
+        return hash(frozenset(self.items()))
+
+    def __setitem__(self, *args, **kwargs):
+        raise TypeError("ColumnSchema is immutable")
+
+    def update(self, *args, **kwargs):
+        raise TypeError("ColumnSchema is immutable")
 
     @classmethod
-    def _normalise_dict(cls, col_dict):
+    def _remove_empty_values(cls, col_dict):
         for key in list(col_dict.keys()):
-            if key not in ("id", "name", "dataType") and col_dict[key] is None:
+            if col_dict[key] is None:
                 del col_dict[key]
+
+    @classmethod
+    def _normalised(cls, col_dict):
+        result = {}
+        for key in sorted(
+            list(col_dict.keys()),
+            key=lambda k: (ColumnSchema.sort_order_dict.get(k, 999), k),
+        ):
+            if col_dict[key] is not None:
+                result[ColumnSchema.PYTHON_TO_JSON_NAME.get(key, key)] = col_dict[key]
+        return result
+
+    @property
+    def id(self):
+        return self.get("id")
+
+    @property
+    def name(self):
+        return self.get("name")
 
     @property
     def id_or_name(self):
-        return self.id if self.id is not None else self.name
+        return self.get("id") if "id" in self else self.get("name")
+
+    @property
+    def pk_index(self):
+        return self.get("primaryKeyIndex")
+
+    @property
+    def data_type(self):
+        return self.get("dataType")
 
 
-class Schema:
-    """A schema is just an immutable ordered list of ColumnSchemas."""
+class Schema(tuple):
+    """
+    A schema is just an immutable ordered list of ColumnSchemas.
+
+    See the ColumnSchema class for information about what each ColumnSchema should store.
+    """
+
+    @staticmethod
+    def __new__(cls, columns):
+        return tuple.__new__(cls, [ColumnSchema(c) for c in columns])
 
     def __init__(self, columns):
-        """Create a new schema from a list of ColumnSchemas."""
-        self._columns = tuple(columns)
         # Creating a legend validates the primaryKeyIndex field.
         self._legend = self._to_legend()
         self._pk_columns = tuple(
-            c for c in sorted(columns, key=pk_index_ordering) if c.pk_index is not None
+            c
+            for c in sorted(self.columns, key=pk_index_ordering)
+            if c.pk_index is not None
         )
-        self._hash = hash(self._columns)
+
+    @classmethod
+    def from_schema_or_none(cls, schema):
+        if schema is not None:
+            return cls(schema)
+        return None
+
+    @classmethod
+    def schema_delta_from_raw_delta(cls, delta):
+        old_half_delta = (
+            (delta.old_key, cls.from_schema_or_none(delta.old_value))
+            if delta.old is not None
+            else None
+        )
+        new_half_delta = (
+            (delta.new_key, cls.from_schema_or_none(delta.new_value))
+            if delta.new is not None
+            else None
+        )
+        return Delta(old_half_delta, new_half_delta)
 
     @property
     def columns(self):
-        return self._columns
+        return self
 
     @property
     def column_names(self):
-        return [c.name for c in self._columns]
+        return [c.name for c in self.columns]
 
     @property
     def legend(self):
@@ -243,14 +294,18 @@ class Schema:
         return self._pk_columns
 
     @property
+    def first_pk_column(self):
+        return self._pk_columns[0] if self._pk_columns else None
+
+    @property
     @functools.lru_cache(maxsize=1)
     def non_pk_columns(self):
-        return tuple(c for c in self.columns if c.pk_index is None)
+        return tuple(c for c in self if c.pk_index is None)
 
     @property
     @functools.lru_cache(maxsize=1)
     def geometry_columns(self):
-        return tuple(c for c in self.columns if c.data_type == "geometry")
+        return tuple(c for c in self if c.data_type == "geometry")
 
     @property
     def has_geometry(self):
@@ -264,39 +319,57 @@ class Schema:
             except StopIteration:
                 raise KeyError(f"No such column: {i}")
 
-        return self._columns[i]
+        return super().__getitem__(i)
 
     def __contains__(self, id):
-        return any(c.id == id for c in self.columns)
+        return any(c.id == id or c.name == c for c in self.columns)
 
-    @classmethod
-    def from_column_dicts(cls, column_dicts):
-        columns = [ColumnSchema.from_dict(d) for d in column_dicts]
-        return cls(columns)
+    def get(self, key, default=None):
+        assert isinstance(key, str)
+        try:
+            return next(c for c in self if c.id == key or c.name == key)
+        except StopIteration:
+            return default
 
-    @classmethod
-    def normalise_column_dicts(cls, column_dicts):
-        return Schema.from_column_dicts(column_dicts).to_column_dicts()
+    def get_by_id(self, key, default=None):
+        assert isinstance(key, str)
+        try:
+            return next(c for c in self if c.id == key)
+        except StopIteration:
+            return default
+
+    def get_by_name(self, key, default=None):
+        assert isinstance(key, str)
+        try:
+            return next(c for c in self if c.name == key)
+        except StopIteration:
+            return default
 
     @classmethod
     def loads(cls, data):
         """Load a schema from a bytestring"""
-        return cls.from_column_dicts(json_unpack(data))
-
-    def to_column_dicts(self):
-        return [c.to_dict() for c in self.columns]
+        return cls(json_unpack(data))
 
     def dumps(self):
         """Writes this schema to a bytestring."""
-        return json_pack(self.to_column_dicts())
+        return json_pack(self)
 
     def __str__(self):
-        cols = ",\n".join(str(c) for c in self.columns)
+        cols = ",\n".join(str(c) for c in self)
         return f"Schema([{cols}])"
 
     def __repr__(self):
-        cols = ",\n".join(repr(c) for c in self.columns)
+        cols = ",\n".join(repr(c) for c in self)
         return f"Schema([{cols}])"
+
+    def __eq__(self, other):
+        if isinstance(other, list):
+            return super().__eq__(tuple(other))
+        else:
+            return super().__eq__(other)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def feature_from_raw_dict(self, raw_dict):
         """
@@ -361,12 +434,9 @@ class Schema:
                 non_pk_column_ids.append(column.id)
         return Legend(pk_column_ids, non_pk_column_ids)
 
-    def __eq__(self, other):
-        if not isinstance(other, Schema):
-            return False
-        return self.columns == other.columns
-
     def __hash__(self):
+        if not hasattr(self, "_hash"):
+            self._hash = super().__hash__()
         return self._hash
 
     def is_pk_compatible(self, other):
@@ -410,14 +480,13 @@ class Schema:
             See DefaultRoundtripContext.
         """
         # TODO - could prompt the user to help with more complex schema changes.
-        old_cols = self.to_column_dicts()
-        new_cols = new_schema.to_column_dicts()
-        Schema.align_schema_cols(old_cols, new_cols, roundtrip_ctx=roundtrip_ctx)
-        return Schema.from_column_dicts(new_cols)
 
-    @classmethod
-    def align_schema_cols(cls, old_cols, new_cols, roundtrip_ctx=None):
-        """Same as align_to_self, but mutates new_cols list, instead of returning a new Schema object."""
+        if new_schema is None:
+            return None
+
+        old_cols = list(dict(c) for c in self)
+        new_cols = list(dict(c) for c in new_schema)
+
         for old_col in old_cols:
             old_col["done"] = False
         for new_col in new_cols:
@@ -426,21 +495,20 @@ class Schema:
         # Align columns by name + type - handles reordering.
         old_cols_by_name = {c["name"]: c for c in old_cols}
         for new_col in new_cols:
-            cls._try_align(
+            self._try_align(
                 old_cols_by_name.get(new_col["name"]), new_col, roundtrip_ctx
             )
 
         # Align columns by position + type - handles renames.
         for old_col, new_col in zip(old_cols, new_cols):
-            cls._try_align(old_col, new_col, roundtrip_ctx)
+            self._try_align(old_col, new_col, roundtrip_ctx)
 
         for old_col in old_cols:
             del old_col["done"]
         for new_col in new_cols:
-            ColumnSchema._normalise_dict(new_col)
             del new_col["done"]
 
-        return new_cols
+        return Schema(new_cols)
 
     @classmethod
     def _try_align(cls, old_col, new_col, roundtrip_ctx=None):
@@ -487,11 +555,16 @@ class Schema:
 
             if old_col.name != new_col.name:
                 name_updates.add(col_id)
-            if (
-                old_col.data_type != new_col.data_type
-                or old_col.extra_type_info != new_col.extra_type_info
-            ):
+
+            old_col_info = old_col.to_dict()
+            old_col_info.pop("name", None)
+            old_col_info.pop("primaryKeyIndex", None)
+            new_col_info = new_col.to_dict()
+            new_col_info.pop("name", None)
+            new_col_info.pop("primaryKeyIndex", None)
+            if old_col_info != new_col_info:
                 type_updates.add(col_id)
+
             if old_col.pk_index != new_col.pk_index:
                 pk_updates.add(col_id)
 
@@ -567,7 +640,7 @@ class Schema:
 
     @classmethod
     def _find_blob_violation(cls, col, value):
-        length = col.extra_type_info.get("length")
+        length = col.get("length")
         if not length:
             return None
         len_value = len(value)
@@ -583,7 +656,7 @@ class Schema:
 
     @classmethod
     def _find_integer_violation(cls, col, value):
-        size = col.extra_type_info.get("size")
+        size = col.get("size")
         if size and cls._signed_bit_length(value) > size:
             bounds = 2 ** (size - 1)
             return f"In column '{col.name}' value {repr(value)} does not fit into an int{size}: {-bounds} to {bounds-1}"
@@ -606,7 +679,7 @@ class Schema:
 
     @classmethod
     def _find_text_violation(cls, col, value):
-        length = col.extra_type_info.get("length")
+        length = col.get("length")
         if not length:
             return None
         len_value = len(value)
@@ -664,6 +737,6 @@ def is_schema_delta_pk_compatible(schema_delta):
     if schema_delta is None or schema_delta.type != "update":
         return True
 
-    old_schema = Schema.from_column_dicts(schema_delta.old_value)
-    new_schema = Schema.from_column_dicts(schema_delta.new_value)
+    old_schema = Schema(schema_delta.old_value)
+    new_schema = Schema(schema_delta.new_value)
     return old_schema.is_pk_compatible(new_schema)

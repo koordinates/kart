@@ -452,14 +452,12 @@ class BaseDiffWriter:
             return NullDeltaFetcher(ds_path, dataset.DATASET_TYPE)
 
     def _get_old_and_new_schema(self, ds_path, ds_diff):
-        from kart.schema import Schema
-
         old_schema = new_schema = None
         schema_delta = ds_diff.recursive_get(["meta", "schema.json"])
         if schema_delta and schema_delta.old_value:
-            old_schema = Schema.from_column_dicts(schema_delta.old_value)
+            old_schema = schema_delta.old_value
         if schema_delta and schema_delta.new_value:
-            new_schema = Schema.from_column_dicts(schema_delta.new_value)
+            new_schema = schema_delta.new_value
         if old_schema or new_schema:
             return old_schema, new_schema
 

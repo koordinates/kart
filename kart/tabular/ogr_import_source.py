@@ -412,7 +412,7 @@ class OgrTableImportSource(TableImportSource):
 
     def align_schema_to_existing_schema(self, existing_schema):
         aligned_schema = existing_schema.align_to_self(self.schema)
-        self.meta_overrides["schema.json"] = aligned_schema.to_column_dicts()
+        self.meta_overrides["schema.json"] = aligned_schema
         assert self.schema == aligned_schema
 
     def meta_items(self):
@@ -424,7 +424,7 @@ class OgrTableImportSource(TableImportSource):
         ogr_metadata = self.ogrlayer.GetMetadata()
         yield "title", ogr_metadata.get("IDENTIFIER")
         yield "description", ogr_metadata.get("DESCRIPTION")
-        yield "schema.json", self._schema_from_db().to_column_dicts()
+        yield "schema.json", self._schema_from_db()
 
         for identifier, definition in self.crs_definitions().items():
             yield f"crs/{identifier}.wkt", definition
@@ -547,7 +547,11 @@ class OgrTableImportSource(TableImportSource):
         name = fd.GetName()
         pk_index = 0 if name == self.primary_key else None
         return ColumnSchema(
-            ColumnSchema.new_id(), name, data_type, pk_index, **extra_type_info
+            id=ColumnSchema.new_id(),
+            name=name,
+            data_type=data_type,
+            pk_index=pk_index,
+            **extra_type_info,
         )
 
     def _geom_field_to_v2_column_schema(self, geom_fd):
@@ -561,7 +565,7 @@ class OgrTableImportSource(TableImportSource):
             extra_type_info["geometryCRS"] = crs_definitions[0][0]
 
         return ColumnSchema(
-            ColumnSchema.new_id(), name, "geometry", None, **extra_type_info
+            id=ColumnSchema.new_id(), name=name, data_type="geometry", **extra_type_info
         )
 
     def _get_v2_geometry_type(self, geom_fd):

@@ -212,9 +212,16 @@ def parse_file_diff(file_diff_input, allow_minimal_updates=None):
 
 
 def parse_meta_diff(meta_diff_input, allow_minimal_updates=False):
+    def convert_delta(delta):
+        if delta.old_key == "schema.json" or delta.new_key == "schema.json":
+            return Schema.schema_delta_from_raw_delta(delta)
+        return delta
+
     return DeltaDiff(
-        Delta.from_key_and_plus_minus_dict(
-            k, v, allow_minimal_updates=allow_minimal_updates
+        convert_delta(
+            Delta.from_key_and_plus_minus_dict(
+                k, v, allow_minimal_updates=allow_minimal_updates
+            )
         )
         for (k, v) in meta_diff_input.items()
     )
@@ -229,9 +236,9 @@ def parse_feature_diff(
 
     schema_delta = meta_diff.get("schema.json") if meta_diff else None
     if schema_delta and schema_delta.old_value:
-        old_schema = Schema.from_column_dicts(schema_delta.old_value)
+        old_schema = schema_delta.old_value
     if schema_delta and schema_delta.new_value:
-        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        new_schema = schema_delta.new_value
 
     delta_parser = FeatureDeltaParser(
         old_schema,

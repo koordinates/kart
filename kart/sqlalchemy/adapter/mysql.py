@@ -101,12 +101,11 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
     def v2_type_to_sql_type(cls, col, v2_obj=None):
         sql_type = super().v2_type_to_sql_type(col, v2_obj)
 
-        extra_type_info = col.extra_type_info
         if sql_type == "GEOMETRY":
             return cls._v2_geometry_type_to_sql_type(col, v2_obj)
 
         if sql_type in ("LONGTEXT, LONGBLOB"):
-            length = extra_type_info.get("length")
+            length = col.get("length")
             if length and length > 0 and length <= cls._MAX_SPECIFIABLE_LENGTH:
                 if sql_type == "LONGTEXT":
                     return f"VARCHAR({length})"
@@ -115,8 +114,8 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             return sql_type
 
         if sql_type == "NUMERIC":
-            precision = extra_type_info.get("precision")
-            scale = extra_type_info.get("scale")
+            precision = col.get("precision")
+            scale = col.get("scale")
             if precision is not None and scale is not None:
                 return f"NUMERIC({precision},{scale})"
             elif precision is not None:
@@ -128,8 +127,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
 
     @classmethod
     def _v2_geometry_type_to_sql_type(cls, column_schema, v2_obj=None):
-        extra_type_info = column_schema.extra_type_info
-        geometry_type = extra_type_info.get("geometryType", "geometry")
+        geometry_type = column_schema.get("geometryType", "geometry")
         geometry_type_parts = geometry_type.strip().split(" ")
         if len(geometry_type_parts) > 1:
             raise NotYetImplemented(
@@ -140,7 +138,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         mysql_type = geometry_type_parts[0]
 
         crs_id = None
-        crs_name = extra_type_info.get("geometryCRS")
+        crs_name = column_schema.get("geometryCRS")
         if crs_name is not None and v2_obj is not None:
             crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
         if crs_id is not None:
@@ -207,7 +205,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         schema = KartAdapter_MySql.sqlserver_to_v2_schema(
             mysql_table_info, mysql_spatial_ref_sys, id_salt
         )
-        yield "schema.json", schema.to_column_dicts()
+        yield "schema.json", schema
 
         for crs_info in mysql_spatial_ref_sys:
             wkt = crs_info["DEFINITION"]
@@ -249,7 +247,13 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             data_type, extra_type_info = cls._mysql_type_to_v2_type(mysql_col_info)
 
         col_id = ColumnSchema.deterministic_id(name, data_type, id_salt)
-        return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
+        return ColumnSchema(
+            id=col_id,
+            name=name,
+            data_type=data_type,
+            pk_index=pk_index,
+            **extra_type_info,
+        )
 
     @classmethod
     def _mysql_type_to_v2_type(cls, mysql_col_info):
@@ -305,7 +309,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
     @classmethod
     def _type_def_for_column_schema(self, col, dataset=None):
         if col.data_type == "geometry":
-            crs_name = col.extra_type_info.get("geometryCRS")
+            crs_name = col.get("geometryCRS")
             crs_id = None
             if dataset is not None:
                 crs_id = (
@@ -315,7 +319,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             return GeometryType(crs_id)
         elif col.data_type == "boolean":
             return BooleanType
-        elif col.data_type == "float" and col.extra_type_info.get("size") != 64:
+        elif col.data_type == "float" and col.get("size") != 64:
             return FloatType
         elif col.data_type == "date":
             return DateType

@@ -199,9 +199,7 @@ class TableV3(RichTableDataset):
     def feature_path_encoder_for_schema_delta(self, schema_delta):
         if schema_delta is None or schema_delta.type == "delete":
             return self.feature_path_encoder
-        return self.feature_path_encoder_for_schema(
-            Schema.from_column_dicts(schema_delta.new_value)
-        )
+        return self.feature_path_encoder_for_schema(Schema(schema_delta.new_value))
 
     def feature_path_encoder_for_schema(self, schema):
         if schema is None:
@@ -429,7 +427,7 @@ class TableV3(RichTableDataset):
         resolve_missing_values_from_tree=False,
     ):
         new_value = delta.new_value
-        new_schema = Schema.from_column_dicts(new_value) if new_value else None
+        new_schema = Schema(new_value) if new_value else None
 
         if new_schema:
             legend = new_schema.legend

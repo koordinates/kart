@@ -10,8 +10,8 @@ from kart.repo import KartRepo
 
 def _dataset_col_types(dataset):
     cols = {}
-    for col in dataset.schema.to_column_dicts():
-        col = col.copy()
+    for col in dataset.schema:
+        col = dict(col)
         col.pop("id")
         cols[col.pop("name")] = col
     return cols

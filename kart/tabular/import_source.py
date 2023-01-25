@@ -153,7 +153,7 @@ class TableImportSource:
         simply delegates to that. Calling self.align_schema_to_existing_schema(...) should modify the schema returned by
         self.meta_items()
         """
-        return Schema.from_column_dicts(self.get_meta_item("schema.json"))
+        return Schema(self.get_meta_item("schema.json"))
 
     def align_schema_to_existing_schema(self, existing_schema):
         """

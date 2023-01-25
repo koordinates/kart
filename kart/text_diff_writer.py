@@ -98,8 +98,8 @@ class TextDiffWriter(BaseDiffWriter):
             click.secho(f"--- {ds_path}:meta:schema.json", bold=True, **self.pecho)
             click.secho(f"+++ {ds_path}:meta:schema.json", bold=True, **self.pecho)
             output = self._schema_diff_as_text(
-                Schema.from_column_dicts(delta.old_value),
-                Schema.from_column_dicts(delta.new_value),
+                Schema(delta.old_value),
+                Schema(delta.new_value),
             )
             click.echo(output, **self.pecho)
         else:

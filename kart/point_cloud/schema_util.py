@@ -1,4 +1,5 @@
 from kart.exceptions import NotYetImplemented
+from kart.schema import Schema
 
 # Utility functions for dealing with Point Cloud schemas.
 
@@ -48,13 +49,16 @@ INFRARED = {"name": "Infrared", "dataType": "integer", "size": 16}
 
 
 PDRF_TO_SCHEMA = {
-    0: PDRF0_SCHEMA + [],
-    1: PDRF0_SCHEMA + [GPS_TIME],
-    2: PDRF0_SCHEMA + RED_GREEN_BLUE,
-    3: PDRF0_SCHEMA + [GPS_TIME] + RED_GREEN_BLUE,
-    6: PDRF6_SCHEMA + [],
-    7: PDRF6_SCHEMA + RED_GREEN_BLUE,
-    8: PDRF6_SCHEMA + RED_GREEN_BLUE + [INFRARED],
+    k: Schema(v)
+    for k, v in {
+        0: PDRF0_SCHEMA + [],
+        1: PDRF0_SCHEMA + [GPS_TIME],
+        2: PDRF0_SCHEMA + RED_GREEN_BLUE,
+        3: PDRF0_SCHEMA + [GPS_TIME] + RED_GREEN_BLUE,
+        6: PDRF6_SCHEMA + [],
+        7: PDRF6_SCHEMA + RED_GREEN_BLUE,
+        8: PDRF6_SCHEMA + RED_GREEN_BLUE + [INFRARED],
+    }.items()
 }
 
 PDRF_TO_RECORD_LENGTH = {
@@ -114,9 +118,9 @@ def pdal_schema_to_kart_schema(pdal_schema):
     Given the JSON schema as PDAL loaded it, format it as a Kart compatiblie schema.json item.
     Eg "type" -> "dataType", size is measured in bits.
     """
-    return [
-        _pdal_col_schema_to_kart_col_schema(col) for col in pdal_schema["dimensions"]
-    ]
+    return Schema(
+        [_pdal_col_schema_to_kart_col_schema(col) for col in pdal_schema["dimensions"]]
+    )
 
 
 def _pdal_col_schema_to_kart_col_schema(pdal_col_schema):

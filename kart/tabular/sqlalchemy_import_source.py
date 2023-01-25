@@ -245,7 +245,7 @@ class SqlAlchemyTableImportSource(TableImportSource):
 
     def align_schema_to_existing_schema(self, existing_schema):
         aligned_schema = existing_schema.align_to_self(self.schema)
-        self.meta_overrides["schema.json"] = aligned_schema.to_column_dicts()
+        self.meta_overrides["schema.json"] = aligned_schema
         assert self.schema == aligned_schema
 
     def override_primary_key(self, new_primary_key):
@@ -289,7 +289,7 @@ class SqlAlchemyTableImportSource(TableImportSource):
 
     def features(self):
         # Make sure to use the raw schema from the db - self.schema can be modified.
-        schema = Schema.from_column_dicts(self.meta_items_from_db().get("schema.json"))
+        schema = Schema(self.meta_items_from_db().get("schema.json"))
         table_def = self.db_type.adapter.table_def_for_schema(
             schema, db_schema=self.db_schema, table_name=self.table
         )
