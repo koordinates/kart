@@ -5,11 +5,12 @@ pytest
     # So we add them explicitly
     atomicwrites>=1.0
     colorama
-pytest-cov
-pytest-sugar
-pytest-helpers-namespace
 pytest-benchmark[aspect]
+pytest-cov
+pytest-helpers-namespace
+pytest-mock
 pytest-profiling
 pytest-shard
-pytest-mock
+pytest-sugar
+pytest-xdist
 html5lib

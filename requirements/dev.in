@@ -14,4 +14,3 @@ ipython
     pexpect>4.3
     appnope
     colorama
-pytest-xdist
