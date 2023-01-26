@@ -145,7 +145,7 @@ else:
 
             datas.append((str(fp), dr))
 
-
+# Python package names here appear to be case-sensitive
 pyi_analysis = Analysis(
     ['platforms/kart_cli.py'],
     pathex=[],
@@ -176,8 +176,9 @@ pyi_analysis = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
-        'ipdb',
         "_kart_env",
+        "IPython",
+        "ipdb",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
