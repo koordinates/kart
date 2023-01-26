@@ -435,6 +435,18 @@ jobs:
           path: build/dist/kart-*.rpm
           if-no-files-found: error
 
+      - name: "release"
+        uses: softprops/action-gh-release@v1
+        if: "steps.version.outputs.is_release == 1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: |
+            build/dist/Kart-*.tar.gz
+            build/dist/kart_*.deb
+            build/dist/kart-*.rpm
+
   #
   # Linux Package tests
   # Install on a wide variety of Linux distributions and run E2E tests
@@ -561,22 +573,6 @@ jobs:
         shell: bash
         run: |
           time tests/scripts/e2e-1.sh
-
-      #
-      # Github release
-      #
-
-      - name: release
-        uses: softprops/action-gh-release@v1
-        if: "steps.version.outputs.is_release == 1"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          draft: true
-          files: |
-            build/dist/Kart-*.tar.gz
-            build/dist/kart_*.deb
-            build/dist/kart-*.rpm
 
   #
   # Linux development build using vendor archive & host python
