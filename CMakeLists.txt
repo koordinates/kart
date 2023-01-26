@@ -68,8 +68,8 @@ set(VENDOR_ARCHIVE
 )
 
 if(MACOS)
-  option(MACOS_SIGN_BUNDLE "Notarize macOS bundle")
-  option(MACOS_SIGN_PKG "Notarize macOS .pkg installer")
+  option(MACOS_SIGN_BUNDLE "Code-sign macOS bundle")
+  option(MACOS_SIGN_PKG "Code-sign macOS .pkg installer")
   option(MACOS_NOTARIZE "Notarize macOS bundle & installer")
   set(MACOS_NOTARIZE_TIMEOUT
       1h
@@ -335,53 +335,69 @@ if(MACOS)
   ")
   set(CPACK_INSTALL_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-pre-install.cmake)
 
-  if(MACOS_SIGN_BUNDLE
-     AND MACOS_SIGN_PKG
-     AND MACOS_NOTARIZE)
+  if(MACOS_SIGN_BUNDLE OR MACOS_SIGN_PKG)
     file(
-      WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake
+      WRITE ${CMAKE_CURRENT_BINARY_DIR}/cpack-macos-post-build-20-check-signing.cmake
       "
-      if(\${CPACK_GENERATOR} STREQUAL \"productbuild\")
+      if(\"${MACOS_SIGN_PKG}\" AND \${CPACK_GENERATOR} STREQUAL \"productbuild\")
         message(STATUS \"Checking PKG signature...\")
-        set(CPACK_POST_BUILD_OUTPUT_FILE_PATH \"\${CPACK_PACKAGE_DIRECTORY}/_CPack_Packages/\${CPACK_SYSTEM_NAME}/\${CPACK_GENERATOR}/\${CPACK_OUTPUT_FILE_NAME}\")
         execute_process(
-          COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_POST_BUILD_OUTPUT_FILE_PATH}
+          COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_TEMPORARY_PACKAGE_FILE_NAME}
           COMMAND_ECHO STDERR
           COMMAND_ERROR_IS_FATAL ANY)
-        message(STATUS \"Notarizing PKG with notarytool...\")
+
+      elseif(\"${MACOS_SIGN_BUNDLE}\" AND \${CPACK_GENERATOR} STREQUAL \"ZIP\")
+        message(STATUS \"Checking ZIP Bundle signature...\")
+        set(CHECK_DIR \"\${CPACK_PACKAGE_DIRECTORY}/_CPack_Packages/\${CPACK_SYSTEM_NAME}/ZIP-codesigning-check\")
+        file(REMOVE_RECURSE \${CHECK_DIR})
+        file(ARCHIVE_EXTRACT INPUT \"\${CPACK_TEMPORARY_PACKAGE_FILE_NAME}\" DESTINATION \${CHECK_DIR})
         execute_process(
-          COMMAND ${XCODE_XCRUN} notarytool submit \${CPACK_POST_BUILD_OUTPUT_FILE_PATH}
-            --keychain-profile \"$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}\"
-            --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
-          COMMAND_ECHO NONE
-          COMMAND_ERROR_IS_FATAL ANY)
-        message(STATUS \"Stapling notarization to PKG...\")
-        execute_process(
-          COMMAND ${XCODE_XCRUN} stapler staple \${CPACK_POST_BUILD_OUTPUT_FILE_PATH}
+          COMMAND ${XCODE_CODESIGN} --display --verbose \"\${CHECK_DIR}/\${CPACK_PACKAGE_FILE_NAME}/Kart.app\"
           COMMAND_ECHO STDERR
           COMMAND_ERROR_IS_FATAL ANY)
-        message(STATUS \"Checking PKG notarization...\")
         execute_process(
-          COMMAND ${XCODE_SPCTL} --assess -vvv --type install \${CPACK_POST_BUILD_OUTPUT_FILE_PATH}
+          COMMAND ${XCODE_CODESIGN} --verify --verbose --deep --strict=all \"\${CHECK_DIR}/\${CPACK_PACKAGE_FILE_NAME}/Kart.app\"
           COMMAND_ECHO STDERR
           COMMAND_ERROR_IS_FATAL ANY)
+
       endif()
       ")
-    set(CPACK_POST_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake)
-  elseif(MACOS_SIGN_BUNDLE AND MACOS_SIGN_PKG)
-    file(
-      WRITE ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake
-      "
-      if(\${CPACK_GENERATOR} STREQUAL \"productbuild\")
-        message(STATUS \"Checking PKG signature...\")
-        set(CPACK_POST_BUILD_OUTPUT_FILE_PATH \"\${CPACK_PACKAGE_DIRECTORY}/_CPack_Packages/\${CPACK_SYSTEM_NAME}/\${CPACK_GENERATOR}/\${CPACK_OUTPUT_FILE_NAME}\")
-        execute_process(
-          COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_POST_BUILD_OUTPUT_FILE_PATH}
-          COMMAND_ECHO STDERR
-          COMMAND_ERROR_IS_FATAL ANY)
-      endif()
-      ")
-    set(CPACK_POST_BUILD_SCRIPTS ${CMAKE_CURRENT_BINARY_DIR}/macos-pkg-post-build.cmake)
+    list(APPEND CPACK_POST_BUILD_SCRIPTS
+         ${CMAKE_CURRENT_BINARY_DIR}/cpack-macos-post-build-20-check-signing.cmake)
+
+    if(MACOS_NOTARIZE)
+      file(
+        WRITE ${CMAKE_CURRENT_BINARY_DIR}/cpack-macos-post-build-30-notarize.cmake
+        "
+        if(\"${MACOS_SIGN_PKG}\" AND \${CPACK_GENERATOR} STREQUAL \"productbuild\")
+          message(STATUS \"Checking PKG signature...\")
+          execute_process(
+            COMMAND ${XCODE_PKGUTIL} --check-signature \${CPACK_TEMPORARY_PACKAGE_FILE_NAME}
+            COMMAND_ECHO STDERR
+            COMMAND_ERROR_IS_FATAL ANY)
+          message(STATUS \"Notarizing PKG with notarytool...\")
+          execute_process(
+            COMMAND ${XCODE_XCRUN} notarytool submit \${CPACK_TEMPORARY_PACKAGE_FILE_NAME}
+              --keychain-profile \"$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}\"
+              --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
+            COMMAND_ECHO NONE
+            COMMAND_ERROR_IS_FATAL ANY)
+          message(STATUS \"Stapling notarization to PKG...\")
+          execute_process(
+            COMMAND ${XCODE_XCRUN} stapler staple \${CPACK_TEMPORARY_PACKAGE_FILE_NAME}
+            COMMAND_ECHO STDERR
+            COMMAND_ERROR_IS_FATAL ANY)
+          message(STATUS \"Checking PKG notarization...\")
+          execute_process(
+            COMMAND ${XCODE_SPCTL} --assess -vvv --type install \${CPACK_TEMPORARY_PACKAGE_FILE_NAME}
+            COMMAND_ECHO STDERR
+            COMMAND_ERROR_IS_FATAL ANY)
+
+        endif()
+        ")
+      list(APPEND CPACK_POST_BUILD_SCRIPTS
+           ${CMAKE_CURRENT_BINARY_DIR}/cpack-macos-post-build-30-notarize.cmake)
+    endif()
   endif()
 
   set(CPACK_GENERATOR "ZIP;productbuild")
@@ -438,11 +454,10 @@ elseif(WIN32)
       "
       if(\${CPACK_GENERATOR} STREQUAL \"WIX\")
         message(STATUS \"Code-signing MSI installer...\")
-        set(CPACK_POST_BUILD_OUTPUT_FILE_PATH \"\${CPACK_PACKAGE_DIRECTORY}/_CPack_Packages/\${CPACK_SYSTEM_NAME}/\${CPACK_GENERATOR}/\${CPACK_OUTPUT_FILE_NAME}\")
         execute_process(
           COMMAND
             \"${CMAKE_COMMAND}\" \"-DSIGNTOOL=${WIN_SIGNTOOL}\" \"-DAZURESIGNTOOL=${WIN_AZURESIGNTOOL}\"
-            \"-DFILES=\${CPACK_POST_BUILD_OUTPUT_FILE_PATH}\" \"-DDESCRIPTION=Kart Installer\" -P
+            \"-DFILES=\${CPACK_TEMPORARY_PACKAGE_FILE_NAME}\" \"-DDESCRIPTION=Kart Installer\" -P
             \"${CMAKE_CURRENT_LIST_DIR}/cmake/win_codesign.cmake\"
           COMMAND_ECHO STDERR
           COMMAND_ERROR_IS_FATAL ANY)
