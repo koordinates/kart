@@ -82,7 +82,7 @@ To do this, take the following steps:
 1. Start at the list of recent [successful builds on master](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess).
 1. Select a commit - ideally the commit that you have checked out locally, but if you don't see it, just choosing the top one will generally work.
 1. Click through the commit and scroll down to the bottom to see the artifacts.\
-(Scrolling down is best achieved with your mouse curson on the left side of the page - see this [GitHub ticket](https://support.github.com/ticket/personal/0/1962630))
+(Scrolling down is best achieved with your mouse curson on the left side of the page - see this [GitHub ticket](https://github.com/community/community/discussions/18035))
 1. Download the vendor-archive artifact for your platform.
 
 Then:
@@ -156,7 +156,7 @@ To do this, take the following steps:
 1. Start at the list of recent [successful builds on master](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess).
 1. Select a commit - ideally the commit that you have checked out locally, but if you don't see it, just choosing the top one will generally work.
 1. Click through the commit and scroll down to the bottom to see the artifacts.\
-(Scrolling down is best achieved with your mouse curson on the left side of the page - see this [GitHub ticket](https://support.github.com/ticket/personal/0/1962630))
+(Scrolling down is best achieved with your mouse curson on the left side of the page - see this [GitHub discussion](https://github.com/community/community/discussions/18035))
 1. Download the vendor-archive artifact for your platform.
 
 Then:
