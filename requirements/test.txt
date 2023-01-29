@@ -18,6 +18,8 @@ coverage[toml]==6.5.0
     # via pytest-cov
 exceptiongroup==1.0.4
     # via pytest
+execnet==1.9.0
+    # via pytest-xdist
 fields==5.0.0
     # via aspectlib
 gprof2dot==2022.7.29
@@ -44,6 +46,7 @@ pytest==7.2.0
     #   pytest-profiling
     #   pytest-shard
     #   pytest-sugar
+    #   pytest-xdist
 pytest-benchmark[aspect]==4.0.0
     # via -r test.in
 pytest-cov==4.0.0
@@ -57,6 +60,8 @@ pytest-profiling==1.7.0
 pytest-shard==0.1.2
     # via -r test.in
 pytest-sugar==0.9.6
+    # via -r test.in
+pytest-xdist==3.1.0
     # via -r test.in
 six==1.16.0
     # via

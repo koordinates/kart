@@ -2,6 +2,11 @@
 -c test.txt
 -c docs.txt
 
+# If new packages are added here, check they don't end up in the PyInstaller
+# bundle. If they do, add to Analysis().excludes in /kart.spec. The bundle
+# process prints out the included files as it runs, or you can check the
+# PYMODULE entries in /build/pyinstaller/kart/Analysis-00.toc
+
 ipdb
 ipython
     # dependencies of ipython on various platforms...
@@ -9,4 +14,3 @@ ipython
     pexpect>4.3
     appnope
     colorama
-pytest-xdist
