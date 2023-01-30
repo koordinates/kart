@@ -478,7 +478,7 @@ ExternalProject_Add(
   git-lfs
   GIT_REPOSITORY https://github.com/git-lfs/git-lfs
   GIT_TAG 02ac3de0e19fbfeea7f8ddb079cfe074367a48d3 # main @ 2023-01-06 (>v3.3.0)
-  GIT_SHALLOW ON
+  GIT_SHALLOW OFF # set to ON when GIT_TAG refers to a tag
   BUILD_IN_SOURCE ON
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
