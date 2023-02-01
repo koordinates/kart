@@ -478,6 +478,23 @@ def test_import_update_existing(cli_runner, data_archive, requires_pdal):
             assert deletes == 1
 
 
+def test_import_replace_existing_with_no_changes(
+    cli_runner, data_archive, requires_pdal
+):
+    with data_archive("point-cloud/laz-auckland.tgz") as src:
+        with data_archive("point-cloud/auckland.tgz"):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    "--dataset-path=auckland",
+                    "--replace-existing",
+                    "--convert-to-copc",
+                    *glob(f"{src}/*.laz"),
+                ]
+            )
+            assert r.exit_code == NO_CHANGES, r.stderr
+
+
 def test_import_empty_commit_error(cli_runner, data_archive, requires_pdal):
     with data_archive("point-cloud/laz-auckland.tgz") as src:
         with data_archive("point-cloud/auckland.tgz"):
