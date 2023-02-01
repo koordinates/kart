@@ -4,6 +4,11 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+
+## 0.12.1
+
+- Modified `point-cloud-import --replace-existing` to reuse previously imported tiles, rather than reimport them, if tiles that have already been imported are imported again - potentially saving time and disk space. Note that `point-cloud-import --update-existing` already had this optimization.
+
 ## 0.12.0
 
 ### Major changes

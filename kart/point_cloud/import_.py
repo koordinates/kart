@@ -39,6 +39,7 @@ from kart.point_cloud.metadata_util import (
     rewrite_and_merge_metadata,
     check_for_non_homogenous_metadata,
     format_tile_for_pointer_file,
+    is_copc,
 )
 from kart.point_cloud.pdal_convert import convert_tile_to_copc
 from kart.point_cloud.v1 import PointCloudV1
@@ -300,32 +301,34 @@ def point_cloud_import(
     with git_fast_import(repo, *FastImportSettings().as_args(), "--quiet") as proc:
         proc.stdin.write(header.encode("utf8"))
 
-        all_metadatas = []
-        existing_dataset = None
-        if update_existing:
-            try:
-                existing_dataset = repo.datasets()[ds_path]
-            except KeyError:
-                # Should it be an error to use --update-existing for a new dataset?
-                # Potentially not; it might be useful for callers to be agnostic
-                # about whether a dataset exists yet.
-                existing_dataset = None
-            else:
-                # Check that the metadata for the existing dataset matches the new tiles
-                all_metadatas.append(
-                    {
-                        "crs": existing_dataset.get_meta_item("crs.wkt"),
-                        "format": existing_dataset.get_meta_item("format.json"),
-                        "schema": existing_dataset.get_meta_item("schema.json"),
-                    }
-                )
+        try:
+            existing_dataset = repo.datasets()[ds_path]
+        except KeyError:
+            existing_dataset = None
+        else:
+            existing_metadata = {
+                "crs": existing_dataset.get_meta_item("crs.wkt"),
+                "format": existing_dataset.get_meta_item("format.json"),
+                "schema": existing_dataset.get_meta_item("schema.json"),
+            }
+
+        if delete and existing_dataset is None:
+            # Trying to delete specific paths from a nonexistent dataset?
+            # This suggests the caller is confused.
+            raise InvalidOperation(
+                f"Dataset {ds_path} does not exist. Cannot delete paths from it."
+            )
+
+        include_existing_metadata = False
+        if update_existing and existing_dataset is not None:
+            # Should it be an error to use --update-existing for a new dataset?
+            # Potentially not; it might be useful for callers to be agnostic
+            # about whether a dataset exists yet.
+
+            # Check that the metadata for the existing dataset matches the new tiles
+            include_existing_metadata = True
+
             if delete:
-                if existing_dataset is None:
-                    # Trying to delete specific paths from a nonexistent dataset?
-                    # This suggests the caller is confused.
-                    raise InvalidOperation(
-                        f"Dataset {ds_path} does not exist. Cannot delete paths from it."
-                    )
                 root_tree = repo.head_tree
                 for tile_name in delete:
                     # Check that the blob exists; if not, error out
@@ -336,7 +339,8 @@ def point_cloud_import(
                         raise NotFound(f"{tile_name} does not exist, can't delete it")
 
                     proc.stdin.write(f"D {blob_path}\n".encode("utf8"))
-        else:
+
+        if not update_existing:
             # Delete the entire existing dataset, before we re-import it.
             proc.stdin.write(f"D {ds_path}\n".encode("utf8"))
 
@@ -356,10 +360,9 @@ def point_cloud_import(
                     tilename, missing_ok=True
                 )
                 if existing_summary:
-                    source_oid = "sha256:" + source_to_hash_and_size[source][0]
-                    if (
-                        existing_summary["oid"] == source_oid
-                        or existing_summary.get("sourceOid") == source_oid
+                    source_oid = source_to_hash_and_size[source][0]
+                    if existing_tile_matches_source(
+                        source_oid, existing_summary, convert_to_copc
                     ):
                         # This tile has already been imported before. Reuse it rather than re-importing it.
                         # (Especially don't use PDAL to reconvert it - that creates pointless diffs due to recompression).
@@ -368,6 +371,7 @@ def point_cloud_import(
                             blob_path,
                             (existing_dataset.inner_tree / rel_blob_path).data,
                         )
+                        include_existing_metadata = True
                         del source_to_imported_metadata[source]
                         continue
 
@@ -394,6 +398,7 @@ def point_cloud_import(
         rewrite_metadata = (
             None if convert_to_copc else RewriteMetadata.DROP_OPTIMIZATION
         )
+        all_metadatas = [existing_metadata] if include_existing_metadata else []
         all_metadatas.extend(source_to_imported_metadata.values())
         merged_metadata = rewrite_and_merge_metadata(all_metadatas, rewrite_metadata)
         check_for_non_homogenous_metadata(merged_metadata)
@@ -476,3 +481,25 @@ def _common_prefix(collection, min_length=4):
     if len(prefix) < min_length:
         return None
     return prefix
+
+
+def existing_tile_matches_source(source_oid, existing_summary, convert_to_copc):
+    """Check if the existing tile can be reused instead of reimporting."""
+    if not source_oid.startswith("sha256:"):
+        source_oid = "sha256:" + source_oid
+
+    if existing_summary.get("oid") == source_oid:
+        # The import source we were given has already been imported in its native format.
+        # Return True if that's what we would do anyway.
+        if convert_to_copc:
+            return is_copc(existing_summary["format"])
+        else:
+            return True
+
+    # NOTE: this logic would be more complicated if we supported more than one type of conversion.
+    if existing_summary.get("sourceOid") == source_oid:
+        # The import source we were given has already been imported, but converted to COPC.
+        # Return True if we were going to convert it to COPC too.
+        return convert_to_copc and is_copc(existing_summary["format"])
+
+    return False
