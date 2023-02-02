@@ -7,7 +7,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.12.1
 
-- Modified `point-cloud-import --replace-existing` to reuse previously imported tiles, rather than reimport them, if tiles that have already been imported are imported again - potentially saving time and disk space. Note that `point-cloud-import --update-existing` already had this optimization.
+- Modified `point-cloud-import --replace-existing` to reuse previously imported tiles, rather than reimport them, if tiles that have already been imported are imported again - potentially saving time and disk space. Note that `point-cloud-import --update-existing` already had this optimization. [#783](https://github.com/koordinates/kart/pull/783)
+- Reintroduced support for `log --graph`.
 
 ## 0.12.0
 
@@ -32,6 +33,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Support for changing the primary key column of an existing dataset. [#238](https://github.com/koordinates/kart/issues/238)
 - Help for the user get the working copy back into a valid state if a crash or similar causes it to become out of sync with the Kart repo. [#751](https://github.com/koordinates/kart/pull/751)
 - Enable the background CLI helper on Linux & macOS in CI builds. The helper improves CLI performance significantly. [#776](https://github.com/koordinates/kart/pull/776)
+- Dropped support for a variety of `kart log` options that were previously being forwarded to Git. [#508](https://github.com/koordinates/kart/issues/508)
 
 ## 0.11.5
 

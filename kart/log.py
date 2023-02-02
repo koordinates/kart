@@ -225,6 +225,14 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
         "Can be used multiple times."
     ),
 )
+@click.option(
+    "--graph",
+    is_flag=True,
+    help=(
+        "Draw a text-based graphical representation of the commit history on the left hand side of the output. "
+        "This may cause extra lines to be printed in between commits, in order for the graph history to be drawn properly. "
+    ),
+)
 @click.argument(
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
@@ -262,6 +270,9 @@ def log(
         run("git", git_args)
 
     elif output_type in ("json", "json-lines"):
+        if kwargs.get("graph"):
+            raise click.UsageError("JSON output and --graph and not compatible")
+
         try:
             cmd = [
                 "git",
