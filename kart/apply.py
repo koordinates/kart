@@ -7,7 +7,7 @@ import click
 import pygit2
 
 from kart.completion_shared import ref_completer
-
+from kart.core import check_git_user
 from kart.cli_util import KartCommand
 from kart.diff_structs import (
     FILES_KEY,
@@ -303,6 +303,9 @@ def apply_patch(
 
     if amend and not do_commit:
         raise click.UsageError("--no-commit and --amend are incompatible")
+
+    if do_commit:
+        check_git_user(repo)
 
     allow_minimal_updates = bool(resolve_missing_values_from_rs)
 

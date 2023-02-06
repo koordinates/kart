@@ -13,6 +13,7 @@ from .cli_util import (
     value_optionally_from_binary_file,
     value_optionally_from_text_file,
 )
+from .core import check_git_user
 from .exceptions import NO_CHANGES, InvalidOperation, NotFound, NotYetImplemented
 from .output_util import (
     dump_json_output,
@@ -177,6 +178,8 @@ def meta_set(ctx, message, amend, dataset, items):
             "This repo doesn't support meta changes, use `kart upgrade`"
         )
 
+    check_git_user(repo)
+
     if message is None and not amend:
         message = f"Update metadata for {dataset}"
 
@@ -271,6 +274,8 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
 
     if amend and not message:
         message = parent_commit.message
+
+    check_git_user(repo)
 
     original_tree = parent_commit.peel(pygit2.Tree)
     with packfile_object_builder(repo, original_tree) as object_builder:
