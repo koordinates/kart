@@ -78,6 +78,12 @@ class StatusDiffWriter(BaseDiffWriter):
     type=click.Choice(["text", "json"]),
     default="text",
 )
+@click.option(
+    "--list-untracked-tables",
+    is_flag=True,
+    help="List all untracked tables"
+)
+
 def status(ctx, output_format):
     """Show the working copy status"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
@@ -96,6 +102,11 @@ def status(ctx, output_format):
         jdict["conflicts"] = conflicts_writer.list_conflicts()
         jdict["state"] = "merging"
     else:
+        if list-untracked-tables:
+            # logic to list all untracked tables
+            print ("Going to print all untracked tables for you")
+            pass
+
         jdict["workingCopy"] = get_working_copy_status_json(repo)
 
     if output_format == "json":
