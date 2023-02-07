@@ -1146,3 +1146,44 @@ def dodgy_restore(cli_runner):
         repo.working_copy.tabular.update_state_table_tree(head_tree)
 
     return _dodgy_restore
+
+
+@pytest.fixture(scope="session")
+def requires_git_lfs():
+    from kart.cli_util import tool_environment
+
+    try:
+        r = subprocess.run(["git", "lfs", "--version"], env=tool_environment())
+        has_git_lfs = r.returncode == 0
+    except OSError:
+        has_git_lfs = False
+
+    pytest.helpers.feature_assert_or_skip(
+        "Git LFS installed", "KART_EXPECT_GIT_LFS", has_git_lfs, ci_require=False
+    )
+
+
+@pytest.fixture()
+def check_lfs_hashes(requires_git_lfs):
+    """
+    Makes sure that all the files in <GITDIR_PATH>/lfs/objects have the appropriate
+    name - ie, they are named after their sha256 hash.
+    Also counts them and asserts there are as many unique files as expected.
+    """
+    LFS_OID_PATTERN = re.compile("[0-9a-fA-F]{64}")
+
+    from kart.lfs_util import get_hash_and_size_of_file
+
+    def _check_lfs_hashes(repo, expected_file_count=None):
+        file_count = 0
+        for file in (repo.gitdir_path / "lfs" / "objects").glob("**/*"):
+            if not file.is_file() or not LFS_OID_PATTERN.fullmatch(file.name):
+                continue
+            file_count += 1
+            file_hash, size = get_hash_and_size_of_file(file)
+            assert file_hash == file.name
+
+        if expected_file_count is not None:
+            assert file_count == expected_file_count
+
+    return _check_lfs_hashes

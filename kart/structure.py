@@ -485,6 +485,10 @@ class Datasets:
             from kart.point_cloud.v1 import PointCloudV1
 
             return PointCloudV1
+        elif dirname == ".raster-dataset.v1":
+            from kart.raster.v1 import RasterV1
+
+            return RasterV1
         else:
             return UnsupportedDataset
 

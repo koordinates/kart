@@ -57,10 +57,12 @@ vendor/Brewfile.lock.json
 !/tests/data/conflicts
 !/tests/data/patches
 !/tests/data/point-cloud/
+!/tests/data/raster/
 !/tests/data/shapefiles/
 !/tests/data/upgrade
 /tests/data/conflicts/*/
 /tests/data/point-cloud/*/
+/tests/data/raster/*/
 /tests/data/shapefiles/*/
 /tests/data/upgrade/v0/*/
 /tests/data/upgrade/v1/*/
