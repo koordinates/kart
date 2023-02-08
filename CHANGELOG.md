@@ -8,7 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.12.1
 
 - Modified `point-cloud-import --replace-existing` to reuse previously imported tiles, rather than reimport them, if tiles that have already been imported are imported again - potentially saving time and disk space. Note that `point-cloud-import --update-existing` already had this optimization. [#783](https://github.com/koordinates/kart/pull/783)
-- Reintroduced support for `log --graph`.
+- Reintroduced support for `log --graph`. [#784](https://github.com/koordinates/kart/pull/784)
 
 ## 0.12.0
 
