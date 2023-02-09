@@ -286,7 +286,7 @@ def working_copy_status_to_text(jdict):
         return 'No working copy\n  (use "kart checkout" to create a working copy)\n'
 
     if not jdict["changes"]:
-        return "lorem ipsum"
+        return "Nothing to commit, working copy clean"
 
     return (
         "Changes in working copy:\n"
