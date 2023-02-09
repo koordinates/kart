@@ -90,14 +90,7 @@ def status(ctx, output_format, list_untracked_tables):
     jdict = get_branch_status_json(repo)
     jdict["spatialFilter"] = SpatialFilter.load_repo_config(repo)
 
-    if list_untracked_tables:
-        untracked_files = []
-        for status in repo.status().values():
-            if status & pygit2.GIT_STATUS_WT_NEW:
-                print (status)
-                untracked_files.append(status.path)
-        for path in untracked_files:
-            click.echo(path)
+    
 
     if output_format == "json":
         jdict["spatialFilter"] = spatial_filter_status_to_json(jdict["spatialFilter"])
@@ -112,12 +105,21 @@ def status(ctx, output_format, list_untracked_tables):
         jdict["conflicts"] = conflicts_writer.list_conflicts()
         jdict["state"] = "merging"
     else:
+        if list_untracked_tables:
+            untracked_files = []
+            for path, status in repo.status().items():
+                if status == pygit2.GIT_STATUS_WT_NEW:
+                    untracked_files.append(path)
+            for path in untracked_files:
+                click.echo(path)
+
         jdict["workingCopy"] = get_working_copy_status_json(repo)
 
-    if output_format == "json":
-        dump_json_output({"kart.status/v2": jdict}, sys.stdout)
-    else:
-        click.echo(status_to_text(jdict))
+        if output_format:
+            if output_format == "json":
+                dump_json_output({"kart.status/v2": jdict}, sys.stdout)
+            else:
+                click.echo(status_to_text(jdict))
 
 
 def get_branch_status_json(repo):
@@ -284,7 +286,7 @@ def working_copy_status_to_text(jdict):
         return 'No working copy\n  (use "kart checkout" to create a working copy)\n'
 
     if not jdict["changes"]:
-        return "Nothing to commit, working copy clean"
+        return "lorem ipsum"
 
     return (
         "Changes in working copy:\n"
