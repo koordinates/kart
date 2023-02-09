@@ -81,14 +81,24 @@ class StatusDiffWriter(BaseDiffWriter):
 @click.option(
     "--list-untracked-tables",
     is_flag=True,
-    help="List all untracked tables"
+    help="List all untracked tables",
 )
 
-def status(ctx, output_format):
+def status(ctx, output_format, list_untracked_tables):
     """Show the working copy status"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
     jdict["spatialFilter"] = SpatialFilter.load_repo_config(repo)
+
+    if list_untracked_tables:
+        untracked_files = []
+        for status in repo.status().values():
+            if status & pygit2.GIT_STATUS_WT_NEW:
+                print (status)
+                untracked_files.append(status.path)
+        for path in untracked_files:
+            click.echo(path)
+
     if output_format == "json":
         jdict["spatialFilter"] = spatial_filter_status_to_json(jdict["spatialFilter"])
 
@@ -102,11 +112,6 @@ def status(ctx, output_format):
         jdict["conflicts"] = conflicts_writer.list_conflicts()
         jdict["state"] = "merging"
     else:
-        if list-untracked-tables:
-            # logic to list all untracked tables
-            print ("Going to print all untracked tables for you")
-            pass
-
         jdict["workingCopy"] = get_working_copy_status_json(repo)
 
     if output_format == "json":
