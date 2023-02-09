@@ -6,6 +6,7 @@ import click
 from . import commit
 from .cli_util import StringFromFile, call_and_exit_flag, KartCommand
 from .conflicts_writer import BaseConflictsWriter
+from .core import check_git_user
 from .diff_util import get_repo_diff
 from .exceptions import InvalidOperation
 from .merge_util import (
@@ -128,6 +129,8 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
         merge_jdict["commit"] = "(dryRun)"
         return merge_jdict
 
+    check_git_user(repo)
+
     with write_to_packfile(repo):
         merge_tree_id = index.write_tree(repo, write_merged_index_flags(repo))
         L.debug(f"Merge tree: {merge_tree_id}")
@@ -221,6 +224,8 @@ def complete_merging_state(ctx):
         raise InvalidOperation(
             "Merge cannot be completed until all conflicts are resolved - see `kart conflicts`."
         )
+
+    check_git_user(repo)
 
     merge_context = MergeContext.read_from_repo(repo)
     commit_ids = merge_context.versions.map(lambda v: v.commit_id)
