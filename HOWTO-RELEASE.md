@@ -24,9 +24,14 @@ This process only supports a single release branch (master). It'll need to be ex
 
 8. Update `CHANGELOG.md` to refer to the new version (ie, make sure it doesn't say "UNRELEASED" next to all the latest changes.)
 
-9. Commit with a message like "Release v1.2.3"
+9. Commit with a message like "Release v1.2.3", and push the commit.
 
-10. Tag the release with the Git tag version format and push it:
+    ```console
+    $ git commit -m "Release v1.2.3"
+    $ git push
+    ```
+
+10. Tag the release with the Git tag version format and push the tag.
 
     ```console
     $ git tag v1.2.3
