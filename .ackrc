@@ -8,6 +8,7 @@
 --ignore-directory=is:tests/data
 --ignore-directory=is:vendor
 --ignore-directory=is:vcpkg-vendor/vcpkg
+--ignore-directory=is:vcpkg-vendor/build
 --ignore-directory=is:venv
 --ignore-directory=match:/\.pytest/
 
