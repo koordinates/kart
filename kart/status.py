@@ -14,6 +14,9 @@ from .output_util import dump_json_output
 from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
 from kart.cli_util import KartCommand
+from .tabular.import_source import TableImportSource
+# from kart.working_copy import TableWorkingCopyType
+from kart.working_copy import TableWorkingCopyType
 
 
 class StatusDiffWriter(BaseDiffWriter):
@@ -78,6 +81,12 @@ class StatusDiffWriter(BaseDiffWriter):
     type=click.Choice(["text", "json"]),
     default="text",
 )
+@click.option(
+    "--list-untracked-tables",
+    is_flag=True,
+    help="Shows which tables haven't yet been tracked by cart"
+    
+)
 def status(ctx, output_format):
     """Show the working copy status"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
@@ -101,7 +110,23 @@ def status(ctx, output_format):
     if output_format == "json":
         dump_json_output({"kart.status/v2": jdict}, sys.stdout)
     else:
-        click.echo(status_to_text(jdict))
+        if list_untracked_tables:
+            working_copy = repo.working_copy
+            location = repo.workingcopy_location
+            wc_type = str(TableWorkingCopyType.from_location(location)).lstrip("TableWorkingCopyType.")
+            source = wc_type + ":" + str(working_copy)
+
+            ret_val = TableImportSource.open(source).get_tables()
+            all_tables = [table_name for table_name, title in ret_val.items()]
+            # Get tables shown in kart data ls
+            ds_paths = [ds.path for ds in repo.datasets()] 
+
+            untracked_tables = list(set(all_tables) - set(ds_paths))
+            if untracked_tables:
+                for untracked_table in untracked_tables:
+                    click.echo(untracked_table)
+        else:        
+            click.echo(status_to_text(jdict))
 
 
 def get_branch_status_json(repo):
