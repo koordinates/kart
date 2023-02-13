@@ -14,9 +14,6 @@ from .output_util import dump_json_output
 from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
 from kart.cli_util import KartCommand
-from .tabular.import_source import TableImportSource
-# from kart.working_copy import TableWorkingCopyType
-from kart.working_copy import TableWorkingCopyType
 
 
 class StatusDiffWriter(BaseDiffWriter):
@@ -85,9 +82,8 @@ class StatusDiffWriter(BaseDiffWriter):
     "--list-untracked-tables",
     is_flag=True,
     help="Shows which tables haven't yet been tracked by cart"
-    
 )
-def status(ctx, output_format):
+def status(ctx, output_format, list_untracked_tables):
     """Show the working copy status"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
@@ -111,20 +107,27 @@ def status(ctx, output_format):
         dump_json_output({"kart.status/v2": jdict}, sys.stdout)
     else:
         if list_untracked_tables:
-            working_copy = repo.working_copy
-            location = repo.workingcopy_location
-            wc_type = str(TableWorkingCopyType.from_location(location)).lstrip("TableWorkingCopyType.")
-            source = wc_type + ":" + str(working_copy)
-
-            ret_val = TableImportSource.open(source).get_tables()
-            all_tables = [table_name for table_name, title in ret_val.items()]
-            # Get tables shown in kart data ls
-            ds_paths = [ds.path for ds in repo.datasets()] 
-
-            untracked_tables = list(set(all_tables) - set(ds_paths))
-            if untracked_tables:
-                for untracked_table in untracked_tables:
-                    click.echo(untracked_table)
+            wc = repo.working_copy.tabular 
+            if wc is not None:
+                if wc.session() is not None:        
+                    with wc.session() as sess: 
+                        wc_items = wc.adapter.list_tables(sess)
+                    # Get all tables in working copy
+                    all_tables = [table_name for table_name, title in wc_items.items()]
+                    # Get tables shown in kart data ls
+                    datasets_paths = [datasets.path for datasets in repo.datasets()] 
+                    click.echo(datasets_paths)
+                    # Get untracked tables
+                    untracked_tables = list(set(all_tables) - set(datasets_paths))
+                    if untracked_tables:
+                        for untracked_table in untracked_tables:
+                            click.echo(untracked_table)
+                    else:
+                        click.echo("All tables are tracked")
+                else:
+                    click.echo("Failed to obtain session")
+            else:
+                click.echo("Working copy is not initialised")
         else:        
             click.echo(status_to_text(jdict))
 
