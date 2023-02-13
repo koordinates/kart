@@ -81,6 +81,14 @@ class CommitDiffWriter(BaseDiffWriter):
     type=StringFromFile(encoding="utf-8"),
 )
 @click.option(
+    " /--no-editor",
+    "launch_editor",
+    is_flag=True,
+    default=True,
+    hidden=True,
+    help="Whether to launch an editor to let the user choose the commit message.",
+)
+@click.option(
     "--allow-empty",
     is_flag=True,
     default=False,
@@ -122,6 +130,7 @@ class CommitDiffWriter(BaseDiffWriter):
 def commit(
     ctx,
     message,
+    launch_editor,
     allow_empty,
     allow_spatial_filter_conflicts,
     convert_to_dataset_format,
@@ -161,9 +170,10 @@ def commit(
         )
 
     do_json = output_format == "json"
+    commit_msg = None
     if message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
-    else:
+    elif launch_editor:
         commit_msg = get_commit_message(repo, wc_diff, quiet=do_json)
 
     if not commit_msg:
