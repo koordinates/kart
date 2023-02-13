@@ -31,6 +31,14 @@ L = logging.getLogger("kart.pull")
     ),
 )
 @click.option(
+    " /--no-editor",
+    "launch_editor",
+    is_flag=True,
+    default=True,
+    hidden=True,
+    help="Whether to launch an editor to let the user choose the commit message.",
+)
+@click.option(
     "--progress/--quiet",
     "do_progress",
     is_flag=True,
@@ -42,7 +50,7 @@ L = logging.getLogger("kart.pull")
     "refspecs", nargs=-1, required=False, metavar="REFISH", shell_complete=ref_completer
 )
 @click.pass_context
-def pull(ctx, ff, ff_only, do_progress, repository, refspecs):
+def pull(ctx, ff, ff_only, launch_editor, do_progress, repository, refspecs):
     """Fetch from and integrate with another repository or a local branch"""
     repo = ctx.obj.repo
 
@@ -93,4 +101,10 @@ def pull(ctx, ff, ff_only, do_progress, repository, refspecs):
 
     # now merge with FETCH_HEAD
     L.debug("Running merge:", {"ff": ff, "ff_only": ff_only, "commit": "FETCH_HEAD"})
-    ctx.invoke(merge.merge, ff=ff, ff_only=ff_only, commit="FETCH_HEAD")
+    ctx.invoke(
+        merge.merge,
+        ff=ff,
+        ff_only=ff_only,
+        launch_editor=launch_editor,
+        commit="FETCH_HEAD",
+    )

@@ -27,31 +27,40 @@ L = logging.getLogger("kart.merge")
 
 
 def get_commit_message(
-    merge_context, merge_tree_id, repo, read_msg_file=False, quiet=False
+    merge_context,
+    merge_tree_id,
+    repo,
+    *,
+    launch_editor=True,
+    read_msg_file=False,
+    quiet=False,
 ):
-    merge_message = None
+    message = None
     if read_msg_file:
-        merge_message = repo.read_gitdir_file(KartRepoFiles.MERGE_MSG, missing_ok=True)
-    if not merge_message:
-        merge_message = merge_context.get_message()
-    head = repo.structure("HEAD")
-    merged = repo.structure(merge_tree_id)
-    diff = get_repo_diff(head, merged)
-    merge_message = commit.get_commit_message(
-        repo, diff, draft_message=merge_message, quiet=quiet
-    )
-    if not merge_message:
+        message = repo.read_gitdir_file(KartRepoFiles.MERGE_MSG, missing_ok=True)
+    if not message:
+        message = merge_context.get_message()
+    if launch_editor:
+        head = repo.structure("HEAD")
+        merged = repo.structure(merge_tree_id)
+        diff = get_repo_diff(head, merged)
+        message = commit.get_commit_message(
+            repo, diff, draft_message=message, quiet=quiet
+        )
+    if not message:
         raise click.UsageError("Aborting commit due to empty commit message.")
-    return merge_message
+    return message
 
 
-def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
+def do_merge(
+    repo, ff, ff_only, dry_run, commit, message, launch_editor=True, quiet=False
+):
     """Does a merge, but doesn't update the working copy."""
     if ff_only and not ff:
         raise click.BadParameter(
             "Conflicting parameters: --no-ff & --ff-only", param_hint="--ff-only"
         )
-    if commit_message:
+    if message:
         if ff_only:
             raise click.BadParameter(
                 "Conflicting parameters: --message & --ff-only", param_hint="--ff-only"
@@ -69,13 +78,12 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
     ancestor = CommitWithReference.resolve(repo, ancestor_id)
     commit_with_ref3 = AncestorOursTheirs(ancestor, ours, theirs)
     merge_context = MergeContext.from_commit_with_refs(commit_with_ref3, repo)
-    merge_message = commit_message or merge_context.get_message()
 
     merge_jdict = {
         "commit": ours.id.hex,
         "branch": ours.branch_shorthand,
         "merging": merge_context.as_json(),
-        "message": merge_message,
+        "message": message or merge_context.get_message(),
         "conflicts": None,
     }
 
@@ -102,7 +110,9 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
         merge_jdict["commit"] = theirs.id.hex
         merge_jdict["fastForward"] = True
         if not dry_run:
-            repo.head.set_target(theirs.id, f"{merge_message}: Fast-forward")
+            repo.head.set_target(
+                theirs.id, f"{merge_context.get_message()}: Fast-forward"
+            )
         return merge_jdict
 
     tree3 = commit_with_ref3.map(lambda c: c.tree)
@@ -121,7 +131,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
                 repo,
                 merged_index,
                 merge_context,
-                merge_message,
+                message or merge_context.get_message(),
             )
         return merge_jdict
 
@@ -136,15 +146,19 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
         L.debug(f"Merge tree: {merge_tree_id}")
 
         user = repo.default_signature
-        if not commit_message:
-            commit_message = get_commit_message(
-                merge_context, merge_tree_id, repo, quiet=quiet
+        if not message:
+            message = get_commit_message(
+                merge_context,
+                merge_tree_id,
+                repo,
+                launch_editor=launch_editor,
+                quiet=quiet,
             )
         merge_commit_id = repo.create_commit(
             repo.head.name,
             user,
             user,
-            commit_message,
+            message,
             merge_tree_id,
             [ours.id, theirs.id],
         )
@@ -159,7 +173,7 @@ def move_repo_to_merging_state(
     repo,
     merged_index,
     merge_context,
-    merge_message,
+    message,
 ):
     """
     Move the Kart repository into a "merging" state in which conflicts
@@ -167,12 +181,12 @@ def move_repo_to_merging_state(
     repo - the KartRepo
     merged_index - the MergedIndex containing the conflicts found.
     merge_context - the MergeContext object for the merge.
-    merge_message - the commit message for when the merge is completed.
+    message - the commit message for when the merge is completed.
     """
     assert repo.state != KartRepoState.MERGING
     merged_index.write_to_repo(repo)
     merge_context.write_to_repo(repo)
-    repo.write_gitdir_file(KartRepoFiles.MERGE_MSG, merge_message)
+    repo.write_gitdir_file(KartRepoFiles.MERGE_MSG, message)
 
     working_copy_merger = WorkingCopyMerger(repo, merge_context)
     # The merged_tree is used mostly for updating the working copy, but is also used for
@@ -234,10 +248,15 @@ def complete_merging_state(ctx):
         merge_tree_id = merged_index.write_resolved_tree(repo)
         L.debug(f"Merge tree: {merge_tree_id}")
 
-        merge_message = ctx.params.get("message")
-        if not merge_message:
-            merge_message = get_commit_message(
-                merge_context, merge_tree_id, repo, read_msg_file=True
+        message = ctx.params.get("message")
+        launch_editor = ctx.params.get("launch_editor")
+        if not message:
+            message = get_commit_message(
+                merge_context,
+                merge_tree_id,
+                repo,
+                read_msg_file=True,
+                launch_editor=launch_editor,
             )
 
         user = repo.default_signature
@@ -245,7 +264,7 @@ def complete_merging_state(ctx):
             repo.head.name,
             user,
             user,
-            merge_message,
+            message,
             merge_tree_id,
             [commit_ids.ours, commit_ids.theirs],
         )
@@ -257,7 +276,7 @@ def complete_merging_state(ctx):
         "branch": head.branch_shorthand,
         "commit": merge_commit_id,
         "merging": merge_context.as_json(),
-        "message": merge_message,
+        "message": message,
     }
 
     for filename in ALL_MERGE_FILES:
@@ -310,6 +329,15 @@ def complete_merging_state(ctx):
     help="Use the given message as the commit message.",
     is_eager=True,  # -m is eager and --continue is non-eager so we can access -m from complete_merging_state callback.
 )
+@click.option(
+    " /--no-editor",
+    "launch_editor",
+    is_flag=True,
+    default=True,
+    hidden=True,
+    help="Whether to launch an editor to let the user choose the commit message.",
+    is_eager=True,
+)
 @call_and_exit_flag(
     "--continue",
     callback=complete_merging_state,
@@ -323,7 +351,7 @@ def complete_merging_state(ctx):
 )
 @click.argument("commit", required=True, metavar="COMMIT")
 @click.pass_context
-def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
+def merge(ctx, ff, ff_only, dry_run, message, launch_editor, output_format, commit):
     """Incorporates changes from the named commits (usually other branch heads) into the current branch."""
 
     repo = ctx.obj.get_repo(
@@ -334,7 +362,16 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
 
     do_json = output_format == "json"
 
-    jdict = do_merge(repo, ff, ff_only, dry_run, commit, message, quiet=do_json)
+    jdict = do_merge(
+        repo,
+        ff,
+        ff_only,
+        dry_run,
+        commit,
+        message,
+        launch_editor=launch_editor,
+        quiet=do_json,
+    )
     no_op = jdict.get("noOp", False) or jdict.get("dryRun", False)
     conflicts = jdict.get("conflicts", None)
 
