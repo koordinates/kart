@@ -116,7 +116,6 @@ def status(ctx, output_format, list_untracked_tables):
                     all_tables = [table_name for table_name, title in wc_items.items()]
                     # Get tables shown in kart data ls
                     datasets_paths = [datasets.path for datasets in repo.datasets()] 
-                    click.echo(datasets_paths)
                     # Get untracked tables
                     untracked_tables = list(set(all_tables) - set(datasets_paths))
                     if untracked_tables:
