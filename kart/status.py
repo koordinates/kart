@@ -111,7 +111,6 @@ def status(ctx, output_format, list_untracked_tables):
         if list_untracked_tables:
             """Check for any untracked tables in working copy"""
             wc = repo.working_copy.tabular 
-            click.echo(wc)
             if wc is not None:
                 if wc.session() is not None:        
                     with wc.session() as sess: 
@@ -119,7 +118,7 @@ def status(ctx, output_format, list_untracked_tables):
                     # Get all tables in working copy
                     all_tables = [table_name for table_name, title in wc_items.items()]
                     # Get tables shown in kart data ls
-                    datasets_paths = [datasets.path for datasets in repo.datasets()] 
+                    datasets_paths = [dataset.path for dataset in repo.datasets()] 
                     # Get untracked tables
                     untracked_tables = list(set(all_tables) - set(datasets_paths))
                     if untracked_tables:
