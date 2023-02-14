@@ -105,9 +105,13 @@ def status(ctx, output_format, list_untracked_tables):
 
     if output_format == "json":
         dump_json_output({"kart.status/v2": jdict}, sys.stdout)
-    else:
+    else:       
+        click.echo(status_to_text(jdict))
+        
         if list_untracked_tables:
+            """Check for any untracked tables in working copy"""
             wc = repo.working_copy.tabular 
+            click.echo(wc)
             if wc is not None:
                 if wc.session() is not None:        
                     with wc.session() as sess: 
@@ -119,16 +123,15 @@ def status(ctx, output_format, list_untracked_tables):
                     # Get untracked tables
                     untracked_tables = list(set(all_tables) - set(datasets_paths))
                     if untracked_tables:
+                        click.echo("\nUntracked tables:\n")
                         for untracked_table in untracked_tables:
-                            click.echo(untracked_table)
+                            click.echo(f"{untracked_table}\n")
                     else:
-                        click.echo("All tables are tracked")
+                        click.echo("\nAll tables are tracked\n")
                 else:
-                    click.echo("Failed to obtain session")
+                    click.echo("\nFailed to obtain session\n")
             else:
-                click.echo("Working copy is not initialised")
-        else:        
-            click.echo(status_to_text(jdict))
+                click.echo("\nWorking copy is not initialised\n")
 
 
 def get_branch_status_json(repo):
