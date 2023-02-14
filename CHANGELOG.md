@@ -11,6 +11,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.12.2
 
 - Fix for issue with launching an editor while using helper mode, affects macOS and Linux. [#788](https://github.com/koordinates/kart/issues/788)
+- Added support for `--list-untracked-tables` option under `kart status` command to list the tables/datasets that are added to the repository but are not tracked by Kart.
 
 ## 0.12.1
 
