@@ -81,7 +81,7 @@ class StatusDiffWriter(BaseDiffWriter):
 @click.option(
     "--list-untracked-tables",
     is_flag=True,
-    help="Shows which tables haven't yet been tracked by kart"
+    help="Shows which tables haven't yet been tracked by Kart"
 )
 def status(ctx, output_format, list_untracked_tables):
     """Show the working copy status"""
@@ -117,52 +117,12 @@ def status(ctx, output_format, list_untracked_tables):
                 # Get untracked tables
                 untracked_tables = list(set(all_tables) - set(datasets_paths))
                 jdict["untrackedTables"] = untracked_tables
-                # if untracked_tables:
-                #     if output_format == "json":
-                #         # jdict["untrackedTables"] = untracked_tables
-                #         dump_json_output({"Untracked tables": untracked_tables}, sys.stdout)
-                #     else:
-                #         # click.echo("\nUntracked tables:\n")
-                #         # for untracked_table in untracked_tables:
-                #         #     click.echo(f"{untracked_table}\n")
-                #         click.echo(status_to_text(jdict))
 
     if output_format == "json":
         dump_json_output({"kart.status/v2": jdict}, sys.stdout)
     else:       
         click.echo(status_to_text(jdict))
         
-        # if list_untracked_tables:
-        #     """Check for any untracked tables in working copy"""
-        #     wc = repo.working_copy.tabular 
-        #     if wc is not None:
-        #         if wc.session() is not None:        
-        #             with wc.session() as sess: 
-        #                 wc_items = wc.adapter.list_tables(sess)
-        #             # Get all tables in working copy
-        #             all_tables = [table_name for table_name, title in wc_items.items()]
-        #             # Get tables shown in kart data ls
-        #             datasets_paths = [dataset.table_name for dataset in repo.datasets(filter_dataset_type="table")] 
-        #             # Get untracked tables
-        #             untracked_tables = list(set(all_tables) - set(datasets_paths))
-        #             jdict["untrackedTables"] = untracked_tables
-        #             if untracked_tables:
-        #                 if output_format == "json":
-        #                     # jdict["untrackedTables"] = untracked_tables
-        #                     dump_json_output({"Untracked tables": untracked_tables}, sys.stdout)
-        #                 else:
-        #                     # click.echo("\nUntracked tables:\n")
-        #                     # for untracked_table in untracked_tables:
-        #                     #     click.echo(f"{untracked_table}\n")
-        #                     click.echo(status_to_text(jdict))
-        #             else:
-        #                 click.echo("\nAll tables are tracked\n")
-        #         else:
-        #             click.echo("\nFailed to obtain session\n")
-        #     else:
-        #         click.echo("\nWorking copy is not initialised\n")
-
-
 def get_branch_status_json(repo):
     output = {"commit": None, "abbrevCommit": None, "branch": None, "upstream": None}
 
