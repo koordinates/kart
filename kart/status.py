@@ -86,6 +86,8 @@ class StatusDiffWriter(BaseDiffWriter):
 def status(ctx, output_format, list_untracked_tables):
     """Show the working copy status"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    untracked_tables = []
+    is_untracked_tables_call = False
     jdict = get_branch_status_json(repo)
     jdict["spatialFilter"] = SpatialFilter.load_repo_config(repo)
     if output_format == "json":
@@ -101,27 +103,27 @@ def status(ctx, output_format, list_untracked_tables):
         jdict["conflicts"] = conflicts_writer.list_conflicts()
         jdict["state"] = "merging"
     else:
-        jdict["workingCopy"] = get_working_copy_status_json(repo)
-
-    if list_untracked_tables:
-        """Check for any untracked tables in working copy"""
-        wc = repo.working_copy.tabular 
-        if wc is not None:
-            if wc.session() is not None:        
-                with wc.session() as sess: 
-                    wc_items = wc.adapter.list_tables(sess)
-                # Get all tables in working copy
-                all_tables = [table_name for table_name, title in wc_items.items()]
-                # Get tables shown in kart data ls
-                datasets_paths = [dataset.table_name for dataset in repo.datasets(filter_dataset_type="table")] 
-                # Get untracked tables
-                untracked_tables = list(set(all_tables) - set(datasets_paths))
-                jdict["untrackedTables"] = untracked_tables
+        if list_untracked_tables:
+            is_untracked_tables_call = True
+            """Check for any untracked tables in working copy"""
+            wc = repo.working_copy.tabular 
+            if wc is not None:
+                if wc.session() is not None:     
+                    with wc.session() as sess:
+                        wc_items = wc.adapter.list_tables(sess)
+                    # Get all tables in working copy
+                    all_tables = [table_name for table_name, title in wc_items.items()]
+                    # Get tables shown in kart data ls
+                    datasets_paths = [dataset.table_name for dataset in repo.datasets(filter_dataset_type="table")] 
+                    # Get untracked tables
+                    untracked_tables = list(set(all_tables) - set(datasets_paths))
+                    jdict["untrackedTables"] = untracked_tables
+        jdict["workingCopy"] = get_working_copy_status_json(repo, untracked_tables, is_untracked_tables_call)
 
     if output_format == "json":
         dump_json_output({"kart.status/v2": jdict}, sys.stdout)
     else:       
-        click.echo(status_to_text(jdict))
+        click.echo(status_to_text(jdict, is_untracked_tables_call))
         
 def get_branch_status_json(repo):
     output = {"commit": None, "abbrevCommit": None, "branch": None, "upstream": None}
@@ -147,14 +149,17 @@ def get_branch_status_json(repo):
     return output
 
 
-def get_working_copy_status_json(repo):
+def get_working_copy_status_json(repo, untracked_tables, is_untracked_tables_call):
     if repo.is_bare:
         return None
 
     result = {
         "parts": repo.working_copy.parts_status(),
-        "changes": get_diff_status_json(repo),
+        "changes": get_diff_status_json(repo)
     }
+    if is_untracked_tables_call:
+        result["untrackedTables"] = untracked_tables
+
     return result
 
 
@@ -170,12 +175,11 @@ def get_diff_status_json(repo):
     return status_diff_writer.get_type_counts()
 
 
-def status_to_text(jdict):
+def status_to_text(jdict, is_untracked_tables_call):
     status_list = [branch_status_to_text(jdict)]
     is_spatial_filter = bool(jdict["spatialFilter"])
     is_empty = not jdict["commit"]
     is_merging = jdict.get("state", None) == KartRepoState.MERGING.value
-    has_untrackedTables = False
 
     if is_spatial_filter:
         status_list.append(spatial_filter_status_to_text(jdict["spatialFilter"]))
@@ -186,10 +190,12 @@ def status_to_text(jdict):
     if not is_merging and not is_empty:
         status_list.append(working_copy_status_to_text(jdict["workingCopy"]))
     
-    if "untrackedTables" in jdict:
-        has_untrackedTables = jdict["untrackedTables"]
-    if has_untrackedTables:
-        status_list.append(untracked_tables_status_to_text(jdict["untrackedTables"]))
+    if is_untracked_tables_call:
+        if jdict["workingCopy"]["untrackedTables"]:
+            status_list.append(untracked_tables_status_to_text(jdict["workingCopy"]["untrackedTables"]))
+        else:
+            status_list.append("No untracked tables found.")
+
 
     return "\n\n".join(status_list)
 
