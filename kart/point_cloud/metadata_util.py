@@ -4,7 +4,6 @@ import logging
 import re
 from subprocess import CalledProcessError
 import sys
-import tempfile
 
 import click
 from osgeo import osr
@@ -152,10 +151,6 @@ def _check_for_non_homogenous_meta_item(
         )
 
 
-def _format_list_as_str(array):
-    return json.dumps(array, separators=(",", ":"))[1:-1]
-
-
 def get_copc_version(info):
     if info.get("copc"):
         # PDAL now hides the COPC VLR from us so we can't do better than this without peeking at the file directly.
@@ -293,43 +288,6 @@ def _calc_crs84_extent(src_extent, src_crs):
         min(az, bz),
         max(az, bz),
     )
-
-
-# Keep pointer file keys in alphabetical order, except:
-# version goes first, and oid and size go last
-TILE_POINTER_FILE_KEYS = (
-    "version",
-    "crs84Extent",
-    "format",
-    "nativeExtent",
-    "pointCount",
-    "sourceOid",
-    "oid",
-    "size",
-)
-
-
-def format_tile_for_pointer_file(*tile_info_sources):
-    """
-    Given the tile-info metadata, converts it to a format appropriate for the LFS pointer file.
-    """
-
-    def get_value_for_key(key):
-        for source in tile_info_sources:
-            if key in source:
-                value = source.get(key)
-                if hasattr(value, "__iter__") and not isinstance(value, str):
-                    return _format_list_as_str(value)
-                else:
-                    return value
-
-    result = {}
-    for key in TILE_POINTER_FILE_KEYS:
-        value = get_value_for_key(key)
-        if value:
-            result[key] = value
-
-    return result
 
 
 def is_copc(tile_format):

@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import logging
 from pathlib import Path
 import re
@@ -14,6 +15,8 @@ from kart.serialise_util import msg_pack, msg_unpack
 from kart.reflink_util import reflink
 
 L = logging.getLogger(__name__)
+
+GIT_LFS_SPEC_V1 = "https://git-lfs.github.com/spec/v1"
 
 POINTER_PATTERN = re.compile(rb"^oid sha256:([0-9a-fA-F]{64})$", re.MULTILINE)
 
@@ -82,32 +85,149 @@ def get_hash_and_size_of_file_while_copying(src_path, dest_path, allow_overwrite
     return sha256.hexdigest(), size
 
 
-def dict_to_pointer_file_bytes(pointer_dict, only_standard_keys=True):
-    if "version" not in pointer_dict:
-        pointer_dict["version"] = "https://git-lfs.github.com/spec/v1"
-    if not pointer_dict["oid"].startswith("sha256:"):
-        pointer_dict["oid"] = f"sha256:{pointer_dict['oid']}"
-
-    if not only_standard_keys or not (pointer_dict.keys() - _STANDARD_LFS_KEYS):
-        return _dict_to_pointer_file_bytes_simple(pointer_dict)
-
-    extra_values = dict(
-        (k, v) for k, v in sorted(pointer_dict.items()) if k not in _STANDARD_LFS_KEYS
+def normalise_pointer_file_dict(
+    pointer_dict, include_nonstandard_keys=True, include_version=False
+):
+    """
+    Normalise a pointer-file dict ready for showing to the user. Keys are sorted, lists are comma-separated.
+    Very similar to what we'd write to disk, but we don't include the LFS version - that's just noise.
+    """
+    return _process_pointer_file_dict(
+        pointer_dict,
+        include_nonstandard_keys=include_nonstandard_keys,
+        include_version=include_version,
     )
-    encoded_extra_values = _encode_extra_values(extra_values)
 
-    # The lfs spec requires keys after `version` to be sorted alphabetically.
-    result = (
-        f"version {pointer_dict['version']}\n"
-        f"ext-0-kart-encoded.{encoded_extra_values} {_EMPTY_SHA256}\n"
-        f"oid {pointer_dict['oid']}\n"
-        f"size {pointer_dict['size']}\n"
+
+def merge_pointer_file_dicts(
+    *pointer_dicts, include_nonstandard_keys=True, include_version=False
+):
+    """Merge more than one pointer-file dict while normalising them. See normalise_pointer_file_dict."""
+    return _process_pointer_file_dict(
+        *pointer_dicts,
+        include_nonstandard_keys=include_nonstandard_keys,
+        include_version=include_version,
     )
-    return result.encode("utf8")
 
 
-def _encode_extra_values(extra_values):
-    packed = msg_pack(extra_values)
+def dict_to_pointer_file_bytes(pointer_dict, include_nonstandard_keys=True):
+    """
+    Normalise a pointer-file-dict ready for writing to disk, then encode it to a bytestring.
+    In this case we do want to write the LFS version, the non-standard keys will have to be specially encoded,
+    and there are some keys that are transient, which we never write to disk.
+    """
+    return _process_pointer_file_dict(
+        pointer_dict,
+        include_nonstandard_keys=include_nonstandard_keys,
+        drop_keys=("name", "sourceName", "sourceFormat", "sourceSize"),
+        encode_to_bytes=True,
+    )
+
+
+def merge_dicts_to_pointer_file_bytes(*pointer_dicts, include_nonstandard_keys=True):
+    """Merge more than one pointer-file dict while normalising and encoding them."""
+    return _process_pointer_file_dict(
+        *pointer_dicts,
+        include_nonstandard_keys=include_nonstandard_keys,
+        drop_keys=("name", "sourceName", "sourceFormat", "sourceSize"),
+        encode_to_bytes=True,
+    )
+
+
+def _process_pointer_file_dict(
+    *pointer_dicts,
+    include_nonstandard_keys=True,
+    include_version=True,
+    drop_keys=(),
+    encode_to_bytes=False,
+):
+    result = {}
+    for key in _iter_pointer_file_keys(
+        *pointer_dicts,
+        include_nonstandard_keys=True,
+        include_version=include_version,
+        drop_keys=drop_keys,
+    ):
+        value = next((p.get(key) for p in pointer_dicts if key in p), None)
+        if key == "version" and value is None:
+            value = GIT_LFS_SPEC_V1
+        elif (
+            key == "oid" and isinstance(value, str) and not value.startswith("sha256:")
+        ):
+            value = "sha256:" + value
+        elif hasattr(value, "__iter__") and not isinstance(value, str):
+            value = _format_list_as_str(value)
+        result[key] = value
+
+    if not encode_to_bytes:
+        return result
+
+    # Any time we're serializing it to bytes, we should be including the version.
+    assert include_version is True
+
+    if len(result) == 3:
+        result_str = (
+            f"version {result['version']}\n"
+            f"oid {result['oid']}\n"
+            f"size {result['size']}\n"
+        )
+    else:
+        standard = {
+            "version": result.pop("version"),
+            "oid": result.pop("oid"),
+            "size": result.pop("size"),
+        }
+        nonstandard = result
+        nonstandard_encoded = _encode_nonstandard_keys(nonstandard)
+        result_str = (
+            f"version {standard['version']}\n"
+            f"ext-0-kart-encoded.{nonstandard_encoded} {_EMPTY_SHA256}\n"
+            f"oid {standard['oid']}\n"
+            f"size {standard['size']}\n"
+        )
+    return result_str.encode("utf8")
+
+
+def _format_list_as_str(array):
+    """
+    We treat a pointer file as a place to store JSON, but its really for storing string-string key-value pairs only.
+    Some of our values are a lists of numbers - we turn them into strings by comma-separating them, and we don't
+    put them inside square brackets as they would be in JSON.
+    """
+    return json.dumps(array, separators=(",", ":"))[1:-1]
+
+
+def _iter_pointer_file_keys(
+    *pointer_dicts,
+    include_nonstandard_keys=True,
+    include_version=True,
+    drop_keys=(),
+):
+    # Ordering - see Git LFS specification.
+    # 1. version (which we sometimes skip, since its pretty meaningless to the user)
+    # 2. non-standard-keys, sorted alphabetically
+    # 3. oid
+    # 4. size
+    if include_version:
+        yield "version"
+    if include_nonstandard_keys:
+        sorted_key_iter = (
+            sorted(pointer_dicts[0])
+            if len(pointer_dicts) == 1
+            else sorted(set().union(*pointer_dicts))
+        )
+        for key in sorted_key_iter:
+            if key in ("version", "oid", "size"):
+                continue
+            if drop_keys and key in drop_keys:
+                continue
+            yield key
+    yield "oid"
+    yield "size"
+
+
+def _encode_nonstandard_keys(nonstandard_dict):
+    packed = msg_pack(nonstandard_dict)
     # Using only the chars: [A-Z][a-z][0-9] . -
     return base64.b64encode(packed, altchars=b".-").rstrip(b"=").decode("ascii")
 
@@ -227,7 +347,7 @@ def copy_file_to_local_lfs_cache(
         tmp_object_path.rename(actual_object_path)
 
     return {
-        "version": "https://git-lfs.github.com/spec/v1",
+        "version": GIT_LFS_SPEC_V1,
         "oid": f"sha256:{oid}",
         "size": size,
     }

@@ -28,7 +28,7 @@ from kart.fast_import import (
 from kart.key_filters import RepoKeyFilter
 from kart.lfs_util import (
     install_lfs_hooks,
-    dict_to_pointer_file_bytes,
+    merge_dicts_to_pointer_file_bytes,
     copy_file_to_local_lfs_cache,
     get_hash_and_size_of_file,
 )
@@ -38,7 +38,6 @@ from kart.point_cloud.metadata_util import (
     extract_pc_tile_metadata,
     rewrite_and_merge_metadata,
     check_for_non_homogenous_metadata,
-    format_tile_for_pointer_file,
     is_copc,
 )
 from kart.point_cloud.pdal_convert import convert_tile_to_copc
@@ -387,13 +386,11 @@ def point_cloud_import(
             pointer_dict = copy_file_to_local_lfs_cache(
                 repo, source, conversion_func, oid_and_size=oid_and_size
             )
-            pointer_dict = format_tile_for_pointer_file(
+            pointer_data = merge_dicts_to_pointer_file_bytes(
                 source_to_imported_metadata[source]["tile"], pointer_dict
             )
 
-            write_blob_to_stream(
-                proc.stdin, blob_path, dict_to_pointer_file_bytes(pointer_dict)
-            )
+            write_blob_to_stream(proc.stdin, blob_path, pointer_data)
 
         rewrite_metadata = (
             None if convert_to_copc else RewriteMetadata.DROP_OPTIMIZATION
