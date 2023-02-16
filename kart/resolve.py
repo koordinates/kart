@@ -86,7 +86,6 @@ def _load_file_resolve_for_feature(rich_conflict, file_path):
 
 def _load_file_resolve_for_tile(rich_conflict, file_path):
     from kart.lfs_util import get_local_path_from_lfs_hash, dict_to_pointer_file_bytes
-    from kart.point_cloud.metadata_util import format_tile_for_pointer_file
 
     tilename = rich_conflict.decoded_path[2]
     dataset = load_dataset(rich_conflict)
@@ -103,8 +102,7 @@ def _load_file_resolve_for_tile(rich_conflict, file_path):
     if not path_in_lfs_cache.is_file():
         path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
         try_reflink(file_path, path_in_lfs_cache)
-    pointer_dict = format_tile_for_pointer_file(tile_summary)
-    pointer_data = dict_to_pointer_file_bytes(pointer_dict)
+    pointer_data = dict_to_pointer_file_bytes(tile_summary)
     blob_path = dataset.tilename_to_blob_path(tilename)
     blob_id = repo.create_blob(pointer_data)
     return [pygit2.IndexEntry(blob_path, blob_id, pygit2.GIT_FILEMODE_BLOB)]
