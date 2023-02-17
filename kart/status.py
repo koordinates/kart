@@ -149,17 +149,17 @@ def get_working_copy_status_json(repo, list_untracked_tables):
 def get_untracked_tables(repo):
     """Check for any untracked tables in working copy"""
     wc = repo.working_copy.tabular 
+    untracked_tables = []
 
-    if wc is not None:
-        if wc.session() is not None:     
-            with wc.session() as sess:
-                wc_items = wc.adapter.list_tables(sess)
-            # Get all tables in working copy
-            all_tables = [table_name for table_name, title in wc_items.items()]
-            # Get tables shown in kart data ls
-            datasets_paths = [dataset.table_name for dataset in repo.datasets(filter_dataset_type="table")] 
-            # Get untracked tables
-            untracked_tables = list(set(all_tables) - set(datasets_paths))
+    if wc is not None and wc.session() is not None:     
+        with wc.session() as sess:
+            wc_items = wc.adapter.list_tables(sess)
+        # Get all tables in working copy
+        all_tables = [table_name for table_name, title in wc_items.items()]
+        # Get tables shown in kart data ls
+        datasets_paths = [dataset.table_name for dataset in repo.datasets(filter_dataset_type="table")] 
+        # Get untracked tables
+        untracked_tables = list(set(all_tables) - set(datasets_paths))
 
             
     return untracked_tables
