@@ -15,7 +15,7 @@ from memory_repo import MemoryRepo
 from kart import init, fast_import
 from kart.tabular.v3 import TableV3
 from kart.tabular.v3_paths import IntPathEncoder, MsgpackHashPathEncoder
-from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT
+from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT, NO_CHANGES
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.schema import Schema
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
@@ -301,6 +301,10 @@ def test_import_from_shp(
                 cmd += [f"--primary-key={layer.LAYER_PK}"]
             r = cli_runner.invoke(cmd)
             assert r.exit_code == 0, r.stderr
+
+            # Make sure schema-alignment is working for SHP files including with auto-generated PK:
+            r = cli_runner.invoke([*cmd, "--replace-existing"])
+            assert r.exit_code == NO_CHANGES
 
         repo = KartRepo(repo_path)
         dataset = repo.datasets()[layer.LAYER]
