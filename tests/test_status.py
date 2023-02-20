@@ -31,43 +31,6 @@ def get_commit_ids(jdict):
     return commit, abbrev_commit
 
 
-def test_status_untracked_tables(data_working_copy, cli_runner):
-    new_table = "test_table"
-    with data_working_copy("points") as (path, wc):
-        repo = KartRepo(path)
-        with repo.working_copy.tabular.session() as sess:
-            sess.execute(
-                f"""CREATE TABLE IF NOT EXISTS {new_table} (test_id int, test_name text);"""
-            )
-
-        r = cli_runner.invoke(["status", "--list-untracked-tables", "-o", "json"])
-        parts_status = {
-            "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
-            "workdir": {"status": "notFound"},
-            }
-        
-        assert json.loads(r.stdout) == {
-        "kart.status/v2": {
-            "commit": H.POINTS.HEAD_SHA,
-            "abbrevCommit": H.POINTS.HEAD_SHA[:7],
-            "branch": "main",
-            "upstream": None,
-            "spatialFilter": None,
-            "workingCopy": {"parts": parts_status, "changes": {}, "untrackedTables": [new_table]}
-            }            
-        }
-        
-        r = cli_runner.invoke(["status", "--list-untracked-tables"])
-        assert r.stdout.splitlines() == [
-            "On branch main",
-            "",
-            "Nothing to commit, working copy clean",
-            "",
-            "Untracked tables:",
-            f"  {new_table}"
-        ]
-
-
 def test_status(
     data_archive,
     data_working_copy,
@@ -403,3 +366,40 @@ def test_status_merging(data_archive, cli_runner):
                 "spatialFilter": None,
             }
         }
+
+
+def test_status_untracked_tables(data_working_copy, cli_runner):
+    new_table = "test_table"
+    with data_working_copy("points") as (path, wc):
+        repo = KartRepo(path)
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                f"""CREATE TABLE IF NOT EXISTS {new_table} (test_id int, test_name text);"""
+            )
+
+        r = cli_runner.invoke(["status", "--list-untracked-tables", "-o", "json"])
+        parts_status = {
+            "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
+            "workdir": {"status": "notFound"},
+            }
+        
+        assert json.loads(r.stdout) == {
+        "kart.status/v2": {
+            "commit": H.POINTS.HEAD_SHA,
+            "abbrevCommit": H.POINTS.HEAD_SHA[:7],
+            "branch": "main",
+            "upstream": None,
+            "spatialFilter": None,
+            "workingCopy": {"parts": parts_status, "changes": {}, "untrackedTables": [new_table]}
+            }            
+        }
+        
+        r = cli_runner.invoke(["status", "--list-untracked-tables"])
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Nothing to commit, working copy clean",
+            "",
+            "Untracked tables:",
+            f"  {new_table}"
+        ]

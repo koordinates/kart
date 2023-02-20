@@ -190,12 +190,12 @@ def status_to_text(jdict):
 
     if not is_merging and not is_empty:
         status_list.append(working_copy_status_to_text(jdict["workingCopy"]))
-    
-    if "untrackedTables" in jdict["workingCopy"]:
-        if jdict["workingCopy"]["untrackedTables"]:
-            status_list.append(untracked_tables_status_to_text(jdict["workingCopy"]["untrackedTables"]))
-        else:
-            status_list.append("No untracked tables found.")
+
+        if jdict["workingCopy"] is not None and "untrackedTables" in jdict["workingCopy"]:
+            if jdict["workingCopy"]["untrackedTables"]:
+                status_list.append(untracked_tables_status_to_text(jdict["workingCopy"]["untrackedTables"]))
+            else:
+                status_list.append("No untracked tables found.")
 
 
     return "\n\n".join(status_list)
