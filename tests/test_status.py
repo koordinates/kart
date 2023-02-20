@@ -30,6 +30,9 @@ def get_commit_ids(jdict):
     assert commit.startswith(abbrev_commit)
     return commit, abbrev_commit
 
+def test_status_untrackedd_tables(data_working_copy, cli_runner, insert):
+    # with data_working_copy():
+    assert False
 
 def test_status(
     data_archive,
