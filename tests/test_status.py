@@ -40,32 +40,32 @@ def test_status_untracked_tables(data_working_copy, cli_runner):
                 f"""CREATE TABLE IF NOT EXISTS {new_table} (test_id int, test_name text);"""
             )
 
-            r = cli_runner.invoke(["status", "--list-untracked-tables", "-o", "json"])
-            parts_status = {
-                "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
-                "workdir": {"status": "notFound"},
-                }
-            
-            assert json.loads(r.stdout) == {
-            "kart.status/v2": {
-                "commit": H.POINTS.HEAD_SHA,
-                "abbrevCommit": H.POINTS.HEAD_SHA[:7],
-                "branch": "main",
-                "upstream": None,
-                "spatialFilter": None,
-                "workingCopy": {"parts": parts_status, "changes": {}, "untrackedTables": [new_table]}
-                }            
+        r = cli_runner.invoke(["status", "--list-untracked-tables", "-o", "json"])
+        parts_status = {
+            "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
+            "workdir": {"status": "notFound"},
             }
-            
-            r = cli_runner.invoke(["status", "--list-untracked-tables"])
-            assert r.stdout.splitlines() == [
-                "On branch main",
-                "",
-                "Nothing to commit, working copy clean",
-                "",
-                "Untracked tables:"
-                f"{new_table}"
-            ]
+        
+        assert json.loads(r.stdout) == {
+        "kart.status/v2": {
+            "commit": H.POINTS.HEAD_SHA,
+            "abbrevCommit": H.POINTS.HEAD_SHA[:7],
+            "branch": "main",
+            "upstream": None,
+            "spatialFilter": None,
+            "workingCopy": {"parts": parts_status, "changes": {}, "untrackedTables": [new_table]}
+            }            
+        }
+        
+        r = cli_runner.invoke(["status", "--list-untracked-tables"])
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Nothing to commit, working copy clean",
+            "",
+            "Untracked tables:",
+            f"  {new_table}"
+        ]
 
 
 def test_status(
