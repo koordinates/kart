@@ -405,7 +405,7 @@ def test_import_update_existing_non_homogenous(
                 ]
             )
             assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT, r.stderr
-            assert "The input files have more than one file format" in r.stderr
+            assert "The imported files would have more than one schema" in r.stderr
 
 
 def test_import_update_existing_with_dirty_workingcopy(cli_runner, data_archive):
@@ -533,10 +533,9 @@ def test_import_single_las_no_convert(
             assert "LAS datasets are not supported" in r.stderr
 
 
-def test_import_mismatched_las(
+def test_import_convert_to_copc_mismatched_CRS(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
-    # Using postgres here because it has the best type preservation
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
         with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
             repo_path = tmp_path / "point-cloud-repo"
@@ -553,6 +552,46 @@ def test_import_mismatched_las(
                 )
                 assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
                 assert "Non-homogenous" in r.stderr
-                # This is disallowed even though we are converting to COPC, since these tiles would have different
-                # schemas even once converted to COPC.
-                assert "schema" in r.stderr
+                # This is disallowed even though we are converting to COPC, since these tiles have and will
+                # continue to have different CRSs when converted to COPC
+                assert "The input files have more than one CRS:" in r.stderr
+
+
+def test_import_convert_to_copc_mismatched_schema(
+    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
+):
+    from kart.point_cloud import pdal_execute_pipeline
+
+    with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
+        pipeline = [
+            {"type": "readers.las", "filename": f"{autzen}/autzen.las"},
+            {
+                "type": "writers.las",
+                "filename": f"{tmp_path}/converted.laz",
+                "forward": "all",
+                "compression": True,
+                "major_version": 1,
+                "minor_version": 4,
+                "dataformat_id": 7,
+            },
+        ]
+        pdal_execute_pipeline(pipeline)
+        assert (tmp_path / "converted.laz").is_file()
+
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0, r.stderr
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    f"{autzen}/autzen.las",
+                    f"{tmp_path}/converted.laz",
+                    "--dataset-path=mixed",
+                ]
+            )
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+            assert "Non-homogenous" in r.stderr
+            # This is disallowed even though we are converting to COPC, since these tiles would have different
+            # schemas even once converted to COPC.
+            assert "The imported files would have more than one schema:" in r.stderr

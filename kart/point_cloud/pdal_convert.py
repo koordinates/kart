@@ -1,4 +1,3 @@
-import json
 import subprocess
 
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT

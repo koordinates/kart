@@ -288,7 +288,8 @@ class TileDataset(BaseDataset):
             "size": size,
         }
 
-    def extract_tile_metadata_from_filesystem_path(self, path):
+    @classmethod
+    def extract_tile_metadata_from_filesystem_path(cls, path):
         raise NotImplementedError()
 
     def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):

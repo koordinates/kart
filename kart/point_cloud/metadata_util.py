@@ -1,11 +1,8 @@
 from enum import IntEnum
-import json
 import logging
 import re
 from subprocess import CalledProcessError
-import sys
 
-import click
 from osgeo import osr
 
 from kart.crs_util import normalise_wkt
@@ -13,9 +10,7 @@ from kart.list_of_conflicts import ListOfConflicts
 from kart.exceptions import (
     InvalidOperation,
     INVALID_FILE_FORMAT,
-    WORKING_COPY_OR_IMPORT_CONFLICT,
 )
-from kart.output_util import format_json_for_output, format_wkt_for_output
 from kart.point_cloud import pdal_execute_pipeline
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf,
@@ -39,9 +34,13 @@ class RewriteMetadata(IntEnum):
     # (ie, because we don't care about whether tiles are optimized, or, we're about to change the tile's optimization anyway.)
     DROP_OPTIMIZATION = 0x2
 
-    # Drop all the format info - we don't need to verify it or store it
+    # Drop all the format info - we don't need to verify it or store it.
     # (ie, because we're about to convert the tile to a different format anyway).
     DROP_FORMAT = 0x4
+
+    # Drop the schema info - we don't need to verify it or store it.
+    # (ie, because we're about to convert the tile to have a different schema anyway).
+    DROP_SCHEMA = 0x8
 
 
 def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
@@ -95,6 +94,9 @@ def rewrite_format(tile_metadata, rewrite_metadata=None):
 def rewrite_schema(tile_metadata, rewrite_metadata=None):
     rewrite_metadata = rewrite_metadata or 0
 
+    if rewrite_metadata & RewriteMetadata.DROP_SCHEMA:
+        return {}
+
     orig_schema = tile_metadata["schema"]
     if rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COPC:
         orig_pdrf = tile_metadata["format"]["pointDataRecordFormat"]
@@ -113,42 +115,6 @@ def _merge_metadata_field(output, key, value):
             existing_value.append(value)
     elif existing_value != value:
         output[key] = ListOfConflicts([existing_value, value])
-
-
-def check_for_non_homogenous_metadata(merged_metadata, will_convert_to_copc=False):
-    _check_for_non_homogenous_meta_item(
-        merged_metadata, "format", "file format", future_tense=will_convert_to_copc
-    )
-    _check_for_non_homogenous_meta_item(
-        merged_metadata, "schema", "schema", future_tense=will_convert_to_copc
-    )
-    _check_for_non_homogenous_meta_item(merged_metadata, "crs", "CRS")
-
-
-def _check_for_non_homogenous_meta_item(
-    merged_metadata, key, output_name, future_tense=False
-):
-    value = merged_metadata[key]
-
-    if isinstance(value, ListOfConflicts):
-        format_func = format_wkt_for_output if key == "crs" else format_json_for_output
-        disparity = " vs \n".join(
-            (format_func(value, sys.stderr) for value in merged_metadata[key])
-        )
-        click.echo(
-            "Kart constrains certain aspects of Point Cloud datasets to be homogenous.",
-            err=True,
-        )
-        if future_tense:
-            click.echo(
-                f"The imported files would have more than one {output_name}:", err=True
-            )
-        else:
-            click.echo(f"The input files have more than one {output_name}:", err=True)
-        click.echo(disparity, err=True)
-        raise InvalidOperation(
-            "Non-homogenous dataset supplied", exit_code=WORKING_COPY_OR_IMPORT_CONFLICT
-        )
 
 
 def get_copc_version(info):

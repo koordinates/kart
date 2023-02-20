@@ -42,7 +42,8 @@ class PointCloudV1(TileDataset):
         """Changes a tile's file extension to the given extension, or to the extension appropriate for its format."""
         return set_tile_extension(filename, ext=ext, tile_format=tile_format)
 
-    def extract_tile_metadata_from_filesystem_path(self, path):
+    @classmethod
+    def extract_tile_metadata_from_filesystem_path(cls, path):
         return extract_pc_tile_metadata(path)
 
     def diff_to_working_copy(
