@@ -78,7 +78,12 @@ class StatusDiffWriter(BaseDiffWriter):
     type=click.Choice(["text", "json"]),
     default="text",
 )
-def status(ctx, output_format):
+@click.option(
+    "--list-untracked-tables",
+    is_flag=True,
+    help="Shows which tables haven't yet been tracked by Kart"
+)
+def status(ctx, output_format, list_untracked_tables):
     """Show the working copy status"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
@@ -96,14 +101,13 @@ def status(ctx, output_format):
         jdict["conflicts"] = conflicts_writer.list_conflicts()
         jdict["state"] = "merging"
     else:
-        jdict["workingCopy"] = get_working_copy_status_json(repo)
+        jdict["workingCopy"] = get_working_copy_status_json(repo, list_untracked_tables)
 
     if output_format == "json":
         dump_json_output({"kart.status/v2": jdict}, sys.stdout)
-    else:
+    else:       
         click.echo(status_to_text(jdict))
-
-
+        
 def get_branch_status_json(repo):
     output = {"commit": None, "abbrevCommit": None, "branch": None, "upstream": None}
 
@@ -128,16 +132,37 @@ def get_branch_status_json(repo):
     return output
 
 
-def get_working_copy_status_json(repo):
+def get_working_copy_status_json(repo, list_untracked_tables):
     if repo.is_bare:
         return None
 
     result = {
         "parts": repo.working_copy.parts_status(),
-        "changes": get_diff_status_json(repo),
+        "changes": get_diff_status_json(repo)
     }
+    if list_untracked_tables:
+        result["untrackedTables"] = get_untracked_tables(repo)
+
+
     return result
 
+def get_untracked_tables(repo):
+    """Check for any untracked tables in working copy"""
+    wc = repo.working_copy.tabular 
+    untracked_tables = []
+
+    if wc is not None and wc.session() is not None:     
+        with wc.session() as sess:
+            wc_items = wc.adapter.list_tables(sess)
+        # Get all tables in working copy
+        all_tables = [table_name for table_name, title in wc_items.items()]
+        # Get tables shown in kart data ls
+        datasets_paths = [dataset.table_name for dataset in repo.datasets(filter_dataset_type="table")] 
+        # Get untracked tables
+        untracked_tables = list(set(all_tables) - set(datasets_paths))
+
+            
+    return untracked_tables
 
 def get_diff_status_json(repo):
     """
@@ -165,6 +190,13 @@ def status_to_text(jdict):
 
     if not is_merging and not is_empty:
         status_list.append(working_copy_status_to_text(jdict["workingCopy"]))
+
+        if jdict["workingCopy"] is not None and "untrackedTables" in jdict["workingCopy"]:
+            if jdict["workingCopy"]["untrackedTables"]:
+                status_list.append(untracked_tables_status_to_text(jdict["workingCopy"]["untrackedTables"]))
+            else:
+                status_list.append("No untracked tables found.")
+
 
     return "\n\n".join(status_list)
 
@@ -299,6 +331,14 @@ def diff_status_to_text(jdict):
                     continue
                 change_type_count = dataset_part_changes[json_type]
                 message.append(f"      {change_type_count} {change_type}")
+
+    return "\n".join(message)
+
+def untracked_tables_status_to_text(jdict):
+    message = []
+    message.append("Untracked tables:")
+    for table_path in jdict:
+        message.append(f"  {table_path}")
 
     return "\n".join(message)
 
