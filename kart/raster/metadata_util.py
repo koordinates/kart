@@ -1,7 +1,3 @@
-import json
-import subprocess
-
-from kart.cli_util import tool_environment
 from kart.crs_util import normalise_wkt
 from kart.geometry import ring_as_wkt
 from kart.list_of_conflicts import ListOfConflicts
@@ -58,15 +54,11 @@ def extract_raster_tile_metadata(
     describe *all* of the tiles in that dataset. The "tile" field is where we keep all information
     that can be different for every tile in the dataset, which is why it must be stored in pointer files.
     """
-    output = subprocess.check_output(
-        ["gdalinfo", "-json", raster_tile_path],
-        encoding="utf-8",
-        env=tool_environment(),
-    )
+    from osgeo import gdal
+
+    metadata = gdal.Info(raster_tile_path, options="-json")
 
     # NOTE: this format is still in early stages of design, is subject to change.
-
-    metadata = json.loads(output)
 
     crs = metadata["coordinateSystem"]["wkt"]
     format_info = {"fileType": "image/tiff; application=geotiff"}
