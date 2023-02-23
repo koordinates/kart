@@ -419,8 +419,17 @@ class PkGeneratingTableImportSource(TableImportSource):
         }
 
     def align_schema_to_existing_schema(self, existing_schema):
-        existing_schema_without_pk = Schema(existing_schema.non_pk_columns)
-        return self.delegate.align_schema_to_existing_schema(existing_schema_without_pk)
+        new_schema_with_pk = existing_schema.align_to_self(self._schema_with_pk)
+        assert len(new_schema_with_pk.pk_columns) == 1
+        self.pk_col = new_schema_with_pk.pk_columns[0]
+
+        self.delegate.align_schema_to_existing_schema(
+            Schema(new_schema_with_pk.non_pk_columns)
+        )
+        assert self.delegate.schema == new_schema_with_pk.non_pk_columns
+
+        self._schema_with_pk = Schema([self.pk_col] + list(self.delegate.schema))
+        assert self.schema == new_schema_with_pk
 
     def crs_definitions(self):
         return self.delegate.crs_definitions()
