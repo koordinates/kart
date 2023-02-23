@@ -2,7 +2,7 @@ import re
 
 
 def remove_tile_extension(filename):
-    """Given a tile filename, removes the suffix .las or .laz or .copc.las or .copc.laz"""
+    """Given a tile filename, removes the suffix .tif or .tiff"""
     match = re.fullmatch(r"(.+?)\.tiff?", filename, re.IGNORECASE)
     if match:
         return match.group(1)
@@ -12,6 +12,7 @@ def remove_tile_extension(filename):
 def set_tile_extension(filename, ext=None, tile_format=None):
     """Changes a tile's file extension to the given extension, or to the extension appropriate for its format."""
 
+    # Not much to do here since we only support one tile-format currently: a GeoTIFF that may or may not be COG.
     # TODO: maybe checkout as tif vs tiff should be user configurable.
     if ext is None:
         ext = ".tiff"

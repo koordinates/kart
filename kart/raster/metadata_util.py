@@ -64,13 +64,14 @@ def extract_raster_tile_metadata(
     format_info = {"fileType": "image/tiff; application=geotiff"}
 
     cc = metadata["cornerCoordinates"]
+    size_in_pixels = metadata["size"]
     tile_info = {
         "format": "geotiff",
         "crs84Extent": format_polygon(*metadata["wgs84Extent"]["coordinates"][0]),
         "extent": format_polygon(
             cc["upperLeft"], cc["lowerLeft"], cc["lowerRight"], cc["upperRight"]
         ),
-        "pixels": f"{metadata['size'][0]}x{metadata['size'][1]}",
+        "pixels": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
     }
 
     result = {

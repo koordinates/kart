@@ -80,12 +80,6 @@ L = logging.getLogger(__name__)
         "such a commit. This option bypasses the safety"
     ),
 )
-@click.option(
-    "--num-processes",
-    help="Parallel import using multiple processes. Not yet supported",
-    default=None,
-    hidden=True,
-)
 @click.option("--dataset-path", "--dataset", help="The dataset's path once imported")
 @click.argument(
     "args",
@@ -104,14 +98,12 @@ def raster_import(
     delete,
     amend,
     allow_empty,
-    num_processes,
     args,
 ):
     """
-    Experimental command for importing point cloud datasets. Work-in-progress.
-    Will eventually be merged with the main `import` command.
+    Experimental command for importing a dataset of raster tiles.
 
-    SOURCES should be one or more LAZ or LAS files (or wildcards that match multiple LAZ or LAS files).
+    SOURCES should be one or more GeoTIFF files (or wildcards that match multiple GeoTIFF files).
     """
     repo = ctx.obj.repo
 

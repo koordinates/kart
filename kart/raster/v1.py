@@ -15,7 +15,7 @@ class RasterV1(TileDataset):
 
     @classmethod
     def remove_tile_extension(cls, filename):
-        """Given a tile filename, removes the suffix .las or .laz or .copc.las or .copc.laz"""
+        """Given a tile filename, removes the suffix .tif or .tiff"""
         return remove_tile_extension(filename)
 
     @classmethod
