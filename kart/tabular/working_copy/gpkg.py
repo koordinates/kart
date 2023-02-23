@@ -502,7 +502,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
             )
 
     def _sno_tracking_name(self, trigger_type, dataset):
-        assert trigger_type in ("ins", "upd", "del")
+        assert trigger_type in ("ins", "upd", "del", "ntbl")
         assert dataset is not None
         # This is how the triggers are named in Sno 0.8.0 and earlier.
         # Newer repos that use kart branding use _kart_tracking_name.
@@ -549,6 +549,20 @@ class WorkingCopy_GPKG(TableWorkingCopy):
                 BEGIN
                     INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
                     VALUES (:table_name, OLD.{pk_column});
+                END;
+                """,
+                {"table_name": dataset.table_name},
+            )
+        )
+
+        sess.execute(
+            text_with_inlined_params(
+                f"""
+                CREATE TRIGGER {self._quoted_tracking_name('ntbl', dataset)}
+                   AFTER CREATE TABLE ON {self.GPKG_CONTENTS}
+                BEGIN
+                    INSERT INTO {self.KART_TRACK} (table_name, pk)
+                    VALUES (:table_name, {pk_column});
                 END;
                 """,
                 {"table_name": dataset.table_name},

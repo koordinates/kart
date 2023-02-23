@@ -116,7 +116,7 @@ class TableWorkingCopy(WorkingCopyPart):
         If dataset is supplied, the name will include dataset.table_name so that multiple triggers,
         one per dataset, can be created.
         """
-        assert trigger_type in ("trigger", "proc", "ins", "upd", "del")
+        assert trigger_type in ("trigger", "proc", "ins", "upd", "del", "ntbl")
         if self.repo.is_kart_branded:
             trigger_name = self._kart_tracking_name(trigger_type, dataset)
         else:
