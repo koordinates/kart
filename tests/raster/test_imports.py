@@ -1,6 +1,13 @@
+import pytest
+
+from kart import is_darwin
 from kart.repo import KartRepo
 
-
+# TODO - figure out what's wrong with gdal.Info in our build.
+@pytest.mark.skipif(
+    is_darwin,
+    reason="gdal.Info is not working on the macos build on CI",
+)
 def test_import_single_geotiff(
     tmp_path,
     chdir,
@@ -101,11 +108,11 @@ def test_import_single_geotiff(
                 "+   }",
                 "+ ]",
                 "+++ aerial:tile:aerial",
-                "+                                     name = aerial.tiff",
-                "+                              crs84Extent = POLYGON((175.1890852 -36.7923968,175.1892991 -36.7999096,175.1988427 -36.7997334,175.1986279 -36.7922207,175.1890852 -36.7923968))",
-                "+                                   extent = POLYGON((1795318.0 5925922.0,1795318.0 5925088.0,1796170.0 5925088.0,1796170.0 5925922.0))",
+                "+                                     name = aerial.tif",
+                "+                              crs84Extent = POLYGON((175.1890852 -36.7923968,175.1892991 -36.7999096,175.1988427 -36.7997334,175.1986279 -36.7922207,175.1890852 -36.7923968,175.1890852 -36.7923968))",
+                "+                               dimensions = 426x417",
                 "+                                   format = geotiff",
-                "+                                   pixels = 426x417",
+                "+                             nativeExtent = POLYGON((1795318.0 5925922.0,1795318.0 5925088.0,1796170.0 5925088.0,1796170.0 5925922.0,1795318.0 5925922.0))",
                 "+                                      oid = sha256:e6cbc8210f9cae3c8b72985e553e97af51fb9c20d17f5a06b7579943fed57b2c",
                 "+                                     size = 516216",
             ]

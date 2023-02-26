@@ -4,10 +4,6 @@ import click
 
 from kart.cli_util import StringFromFile, MutexOption, KartCommand
 from kart.completion_shared import file_path_completer
-from kart.exceptions import (
-    InvalidOperation,
-    INVALID_FILE_FORMAT,
-)
 from kart.parse_args import parse_import_sources_and_datasets
 from kart.raster.metadata_util import rewrite_and_merge_metadata
 from kart.raster.v1 import RasterV1

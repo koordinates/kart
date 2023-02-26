@@ -68,10 +68,10 @@ def extract_raster_tile_metadata(
     tile_info = {
         "format": "geotiff",
         "crs84Extent": format_polygon(*metadata["wgs84Extent"]["coordinates"][0]),
-        "extent": format_polygon(
+        "nativeExtent": format_polygon(
             cc["upperLeft"], cc["lowerLeft"], cc["lowerRight"], cc["upperRight"]
         ),
-        "pixels": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
+        "dimensions": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
     }
 
     result = {

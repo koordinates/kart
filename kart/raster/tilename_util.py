@@ -15,7 +15,7 @@ def set_tile_extension(filename, ext=None, tile_format=None):
     # Not much to do here since we only support one tile-format currently: a GeoTIFF that may or may not be COG.
     # TODO: maybe checkout as tif vs tiff should be user configurable.
     if ext is None:
-        ext = ".tiff"
+        ext = ".tif"
 
     return remove_tile_extension(filename) + ext
 
@@ -25,7 +25,7 @@ def get_tile_path_pattern(
 ):
     """
     Given a tilename eg "mytile" and a parent_path eg "myfolder",
-    returns a regex that accepts "myfolder/mytile.laz", "myfolder/mytile.LAZ", "myfolder/mytile.copc.laz", "myfolder/mytile.las", etc.
+    returns a regex that accepts "myfolder/mytile.tif", "myfolder/mytile.TIF", "myfolder/mytile.tiff", etc.
     Note that path separators need to be normalised to "/" before this is called (as they are in a Git diff).
 
     If tilename is not specified, the regex will match any non-empty tilename that contains no path separators, and this will
