@@ -1,4 +1,5 @@
 import binascii
+import itertools
 import json
 import math
 import re
@@ -704,8 +705,13 @@ def geom_envelope(gpkg_geom, only_2d=False, calculate_if_missing=False):
         return envelope
 
 
-def ring_as_wkt(*points):
-    return "(" + ",".join(f"{x} {y}" for x, y in points) + ")"
+def ring_as_wkt(*points, repeat_first_point=True):
+    if repeat_first_point:
+        points_iter = itertools.chain(points, [points[0]])
+    else:
+        points_iter = points
+
+    return "(" + ",".join(f"{x} {y}" for x, y in points_iter) + ")"
 
 
 def bbox_as_wkt_polygon(min_x, max_x, min_y, max_y):
@@ -716,7 +722,6 @@ def bbox_as_wkt_polygon(min_x, max_x, min_y, max_y):
             (max_x, min_y),
             (max_x, max_y),
             (min_x, max_y),
-            (min_x, min_y),
         )
         + ")"
     )

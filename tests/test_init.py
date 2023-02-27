@@ -1057,6 +1057,7 @@ def test_import_list_formats(data_archive_readonly, cli_runner):
             "MySQL",
             "ESRI Shapefile",
             "LAS (LASer)",
+            "GeoTIFF",
         ]
 
 

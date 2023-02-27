@@ -1,6 +1,5 @@
 from glob import glob
 import json
-import re
 import shutil
 import subprocess
 import pytest
@@ -12,9 +11,8 @@ from kart.exceptions import (
     UNCOMMITTED_CHANGES,
     NO_CHANGES,
 )
-from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
-from .fixtures import requires_pdal, requires_git_lfs  # noqa
+from .fixtures import requires_pdal  # noqa
 from . import assert_lines_almost_equal
 
 DUMMY_REPO = "git@example.com/example.git"
@@ -31,23 +29,14 @@ def count_head_tile_changes(cli_runner, dataset_path):
     return inserts, updates, deletes
 
 
-LFS_OID_PATTERN = re.compile("[0-9a-fA-F]{64}")
-
-
-def check_lfs_hashes(repo, expected_file_count):
-    file_count = 0
-    for file in (repo.gitdir_path / "lfs" / "objects").glob("**/*"):
-        if not file.is_file() or not LFS_OID_PATTERN.fullmatch(file.name):
-            continue
-        file_count += 1
-        file_hash, size = get_hash_and_size_of_file(file)
-        assert file_hash == file.name
-
-    assert file_count == expected_file_count
-
-
 def test_import_single_las(
-    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
+    tmp_path,
+    chdir,
+    cli_runner,
+    data_archive_readonly,
+    check_lfs_hashes,
+    requires_pdal,
+    requires_git_lfs,
 ):
     with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
         repo_path = tmp_path / "point-cloud-repo"
@@ -151,6 +140,7 @@ def test_import_several_laz(
     chdir,
     cli_runner,
     data_archive_readonly,
+    check_lfs_hashes,
     requires_pdal,
     requires_git_lfs,
 ):
@@ -233,6 +223,7 @@ def test_import_single_laz_no_convert(
     chdir,
     cli_runner,
     data_archive_readonly,
+    check_lfs_hashes,
     requires_pdal,
     requires_git_lfs,
 ):

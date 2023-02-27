@@ -161,6 +161,8 @@ class ColumnSchema(dict):
         "primaryKeyIndex",
         "geometryType",
         "geometryCRS",
+        "size",
+        "length",
     )
 
     @classmethod

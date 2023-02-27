@@ -16,6 +16,7 @@ class ImportType(Enum):
     SQLALCHEMY_TABLE = auto()
     OGR_TABLE = auto()
     POINT_CLOUD = auto()
+    RASTER = auto()
 
     @property
     def import_cmd(self):
@@ -27,6 +28,10 @@ class ImportType(Enum):
             from kart.point_cloud.import_ import point_cloud_import
 
             return point_cloud_import
+        elif self is self.RASTER:
+            from kart.raster.import_ import raster_import
+
+            return raster_import
 
     @property
     def import_source_class(self):
@@ -123,6 +128,13 @@ ALL_IMPORT_SOURCE_TYPES = [
         "PATH.las or PATH.laz",
         ImportType.POINT_CLOUD,
         file_ext=(".las", ".laz"),
+    ),
+    # Raster imports:
+    ImportSourceType(
+        "GeoTIFF",
+        "PATH.tif or PATH.tiff",
+        ImportType.RASTER,
+        file_ext=(".tif", ".tiff"),
     ),
 ]
 
