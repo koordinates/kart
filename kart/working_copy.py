@@ -392,6 +392,11 @@ class WorkingCopyPart:
         """Returns True if this part has uncommitted changes, False if it does not."""
         raise NotImplementedError()
 
+    def is_table_dirty(self, table_name):
+        """Returns True if this part has uncommitted changes, False if it does not."""
+        raise NotImplementedError()
+
+
     def assert_matches_head_tree(self):
         """
         Checks that this part of the working copy is based on the HEAD tree, according to the kart-state table.

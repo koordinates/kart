@@ -429,8 +429,17 @@ class TableWorkingCopy(WorkingCopyPart):
         except WorkingCopyDirty:
             return True
 
+    def is_table_dirty(self, table_name):
+        if self.get_tree_id() is None:
+            return False
+        try:
+            self.diff_repo_to_working_copy(table_name=table_name, raise_if_dirty=True)
+            return False
+        except WorkingCopyDirty:
+            return True
+
     def diff_repo_to_working_copy(
-        self, repo_filter=RepoKeyFilter.MATCH_ALL, raise_if_dirty=False
+        self, repo_filter=RepoKeyFilter.MATCH_ALL, raise_if_dirty=False, table_name=None
     ):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
@@ -445,10 +454,20 @@ class TableWorkingCopy(WorkingCopyPart):
             ):
                 if not self._is_dataset_supported(dataset):
                     continue
+
                 ds_diff = self.diff_dataset_to_working_copy(
                     dataset,
                     ds_filter=repo_filter[dataset.path],
                     raise_if_dirty=raise_if_dirty,
+                )
+
+                if table_name is not None and table_name != dataset.table_name:
+                    continue
+                ds_diff = self.diff_dataset_to_working_copy(
+                    dataset,
+                    ds_filter=repo_filter[dataset.path],
+                    raise_if_dirty=raise_if_dirty,
+                    table_name=table_name,
                 )
                 repo_diff[dataset.path] = ds_diff
             repo_diff.prune()
@@ -482,6 +501,7 @@ class TableWorkingCopy(WorkingCopyPart):
         ds_diff["meta"] = meta_diff
         ds_diff["feature"] = feature_diff
         return ds_diff
+
 
     def diff_dataset_to_working_copy_meta(self, dataset, raise_if_dirty=False):
         """
@@ -614,9 +634,11 @@ class TableWorkingCopy(WorkingCopyPart):
             )
 
     def diff_dataset_to_working_copy_feature(
-        self, dataset, feature_filter, meta_diff, raise_if_dirty=False
+            #in my case no dataset, go through every single feature in the working copy
+        self, dataset=None, table_name=None, feature_filter=None, meta_diff=None, raise_if_dirty=False
     ):
         schema_delta = meta_diff.get("schema.json")
+        breakpoint()
 
         if schema_delta and schema_delta.type == "delete":
             # The entire table has been deleted - add delete deltas for every feature.
@@ -632,7 +654,7 @@ class TableWorkingCopy(WorkingCopyPart):
                 delta_type=Delta.delete, flags=WORKING_COPY_EDIT
             ) + self.all_features_diff(dataset, meta_diff, delta_type=Delta.delete)
 
-        pk_field = dataset.schema.pk_columns[0].name
+        pk_field = dataset.schema.pk_columns[0].name # dataset exists and in wc potentially has  changes
         find_renames = self.can_find_renames(meta_diff)
 
         with self.session() as sess:
@@ -641,8 +663,11 @@ class TableWorkingCopy(WorkingCopyPart):
             feature_diff = DeltaDiff()
             insert_count = delete_count = 0
 
+            # Feature diff how it works
+
             for row in r:
                 track_pk = row[0]  # This is always a str
+                # Call sql query to get everything except track_pk
                 db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
 
                 if db_obj[pk_field] is None:
@@ -659,6 +684,8 @@ class TableWorkingCopy(WorkingCopyPart):
 
                 if raise_if_dirty:
                     raise WorkingCopyDirty()
+
+                #What we do now
 
                 if db_obj and not repo_obj:  # INSERT
                     insert_count += 1
@@ -745,7 +772,9 @@ class TableWorkingCopy(WorkingCopyPart):
         Does a join on the tracking table and the table for the given dataset, and returns a result
         containing all the rows that have been inserted / updated / deleted.
         """
+        # Sets SQL Alchemy (3 lines):
         schema = self._get_dataset_schema(dataset, meta_diff)
+        breakpoint()
 
         kart_track = self.kart_tables.kart_track
         table = self._table_def_for_schema(schema, dataset.table_name)
@@ -765,7 +794,7 @@ class TableWorkingCopy(WorkingCopyPart):
                 pk_expr,
             )
         )
-
+        breakpoint()
         if feature_filter.match_all:
             query = base_query.where(kart_track.c.table_name == dataset.table_name)
         else:

@@ -744,11 +744,15 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def dirty_paths(self):
         env = tool_environment()
         env["GIT_INDEX_FILE"] = str(self.index_path)
+        table_name = sys.argv[1]
 
         try:
             # This finds all files in the index that have been modified - and updates any mtimes in the index
             # if the mtimes are stale but the files are actually unchanged (as in GIT_DIFF_UPDATE_INDEX).
-            cmd = ["git", "diff", "--name-only"]
+            if table_name is None:
+                cmd = ["git", "diff", "--name-only"]
+            else:
+                cmd = ["git", "diff", "--name-only", table_name]
             output_lines = (
                 subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
                 .strip()
