@@ -120,7 +120,8 @@
             "environment": {
                 "CI": "true",
                 "KART_EXPECT_PDAL": "1",
-                "KART_EXPECT_GIT_LFS": "1"
+                "KART_EXPECT_GIT_LFS": "1",
+                "KART_EXPECT_GDAL_INFO": "1"
             }
         },
         {
@@ -135,7 +136,8 @@
             "inherits": "ci-base",
             "configurePreset": "ci-macos",
             "environment": {
-                "KART_EXPECT_MSSQLDRIVER": "0"
+                "KART_EXPECT_MSSQLDRIVER": "0",
+                "KART_EXPECT_GDAL_INFO": "0"
             }
         },
         {

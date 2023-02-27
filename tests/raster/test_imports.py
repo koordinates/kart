@@ -1,22 +1,17 @@
-import pytest
-
-from kart import is_darwin
 from kart.repo import KartRepo
+from .fixtures import requires_gdal_info  # noqa
 
-# TODO - figure out what's wrong with gdal.Info in our build.
-@pytest.mark.skipif(
-    is_darwin,
-    reason="gdal.Info is not working on the macos build on CI",
-)
+
 def test_import_single_geotiff(
     tmp_path,
     chdir,
     cli_runner,
     data_archive_readonly,
     check_lfs_hashes,
+    requires_gdal_info,
     requires_git_lfs,
 ):
-    with data_archive_readonly("raster/aerial.tgz") as aerial:
+    with data_archive_readonly("raster/tif-aerial.tgz") as aerial:
         repo_path = tmp_path / "raster-repo"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0, r.stderr

@@ -56,7 +56,7 @@ def extract_raster_tile_metadata(
     """
     from osgeo import gdal
 
-    metadata = gdal.Info(raster_tile_path, options="-json")
+    metadata = gdal.Info(str(raster_tile_path), options="-json")
 
     # NOTE: this format is still in early stages of design, is subject to change.
 

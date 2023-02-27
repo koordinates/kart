@@ -281,7 +281,7 @@ def data_archive(request, tmp_path_factory):
 _archive_hashes = {}
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def data_archive_readonly(request, pytestconfig):
     """
     Extract a .tgz data archive to a temporary folder, and CACHE it in the pytest cache.

@@ -38,9 +38,9 @@ def get_tile_path_pattern(
     parent_pattern = (
         re.escape(parent_path.rstrip("/") + "/") if parent_path is not None else ""
     )
-    tile_pattern = re.escape(tilename) if tilename is not None else r"([^/]+)"
+    tile_pattern = re.escape(tilename) if tilename is not None else r"([^/.][^/]*)"
     version_pattern = (
         r"(?:\.ancestor|\.ours|\.theirs)?" if include_conflict_versions else ""
     )
-    ext_pattern = r"\.[Tt][If][Ff][Ff]?"
+    ext_pattern = r"\.[Tt][Ii][Ff][Ff]?"
     return re.compile(parent_pattern + tile_pattern + version_pattern + ext_pattern)

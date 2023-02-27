@@ -46,6 +46,16 @@ class PointCloudV1(TileDataset):
     def extract_tile_metadata_from_filesystem_path(cls, path):
         return extract_pc_tile_metadata(path)
 
+    @classmethod
+    def get_tile_path_pattern(
+        cls, tilename=None, *, parent_path=None, include_conflict_versions=False
+    ):
+        return get_tile_path_pattern(
+            tilename,
+            parent_path=parent_path,
+            include_conflict_versions=include_conflict_versions,
+        )
+
     def diff_to_working_copy(
         self,
         workdir_diff_cache,
