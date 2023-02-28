@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 import click
-import pygit2
 
 from kart import diff_util
 from kart.diff_structs import FILES_KEY, WORKING_COPY_EDIT, BINARY_FILE, Delta
@@ -16,6 +15,7 @@ from kart.promisor_utils import FetchPromisedBlobsProcess, object_is_promised
 from kart.repo import KartRepoState
 from kart.spatial_filter import SpatialFilter
 from kart.serialise_util import b64encode_str
+from kart.tile import ALL_TILE_DATASET_TYPES
 
 
 L = logging.getLogger("kart.diff_writer")
@@ -470,10 +470,8 @@ class BaseDiffWriter:
         dataset = self._get_old_or_new_dataset(ds_path)
         if dataset.DATASET_TYPE == "table":
             return self._get_old_and_new_table_crs(ds_path, ds_diff, context=context)
-        elif dataset.DATASET_TYPE == "point-cloud":
-            return self._get_old_and_new_point_cloud_crs(
-                ds_path, ds_diff, context=context
-            )
+        elif dataset.DATASET_TYPE in ALL_TILE_DATASET_TYPES:
+            return self._get_old_and_new_tile_crs(ds_path, ds_diff, context=context)
         raise RuntimeError(
             f"Can't load old and new CRS for dataset of type {dataset.DATASET_TYPE}"
         )
@@ -514,7 +512,7 @@ class BaseDiffWriter:
         crs = make_crs(crs_defs[0], context=ds_path)
         return crs, crs
 
-    def _get_old_and_new_point_cloud_crs(self, ds_path, ds_diff, context=None):
+    def _get_old_and_new_tile_crs(self, ds_path, ds_diff, context=None):
         from kart.crs_util import make_crs
 
         # If the CRS is changing during the diff, we extract the two CRS from the diff.
@@ -584,8 +582,8 @@ class BaseDiffWriter:
         dataset = self._get_old_or_new_dataset(ds_path)
         if dataset.DATASET_TYPE == "table":
             return self._get_table_spatial_filters(ds_path, ds_diff)
-        elif dataset.DATASET_TYPE == "point-cloud":
-            return self._get_point_cloud_spatial_filters(ds_path, ds_diff)
+        elif dataset.DATASET_TYPE in ALL_TILE_DATASET_TYPES:
+            return self._get_tile_spatial_filters(ds_path, ds_diff)
         raise RuntimeError(
             f"Spatial filtering is not supported for dataset of type {dataset.DATASET_TYPE}"
         )
@@ -608,18 +606,18 @@ class BaseDiffWriter:
         )
         return old_spatial_filter, new_spatial_filter
 
-    def _get_point_cloud_spatial_filters(self, ds_path, ds_diff):
-        old_crs, new_crs = self._get_old_and_new_point_cloud_crs(
+    def _get_tile_spatial_filters(self, ds_path, ds_diff):
+        old_crs, new_crs = self._get_old_and_new_tile_crs(
             ds_path, ds_diff, context="spatial filtering"
         )
         sf = self.spatial_filter
         old_spatial_filter = (
-            sf.transform_for_point_cloud_crs(old_crs, ds_path)
+            sf.transform_for_tile_crs(old_crs, ds_path)
             if old_crs
             else SpatialFilter.MATCH_ALL
         )
         new_spatial_filter = (
-            sf.transform_for_point_cloud_crs(new_crs, ds_path)
+            sf.transform_for_tile_crs(new_crs, ds_path)
             if new_crs
             else SpatialFilter.MATCH_ALL
         )

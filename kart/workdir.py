@@ -32,15 +32,13 @@ from kart.output_util import InputMode, get_input_mode
 from kart.reflink_util import try_reflink
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
+from kart.tile import ALL_TILE_DATASET_TYPES
 from kart.tile.tile_dataset import TileDataset
 from kart.tile.tilename_util import remove_any_tile_extension
 from kart.working_copy import WorkingCopyPart
 
 
 Base = declarative_base()
-
-ALL_TILE_DATASET_TYPES = TileDataset.ALL_TILE_DATASET_TYPES
-
 
 L = logging.getLogger("kart.workdir")
 
