@@ -1,6 +1,7 @@
 import re
 
 from .metadata_util import is_copc
+from kart.tile.tilename_util import TILE_BASENAME_PATTERN
 
 
 def remove_tile_extension(filename):

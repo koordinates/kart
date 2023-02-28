@@ -220,14 +220,20 @@ class ColumnSchema(dict):
 
     @property
     def id(self):
+        """Kart-specific identifier for a column that stays unchanged through renames. Used in table-dataset schemas."""
         return self.get("id")
 
     @property
     def name(self):
+        """User-visible name of the column. Used in table-dataset and point-cloud-dataset schemas."""
         return self.get("name")
 
     @property
     def interpretation(self):
+        """
+        Information on how to interpret a raster band - ie as a particular color, or as an index into a color table.
+        Used in raster-dataset schemas.
+        """
         return self.get("interpretation")
 
     @property

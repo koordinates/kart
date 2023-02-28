@@ -415,7 +415,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         Get the diff-to-apply needed to reset a particular dataset - currently based on base_datasets[ds_path] -
         to the target state at target_datasets[ds_path]."""
         ds_diff = ~base_datasets[ds_path].diff_to_working_copy(
-            workdir_diff_cache, ds_filter=ds_filter, skip_pdal=True
+            workdir_diff_cache, ds_filter=ds_filter, extract_metadata=False
         )
         if base_datasets != target_datasets:
             ds_diff = DatasetDiff.concatenated(

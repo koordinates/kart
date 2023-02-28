@@ -1,5 +1,7 @@
 import re
 
+from kart.tile.tilename_util import TILE_BASENAME_PATTERN
+
 
 def remove_tile_extension(filename):
     """Given a tile filename, removes the suffix .tif or .tiff"""
@@ -38,7 +40,9 @@ def get_tile_path_pattern(
     parent_pattern = (
         re.escape(parent_path.rstrip("/") + "/") if parent_path is not None else ""
     )
-    tile_pattern = re.escape(tilename) if tilename is not None else r"([^/.][^/]*)"
+    tile_pattern = (
+        re.escape(tilename) if tilename is not None else TILE_BASENAME_PATTERN
+    )
     version_pattern = (
         r"(?:\.ancestor|\.ours|\.theirs)?" if include_conflict_versions else ""
     )
