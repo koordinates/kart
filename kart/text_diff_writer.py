@@ -244,8 +244,8 @@ class TextDiffWriter(BaseDiffWriter):
 
     @classmethod
     def _diff_schema(cls, old_schema, new_schema):
-        old_ids = [c.id_or_name_or_interpretation for c in old_schema]
-        new_ids = [c.id_or_name_or_interpretation for c in new_schema]
+        old_ids = [c.best_identifier for c in old_schema]
+        new_ids = [c.best_identifier for c in new_schema]
 
         def transform(id_pair):
             old_id, new_id = id_pair
