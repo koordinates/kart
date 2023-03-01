@@ -242,8 +242,10 @@ def update_workingcopy_with_resolve(
         if workdir is None:
             return
         dataset = load_dataset(rich_conflict)
-        workdir.delete_tiles(
-            rich_conflict.as_key_filter(), including_conflict_versions=True
+        workdir.delete_tiles_for_dataset(
+            dataset,
+            rich_conflict.as_key_filter()[dataset.path],
+            including_conflict_versions=True,
         )
         for r in res:
             tilename = dataset.tilename_from_path(r.path)

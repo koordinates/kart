@@ -33,6 +33,8 @@ class TileDataset(BaseDataset):
     Tiles are checked out into the file-system part of the working copy (see workdir.py)
     """
 
+    ALL_TILE_DATASET_TYPES = ("point-cloud", "raster")
+
     ITEM_TYPE = "tile"
 
     WORKING_COPY_PART_TYPE = PartType.WORKDIR

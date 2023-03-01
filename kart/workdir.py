@@ -29,15 +29,17 @@ from kart.lfs_util import get_local_path_from_lfs_hash
 from kart.lfs_commands import fetch_lfs_blobs_for_pointer_files
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import InputMode, get_input_mode
-from kart.point_cloud.v1 import PointCloudV1
-from kart.point_cloud.tilename_util import remove_tile_extension, get_tile_path_pattern
 from kart.reflink_util import try_reflink
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
+from kart.tile.tile_dataset import TileDataset
+from kart.tile.tilename_util import remove_any_tile_extension
 from kart.working_copy import WorkingCopyPart
 
 
 Base = declarative_base()
+
+ALL_TILE_DATASET_TYPES = TileDataset.ALL_TILE_DATASET_TYPES
 
 
 L = logging.getLogger("kart.workdir")
@@ -179,7 +181,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def delete(self):
         """Deletes the index file and state table, and attempts to clean up any datasets in the workdir itself."""
         datasets = self.repo.datasets(
-            self.get_tree_id(), filter_dataset_type="point-cloud"
+            self.get_tree_id(), filter_dataset_type=ALL_TILE_DATASET_TYPES
         )
         self.delete_datasets_from_workdir(datasets, track_changes_as_dirty=True)
 
@@ -252,11 +254,13 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             return False
 
         datasets = self.repo.datasets(
-            self.get_tree_id(), filter_dataset_type="point-cloud"
+            self.get_tree_id(), filter_dataset_type=ALL_TILE_DATASET_TYPES
         )
         workdir_diff_cache = self.workdir_diff_cache()
         for dataset in datasets:
-            ds_tiles_path_pattern = get_tile_path_pattern(parent_path=dataset.path)
+            ds_tiles_path_pattern = dataset.get_tile_path_pattern(
+                parent_path=dataset.path
+            )
             for tile_path in workdir_diff_cache.dirty_paths_for_dataset(dataset):
                 if ds_tiles_path_pattern.fullmatch(tile_path):
                     return True
@@ -320,7 +324,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         base_datasets = self.repo.datasets(
             base_tree,
             repo_key_filter=repo_key_filter,
-            filter_dataset_type="point-cloud",
+            filter_dataset_type=ALL_TILE_DATASET_TYPES,
         ).datasets_by_path()
         if base_tree == target_tree:
             target_datasets = base_datasets
@@ -328,7 +332,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             target_datasets = self.repo.datasets(
                 target_tree,
                 repo_key_filter=repo_key_filter,
-                filter_dataset_type="point-cloud",
+                filter_dataset_type=ALL_TILE_DATASET_TYPES,
             ).datasets_by_path()
 
         ds_inserts = target_datasets.keys() - base_datasets.keys()
@@ -411,7 +415,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         Get the diff-to-apply needed to reset a particular dataset - currently based on base_datasets[ds_path] -
         to the target state at target_datasets[ds_path]."""
         ds_diff = ~base_datasets[ds_path].diff_to_working_copy(
-            workdir_diff_cache, ds_filter=ds_filter, skip_pdal=True
+            workdir_diff_cache, ds_filter=ds_filter, extract_metadata=False
         )
         if base_datasets != target_datasets:
             ds_diff = DatasetDiff.concatenated(
@@ -460,7 +464,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def write_full_datasets_to_workdir(self, datasets, track_changes_as_dirty=False):
         dataset_count = len(datasets)
         for i, dataset in enumerate(datasets):
-            assert isinstance(dataset, PointCloudV1)
+            assert isinstance(dataset, TileDataset)
 
             click.echo(
                 f"Writing tiles for dataset {i+1} of {dataset_count}: {dataset.path}",
@@ -486,7 +490,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
     def delete_datasets_from_workdir(self, datasets, track_changes_as_dirty=False):
         for dataset in datasets:
-            assert isinstance(dataset, PointCloudV1)
+            assert isinstance(dataset, TileDataset)
 
             ds_tiles_dir = (self.path / dataset.path).resolve()
             # Sanity check to make sure we're not deleting something we shouldn't.
@@ -501,6 +505,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def delete_tiles(
         self,
         repo_key_filter,
+        datasets,
         *,
         track_changes_as_dirty=True,
         including_conflict_versions=False,
@@ -519,33 +524,50 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             )
 
         for ds_path, ds_filter in repo_key_filter.items():
-            tile_filter = ds_filter.get("tile")
-            if not tile_filter:
-                continue
-            ds_tiles_dir = (self.path / ds_path).resolve()
-            if not ds_tiles_dir.is_dir():
-                continue
-            # Sanity check to make sure we're not messing with files we shouldn't:
-            assert self.path in ds_tiles_dir.parents
-            assert self.repo.workdir_path in ds_tiles_dir.parents
-            if tile_filter.match_all:
-                raise NotImplementedError(
-                    "delete_tiles currently only supports deleting specific tiles, not match_all"
-                )
+            dataset = datasets[ds_path]
+            self.delete_tiles_for_dataset(
+                dataset,
+                ds_filter,
+                track_changes_as_dirty=track_changes_as_dirty,
+                including_conflict_versions=including_conflict_versions,
+            )
 
-            reset_index_files = []
-            for tilename in tile_filter:
-                name_pattern = get_tile_path_pattern(
-                    tilename, include_conflict_versions=including_conflict_versions
-                )
-                for child in ds_tiles_dir.glob(tilename + ".*"):
-                    if name_pattern.fullmatch(child.name) and child.is_file():
-                        child.unlink()
-                        if not track_changes_as_dirty:
-                            reset_index_files.append(f"{ds_path}/{child.name}")
+    def delete_tiles_for_dataset(
+        self,
+        dataset,
+        ds_filter,
+        *,
+        track_changes_as_dirty=True,
+        including_conflict_versions=False,
+    ):
+        tile_filter = ds_filter.get("tile")
+        if not tile_filter:
+            return
+        ds_tiles_dir = (self.path / dataset.path).resolve()
+        if not ds_tiles_dir.is_dir():
+            return
 
-            if not track_changes_as_dirty:
-                self._reset_workdir_index_for_files(reset_index_files)
+        # Sanity check to make sure we're not messing with files we shouldn't:
+        assert self.path in ds_tiles_dir.parents
+        assert self.repo.workdir_path in ds_tiles_dir.parents
+        if tile_filter.match_all:
+            raise NotImplementedError(
+                "delete_tiles currently only supports deleting specific tiles, not match_all"
+            )
+
+        reset_index_files = []
+        for tilename in tile_filter:
+            name_pattern = dataset.get_tile_path_pattern(
+                tilename, include_conflict_versions=including_conflict_versions
+            )
+            for child in ds_tiles_dir.glob(tilename + ".*"):
+                if name_pattern.fullmatch(child.name) and child.is_file():
+                    child.unlink()
+                    if not track_changes_as_dirty:
+                        reset_index_files.append(f"{dataset.path}/{child.name}")
+
+        if not track_changes_as_dirty:
+            self._reset_workdir_index_for_files(reset_index_files)
 
     def _update_dataset_in_workdir(
         self, ds_path, diff_to_apply, ds_filter, track_changes_as_dirty
@@ -639,7 +661,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         def matches_repo_key_filter(path):
             path = Path(path.replace("\\", "/"))
             ds_path = str(path.parents[0])
-            tile_name = remove_tile_extension(path.name)
+            tile_name = remove_any_tile_extension(path.name)
             return repo_key_filter.recursive_get([ds_path, "tile", tile_name])
 
         # Use git update-index to reset these paths - we can't use git add directly since
@@ -683,8 +705,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         supplied, and the other is what was actually committed.
         These need to be updated in the workdir so that the workdir reflects what was committed.
         """
-        for ds_path in datasets.paths():
-            tile_diff = committed_diff.recursive_get([ds_path, "tile"])
+        for dataset in datasets:
+            tile_diff = committed_diff.recursive_get([dataset.path, "tile"])
             if not tile_diff:
                 continue
             for tile_delta in tile_diff.values():
@@ -692,21 +714,21 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 if new_value is None:
                     continue
                 if "sourceName" in new_value or "sourceFormat" in new_value:
-                    self._hard_reset_converted_tile(ds_path, tile_delta)
+                    self._hard_reset_converted_tile(dataset, tile_delta)
 
-    def _hard_reset_converted_tile(self, ds_path, tile_delta):
+    def _hard_reset_converted_tile(self, dataset, tile_delta):
         """
         Update an individual tile in the workdir so that it reflects what was actually committed.
         """
-        tilename = remove_tile_extension(tile_delta.new_value["name"])
+        tilename = dataset.remove_tile_extension(tile_delta.new_value["name"])
 
-        ds_tiles_dir = (self.path / ds_path).resolve()
+        ds_tiles_dir = (self.path / dataset.path).resolve()
         # Sanity check to make sure we're not messing with files we shouldn't:
         assert self.path in ds_tiles_dir.parents
         assert self.repo.workdir_path in ds_tiles_dir.parents
         assert ds_tiles_dir.is_dir()
 
-        name_pattern = get_tile_path_pattern(tilename)
+        name_pattern = dataset.get_tile_path_pattern(tilename)
         for child in ds_tiles_dir.glob(tilename + ".*"):
             if name_pattern.fullmatch(child.name) and child.is_file():
                 child.unlink()
@@ -729,7 +751,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         datasets = self.repo.datasets(
             commit_or_tree,
             repo_key_filter=mark_as_clean,
-            filter_dataset_type="point-cloud",
+            filter_dataset_type=ALL_TILE_DATASET_TYPES,
         )
 
         # Handle tiles that were, eg, converted to COPC during the commit - the non-COPC
@@ -737,7 +759,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         self._hard_reset_after_commit_for_converted_tiles(datasets, committed_diff)
 
         self._reset_workdir_index_for_datasets(datasets, repo_key_filter=mark_as_clean)
-        self.delete_tiles(now_outside_spatial_filter, track_changes_as_dirty=False)
+        self.delete_tiles(
+            now_outside_spatial_filter, datasets, track_changes_as_dirty=False
+        )
 
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
 

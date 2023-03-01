@@ -220,15 +220,35 @@ class ColumnSchema(dict):
 
     @property
     def id(self):
+        """Kart-specific identifier for a column that stays unchanged through renames. Used in table-dataset schemas."""
         return self.get("id")
 
     @property
     def name(self):
+        """User-visible name of the column. Used in table-dataset and point-cloud-dataset schemas."""
         return self.get("name")
 
     @property
-    def id_or_name(self):
-        return self.get("id") if "id" in self else self.get("name")
+    def interpretation(self):
+        """
+        Information on how to interpret a raster band - ie as a particular color, or as an index into a color table.
+        Used in raster-dataset schemas.
+        """
+        return self.get("interpretation")
+
+    @property
+    def id_or_name_or_interpretation(self):
+        """
+        Different types of schemas have these various ways of identifying themselves.
+        When we do schema diffs, it makes them more readable if we match up the columns using this property.
+        """
+        if "id" in self:
+            return self.get("id")
+        if "name" in self:
+            return self.get("name")
+        if "interpretation" in self:
+            return self.get("interpretation")
+        return None
 
     @property
     def pk_index(self):
@@ -317,7 +337,11 @@ class Schema(tuple):
         """Return the _i_th ColumnSchema, or, the ColumnSchema with the given ID or name."""
         if isinstance(i, str):
             try:
-                return next(c for c in self.columns if c.id == i or c.name == i)
+                return next(
+                    c
+                    for c in self.columns
+                    if c.id == i or c.name == i or c.interpretation == i
+                )
             except StopIteration:
                 raise KeyError(f"No such column: {i}")
 
