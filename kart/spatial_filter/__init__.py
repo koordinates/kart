@@ -23,6 +23,7 @@ from kart.output_util import dump_json_output
 from kart.promisor_utils import object_is_promised
 from kart.repo import KartRepoState
 from kart.serialise_util import hexhash
+from kart.tile import ALL_TILE_DATASET_TYPES
 
 L = logging.getLogger("kart.spatial_filter")
 
@@ -661,8 +662,8 @@ class OriginalSpatialFilter(SpatialFilter):
 
         if dataset.DATASET_TYPE == "table":
             return self.transform_for_table_dataset(dataset)
-        elif dataset.DATASET_TYPE == "point-cloud":
-            return self.transform_for_point_cloud_dataset(dataset)
+        elif dataset.DATASET_TYPE in ALL_TILE_DATASET_TYPES:
+            return self.transform_for_tile_dataset(dataset)
         raise RuntimeError(
             f"Spatial filtering is not supported for a dataset of type {dataset.DATASET_TYPE}"
         )
@@ -715,7 +716,7 @@ class OriginalSpatialFilter(SpatialFilter):
             crs, extract_geometry=extract_geometry, ds_path=ds_path
         )
 
-    def transform_for_point_cloud_dataset(self, dataset):
+    def transform_for_tile_dataset(self, dataset):
         """
         Transform this spatial filter so that it matches the CRS of the given dataset.
         The resulting spatial filter will also have the extract_geometry function set such that
@@ -724,13 +725,13 @@ class OriginalSpatialFilter(SpatialFilter):
         if self.match_all:
             return SpatialFilter._MATCH_ALL
 
-        return self.transform_for_point_cloud_crs(
+        return self.transform_for_tile_crs(
             dataset.get_meta_item("crs.wkt"), ds_path=dataset.path
         )
 
-    def transform_for_point_cloud_crs(self, crs, ds_path=None):
+    def transform_for_tile_crs(self, crs, ds_path=None):
         """
-        Similar to transform_for_point_cloud_dataset above, but can also be used without a dataset object - for example,
+        Similar to transform_for_tile_dataset above, but can also be used without a dataset object - for example,
         to apply the spatial filter to a working-copy directory which might not exactly match any dataset.
 
         crs - the crs definition of the dataset or directory.
@@ -742,8 +743,11 @@ class OriginalSpatialFilter(SpatialFilter):
         def extract_geometry(tile):
             if getattr(tile, "type", None) == pygit2.GIT_OBJ_BLOB:
                 tile = pointer_file_bytes_to_dict(tile)
-            native_extent = tile["nativeExtent"].split(",")
-            return Geometry.from_bbox(*native_extent[:4])
+            native_extent = tile["nativeExtent"]
+            if native_extent.startswith("POLYGON"):
+                return Geometry.from_wkt(native_extent)
+            else:
+                return Geometry.from_bbox(*native_extent.split(",")[:4])
 
         return self._transform_for_crs(
             crs, extract_geometry=extract_geometry, demote_to_2d=True, ds_path=ds_path
