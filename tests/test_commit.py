@@ -1,3 +1,5 @@
+from ast import Dict
+from datetime import datetime
 import json
 import re
 import shlex
@@ -12,6 +14,8 @@ from kart.exceptions import (
     NO_DATA,
     NO_REPOSITORY,
     SCHEMA_VIOLATION,
+    NO_CHANGES,
+    NotFound
 )
 from kart.commit import fallback_editor
 from kart.repo import KartRepo
@@ -326,3 +330,141 @@ def test_commit_schema_violation(cli_runner, data_working_copy):
             "nz_pa_points_topo_150k: In column 'macronated' value 'kinda' exceeds limit of 1 characters",
             "Error: Schema violation - values do not match schema",
         ]
+
+
+def test_commit_table_json_output(cli_runner, data_working_copy):
+    new_table = "test_table"
+    message = "test commit"
+    with data_working_copy("points") as (path, wc):
+        repo = KartRepo(path)
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                f"""CREATE TABLE IF NOT EXISTS {new_table} (test_id int primary key, field1 text, field2 text);"""
+            )
+            sess.execute(
+                f"""INSERT INTO {new_table} (test_id, field1, field2)
+                VALUES
+                    (1, 'value1a', 'value1b'),
+                    (2, 'value2a', 'value2b'),
+                    (3, 'value3a', 'value3b'),
+                    (4, 'value4a', 'value4b'),
+                    (5, 'value5a', 'value5b');"""
+            )
+
+        r = cli_runner.invoke(["add-dataset", new_table, "-m", message, "-o", "json"])
+
+        assert r.exit_code == 0, r
+
+        author = repo.head_commit.author
+
+        expected_output: Dict[str, Dict[str, any]] = {
+        "kart.commit/v1": {
+            "commit": str(repo.head.target),
+            "abbrevCommit": str(repo.head.target)[:7],
+            # Check later: author should probably be author.name but in commit.py l284 it is author.email:
+            "author": author.email,
+            "committer": author.email,
+            "branch": "main",
+            "message": message,
+            "changes": {
+                new_table: {
+                    "meta": {
+                        "inserts": 1
+                    },
+                    "feature": {
+                        "inserts": 5
+                    }
+                }
+            },
+            "commitTime": datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
+            "commitTimeOffset": "+13:00"
+            }
+        }
+
+        assert json.loads(r.stdout) == expected_output
+
+
+def test_commit_table_text_output(cli_runner, data_working_copy):
+    new_table = "test_table"
+    message = "test commit"
+    with data_working_copy("points") as (path, wc):
+        repo = KartRepo(path)
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                f"""CREATE TABLE IF NOT EXISTS {new_table} (test_id int primary key, field1 text, field2 text);"""
+            )
+            sess.execute(
+                f"""INSERT INTO {new_table} (test_id, field1, field2)
+                VALUES
+                    (1, 'value1a', 'value1b'),
+                    (2, 'value2a', 'value2b'),
+                    (3, 'value3a', 'value3b'),
+                    (4, 'value4a', 'value4b'),
+                    (5, 'value5a', 'value5b');"""
+            )
+
+        r = cli_runner.invoke(["add-dataset", new_table, "-m", message, "-o", "text"])
+
+        assert r.exit_code == 0, r
+
+        diff = {
+                new_table: {
+                    "meta": {
+                        "inserts": 1
+                    },
+                    "feature": {
+                        "inserts": 5
+                    }
+                }
+            }
+
+        flat_diff = ""
+        for table, table_diff in diff.items():
+            flat_diff += f"  {table}:\n"
+            for section, section_diff in table_diff.items():
+                for op, count in section_diff.items():
+                    flat_diff += f"    {section}:\n"
+                    flat_diff += f"      {count} {op}\n"
+
+        date = datetime.now().strftime('%a %b %d %H:%M:%S %Y %z+1300\n')
+        expected_output = f"[main {str(repo.head.target)[:7]}] {message}\n{flat_diff}  Date: {date}"
+
+        assert r.stdout == expected_output
+
+
+def test_commit_table_nonexistent(cli_runner, data_working_copy):
+    new_table = "test_table"
+    message = "test commit"
+    with data_working_copy("points") as (path, wc):
+        repo = KartRepo(path)
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                f"""CREATE TABLE IF NOT EXISTS {new_table} (test_id int primary key, field1 text, field2 text);"""
+            )
+
+        try:
+            cli_runner.invoke(["add-dataset", "wrong_test_table", "-m", message, "-o", "text"])
+        except NotFound as e:
+            assert str(e) == f"Table wrong_test_table is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n"
+            assert e.exit_code == NO_CHANGES
+
+
+def test_commit_table_twice(cli_runner, data_working_copy):
+    new_table = "test_table"
+    message1 = "test commit1"
+    message2 = "test commit2"
+
+    with data_working_copy("points") as (path, wc):
+        repo = KartRepo(path)
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                f"""CREATE TABLE IF NOT EXISTS {new_table} (test_id int primary key, field1 text, field2 text);"""
+            )
+
+        try:
+            cli_runner.invoke(["add-dataset", "test_table", "-m", message1, "-o", "text"])
+            cli_runner.invoke(["add-dataset", "test_table", "-m", message2, "-o", "text"])
+        except NotFound as e:
+            assert str(e) == f"Table wrong_test_table is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n"
+            assert e.exit_code == NO_CHANGES
+
