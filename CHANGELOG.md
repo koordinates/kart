@@ -8,8 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 - Fix the issue where re-importing the same shapefile with `--replace-existing` would show spurious schema changes (and therefore row changes). [#791](https://github.com/koordinates/kart/issues/791)
 
-- Added support for committing new layers to a kart repository. When adding a new layer to a working copy, you can now commit the layer to add it to your kart repository. Previously, you could only commit changes to existing layers that were already tracked by kart.
-To commit a new layer, use the `add-dataset` command with the name of the layer and a commit message. If the layer is not yet tracked by kart, it will be added to the repository as a new layer.
+- Added support for committing new layers to a kart repository with `add-dataset` and the table name. [#249](https://github.com/koordinates/kart/issues/249)
 
 ## 0.12.2
 

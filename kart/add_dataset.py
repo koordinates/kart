@@ -53,12 +53,11 @@ def add_dataset(ctx, table_name, message, launch_editor, output_format):
     if table_name not in untracked_tables:
         # Check if the table is already tracked:
         ds_paths = list(repo.datasets().paths())
-        for ds_path in ds_paths:
-            if ds_path == table_name:
-                raise InvalidOperation(
-                    f"Table '{table_name}' is already tracked\n",
-                    exit_code=NO_CHANGES,
-                )
+        if table_name in ds_paths:
+            raise InvalidOperation(
+                f"Table '{table_name}' is already tracked\n",
+                exit_code=NO_CHANGES,
+            )
 
         raise NotFound(
             f"""Table '{table_name}' is not found\n\nTry running 'kart status --list-untracked-tables'\n""",
