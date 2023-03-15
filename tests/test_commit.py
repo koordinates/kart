@@ -1,5 +1,4 @@
 from ast import Dict
-from datetime import datetime
 import json
 import re
 import shlex
@@ -15,7 +14,7 @@ from kart.exceptions import (
     NO_REPOSITORY,
     SCHEMA_VIOLATION,
     NO_CHANGES,
-    NotFound
+    NotFound,
 )
 from kart.commit import fallback_editor
 from kart.repo import KartRepo
@@ -47,7 +46,7 @@ def test_commit(
     edit_polygons,
     edit_table,
 ):
-    """ commit outstanding changes from the working copy """
+    """commit outstanding changes from the working copy"""
 
     with data_working_copy(archive) as (repo_dir, wc_path):
         # empty
@@ -118,7 +117,7 @@ def test_commit(
 
 
 def test_tag(data_working_copy, cli_runner):
-    """ review commit history """
+    """review commit history"""
     with data_working_copy("points") as (repo_dir, wc):
         # create a tag
         r = cli_runner.invoke(["tag", "version1"])
@@ -133,7 +132,7 @@ def test_tag(data_working_copy, cli_runner):
 def test_commit_message(
     data_working_copy, cli_runner, monkeypatch, tmp_path, edit_points
 ):
-    """ commit message handling """
+    """commit message handling"""
     editor_in = None
     editor_out = None
     editor_cmd = None
@@ -351,33 +350,30 @@ def test_commit_table_json_output(cli_runner, data_working_copy):
                     (5, 'value5a', 'value5b');"""
             )
 
-        r = cli_runner.invoke(["add-dataset", new_table, "-m", message, "-o", "json"])
+        r = cli_runner.invoke(
+            ["add-dataset", new_table, "-m", message, "-o", "json"],
+            env={
+                "GIT_COMMITTER_DATE": "2010-1-1T00:00:00Z",
+                "GIT_AUTHOR_EMAIL": "user@example.com",
+                "GIT_COMMITTER_EMAIL": "committer@example.com",
+            },
+        )
 
         assert r.exit_code == 0, r
 
-        author = repo.head_commit.author
-
         expected_output: Dict[str, Dict[str, any]] = {
-        "kart.commit/v1": {
-            "commit": str(repo.head.target),
-            "abbrevCommit": str(repo.head.target)[:7],
-            # Check later: author should probably be author.name but in commit.py l284 it is author.email:
-            "author": author.email,
-            "committer": author.email,
-            "branch": "main",
-            "message": message,
-            "changes": {
-                new_table: {
-                    "meta": {
-                        "inserts": 1
-                    },
-                    "feature": {
-                        "inserts": 5
-                    }
-                }
-            },
-            "commitTime": datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
-            "commitTimeOffset": "+13:00"
+            "kart.commit/v1": {
+                "commit": str(repo.head.target),
+                "abbrevCommit": str(repo.head.target)[:7],
+                "author": "user@example.com",
+                "committer": "committer@example.com",
+                "branch": "main",
+                "message": message,
+                "changes": {
+                    new_table: {"meta": {"inserts": 1}, "feature": {"inserts": 5}}
+                },
+                "commitTime": "2010-01-01T00:00:00Z",
+                "commitTimeOffset": "+00:00",
             }
         }
 
@@ -403,20 +399,16 @@ def test_commit_table_text_output(cli_runner, data_working_copy):
                     (5, 'value5a', 'value5b');"""
             )
 
-        r = cli_runner.invoke(["add-dataset", new_table, "-m", message, "-o", "text"])
+        r = cli_runner.invoke(
+            ["add-dataset", new_table, "-m", message, "-o", "text"],
+            env={
+                "GIT_COMMITTER_DATE": "2010-1-1T00:00:00Z",
+            },
+        )
 
         assert r.exit_code == 0, r
 
-        diff = {
-                new_table: {
-                    "meta": {
-                        "inserts": 1
-                    },
-                    "feature": {
-                        "inserts": 5
-                    }
-                }
-            }
+        diff = {new_table: {"meta": {"inserts": 1}, "feature": {"inserts": 5}}}
 
         flat_diff = ""
         for table, table_diff in diff.items():
@@ -426,8 +418,7 @@ def test_commit_table_text_output(cli_runner, data_working_copy):
                     flat_diff += f"    {section}:\n"
                     flat_diff += f"      {count} {op}\n"
 
-        date = datetime.now().strftime('%a %b %d %H:%M:%S %Y %z+1300\n')
-        expected_output = f"[main {str(repo.head.target)[:7]}] {message}\n{flat_diff}  Date: {date}"
+        expected_output = f"[main {str(repo.head.target)[:7]}] {message}\n{flat_diff}  Date: Fri Jan  1 00:00:00 2010 +0000\n"
 
         assert r.stdout == expected_output
 
@@ -443,9 +434,14 @@ def test_commit_table_nonexistent(cli_runner, data_working_copy):
             )
 
         try:
-            cli_runner.invoke(["add-dataset", "wrong_test_table", "-m", message, "-o", "text"])
+            cli_runner.invoke(
+                ["add-dataset", "wrong_test_table", "-m", message, "-o", "text"]
+            )
         except NotFound as e:
-            assert str(e) == f"Table wrong_test_table is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n"
+            assert (
+                str(e)
+                == f"Table wrong_test_table is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n"
+            )
             assert e.exit_code == NO_CHANGES
 
 
@@ -462,9 +458,15 @@ def test_commit_table_twice(cli_runner, data_working_copy):
             )
 
         try:
-            cli_runner.invoke(["add-dataset", "test_table", "-m", message1, "-o", "text"])
-            cli_runner.invoke(["add-dataset", "test_table", "-m", message2, "-o", "text"])
+            cli_runner.invoke(
+                ["add-dataset", "test_table", "-m", message1, "-o", "text"]
+            )
+            cli_runner.invoke(
+                ["add-dataset", "test_table", "-m", message2, "-o", "text"]
+            )
         except NotFound as e:
-            assert str(e) == f"Table wrong_test_table is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n"
+            assert (
+                str(e)
+                == f"Table wrong_test_table is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n"
+            )
             assert e.exit_code == NO_CHANGES
-
