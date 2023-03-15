@@ -56,12 +56,12 @@ def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
     result = {}
     for tile_metadata in tile_metadata_list:
         _merge_metadata_field(
-            result, "format", rewrite_format(tile_metadata, rewrite_metadata)
+            result, "format.json", rewrite_format(tile_metadata, rewrite_metadata)
         )
         _merge_metadata_field(
-            result, "schema", rewrite_schema(tile_metadata, rewrite_metadata)
+            result, "schema.json", rewrite_schema(tile_metadata, rewrite_metadata)
         )
-        _merge_metadata_field(result, "crs", tile_metadata["crs"])
+        _merge_metadata_field(result, "crs.wkt", tile_metadata["crs.wkt"])
         # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
     return result
 
@@ -69,7 +69,7 @@ def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
 def rewrite_format(tile_metadata, rewrite_metadata=None):
     rewrite_metadata = rewrite_metadata or 0
 
-    orig_format = tile_metadata["format"]
+    orig_format = tile_metadata["format.json"]
     if rewrite_metadata & RewriteMetadata.DROP_FORMAT:
         return {}
     elif rewrite_metadata & RewriteMetadata.DROP_OPTIMIZATION:
@@ -97,9 +97,9 @@ def rewrite_schema(tile_metadata, rewrite_metadata=None):
     if rewrite_metadata & RewriteMetadata.DROP_SCHEMA:
         return {}
 
-    orig_schema = tile_metadata["schema"]
+    orig_schema = tile_metadata["schema.json"]
     if rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COPC:
-        orig_pdrf = tile_metadata["format"]["pointDataRecordFormat"]
+        orig_pdrf = tile_metadata["format.json"]["pointDataRecordFormat"]
         return get_schema_from_pdrf(equivalent_copc_pdrf(orig_pdrf))
     else:
         return orig_schema
@@ -137,11 +137,7 @@ def get_native_extent(info):
     )
 
 
-def extract_pc_tile_metadata(
-    pc_tile_path,
-    *,
-    extract_schema=True,
-):
+def extract_pc_tile_metadata(pc_tile_path):
     """
     Use pdal to get any and all point-cloud metadata we can make use of in Kart.
     This includes metadata that must be dataset-homogenous and would be stored in the dataset's /meta/ folder,
@@ -149,10 +145,10 @@ def extract_pc_tile_metadata(
 
     Output:
     {
-        "format": - Information about file format, as stored at meta/format.json (or some subset thereof).
+        "format.json": - Information about file format, as stored at meta/format.json (or some subset thereof).
+        "schema.json": - PDRF schema, as stored in meta/schema.json
+        "crs.wkt":    - CRS as stored at meta/crs.wkt
         "tile":   - Tile-specific (non-homogenous) information, as stored in individual tile pointer files.
-        "schema": - PDRF schema, as stored in meta/schema.json
-        "crs":    - CRS as stored at meta/crs.wkt
     }
 
     Although any two point cloud tiles can differ in any way imaginable, we specifically constrain tiles in the
@@ -165,10 +161,9 @@ def extract_pc_tile_metadata(
             "type": "readers.las",
             "filename": str(pc_tile_path),
             "count": 0,  # Don't read any individual points.
-        }
+        },
+        {"type": "filters.info"},
     ]
-    if extract_schema:
-        pipeline.append({"type": "filters.info"})
 
     try:
         metadata = pdal_execute_pipeline(pipeline)
@@ -183,7 +178,7 @@ def extract_pc_tile_metadata(
     compound_crs = info["srs"].get("compoundwkt")
     horizontal_crs = info["srs"].get("wkt")
     is_copc = info.get("copc") or False
-    format_info = {
+    format_json = {
         "compression": "laz" if info["compressed"] else "las",
         "lasVersion": f"{info['major_version']}.{info['minor_version']}",
         "optimization": "copc" if is_copc else None,
@@ -192,26 +187,25 @@ def extract_pc_tile_metadata(
         "pointDataRecordLength": info["point_length"],
     }
 
+    schema_json = pdal_schema_to_kart_schema(metadata["filters.info"]["schema"])
+
     # Keep tile info keys in alphabetical order.
     tile_info = {
         # PDAL seems to work best if we give it only the horizontal CRS here:
         "crs84Extent": _calc_crs84_extent(
             native_extent, horizontal_crs or compound_crs
         ),
-        "format": get_format_summary(format_info),
+        "format": get_format_summary(format_json),
         "nativeExtent": native_extent,
         "pointCount": info["count"],
     }
 
     result = {
-        "format": format_info,
+        "format.json": format_json,
+        "schema.json": schema_json,
+        "crs.wkt": normalise_wkt(compound_crs or horizontal_crs),
         "tile": tile_info,
-        "crs": normalise_wkt(compound_crs or horizontal_crs),
     }
-    if extract_schema:
-        result["schema"] = pdal_schema_to_kart_schema(
-            metadata["filters.info"]["schema"]
-        )
 
     return result
 
@@ -220,6 +214,9 @@ def get_format_summary(format_info):
     """
     Given format info as stored in format.json, return a short string summary such as: laz-1.4/copc-1.0
     """
+    if "format.json" in format_info:
+        format_info = format_info["format.json"]
+
     format_summary = f"{format_info['compression']}-{format_info['lasVersion']}"
     if format_info["optimization"]:
         format_summary += (
@@ -257,6 +254,7 @@ def _calc_crs84_extent(src_extent, src_crs):
 
 
 def is_copc(tile_format):
+    tile_format = extract_format(tile_format)
     if isinstance(tile_format, dict):
         return tile_format.get("optimization") == "copc"
     elif isinstance(tile_format, str):
@@ -265,6 +263,7 @@ def is_copc(tile_format):
 
 
 def get_las_version(tile_format):
+    tile_format = extract_format(tile_format)
     if isinstance(tile_format, dict):
         return tile_format.get("lasVersion")
     elif isinstance(tile_format, str):
@@ -272,3 +271,12 @@ def get_las_version(tile_format):
         if match:
             return match.group(1)
     raise ValueError("Bad tile format")
+
+
+def extract_format(tile_format):
+    if isinstance(tile_format, dict):
+        if "format.json" in tile_format:
+            return tile_format["format.json"]
+        if "format" in tile_format:
+            return tile_format["format"]
+    return tile_format

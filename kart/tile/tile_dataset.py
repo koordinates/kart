@@ -355,7 +355,7 @@ class TileDataset(BaseDataset):
     @property
     def tile_metadata(self):
         return {
-            "format": self.get_meta_item("format.json"),
-            "schema": self.get_meta_item("schema.json"),
-            "crs": self.get_meta_item("crs.wkt"),
+            "format.json": self.get_meta_item("format.json"),
+            "schema.json": self.get_meta_item("schema.json"),
+            "crs.wkt": self.get_meta_item("crs.wkt"),
         }

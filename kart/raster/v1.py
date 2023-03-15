@@ -119,12 +119,11 @@ class RasterV1(TileDataset):
             merged_metadata = rewrite_and_merge_metadata(metadata_list)
 
         meta_diff = DeltaDiff()
-        for key, ext in (("format", "json"), ("schema", "json"), ("crs", "wkt")):
+        for key in ("format.json", "schema.json", "crs.wkt"):
             if current_metadata[key] != merged_metadata[key]:
-                item_name = f"{key}.{ext}"
-                meta_diff[item_name] = Delta.update(
-                    KeyValue.of((item_name, current_metadata[key])),
-                    KeyValue.of((item_name, merged_metadata[key])),
+                meta_diff[key] = Delta.update(
+                    KeyValue.of((key, current_metadata[key])),
+                    KeyValue.of((key, merged_metadata[key])),
                 )
 
         ds_diff = DatasetDiff()

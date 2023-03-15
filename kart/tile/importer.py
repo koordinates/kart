@@ -136,7 +136,7 @@ class TileImporter:
                 raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
 
         existing_dataset = self.get_existing_dataset()
-        existing_metadata = self.get_existing_metadata(existing_dataset)
+        existing_metadata = existing_dataset.tile_metadata if existing_dataset else None
         include_existing_metadata = update_existing and existing_dataset is not None
 
         if delete and existing_dataset is None:
@@ -414,17 +414,6 @@ class TileImporter:
             )
         return result
 
-    def get_existing_metadata(self, existing_dataset):
-        """Read the metadata from the pre-existing dataset (ie, to make sure that the new sources conform)."""
-        if existing_dataset is None:
-            return None
-        # Subclasses can override if they have other relevant meta items.
-        return {
-            "crs": existing_dataset.get_meta_item("crs.wkt"),
-            "format": existing_dataset.get_meta_item("format.json"),
-            "schema": existing_dataset.get_meta_item("schema.json"),
-        }
-
     def write_extra_blobs(self, stream):
         # We still need to write .kart.repostructure.version unfortunately, even though it's only relevant to tabular datasets.
         extra_blobs = (
@@ -444,7 +433,11 @@ class TileImporter:
                 merged_metadata, key, future_tense=future_tense
             )
 
-    HUMAN_READABLE_META_ITEM_NAMES = {"format": "file format", "crs": "CRS"}
+    HUMAN_READABLE_META_ITEM_NAMES = {
+        "format.json": "file format",
+        "schema.json": "schema",
+        "crs.wkt": "CRS",
+    }
 
     def _check_for_non_homogenous_meta_item(
         self, merged_metadata, key, future_tense=False
@@ -455,7 +448,9 @@ class TileImporter:
         if not isinstance(value, ListOfConflicts):
             return
 
-        format_func = format_wkt_for_output if key == "crs" else format_json_for_output
+        format_func = (
+            format_wkt_for_output if key.endswith(".wkt") else format_json_for_output
+        )
         disparity = " vs \n".join(
             (format_func(value, sys.stderr) for value in merged_metadata[key])
         )
@@ -507,17 +502,17 @@ class TileImporter:
         write_blob_to_stream(
             stream,
             f"{dataset_inner_path}/meta/format.json",
-            json_pack(merged_metadata["format"]),
+            json_pack(merged_metadata["format.json"]),
         )
         write_blob_to_stream(
             stream,
             f"{dataset_inner_path}/meta/schema.json",
-            json_pack(merged_metadata["schema"]),
+            json_pack(merged_metadata["schema.json"]),
         )
         write_blob_to_stream(
             stream,
             f"{dataset_inner_path}/meta/crs.wkt",
-            ensure_bytes(normalise_wkt(merged_metadata["crs"])),
+            ensure_bytes(normalise_wkt(merged_metadata["crs.wkt"])),
         )
 
     def missing_parameter(self, param_name):

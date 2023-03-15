@@ -12,9 +12,9 @@ def rewrite_and_merge_metadata(tile_metadata_list):
     # TODO - this will get more complicated as we add support for convert-to-COG.
     result = {}
     for tile_metadata in tile_metadata_list:
-        _merge_metadata_field(result, "format", tile_metadata["format"])
-        _merge_metadata_field(result, "schema", tile_metadata["schema"])
-        _merge_metadata_field(result, "crs", tile_metadata["crs"])
+        _merge_metadata_field(result, "format.json", tile_metadata["format.json"])
+        _merge_metadata_field(result, "schema.json", tile_metadata["schema.json"])
+        _merge_metadata_field(result, "crs.wkt", tile_metadata["crs.wkt"])
         # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
     return result
 
@@ -31,11 +31,7 @@ def _merge_metadata_field(output, key, value):
         output[key] = ListOfConflicts([existing_value, value])
 
 
-def extract_raster_tile_metadata(
-    raster_tile_path,
-    *,
-    extract_schema=True,
-):
+def extract_raster_tile_metadata(raster_tile_path):
     """
     Use gdalinfo to get any and all raster metadata we can make use of in Kart.
     This includes metadata that must be dataset-homogenous and would be stored in the dataset's /meta/ folder,
@@ -60,8 +56,9 @@ def extract_raster_tile_metadata(
 
     # NOTE: this format is still in early stages of design, is subject to change.
 
-    crs = metadata["coordinateSystem"]["wkt"]
-    format_info = {"fileType": "image/tiff; application=geotiff"}
+    format_json = {"fileType": "image/tiff; application=geotiff"}
+    schema_json = gdalinfo_bands_to_kart_schema(metadata["bands"])
+    crs_wkt = metadata["coordinateSystem"]["wkt"]
 
     cc = metadata["cornerCoordinates"]
     size_in_pixels = metadata["size"]
@@ -75,12 +72,11 @@ def extract_raster_tile_metadata(
     }
 
     result = {
-        "format": format_info,
+        "format.json": format_json,
+        "schema.json": schema_json,
+        "crs.wkt": normalise_wkt(crs_wkt),
         "tile": tile_info,
-        "crs": normalise_wkt(crs),
     }
-    if extract_schema:
-        result["schema"] = gdalinfo_bands_to_kart_schema(metadata["bands"])
 
     return result
 

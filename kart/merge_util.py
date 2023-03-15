@@ -940,7 +940,7 @@ class WorkingCopyMerger:
                         )
                         continue
                     filename = set_tile_extension(
-                        f"{tilename}.{version_name}", tile_format=pointer_dict["format"]
+                        f"{tilename}.{version_name}", tile_format=pointer_dict
                     )
                     try_reflink(
                         lfs_path,

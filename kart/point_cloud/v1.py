@@ -78,7 +78,7 @@ class PointCloudV1(TileDataset):
         current_metadata = self.tile_metadata
         dataset_format_to_apply = None
         if convert_to_dataset_format:
-            dataset_format_to_apply = get_format_summary(current_metadata["format"])
+            dataset_format_to_apply = get_format_summary(current_metadata)
 
         tilename_to_metadata = {}
 
@@ -133,7 +133,7 @@ class PointCloudV1(TileDataset):
             metadata_list.insert(0, current_metadata)
 
         rewrite_metadata = 0
-        optimization_constraint = current_metadata["format"].get("optimization")
+        optimization_constraint = current_metadata["format.json"].get("optimization")
         if convert_to_dataset_format:
             rewrite_metadata = (
                 RewriteMetadata.AS_IF_CONVERTED_TO_COPC
@@ -154,25 +154,24 @@ class PointCloudV1(TileDataset):
                 metadata_list, rewrite_metadata
             )
             if rewrite_metadata & RewriteMetadata.DROP_FORMAT:
-                merged_metadata["format"] = current_metadata["format"]
+                merged_metadata["format.json"] = current_metadata["format.json"]
 
-        # Make it invalid to try and commit and LAS files:
-        merged_format = merged_metadata["format"]
+        # Make it invalid to try and commit LAS files:
+        merged_format = merged_metadata["format.json"]
         if (
             not isinstance(merged_format, ListOfConflicts)
             and merged_format.get("compression") == "las"
         ):
             merged_format = InvalidNewValue([merged_format])
             merged_format.error_message = "Committing LAS tiles is not supported, unless you specify the --convert-to-dataset-format flag"
-            merged_metadata["format"] = merged_format
+            merged_metadata["format.json"] = merged_format
 
         meta_diff = DeltaDiff()
-        for key, ext in (("format", "json"), ("schema", "json"), ("crs", "wkt")):
+        for key in ("format.json", "schema.json", "crs.wkt"):
             if current_metadata[key] != merged_metadata[key]:
-                item_name = f"{key}.{ext}"
-                meta_diff[item_name] = Delta.update(
-                    KeyValue.of((item_name, current_metadata[key])),
-                    KeyValue.of((item_name, merged_metadata[key])),
+                meta_diff[key] = Delta.update(
+                    KeyValue.of((key, current_metadata[key])),
+                    KeyValue.of((key, merged_metadata[key])),
                 )
 
         ds_diff = DatasetDiff()
