@@ -54,6 +54,7 @@ MODULE_COMMANDS = {
     "tabular.import_": {"table-import"},
     "point_cloud.import_": {"point-cloud-import"},
     "install": {"install"},
+    "add_dataset": {"add-dataset"},
 }
 
 # These commands aren't valid Python symbols, even when we change dash to underscore.

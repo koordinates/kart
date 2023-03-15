@@ -178,7 +178,6 @@ def commit(
 
     if not commit_msg:
         raise click.UsageError("Aborting commit due to empty commit message.")
-
     new_commit = repo.structure().commit_diff(
         wc_diff, commit_msg, allow_empty=allow_empty
     )
