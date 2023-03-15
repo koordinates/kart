@@ -193,7 +193,9 @@ class ColumnSchema(dict):
         return {**self}
 
     def __hash__(self):
-        return hash(frozenset(self.items()))
+        if not hasattr(self, "_hash"):
+            self._hash = hash(frozenset(self.items()))
+        return self._hash
 
     def __setitem__(self, *args, **kwargs):
         raise TypeError("ColumnSchema is immutable")
@@ -220,15 +222,42 @@ class ColumnSchema(dict):
 
     @property
     def id(self):
+        """Kart-specific identifier for a column that stays unchanged through renames. Used in table-dataset schemas."""
         return self.get("id")
 
     @property
     def name(self):
+        """User-visible name of the column. Used in table-dataset and point-cloud-dataset schemas."""
         return self.get("name")
 
     @property
-    def id_or_name(self):
-        return self.get("id") if "id" in self else self.get("name")
+    def interpretation(self):
+        """
+        Information on how to interpret a raster band - ie as a particular color, or as an index into a color table.
+        Used in raster-dataset schemas.
+        """
+        return self.get("interpretation")
+
+    @property
+    def best_identifier(self):
+        """
+        Different types of schemas have these various ways of identifying themselves.
+        When we do schema diffs, it makes them more readable if we match up the columns using this property.
+        At a last resort, we use the hash of the entire column contents as an "ID".
+        """
+        if "id" in self:
+            return self.get("id")
+        if "name" in self:
+            return self.get("name")
+        if "interpretation" in self:
+            return self.get("interpretation")
+        return self._id_from_hash
+
+    @property
+    def _id_from_hash(self):
+        if not hasattr(self, "__id_from_hash"):
+            self.__id_from_hash = str(uuid.UUID(int=abs(hash(self))))
+        return self.__id_from_hash
 
     @property
     def pk_index(self):
@@ -313,23 +342,28 @@ class Schema(tuple):
     def has_geometry(self):
         return bool(self.geometry_columns)
 
-    def __getitem__(self, i):
+    def __getitem__(self, key_or_index):
         """Return the _i_th ColumnSchema, or, the ColumnSchema with the given ID or name."""
-        if isinstance(i, str):
-            try:
-                return next(c for c in self.columns if c.id == i or c.name == i)
-            except StopIteration:
-                raise KeyError(f"No such column: {i}")
+        if isinstance(key_or_index, str):
+            result = self.get(key_or_index)
+            if result is None:
+                raise KeyError(f"No such column: {key_or_index}")
+            return result
 
-        return super().__getitem__(i)
+        return super().__getitem__(key_or_index)
 
-    def __contains__(self, id):
-        return any(c.id == id or c.name == c for c in self.columns)
+    def __contains__(self, key):
+        assert isinstance(key, str)
+        return self.get(key) is not None
 
     def get(self, key, default=None):
         assert isinstance(key, str)
         try:
-            return next(c for c in self if c.id == key or c.name == key)
+            return next(
+                c
+                for c in self
+                if c.id == key or c.name == key or c.best_identifier == key
+            )
         except StopIteration:
             return default
 

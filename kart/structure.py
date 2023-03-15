@@ -522,14 +522,18 @@ class Datasets:
                 if not self.is_dataset_dirname(dirname):
                     continue
                 dataset_class = self.get_dataset_class_for_dirname(dirname)
-                if (
-                    self.filter_dataset_type
-                    and dataset_class.DATASET_TYPE != self.filter_dataset_type
-                ):
+                if not self._dataset_matches_filter(dataset_class.DATASET_TYPE):
                     continue
                 return dataset_class(ds_tree, ds_path, self.repo, dirname=dirname)
 
         return None
+
+    def _dataset_matches_filter(self, dataset_type):
+        if self.filter_dataset_type is None:
+            return True
+        if isinstance(self.filter_dataset_type, str):
+            return dataset_type == self.filter_dataset_type
+        return dataset_type in self.filter_dataset_type
 
     def __len__(self):
         return sum(1 for _ in self)

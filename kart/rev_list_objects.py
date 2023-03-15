@@ -159,7 +159,9 @@ def rev_list_feature_blobs(repo, start_commits, stop_commits):
     )
 
 
-TILE_POINTER_FILES_PATTERN = re.compile(r"(.+)/\.point-cloud-dataset[^/]*/tile/.+")
+TILE_POINTER_FILES_PATTERN = re.compile(
+    r"(.+)/\.(?:point-cloud|raster)-dataset[^/]*/tile/.+"
+)
 
 
 def rev_list_tile_pointer_files(repo, start_commits, stop_commits):
@@ -173,7 +175,9 @@ def rev_list_tile_pointer_files(repo, start_commits, stop_commits):
         repo,
         start_commits,
         stop_commits,
-        dirname_filter=lambda d: d.startswith(".point-cloud-dataset"),
+        dirname_filter=lambda d: (
+            d.startswith(".point-cloud-dataset") or d.startswith(".raster-dataset")
+        ),
     )
     return rev_list_matching_blobs(
         repo, start_commits, stop_commits, pathspecs, TILE_POINTER_FILES_PATTERN

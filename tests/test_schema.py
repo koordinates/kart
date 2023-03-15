@@ -13,7 +13,8 @@ H = pytest.helpers.helpers()
 
 
 def schema_diff_as_text(old_schema, new_schema):
-    return TextDiffWriter._schema_diff_as_text(old_schema, new_schema)
+    output = TextDiffWriter._schema_diff_as_text(old_schema, new_schema)
+    return click.unstyle(output).splitlines()
 
 
 @pytest.fixture
@@ -1054,7 +1055,7 @@ def check_polygons_diff_output(r, output_format):
         }
 
 
-def test_schema_diff_as_text(gen_uuid):
+def test_schema_diff_as_text__tabular(gen_uuid):
     old_schema = Schema(
         [
             ColumnSchema(
@@ -1104,79 +1105,180 @@ def test_schema_diff_as_text(gen_uuid):
     aligned_schema = old_schema.align_to_self(new_schema)
 
     output = schema_diff_as_text(old_schema, aligned_schema)
-
-    assert click.unstyle(output).splitlines() == [
+    assert output == [
         "  [",
         "    {",
-        '      "id": "b11ea716-6b85-f672-741f-8281aaa04bef",',
+        '      "id": "2a7e8a32-f2f9-1801-e3e8-2c96f423ab4e",',
         '      "name": "fid",',
         '      "dataType": "integer",',
         '      "primaryKeyIndex": 0,',
         '      "size": 64',
         "    },",
         "-   {",
-        '-     "id": "0d167b8b-294f-c2be-4747-bc947672d3a0",',
+        '-     "id": "5cef0185-b294-aefb-f0ea-f31b2092508e",',
         '-     "name": "geom",',
         '-     "dataType": "geometry",',
         '-     "geometryType": "MULTIPOLYGON",',
         '-     "geometryCRS": "EPSG:2193"',
         "-   },",
         "    {",
-        '      "id": "0f28f35f-89d8-2b93-40d7-30abe42c69ea",',
+        '      "id": "14be297a-4064-8e6f-7503-7ec5b7e9a954",',
         '      "name": "building_id",',
         '      "dataType": "integer",',
         '-     "size": 32,',
         '+     "size": 64,',
         "    },",
         "    {",
-        '      "id": "b5c69fa8-f48f-59bb-7aab-95225daf4774",',
+        '      "id": "4eb190a4-8d57-8793-afce-259ab59fb3e9",',
         '      "name": "name",',
         '      "dataType": "text",',
         '+     "size": 40,',
         "    },",
         "+   {",
-        '+     "id": "d087bf39-1c76-fdd9-1315-0e81c6bd360f",',
+        '+     "id": "185db218-80e6-6886-5174-d70275729470",',
         '+     "name": "territorial_authority",',
         '+     "dataType": "text"',
         "+   },",
         "    {",
-        '      "id": "9f1924ac-097a-fc0a-b168-a06e8db32af7",',
+        '      "id": "d56ef618-d12e-ed41-a933-651d9ceb03e0",',
         '      "name": "use",',
         '      "dataType": "text"',
         "    },",
         "-   {",
-        '-     "id": "1bcf7a4a-19e9-9752-6264-0fd1d387633b",',
+        '-     "id": "7d02cdde-564b-48ba-f6e7-a4c912ed66dd",',
         '-     "name": "suburb_locality",',
         '-     "dataType": "text"',
         "-   },",
         "+   {",
-        '+     "id": "0f4e1e5b-9adb-edbe-6cbd-0ee0140448e6",',
+        '+     "id": "532252a8-0ede-8d6d-2ba6-8fc3842933b8",',
         '+     "name": "colour",',
         '+     "dataType": "integer",',
         '+     "size": 32',
         "+   },",
         "    {",
-        '      "id": "1777c850-baa2-6d52-dfcd-309f1741ff51",',
+        '      "id": "d9271e65-36bc-fdc0-4c6d-8f7188bb66e9",',
         '      "name": "town_city",',
         '      "dataType": "text"',
         "    },",
         "-   {",
-        '-     "id": "d087bf39-1c76-fdd9-1315-0e81c6bd360f",',
+        '-     "id": "185db218-80e6-6886-5174-d70275729470",',
         '-     "name": "territorial_authority",',
         '-     "dataType": "text"',
         "-   },",
         "+   {",
-        '+     "id": "0d167b8b-294f-c2be-4747-bc947672d3a0",',
+        '+     "id": "5cef0185-b294-aefb-f0ea-f31b2092508e",',
         '+     "name": "geom",',
         '+     "dataType": "geometry",',
         '+     "geometryType": "MULTIPOLYGON",',
         '+     "geometryCRS": "EPSG:2193"',
         "+   },",
         "    {",
-        '      "id": "db82ba8c-c997-4bf1-87ef-b5108bdccde7",',
+        '      "id": "753563e7-b9b2-a093-da98-141ea647f0b2",',
         '      "name": "last_modified",',
         '      "dataType": "date"',
         "    },",
+        "  ]",
+    ]
+
+
+def test_schema_diff_as_text__raster(gen_uuid):
+    old_schema = Schema(
+        [
+            ColumnSchema(data_type="integer", size=8, interpretation="red"),
+            ColumnSchema(data_type="integer", size=8, interpretation="green"),
+            ColumnSchema(data_type="integer", size=8, interpretation="blue"),
+            ColumnSchema(data_type="integer", size=8, interpretation="alpha"),
+        ]
+    )
+    new_schema = Schema(
+        list(old_schema[0:3])
+        + [ColumnSchema(data_type="integer", size=1, interpretation="alpha")]
+    )
+
+    output = schema_diff_as_text(old_schema, new_schema)
+    assert output == [
+        "  [",
+        "    {",
+        '      "dataType": "integer",',
+        '      "size": 8,',
+        '      "interpretation": "red"',
+        "    },",
+        "    {",
+        '      "dataType": "integer",',
+        '      "size": 8,',
+        '      "interpretation": "green"',
+        "    },",
+        "    {",
+        '      "dataType": "integer",',
+        '      "size": 8,',
+        '      "interpretation": "blue"',
+        "    },",
+        "    {",
+        '      "dataType": "integer",',
+        '-     "size": 8,',
+        '+     "size": 1,',
+        '      "interpretation": "alpha",',
+        "    },",
+        "  ]",
+    ]
+    new_schema = Schema(old_schema[0:3])
+
+    output = schema_diff_as_text(old_schema, new_schema)
+    assert output == [
+        "  [",
+        "    {",
+        '      "dataType": "integer",',
+        '      "size": 8,',
+        '      "interpretation": "red"',
+        "    },",
+        "    {",
+        '      "dataType": "integer",',
+        '      "size": 8,',
+        '      "interpretation": "green"',
+        "    },",
+        "    {",
+        '      "dataType": "integer",',
+        '      "size": 8,',
+        '      "interpretation": "blue"',
+        "    },",
+        "-   {",
+        '-     "dataType": "integer",',
+        '-     "size": 8,',
+        '-     "interpretation": "alpha"',
+        "-   },",
+        "  ]",
+    ]
+
+    new_schema
+
+    old_schema = Schema(
+        [
+            ColumnSchema(data_type="integer", size=32),
+            ColumnSchema(data_type="integer", size=8),
+            ColumnSchema(data_type="integer", size=8),
+        ]
+    )
+    new_schema = Schema([old_schema[1], old_schema[2], old_schema[0]])
+
+    output = schema_diff_as_text(old_schema, new_schema)
+    assert output == [
+        "  [",
+        "-   {",
+        '-     "dataType": "integer",',
+        '-     "size": 32',
+        "-   },",
+        "    {",
+        '      "dataType": "integer",',
+        '      "size": 8',
+        "    },",
+        "    {",
+        '      "dataType": "integer",',
+        '      "size": 8',
+        "    },",
+        "+   {",
+        '+     "dataType": "integer",',
+        '+     "size": 32',
+        "+   },",
         "  ]",
     ]
 

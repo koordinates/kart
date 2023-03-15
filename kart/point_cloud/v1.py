@@ -46,20 +46,30 @@ class PointCloudV1(TileDataset):
     def extract_tile_metadata_from_filesystem_path(cls, path):
         return extract_pc_tile_metadata(path)
 
+    @classmethod
+    def get_tile_path_pattern(
+        cls, tilename=None, *, parent_path=None, include_conflict_versions=False
+    ):
+        return get_tile_path_pattern(
+            tilename,
+            parent_path=parent_path,
+            include_conflict_versions=include_conflict_versions,
+        )
+
     def diff_to_working_copy(
         self,
         workdir_diff_cache,
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         *,
         convert_to_dataset_format=False,
-        skip_pdal=False,
+        extract_metadata=True,
     ):
         """
         Returns a diff of all changes made to this dataset in the working copy.
 
         convert_to_dataset_format - user wants this converted to dataset's format as it is
             committed, and wants to see diffs of what this would look like.
-        skip_pdal - if set, don't run PDAL to check the tile contents. The resulting diffs
+        extract_metadata - if False, don't run PDAL to check the tile contents. The resulting diffs
             are missing almost all of the info about the new tiles, but this is faster and more
             reliable if this information is not needed.
         """
@@ -90,9 +100,7 @@ class PointCloudV1(TileDataset):
             wc_path = self._workdir_path(tile_path)
             if not wc_path.is_file():
                 new_half_delta = None
-            elif skip_pdal:
-                new_half_delta = tilename, {"name": wc_path.name}
-            else:
+            elif extract_metadata:
                 tile_metadata = extract_pc_tile_metadata(wc_path)
                 tilename_to_metadata[wc_path.name] = tile_metadata
                 new_tile_summary = self.get_tile_summary_from_workdir_path(
@@ -107,6 +115,8 @@ class PointCloudV1(TileDataset):
                     )
 
                 new_half_delta = tilename, new_tile_summary
+            else:
+                new_half_delta = tilename, {"name": wc_path.name}
 
             tile_delta = Delta(old_half_delta, new_half_delta)
             tile_delta.flags = WORKING_COPY_EDIT
