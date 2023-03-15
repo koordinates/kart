@@ -9,7 +9,7 @@ from .commit import (
 )
 from .output_util import dump_json_output
 from .working_copy import WorkingCopyPart
-from .exceptions import NO_CHANGES, NotFound
+from .exceptions import NO_CHANGES, NotFound, InvalidOperation
 from .status import get_untracked_tables
 
 
@@ -41,12 +41,27 @@ from .status import get_untracked_tables
     default="text",
 )
 def add_dataset(ctx, table_name, message, launch_editor, output_format):
+    """
+    Add a new table to the Kart repository.
+
+    To check the new untracked tables, run 'kart status --list-untracked-tables'
+    """
     repo = ctx.obj.repo
+
     # Check that the table is in the list of untracked tables:
     untracked_tables = get_untracked_tables(repo)
     if table_name not in untracked_tables:
+        # Check if the table is already tracked:
+        ds_paths = list(repo.datasets().paths())
+        for ds_path in ds_paths:
+            if ds_path == table_name:
+                raise InvalidOperation(
+                    f"Table '{table_name}' is already tracked\n",
+                    exit_code=NO_CHANGES,
+                )
+
         raise NotFound(
-            f"""Table {table_name} is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n""",
+            f"""Table '{table_name}' is not found\n\nTry running 'kart status --list-untracked-tables'\n""",
             exit_code=NO_CHANGES,
         )
 

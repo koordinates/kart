@@ -15,6 +15,7 @@ from kart.exceptions import (
     SCHEMA_VIOLATION,
     NO_CHANGES,
     NotFound,
+    InvalidOperation,
 )
 from kart.commit import fallback_editor
 from kart.repo import KartRepo
@@ -425,6 +426,7 @@ def test_commit_table_text_output(cli_runner, data_working_copy):
 
 def test_commit_table_nonexistent(cli_runner, data_working_copy):
     new_table = "test_table"
+    wrong_table = "wrong_test_table"
     message = "test commit"
     with data_working_copy("points") as (path, wc):
         repo = KartRepo(path)
@@ -434,13 +436,11 @@ def test_commit_table_nonexistent(cli_runner, data_working_copy):
             )
 
         try:
-            cli_runner.invoke(
-                ["add-dataset", "wrong_test_table", "-m", message, "-o", "text"]
-            )
+            cli_runner.invoke(["add-dataset", wrong_table, "-m", message, "-o", "text"])
         except NotFound as e:
             assert (
                 str(e)
-                == f"Table wrong_test_table is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n"
+                == f"""Table '{wrong_table}' is not found\n\nTry running 'kart status --list-untracked-tables'\n"""
             )
             assert e.exit_code == NO_CHANGES
 
@@ -458,15 +458,8 @@ def test_commit_table_twice(cli_runner, data_working_copy):
             )
 
         try:
-            cli_runner.invoke(
-                ["add-dataset", "test_table", "-m", message1, "-o", "text"]
-            )
-            cli_runner.invoke(
-                ["add-dataset", "test_table", "-m", message2, "-o", "text"]
-            )
-        except NotFound as e:
-            assert (
-                str(e)
-                == f"Table wrong_test_table is either not found or already tracked by kart.\n\nTry running 'kart status --list-untracked-tables'\n"
-            )
+            cli_runner.invoke(["add-dataset", new_table, "-m", message1, "-o", "text"])
+            cli_runner.invoke(["add-dataset", new_table, "-m", message2, "-o", "text"])
+        except InvalidOperation as e:
+            assert (str(e) == f"Table '{new_table}' is already tracked\n",)
             assert e.exit_code == NO_CHANGES
