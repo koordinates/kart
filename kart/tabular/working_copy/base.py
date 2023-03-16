@@ -1,6 +1,7 @@
 import contextlib
 import functools
 import logging
+import operator
 import time
 
 import click
@@ -461,6 +462,31 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         return True
 
+    def get_diff_for_table_creation(self, table, meta_items):
+        """
+        Generates a diff for a new table.
+        """
+        ds_meta_items = meta_items
+        wc_meta_items = {}
+        with self.session():
+            meta_diff = DeltaDiff.diff_dicts(
+                wc_meta_items, ds_meta_items, delta_flags=WORKING_COPY_EDIT
+            )
+            schema = meta_diff["schema.json"]
+            schema_value = schema.new.value
+            feature_diff = self.all_features_diff(
+                table, schema_value, delta_type=Delta.insert
+            )
+
+        ds_diff = DatasetDiff()
+        ds_diff["meta"] = meta_diff
+        ds_diff["feature"] = feature_diff
+
+        repo_diff = RepoDiff()
+        repo_diff[table] = ds_diff
+
+        return repo_diff
+
     def diff_dataset_to_working_copy(
         self, dataset, ds_filter=DatasetKeyFilter.MATCH_ALL, raise_if_dirty=False
     ):
@@ -487,8 +513,10 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
         """
+
+        table_name = dataset.table_name
         ds_meta_items = self.adapter.remove_empty_values(dataset.meta_items())
-        wc_meta_items = self.meta_items(dataset)
+        wc_meta_items = self.meta_items(table_name)
         self._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
         result = DeltaDiff.diff_dicts(
             ds_meta_items, wc_meta_items, delta_flags=WORKING_COPY_EDIT
@@ -591,7 +619,7 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         return False
 
-    def meta_items(self, dataset):
+    def meta_items(self, table_name):
         """
         Extract all the metadata for this table and convert to dataset V2 format.
         Note that the extracted schema will not be aligned to any existing schema
@@ -603,13 +631,16 @@ class TableWorkingCopy(WorkingCopyPart):
         # That way, they don't vary at random if the same command is run twice in a row, but
         # they will vary as the repo state changes so that we don't accidentally generate the same ID twice
         # for two unrelated columns.
-        id_salt = f"{self.engine.url} {self.db_schema} {dataset.table_name} {self.get_tree_id()}"
+
+        id_salt = (
+            f"{self.engine.url} {self.db_schema} {table_name} {self.get_tree_id()}"
+        )
 
         with self.session() as sess:
             return self.adapter.all_v2_meta_items(
                 sess,
                 self.db_schema,
-                dataset.table_name,
+                table_name,
                 id_salt=id_salt,
             )
 
@@ -617,6 +648,7 @@ class TableWorkingCopy(WorkingCopyPart):
         self, dataset, feature_filter, meta_diff, raise_if_dirty=False
     ):
         schema_delta = meta_diff.get("schema.json")
+        schema = self._get_dataset_schema(dataset, meta_diff)
 
         if schema_delta and schema_delta.type == "delete":
             # The entire table has been deleted - add delete deltas for every feature.
@@ -630,7 +662,9 @@ class TableWorkingCopy(WorkingCopyPart):
         ):
             return dataset.all_features_diff(
                 delta_type=Delta.delete, flags=WORKING_COPY_EDIT
-            ) + self.all_features_diff(dataset, meta_diff, delta_type=Delta.delete)
+            ) + self.all_features_diff(
+                dataset.table_name, schema, delta_type=Delta.delete
+            )
 
         pk_field = dataset.schema.pk_columns[0].name
         find_renames = self.can_find_renames(meta_diff)
@@ -680,13 +714,16 @@ class TableWorkingCopy(WorkingCopyPart):
 
         return feature_diff
 
-    def all_features_diff(self, dataset, meta_diff, delta_type=Delta.insert):
+    def all_features_diff(self, table, schema, delta_type=Delta.insert):
+        """
+        Returns a diff containing all the features in the working copy.
+        """
         assert delta_type in (Delta.insert, Delta.delete)
-        pk_field = self._get_dataset_schema(dataset, meta_diff).pk_columns[0].name
+        pk_field = schema.pk_columns[0].name
 
         feature_diff = DeltaDiff()
         with self.session() as sess:
-            r = self._execute_all_rows_query(sess, dataset, meta_diff)
+            r = self._execute_all_rows_query(sess, table, schema)
             for row in r:
                 db_obj = {k: row[k] for k in row.keys()}
                 delta = Delta.insert((db_obj[pk_field], db_obj))
@@ -779,13 +816,12 @@ class TableWorkingCopy(WorkingCopyPart):
 
         return sess.execute(query)
 
-    def _execute_all_rows_query(self, sess, dataset, meta_diff=None):
+    def _execute_all_rows_query(self, sess, table_name, schema):
         """
         Does a join on the tracking table and the table for the given dataset, and returns a result
         containing all the rows that have been inserted / updated / deleted.
         """
-        schema = self._get_dataset_schema(dataset, meta_diff)
-        table = self._table_def_for_schema(schema, dataset.table_name)
+        table = self._table_def_for_schema(schema, table_name)
         return sess.execute(sa.select(table.columns).select_from(table))
 
     def get_dirty_pks(self, dataset):
