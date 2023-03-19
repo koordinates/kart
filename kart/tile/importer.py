@@ -8,7 +8,6 @@ import click
 import pygit2
 
 from kart.cli_util import find_param
-from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
     InvalidOperation,
@@ -32,9 +31,9 @@ from kart.lfs_util import (
     copy_file_to_local_lfs_cache,
     get_hash_and_size_of_file,
 )
+from kart.meta_items import MetaItemFileType
 from kart.list_of_conflicts import ListOfConflicts
 from kart.output_util import format_json_for_output, format_wkt_for_output
-from kart.serialise_util import json_pack, ensure_bytes
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     extra_blobs_for_version,
@@ -499,21 +498,14 @@ class TileImporter:
 
     def write_meta_blobs_to_stream(self, stream, dataset_inner_path, merged_metadata):
         """Writes the format.json, schema.json and crs.wkt meta items to the dataset."""
-        write_blob_to_stream(
-            stream,
-            f"{dataset_inner_path}/meta/format.json",
-            json_pack(merged_metadata["format.json"]),
-        )
-        write_blob_to_stream(
-            stream,
-            f"{dataset_inner_path}/meta/schema.json",
-            json_pack(merged_metadata["schema.json"]),
-        )
-        write_blob_to_stream(
-            stream,
-            f"{dataset_inner_path}/meta/crs.wkt",
-            ensure_bytes(normalise_wkt(merged_metadata["crs.wkt"])),
-        )
+        for key, value in merged_metadata.items():
+            definition = self.DATASET_CLASS.get_meta_item_definition(key)
+            file_type = MetaItemFileType.get_from_definition_or_suffix(definition, key)
+            write_blob_to_stream(
+                stream,
+                f"{dataset_inner_path}/meta/{key}",
+                file_type.encode_to_bytes(value),
+            )
 
     def missing_parameter(self, param_name):
         """Raise a MissingParameter exception."""

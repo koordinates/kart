@@ -215,6 +215,7 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
     def meta_tree(self):
         return self.get_subtree(self.META_PATH)
 
+    @classmethod
     def get_meta_item_definition(self, meta_item_path):
         # Quicker dict lookup:
         definition = self.PATH_META_ITEMS.get(meta_item_path)
