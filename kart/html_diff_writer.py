@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 import kart
+from kart.diff_format import DiffFormat
 from .base_diff_writer import BaseDiffWriter
 from .json_diff_writers import GeojsonDiffWriter
 from .output_util import ExtendedJsonEncoder, resolve_output_path
@@ -26,13 +27,15 @@ class HtmlDiffWriter(BaseDiffWriter):
             )
         return output_path or repo.workdir_path / "DIFF.html"
 
-    def write_diff(self):
+    def write_diff(self, diff_format=DiffFormat.FULL):
+        if diff_format != DiffFormat.FULL:
+            raise click.UsageError("Html format only supports full diffs")
         with open(
             Path(kart.package_data_path) / "diff-view.html", "r", encoding="utf8"
         ) as ft:
             template = string.Template(ft.read())
 
-        repo_diff = self.get_repo_diff()
+        repo_diff = self.get_repo_diff(diff_format=diff_format)
         self.has_changes = bool(repo_diff)
 
         if self.commit:

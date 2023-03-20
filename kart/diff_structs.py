@@ -2,6 +2,8 @@ from collections import UserDict
 from dataclasses import dataclass
 from typing import Any
 
+from kart.diff_format import DiffFormat
+
 from .exceptions import InvalidOperation
 
 
@@ -221,9 +223,16 @@ class RichDict(UserDict):
         super().__init__(*args, **kwargs)
 
     def ensure_child_type(self, key, value):
-        if type(value) != self.child_type:
+        # Check that the value is of the correct type
+        if not isinstance(value, self.child_type):
+            # Check if the child_type is a tuple of types, and if so, print a more helpful error message
+            if isinstance(self.child_type, tuple):
+                child_type_joint = ", ".join([t.__name__ for t in self.child_type])
+                child_type_str = f"one of the types: {child_type_joint}"
+            else:
+                child_type_str = self.child_type.__name__
             raise TypeError(
-                f"{type(self).__name__} accepts children of type {self.child_type.__name__} "
+                f"{type(self).__name__} accepts children of type {child_type_str} "
                 f"but received {type(value).__name__}"
             )
 
@@ -304,10 +313,12 @@ class RichDict(UserDict):
         Deletes any empty RichDicts that are children of self.
         If recurse is True, also deletes non-empty RichDicts, as long as they only contain empty RichDicts in the end.
         """
-        if not issubclass(self.child_type, RichDict):
-            return
         items = list(self.items())
         for key, value in items:
+            if key == "data_changes" and value == False and len(self) == 1:
+                del self[key]
+            if not isinstance(value, RichDict):
+                continue
             if recurse:
                 value.prune()
             if not value:
@@ -490,7 +501,7 @@ class DeltaDiff(Diff):
 class DatasetDiff(Diff):
     """A DatasetDiff contains up to two DeltaDiffs, at keys "meta" or "feature"."""
 
-    child_type = DeltaDiff
+    child_type = (DeltaDiff, bool)
 
     def __json__(self):
         result = {}

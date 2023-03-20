@@ -10,6 +10,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 - Added support for committing new layers to a kart repository with `add-dataset` and the table name. [#249](https://github.com/koordinates/kart/issues/249)
 
+- Added support for `--diff-format` option under `kart show` command to display different level of detail depending on the user's needs.  [#721](https://github.com/koordinates/kart/issues/721)
+
 ## 0.12.2
 
 - Fix for issue with launching an editor while using helper mode, affects macOS and Linux. [#788](https://github.com/koordinates/kart/issues/788)

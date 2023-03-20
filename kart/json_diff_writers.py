@@ -7,6 +7,8 @@ from pathlib import Path
 import click
 
 from typing import Union
+
+from kart.diff_format import DiffFormat
 from .base_diff_writer import BaseDiffWriter
 from .diff_estimation import (
     ThreadTerminated,
@@ -57,10 +59,10 @@ class JsonDiffWriter(BaseDiffWriter):
         if self.commit is not None:
             obj["kart.show/v1"] = commit_obj_to_json(self.commit)
 
-    def write_diff(self):
+    def write_diff(self, diff_format=DiffFormat.FULL):
         # TODO - optimise - no need to generate the entire repo diff before starting output.
         # (This is not quite as bad as it looks, since parts of the diff object are lazily generated.)
-        repo_diff = self.get_repo_diff()
+        repo_diff = self.get_repo_diff(diff_format=diff_format)
         self.has_changes = bool(repo_diff)
 
         for ds_path, ds_diff in repo_diff.items():
@@ -68,7 +70,8 @@ class JsonDiffWriter(BaseDiffWriter):
 
         output_obj = {}
         self.add_json_header(output_obj)
-        output_obj["kart.diff/v1+hexwkb"] = repo_diff
+        if diff_format != DiffFormat.NONE:
+            output_obj["kart.diff/v1+hexwkb"] = repo_diff
 
         dump_json_output(
             output_obj,
@@ -102,6 +105,8 @@ class JsonDiffWriter(BaseDiffWriter):
                     key: self._postprocess_simple_delta(value)
                     for key, value in ds_diff["meta"].items()
                 }
+            if "data_changes" in ds_diff:
+                result["data_changes"] = ds_diff["data_changes"]
             item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
             if item_type and item_type in ds_diff:
                 result[item_type] = self.filtered_dataset_deltas_as_json(
@@ -286,7 +291,7 @@ class JsonLinesDiffWriter(BaseDiffWriter):
                 }
             )
 
-    def write_ds_diff(self, ds_path, ds_diff):
+    def write_ds_diff(self, ds_path, ds_diff, diff_format=DiffFormat.FULL):
         dataset = self._get_old_or_new_dataset(ds_path)
         schema_json_delta = ds_diff.recursive_get(["meta", "schema.json"])
 
@@ -423,8 +428,11 @@ class GeojsonDiffWriter(BaseDiffWriter):
             output_path = "-"
         return output_path
 
-    def write_diff(self):
-        repo_diff = self.get_repo_diff(include_files=False)
+    def write_diff(self, diff_format=DiffFormat.FULL):
+        if diff_format != DiffFormat.FULL.value:
+            raise click.UsageError("GeoJSON format only supports full diffs")
+        repo_diff = self.get_repo_diff(include_files=False, diff_format=diff_format)
+
         self.has_changes = bool(repo_diff)
         if len(repo_diff) > 1 and not isinstance(self.output_path, Path):
             raise click.BadParameter(

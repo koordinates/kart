@@ -3,6 +3,7 @@ import re
 import subprocess
 
 from kart.cli_util import tool_environment
+from kart.diff_format import DiffFormat
 from kart.diff_structs import FILES_KEY, Delta, DeltaDiff, DatasetDiff, RepoDiff
 from kart.exceptions import SubprocessError
 from kart.key_filters import DatasetKeyFilter, RepoKeyFilter
@@ -45,6 +46,7 @@ def get_repo_diff(
     repo_key_filter=RepoKeyFilter.MATCH_ALL,
     convert_to_dataset_format=False,
     include_files=False,
+    diff_format=DiffFormat.FULL,
 ):
     """
     Generates a RepoDiff containing an entry for every dataset in the repo
@@ -66,13 +68,13 @@ def get_repo_diff(
 
     if include_wc_diff and workdir_diff_cache is None:
         workdir_diff_cache = target_rs.repo.working_copy.workdir_diff_cache()
-
     repo_diff = RepoDiff()
     for ds_path in all_ds_paths:
         repo_diff[ds_path] = get_dataset_diff(
             ds_path,
             base_rs.datasets(),
             target_rs.datasets(),
+            diff_format=diff_format,
             include_wc_diff=include_wc_diff,
             workdir_diff_cache=workdir_diff_cache,
             ds_filter=repo_key_filter[ds_path],
@@ -97,6 +99,7 @@ def get_dataset_diff(
     workdir_diff_cache=None,
     ds_filter=DatasetKeyFilter.MATCH_ALL,
     convert_to_dataset_format=False,
+    diff_format=DiffFormat.FULL,
 ):
     """
     Generates the DatasetDiff for the dataset at path dataset_path.
@@ -126,8 +129,12 @@ def get_dataset_diff(
             from_ds, to_ds = target_ds, base_ds
             reverse = True
 
-        base_target_diff = from_ds.diff(to_ds, ds_filter=ds_filter, reverse=reverse)
-        L.debug("base<>target diff (%s): %s", ds_path, repr(base_target_diff))
+        # If the diff_format is none, then we don't need to do any work to generate the diff. Else:
+        if diff_format != DiffFormat.NONE:
+            base_target_diff = from_ds.diff(
+                to_ds, ds_filter=ds_filter, reverse=reverse, diff_format=diff_format
+            )
+            L.debug("base<>target diff (%s): %s", ds_path, repr(base_target_diff))
 
     if include_wc_diff:
         # diff += target_ds<>working_copy
@@ -145,10 +152,10 @@ def get_dataset_diff(
                 ds_path,
                 repr(target_wc_diff),
             )
-
     ds_diff = DatasetDiff.concatenated(
         base_target_diff, target_wc_diff, overwrite_original=True
     )
+    # Get rid of parts of the diff-structure that are "empty":
     ds_diff.prune()
     return ds_diff
 

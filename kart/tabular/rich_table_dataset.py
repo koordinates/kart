@@ -2,6 +2,7 @@ import functools
 import time
 
 import click
+from kart.diff_format import DiffFormat
 from osgeo import osr
 
 from kart import crs_util
@@ -98,16 +99,33 @@ class RichTableDataset(TableDataset):
                 f"Can't reproject dataset {self.path!r} into target CRS: {e}"
             )
 
-    def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):
+    def diff(
+        self,
+        other,
+        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        reverse=False,
+        diff_format=DiffFormat.FULL,
+    ):
         """
         Generates a Diff from self -> other.
         If reverse is true, generates a diff from other -> self.
         """
         ds_diff = super().diff(other, ds_filter=ds_filter, reverse=reverse)
         feature_filter = ds_filter.get("feature", ds_filter.child_type())
-        ds_diff["feature"] = DeltaDiff(
-            self.diff_feature(other, feature_filter, reverse=reverse)
-        )
+
+        # If the user is asking for a no data changes diff, just check if the feature subtree is different.
+        if diff_format == DiffFormat.NO_DATA_CHANGES:
+            self_subtree = self.get_subtree("feature")
+            other_subtree = other.get_subtree("feature") if other else self._empty_tree
+            data_changes = self_subtree != other_subtree
+
+            ds_diff["data_changes"]: bool = data_changes
+
+        # Else do a full diff.
+        else:
+            ds_diff["feature"] = DeltaDiff(
+                self.diff_feature(other, feature_filter, reverse=reverse)
+            )
         return ds_diff
 
     def diff_to_working_copy(
