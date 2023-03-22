@@ -19,7 +19,9 @@ def rewrite_and_merge_metadata(tile_metadata_list):
     """
     # TODO - this will get more complicated as we add support for convert-to-COG.
     result = {}
-    all_keys = set().union(*tile_metadata_list)
+    all_keys = set()
+    for tm in tile_metadata_list:
+        all_keys.update(tm)
     # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
     all_keys.remove("tile")
     # TODO - handle metadata that doesn't actually conflict but may differ slightly
