@@ -147,7 +147,7 @@ class TileDataset(BaseDataset):
             spatial_filter=spatial_filter, show_progress=show_progress
         ):
             if fix_extensions:
-                tile_format = pointer_dict["format"]
+                tile_format = pointer_dict.get("format")
                 oid = pointer_dict["oid"].split(":", maxsplit=1)[1]
                 yield self.set_tile_extension(blob.name, tile_format=tile_format), oid
             else:
@@ -214,7 +214,7 @@ class TileDataset(BaseDataset):
             tile_pointer_blob, {"name": tile_pointer_blob.name}
         )
         result["name"] = cls.set_tile_extension(
-            result["name"], tile_format=result["format"]
+            result["name"], tile_format=result.get("format")
         )
         # LFS version info is in every pointer file but is not interesting to the user.
         if "version" in result:
@@ -299,7 +299,7 @@ class TileDataset(BaseDataset):
         """
         ds_diff = super().diff(other, ds_filter=ds_filter, reverse=reverse)
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
-        ds_diff["tile"] = DeltaDiff(self.diff_tile(other, tile_filter, reverse=reverse))
+        ds_diff["tile"] = self.diff_tile(other, tile_filter, reverse=reverse)
         return ds_diff
 
     def diff_tile(self, other, tile_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):
@@ -307,13 +307,15 @@ class TileDataset(BaseDataset):
         Yields tile deltas from self -> other, but only for tile that match the tile_filter.
         If reverse is true, yields tile deltas from other -> self.
         """
-        yield from self.diff_subtree(
-            other,
-            "tile",
-            key_filter=tile_filter,
-            key_decoder_method="tilename_from_path",
-            value_decoder_method="get_tile_summary_promise_from_blob_path",
-            reverse=reverse,
+        return DeltaDiff(
+            self.diff_subtree(
+                other,
+                "tile",
+                key_filter=tile_filter,
+                key_decoder_method="tilename_from_path",
+                value_decoder_method="get_tile_summary_promise_from_blob_path",
+                reverse=reverse,
+            )
         )
 
     def is_clean_slate(self, tile_diff):

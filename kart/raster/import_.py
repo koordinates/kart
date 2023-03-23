@@ -1,3 +1,4 @@
+from pathlib import Path
 import logging
 
 import click
@@ -163,3 +164,10 @@ class RasterImporter(TileImporter):
             source_oid = "sha256:" + source_oid
 
         return existing_summary.get("oid") == source_oid
+
+    def sidecar_files(self, source):
+        source = str(source)
+        if self.DATASET_CLASS.remove_tile_extension(source) != source:
+            sidecar_path = source + ".aux.xml"
+            if Path(sidecar_path).is_file():
+                yield sidecar_path

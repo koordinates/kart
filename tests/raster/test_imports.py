@@ -1,3 +1,4 @@
+from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
 from .fixtures import requires_gdal_info  # noqa
 
@@ -132,7 +133,7 @@ def test_import_single_geotiff_with_rat(
             r = cli_runner.invoke(["import", f"{erosion}/erorisk_silcdb4.tif"])
             assert r.exit_code == 0, r.stderr
 
-            check_lfs_hashes(repo, 1)
+            check_lfs_hashes(repo, 2)
 
             r = cli_runner.invoke(["data", "ls"])
             assert r.exit_code == 0, r.stderr
@@ -246,4 +247,19 @@ def test_import_single_geotiff_with_rat(
                 "+                             nativeExtent = POLYGON((1573869.73 5155224.347,1573869.73 5143379.674,1585294.591 5143379.674,1585294.591 5155224.347,1573869.73 5155224.347))",
                 "+                                      oid = sha256:c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
                 "+                                     size = 604652",
+                "+                                   pamOid = sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
+                "+                                  pamSize = 36908",
             ]
+
+            tif = repo_path / "erorisk_silcdb4" / "erorisk_silcdb4.tif"
+            assert tif.is_file()
+            assert get_hash_and_size_of_file(tif) == (
+                "c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
+                604652,
+            )
+            pam = repo_path / "erorisk_silcdb4" / "erorisk_silcdb4.tif.aux.xml"
+            assert pam.is_file()
+            assert get_hash_and_size_of_file(pam) == (
+                "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
+                36908,
+            )

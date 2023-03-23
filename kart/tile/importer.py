@@ -28,6 +28,7 @@ from kart.key_filters import RepoKeyFilter
 from kart.lfs_util import (
     install_lfs_hooks,
     merge_dicts_to_pointer_file_bytes,
+    dict_to_pointer_file_bytes,
     copy_file_to_local_lfs_cache,
     get_hash_and_size_of_file,
 )
@@ -278,6 +279,15 @@ class TileImporter:
 
                 write_blob_to_stream(proc.stdin, blob_path, pointer_data)
 
+                for sidecar_file in self.sidecar_files(source):
+                    pointer_dict = copy_file_to_local_lfs_cache(self.repo, sidecar_file)
+                    pointer_data = dict_to_pointer_file_bytes(pointer_dict)
+                    rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
+                        sidecar_file, relative=True
+                    )
+                    blob_path = f"{dataset_inner_path}/{rel_blob_path}"
+                    write_blob_to_stream(proc.stdin, blob_path, pointer_data)
+
             all_metadata = [existing_metadata] if include_existing_metadata else []
             all_metadata.extend(self.source_to_imported_metadata.values())
             self.actual_merged_metadata = self.get_actual_merged_metadata(all_metadata)
@@ -510,3 +520,6 @@ class TileImporter:
     def missing_parameter(self, param_name):
         """Raise a MissingParameter exception."""
         return click.MissingParameter(param=find_param(self.ctx, param_name))
+
+    def sidecar_files(self, source):
+        return []
