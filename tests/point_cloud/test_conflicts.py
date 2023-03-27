@@ -4,7 +4,6 @@ import shutil
 from .fixtures import requires_pdal  # noqa
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
-from . import assert_lines_almost_equal
 
 
 def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
@@ -26,40 +25,37 @@ def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
 
         r = cli_runner.invoke(["conflicts"])
         assert r.exit_code == 0, r.stderr
-        assert_lines_almost_equal(
-            r.stdout.splitlines(),
-            [
-                "auckland:",
-                "    auckland:tile:",
-                "        auckland:tile:auckland_0_0:",
-                "            auckland:tile:auckland_0_0:ancestor:",
-                "                                    name = auckland_0_0.copc.laz",
-                "                             crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83",
-                "                                  format = laz-1.4/copc-1.0",
-                "                            nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
-                "                              pointCount = 4231",
-                "                               sourceOid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
-                "                                     oid = sha256:1ad630a7b3acd8d678984831181688f82471a25ad6e93b2a2a5a253c9ffb1849",
-                "                                    size = 69437",
-                "            auckland:tile:auckland_0_0:ours:",
-                "                                    name = auckland_0_0.copc.laz",
-                "                             crs84Extent = 174.7602522,174.7716555,-36.83288446,-36.82371241,-1.54,10.59",
-                "                                  format = laz-1.4/copc-1.0",
-                "                            nativeExtent = 1756987.83,1757986.74,5922219.95,5923219.43,-1.54,10.59",
-                "                              pointCount = 1599",
-                "                                     oid = sha256:858757799b09743b4b58627d2cfabd7d2c0359d658c060b195c8ac932c279ef3",
-                "                                    size = 22671",
-                "            auckland:tile:auckland_0_0:theirs:",
-                "                                    name = auckland_0_0.copc.laz",
-                "                             crs84Extent = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15",
-                "                                  format = laz-1.4/copc-1.0",
-                "                            nativeExtent = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15",
-                "                              pointCount = 1558",
-                "                                     oid = sha256:9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312",
-                "                                    size = 24480",
-                "",
-            ],
-        )
+        assert r.stdout.splitlines() == [
+            "auckland:",
+            "    auckland:tile:",
+            "        auckland:tile:auckland_0_0:",
+            "            auckland:tile:auckland_0_0:ancestor:",
+            "                                    name = auckland_0_0.copc.laz",
+            "                             crs84Extent = POLYGON((174.7384483 -36.8512371,174.7382443 -36.8422277,174.7494540 -36.8420632,174.7496594 -36.8510726,174.7384483 -36.8512371))",
+            "                                  format = laz-1.4/copc-1.0",
+            "                            nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
+            "                              pointCount = 4231",
+            "                               sourceOid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
+            "                                     oid = sha256:adbc1dc7fc99c88fcb627b9c40cdb56c211b791fe9cf83fe066b1a9932c12569",
+            "                                    size = 54396",
+            "            auckland:tile:auckland_0_0:ours:",
+            "                                    name = auckland_0_0.copc.laz",
+            "                             crs84Extent = POLYGON((174.7604586 -36.8328845,174.7602522 -36.8238787,174.7714478 -36.8237124,174.7716555 -36.8327181,174.7604586 -36.8328845))",
+            "                                  format = laz-1.4/copc-1.0",
+            "                            nativeExtent = 1756987.83,1757986.74,5922219.95,5923219.43,-1.54,10.59",
+            "                              pointCount = 1599",
+            "                                     oid = sha256:583789bcea43177dbba446574f00f817b2f89782fcf71709d911b2ad10872d0e",
+            "                                    size = 18317",
+            "            auckland:tile:auckland_0_0:theirs:",
+            "                                    name = auckland_0_0.copc.laz",
+            "                             crs84Extent = POLYGON((174.7494680 -36.8420542,174.7492629 -36.8330539,174.7604509 -36.8328887,174.7606572 -36.8418890,174.7494680 -36.8420542))",
+            "                                  format = laz-1.4/copc-1.0",
+            "                            nativeExtent = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15",
+            "                              pointCount = 1558",
+            "                                     oid = sha256:8624133a3fa257e528fe1e0a01e1f2a7fa9f453cbe4fe283a31eabaf77c68794",
+            "                                    size = 19975",
+            "",
+        ]
 
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
@@ -72,13 +68,13 @@ def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
         # Check the conflict versions were written to the working copy for the user to compare:
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.ancestor.copc.laz"
-        ) == ("1ad630a7b3acd8d678984831181688f82471a25ad6e93b2a2a5a253c9ffb1849", 69437)
+        ) == ("adbc1dc7fc99c88fcb627b9c40cdb56c211b791fe9cf83fe066b1a9932c12569", 54396)
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.ours.copc.laz"
-        ) == ("858757799b09743b4b58627d2cfabd7d2c0359d658c060b195c8ac932c279ef3", 22671)
+        ) == ("583789bcea43177dbba446574f00f817b2f89782fcf71709d911b2ad10872d0e", 18317)
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.theirs.copc.laz"
-        ) == ("9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312", 24480)
+        ) == ("8624133a3fa257e528fe1e0a01e1f2a7fa9f453cbe4fe283a31eabaf77c68794", 19975)
 
         assert not (repo_path / "auckland" / "auckland_0_0.copc.laz").exists()
 
@@ -98,7 +94,7 @@ def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
 
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
-        ) == ("9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312", 24480)
+        ) == ("8624133a3fa257e528fe1e0a01e1f2a7fa9f453cbe4fe283a31eabaf77c68794", 19975)
 
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
@@ -130,7 +126,7 @@ def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
 
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
-        ) == ("9aa44b101a0e3461a25b94d747057b0dd20e737ac2a344f788085f062ac7c312", 24480)
+        ) == ("8624133a3fa257e528fe1e0a01e1f2a7fa9f453cbe4fe283a31eabaf77c68794", 19975)
 
 
 def test_resolve_conflict_with_workingcopy(cli_runner, data_archive, requires_pdal):
@@ -173,29 +169,26 @@ def test_resolve_conflict_with_workingcopy(cli_runner, data_archive, requires_pd
 
         r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
         assert r.exit_code == 0, r.stderr
-        assert_lines_almost_equal(
-            r.stdout.splitlines()[4:],
-            [
-                '    Merge with "theirs_branch"',
-                "",
-                "--- auckland:tile:auckland_0_0",
-                "+++ auckland:tile:auckland_0_0",
-                "-                              crs84Extent = 174.7602522,174.7716555,-36.83288446,-36.82371241,-1.54,10.59",
-                "+                              crs84Extent = 174.77264383982666,174.78196531690548,-36.82369124731785,-36.82346552753396,-1.28,9.8",
-                "-                             nativeExtent = 1756987.83,1757986.74,5922219.95,5923219.43,-1.54,10.59",
-                "+                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
-                "-                               pointCount = 1599",
-                "+                               pointCount = 29",
-                "-                                      oid = sha256:858757799b09743b4b58627d2cfabd7d2c0359d658c060b195c8ac932c279ef3",
-                "+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
-                "-                                     size = 22671",
-                "+                                     size = 2319",
-            ],
-        )
+        assert r.stdout.splitlines()[4:] == [
+            '    Merge with "theirs_branch"',
+            "",
+            "--- auckland:tile:auckland_0_0",
+            "+++ auckland:tile:auckland_0_0",
+            "-                              crs84Extent = POLYGON((174.7604586 -36.8328845,174.7602522 -36.8238787,174.7714478 -36.8237124,174.7716555 -36.8327181,174.7604586 -36.8328845))",
+            "+                              crs84Extent = POLYGON((174.7726438 -36.8236912,174.7726418 -36.8236049,174.7819653 -36.8234655,174.7819673 -36.8235518,174.7726438 -36.8236912))",
+            "-                             nativeExtent = 1756987.83,1757986.74,5922219.95,5923219.43,-1.54,10.59",
+            "+                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
+            "-                               pointCount = 1599",
+            "+                               pointCount = 29",
+            "-                                      oid = sha256:583789bcea43177dbba446574f00f817b2f89782fcf71709d911b2ad10872d0e",
+            "+                                      oid = sha256:0fd4dc03d2e9963658cf70e9d52fa1eaa7292da71d89d0188cfa88d5afb75ab6",
+            "-                                     size = 18317",
+            "+                                     size = 2314",
+        ]
 
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
-        ) == ("64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3", 2319)
+        ) == ("0fd4dc03d2e9963658cf70e9d52fa1eaa7292da71d89d0188cfa88d5afb75ab6", 2314)
 
 
 def test_resolve_conflict_with_file(cli_runner, data_archive, requires_pdal, tmpdir):
@@ -234,26 +227,22 @@ def test_resolve_conflict_with_file(cli_runner, data_archive, requires_pdal, tmp
 
         r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
         assert r.exit_code == 0, r.stderr
-        assert_lines_almost_equal(
-            r.stdout.splitlines()[4:],
-            [
-                '    Merge with "theirs_branch"',
-                "",
-                "--- auckland:tile:auckland_0_0",
-                "+++ auckland:tile:auckland_0_0",
-                "-                              crs84Extent = 174.7602522,174.7716555,-36.83288446,-36.82371241,-1.54,10.59",
-                "+                              crs84Extent = 174.74926510353393,174.75916130261766,-36.824030639213454,-36.823804108019,-1.28,30.4",
-                "-                             nativeExtent = 1756987.83,1757986.74,5922219.95,5923219.43,-1.54,10.59",
-                "+                             nativeExtent = 1756007.55,1756890.68,5923220.57,5923229.5,-1.28,30.4",
-                "-                               pointCount = 1599",
-                "+                               pointCount = 17",
-                "-                                      oid = sha256:858757799b09743b4b58627d2cfabd7d2c0359d658c060b195c8ac932c279ef3",
-                "+                                      oid = sha256:bf4210be91ea2013ff13961a885cc9b16cb631a5b54cc89276010d1e4adf74e2",
-                "-                                     size = 22671",
-                "+                                     size = 2138",
-            ],
-        )
-
+        assert r.stdout.splitlines()[4:] == [
+            '    Merge with "theirs_branch"',
+            "",
+            "--- auckland:tile:auckland_0_0",
+            "+++ auckland:tile:auckland_0_0",
+            "-                              crs84Extent = POLYGON((174.7604586 -36.8328845,174.7602522 -36.8238787,174.7714478 -36.8237124,174.7716555 -36.8327181,174.7604586 -36.8328845))",
+            "+                              crs84Extent = POLYGON((174.7492651 -36.8240306,174.7492633 -36.8239502,174.7591613 -36.8238041,174.7591631 -36.8238846,174.7492651 -36.8240306))",
+            "-                             nativeExtent = 1756987.83,1757986.74,5922219.95,5923219.43,-1.54,10.59",
+            "+                             nativeExtent = 1756007.55,1756890.68,5923220.57,5923229.5,-1.28,30.4",
+            "-                               pointCount = 1599",
+            "+                               pointCount = 17",
+            "-                                      oid = sha256:583789bcea43177dbba446574f00f817b2f89782fcf71709d911b2ad10872d0e",
+            "+                                      oid = sha256:32b5fe23040b236dfe469456dd8f7ebbb4dcb3326305ba3e183714a32e4dd1ac",
+            "-                                     size = 18317",
+            "+                                     size = 2137",
+        ]
         assert get_hash_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
-        ) == ("bf4210be91ea2013ff13961a885cc9b16cb631a5b54cc89276010d1e4adf74e2", 2138)
+        ) == ("32b5fe23040b236dfe469456dd8f7ebbb4dcb3326305ba3e183714a32e4dd1ac", 2137)

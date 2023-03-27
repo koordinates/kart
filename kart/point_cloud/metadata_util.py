@@ -11,6 +11,7 @@ from kart.exceptions import (
     InvalidOperation,
     INVALID_FILE_FORMAT,
 )
+from kart.geometry import ring_as_wkt
 from kart.point_cloud import pdal_execute_pipeline
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf,
@@ -237,20 +238,16 @@ def _calc_crs84_extent(src_extent, src_crs):
     dest_srs.SetWellKnownGeogCS("CRS84")
 
     transform = osr.CoordinateTransformation(src_srs, dest_srs)
-    (ax, ay, az), (bx, by, bz) = transform.TransformPoints(
+    min_x, max_x, min_y, max_y, min_z, max_z = src_extent
+    result = transform.TransformPoints(
         [
-            src_extent[0::2],
-            src_extent[1::2],
+            (min_x, min_y),
+            (min_x, max_y),
+            (max_x, max_y),
+            (max_x, min_y),
         ]
     )
-    return (
-        min(ax, bx),
-        max(ax, bx),
-        min(ay, by),
-        max(ay, by),
-        min(az, bz),
-        max(az, bz),
-    )
+    return "POLYGON(" + ring_as_wkt(*result, dp=7) + ")"
 
 
 def is_copc(tile_format):
