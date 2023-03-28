@@ -705,13 +705,16 @@ def geom_envelope(gpkg_geom, only_2d=False, calculate_if_missing=False):
         return envelope
 
 
-def ring_as_wkt(*points, repeat_first_point=True):
+def ring_as_wkt(*points, repeat_first_point=True, dp=None):
     if repeat_first_point:
         points_iter = itertools.chain(points, [points[0]])
     else:
         points_iter = points
 
-    return "(" + ",".join(f"{x} {y}" for x, y in points_iter) + ")"
+    if dp is None:
+        return "(" + ",".join(f"{p[0]} {p[1]}" for p in points_iter) + ")"
+    else:
+        return "(" + ",".join(f"{p[0]:.{dp}f} {p[1]:.{dp}f}" for p in points_iter) + ")"
 
 
 def bbox_as_wkt_polygon(min_x, max_x, min_y, max_y):

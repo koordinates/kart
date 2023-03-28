@@ -190,17 +190,17 @@ def test_spatial_filtered_diff(data_archive, cli_runner, tmp_path, requires_pdal
         assert r.stdout.splitlines() == [
             "--- auckland:tile:auckland_0_3",
             "+++ auckland:tile:auckland_0_3",
-            "-                              crs84Extent = 174.73891001915146,174.74882538957996,-36.82418662552334,-36.82395715927626,-1.77,28.39",
-            "+                              crs84Extent = 174.73844833207193,174.74945404214898,-36.85123712200056,-36.84206322341377,-1.66,99.83",
+            "-                              crs84Extent = POLYGON((174.7389100 -36.8241866,174.7389081 -36.8241026,174.7488254 -36.8239572,174.7488273 -36.8240411,174.7389100 -36.8241866))",
+            "+                              crs84Extent = POLYGON((174.7384483 -36.8512371,174.7382443 -36.8422277,174.7494540 -36.8420632,174.7496594 -36.8510726,174.7384483 -36.8512371))",
             "-                             nativeExtent = 1755083.64,1755968.48,5923220.12,5923229.44,-1.77,28.39",
             "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
             "-                               pointCount = 20",
             "+                               pointCount = 4231",
             "-                                sourceOid = sha256:a4acd08ca3763823df67fc0d4e45ce0e39525b49e31d8f20babc74d208e481a5",
-            "-                                      oid = sha256:11ba773069c7e935735f7076b2fa44334d0bb41c4742d8cd8111f575359a773c",
-            "+                                      oid = sha256:a1862450841dede2759af665825403e458dfa551c095d9a65ea6e6765aeae0f7",
-            "-                                     size = 2190",
-            "+                                     size = 69590",
+            "-                                      oid = sha256:4269cf4db9798d077786bb2f842aa28608fd3a52dd7cdaa0fa66bc1cb47cc483",
+            "+                                      oid = sha256:adbc1dc7fc99c88fcb627b9c40cdb56c211b791fe9cf83fe066b1a9932c12569",
+            "-                                     size = 2180",
+            "+                                     size = 54396",
         ]
 
         assert r.stderr.splitlines() == [

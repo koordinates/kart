@@ -103,7 +103,6 @@ def extract_raster_tile_metadata(raster_tile_path):
 
 
 def format_polygon(*points):
-    # TODO - should we just store the axis-aligned extent?
     return "POLYGON(" + ring_as_wkt(*points) + ")"
 
 
