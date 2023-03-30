@@ -279,14 +279,10 @@ class TileImporter:
 
                 write_blob_to_stream(proc.stdin, blob_path, pointer_data)
 
-                for sidecar_file in self.sidecar_files(source):
+                for sidecar_file, suffix in self.sidecar_files(source):
                     pointer_dict = copy_file_to_local_lfs_cache(self.repo, sidecar_file)
                     pointer_data = dict_to_pointer_file_bytes(pointer_dict)
-                    rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
-                        sidecar_file, relative=True
-                    )
-                    blob_path = f"{dataset_inner_path}/{rel_blob_path}"
-                    write_blob_to_stream(proc.stdin, blob_path, pointer_data)
+                    write_blob_to_stream(proc.stdin, blob_path + suffix, pointer_data)
 
             all_metadata = [existing_metadata] if include_existing_metadata else []
             all_metadata.extend(self.source_to_imported_metadata.values())

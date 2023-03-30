@@ -10,7 +10,7 @@ def remove_tile_extension(filename, remove_pam_suffix=False):
         return (
             match.group(1)
             if remove_pam_suffix
-            else match.group(1) + (match.group(3) or "")
+            else match.group(1) + (match.group(3).lower() if match.group(3) else "")
         )
     return filename
 
@@ -50,5 +50,5 @@ def get_tile_path_pattern(
     version_pattern = (
         r"(?:\.ancestor|\.ours|\.theirs)?" if include_conflict_versions else ""
     )
-    ext_pattern = r"\.[Tt][Ii][Ff][Ff]?"
+    ext_pattern = r"(?i:\.tiff?)"
     return re.compile(parent_pattern + tile_pattern + version_pattern + ext_pattern)
