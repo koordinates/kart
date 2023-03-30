@@ -101,10 +101,28 @@ def extract_raster_tile_metadata(raster_tile_path):
 
     try:
         raster_tile_path = Path(raster_tile_path)
-        pam_path = raster_tile_path.with_name(raster_tile_path.name + ".aux.xml")
-        pams = find_similar_files_case_insensitive(pam_path)
+        expected_pam_path = raster_tile_path.with_name(
+            raster_tile_path.name + ".aux.xml"
+        )
+        pams = find_similar_files_case_insensitive(expected_pam_path)
         if len(pams) == 1:
-            result.update(extract_aux_xml_metadata(pams[0]))
+            pam_path = pams[0]
+            result.update(extract_aux_xml_metadata(pam_path))
+
+            if pam_path.name == expected_pam_path.name:
+                tile_info.update({"pamName": pam_path.name})
+            else:
+                tile_info.update(
+                    {"pamSourceName": pam_path.name, "pamName": expected_pam_path.name}
+                )
+
+            pam_oid, pam_size = get_hash_and_size_of_file(pam_path)
+            tile_info.update(
+                {
+                    "pamOid": f"sha256:{pam_oid}",
+                    "pamSize": pam_size,
+                }
+            )
     except Exception as e:
         # TODO - how to handle corrupted PAM file.
         L.warn("Error extracting aux-xml metadata", e)
@@ -167,8 +185,8 @@ def extract_aux_xml_metadata(aux_xml_path):
     """
     Given the path to a tif.aux.xml file, tries to extract the following:
 
-    - the column headings of any raster-attribute-table(s), as "bands/band-{band_id}-rat.xml"
-    - the category labels from any raster-attribute-table(s) as "bands/band-{band_id}-categories.json"
+    - the column headings of any raster-attribute-table(s), as "band/band-{band_id}-rat.xml"
+    - the category labels from any raster-attribute-table(s) as "band/band-{band_id}-categories.json"
     """
     result = {}
 
@@ -197,7 +215,7 @@ def extract_aux_xml_metadata(aux_xml_path):
             rat_schema_xml = "\n".join(
                 l for l in rat_schema_xml.split("\n") if not l.isspace()
             )
-            result[f"bands/band-{band_id}-rat.xml"] = rat_schema_xml
+            result[f"band/band-{band_id}-rat.xml"] = rat_schema_xml
 
             if category_column is not None:
                 category_labels = {}
@@ -211,7 +229,7 @@ def extract_aux_xml_metadata(aux_xml_path):
                         category_labels[row_id] = category_text
 
                 if category_labels:
-                    result[f"bands/band-{band_id}-categories.json"] = category_labels
+                    result[f"band/band-{band_id}-categories.json"] = category_labels
 
     return result
 

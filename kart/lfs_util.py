@@ -110,6 +110,20 @@ def merge_pointer_file_dicts(
     )
 
 
+_TRANSIENT_KEYS = (
+    "name",
+    "sourceName",
+    "sourceFormat",
+    "sourceSize",
+    # Some of the PAM keys aren't actually transient but they should be stored in a separate pointer file:
+    # make sure we don't serialize them in the tile pointer file using the "pam" prefix.
+    "pamName",
+    "pamSourceName",
+    "pamOid",
+    "pamSize",
+)
+
+
 def dict_to_pointer_file_bytes(pointer_dict, include_nonstandard_keys=True):
     """
     Normalise a pointer-file-dict ready for writing to disk, then encode it to a bytestring.
@@ -119,7 +133,7 @@ def dict_to_pointer_file_bytes(pointer_dict, include_nonstandard_keys=True):
     return _process_pointer_file_dict(
         pointer_dict,
         include_nonstandard_keys=include_nonstandard_keys,
-        drop_keys=("name", "sourceName", "sourceFormat", "sourceSize"),
+        drop_keys=_TRANSIENT_KEYS,
         encode_to_bytes=True,
     )
 
@@ -129,7 +143,7 @@ def merge_dicts_to_pointer_file_bytes(*pointer_dicts, include_nonstandard_keys=T
     return _process_pointer_file_dict(
         *pointer_dicts,
         include_nonstandard_keys=include_nonstandard_keys,
-        drop_keys=("name", "sourceName", "sourceFormat", "sourceSize"),
+        drop_keys=_TRANSIENT_KEYS,
         encode_to_bytes=True,
     )
 
@@ -335,8 +349,11 @@ def copy_file_to_local_lfs_cache(
         actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
         tmp_object_path.rename(actual_object_path)
 
+    if not oid.startswith("sha256:"):
+        oid = "sha256:" + oid
+
     return {
         "version": GIT_LFS_SPEC_V1,
-        "oid": f"sha256:{oid}",
+        "oid": oid,
         "size": size,
     }

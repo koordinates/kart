@@ -27,7 +27,7 @@ def set_tile_extension(filename, ext=None, tile_format=None):
 
 
 def get_tile_path_pattern(
-    tilename=None, *, parent_path=None, include_conflict_versions=False
+    tilename=None, *, parent_path=None, include_conflict_versions=False, is_pam=None
 ):
     """
     Given a tilename eg "mytile" and a parent_path eg "myfolder",
@@ -39,6 +39,8 @@ def get_tile_path_pattern(
     If parent_path is not specified, the resulting regex will match only tiles that have no parent-path prefix ie simply "mytile.laz"
     If include_conflict_versions is True, then an "ancestor" / "ours" / "theirs" infix will also be matched if needed -
     that is, "mytile.laz", "mytile.ancestor.laz", "mytile.ours.laz" and "mytile.theirs.laz" are all matched (and so on).
+    If is_pam is True, this will match only PAM files eg "*.aux.xml". If is_pam is False, will match only non-PAM tiles.
+    If is_pam is None, this will match both PAM and non-PAM files.
     """
 
     parent_pattern = (
@@ -51,4 +53,9 @@ def get_tile_path_pattern(
         r"(?:\.ancestor|\.ours|\.theirs)?" if include_conflict_versions else ""
     )
     ext_pattern = r"(?i:\.tiff?)"
+    if is_pam is True:
+        ext_pattern += r"(?i:\.aux\.xml)"
+    elif is_pam is None:
+        ext_pattern += r"(?i:\.aux\.xml)?"
+
     return re.compile(parent_pattern + tile_pattern + version_pattern + ext_pattern)
