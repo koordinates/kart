@@ -1,5 +1,7 @@
+import functools
+
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue, WORKING_COPY_EDIT
-from kart.key_filters import DatasetKeyFilter
+from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.tile.tile_dataset import TileDataset
 from kart.raster.metadata_util import (
     extract_raster_tile_metadata,
@@ -42,6 +44,38 @@ class RasterV1(TileDataset):
             parent_path=parent_path,
             include_conflict_versions=include_conflict_versions,
         )
+
+    def diff_tile(self, other, tile_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):
+        # PAM files deltas are output in the same delta as the tile they are attached to.
+        def _unify_pam_delta(key_value, pam_key_value):
+            if key_value is None or pam_key_value is None:
+                return key_value
+            return key_value.key, functools.partial(
+                _pam_delta_value_promise, key_value, pam_key_value
+            )
+
+        # Don't access lazy values until we need to, for efficient diff streaming.
+        def _pam_delta_value_promise(key_value, pam_key_value):
+            value = key_value.get_lazy_value()
+            pam_key_value = pam_key_value.get_lazy_value()
+            value["pamOid"] = pam_key_value["oid"]
+            value["pamSize"] = pam_key_value["size"]
+            return value
+
+        raw_diff = super().diff_tile(other, tile_filter=tile_filter, reverse=reverse)
+        result = DeltaDiff()
+        for key, delta in raw_diff.items():
+            if key.endswith(".aux.xml"):
+                continue
+            if f"{key}.aux.xml" in raw_diff:
+                pam_delta = raw_diff[f"{key}.aux.xml"]
+                old_half_delta = _unify_pam_delta(delta.old, pam_delta.old)
+                new_half_delta = _unify_pam_delta(delta.new, pam_delta.new)
+                result[key] = Delta(old_half_delta, new_half_delta)
+            else:
+                result[key] = delta
+
+        return result
 
     def diff_to_working_copy(
         self,

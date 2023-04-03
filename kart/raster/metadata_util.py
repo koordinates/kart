@@ -6,6 +6,7 @@ from xml.dom.minidom import Node
 from kart.crs_util import normalise_wkt
 from kart.geometry import ring_as_wkt
 from kart.list_of_conflicts import ListOfConflicts
+from kart.tile.tilename_util import find_similar_files_case_insensitive
 from kart.schema import Schema, ColumnSchema
 
 
@@ -93,10 +94,12 @@ def extract_raster_tile_metadata(raster_tile_path):
 
     try:
         raster_tile_path = Path(raster_tile_path)
-        aux_xml_path = raster_tile_path.with_name(raster_tile_path.name + ".aux.xml")
-        if aux_xml_path.is_file():
-            result.update(extract_aux_xml_metadata(aux_xml_path))
+        pam_path = raster_tile_path.with_name(raster_tile_path.name + ".aux.xml")
+        pams = find_similar_files_case_insensitive(pam_path)
+        if len(pams) == 1:
+            result.update(extract_aux_xml_metadata(pams[0]))
     except Exception as e:
+        # TODO - how to handle corrupted PAM file.
         L.warn("Error extracting aux-xml metadata", e)
 
     return result
