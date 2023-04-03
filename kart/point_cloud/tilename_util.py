@@ -64,5 +64,5 @@ def get_tile_path_pattern(
     version_pattern = (
         r"(?:\.ancestor|\.ours|\.theirs)?" if include_conflict_versions else ""
     )
-    ext_pattern = r"(?i:\.copc)?(?i:\.la[sz])"
+    ext_pattern = r"(?i:\.copc\.laz|\.la[sz])"
     return re.compile(parent_pattern + tile_pattern + version_pattern + ext_pattern)

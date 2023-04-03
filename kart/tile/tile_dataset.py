@@ -304,8 +304,8 @@ class TileDataset(BaseDataset):
 
     def diff_tile(self, other, tile_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):
         """
-        Yields tile deltas from self -> other, but only for tile that match the tile_filter.
-        If reverse is true, yields tile deltas from other -> self.
+        Returns a DeltaDiff of deltas from self -> other, but only for tiles that match the tile_filter.
+        If reverse is true, returns a DeltaDiff of deltas from other -> self.
         """
         return DeltaDiff(
             self.diff_subtree(

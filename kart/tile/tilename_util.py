@@ -28,7 +28,7 @@ def remove_any_tile_extension(filename):
 def case_insensitive(name):
     """
     Given a name eg "baz", returns a case-insensitive version that can be understood by pathlib.Path.glob
-    or the fnmatch module - eg "[Bb][Aa][Zz]"
+    - eg "[Bb][Aa][Zz]"
     """
     return re.sub(
         "[A-Za-z]", lambda m: f"[{m.group().upper()}{m.group().lower()}]", name

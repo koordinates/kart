@@ -46,11 +46,6 @@ class RasterV1(TileDataset):
         )
 
     def diff_tile(self, other, tile_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):
-        """
-        Yields tile deltas from self -> other, but only for tile that match the tile_filter.
-        If reverse is true, yields tile deltas from other -> self.
-        """
-
         # PAM files deltas are output in the same delta as the tile they are attached to.
         def _unify_pam_delta(key_value, pam_key_value):
             if key_value is None or pam_key_value is None:
