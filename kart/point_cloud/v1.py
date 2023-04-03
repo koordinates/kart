@@ -103,9 +103,7 @@ class PointCloudV1(TileDataset):
             elif extract_metadata:
                 tile_metadata = extract_pc_tile_metadata(wc_path)
                 tilename_to_metadata[wc_path.name] = tile_metadata
-                new_tile_summary = self.get_tile_summary_from_workdir_path(
-                    wc_path, tile_metadata=tile_metadata
-                )
+                new_tile_summary = tile_metadata["tile"]
 
                 if dataset_format_to_apply and not self.is_tile_compatible(
                     dataset_format_to_apply, new_tile_summary

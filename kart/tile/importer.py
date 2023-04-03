@@ -153,8 +153,12 @@ class TileImporter:
         if sources:
             for source in sources:
                 click.echo(f"Checking {source}...          \r", nl=False)
-                self.source_to_metadata[source] = self.extract_tile_metadata(source)
-                self.source_to_hash_and_size[source] = get_hash_and_size_of_file(source)
+                tile_metadata = self.extract_tile_metadata(source)
+                self.source_to_metadata[source] = tile_metadata
+                self.source_to_hash_and_size[source] = (
+                    tile_metadata["tile"]["oid"],
+                    tile_metadata["tile"]["size"],
+                )
             click.echo()
 
             self.check_metadata_pre_convert()

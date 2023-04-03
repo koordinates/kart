@@ -6,6 +6,7 @@ from xml.dom.minidom import Node
 from kart.crs_util import normalise_wkt
 from kart.geometry import ring_as_wkt
 from kart.list_of_conflicts import ListOfConflicts
+from kart.lfs_util import get_hash_and_size_of_file
 from kart.tile.tilename_util import find_similar_files_case_insensitive
 from kart.schema import Schema, ColumnSchema
 
@@ -76,13 +77,19 @@ def extract_raster_tile_metadata(raster_tile_path):
 
     cc = metadata["cornerCoordinates"]
     size_in_pixels = metadata["size"]
+    oid, size = get_hash_and_size_of_file(raster_tile_path)
+
+    # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {
+        "name": Path(raster_tile_path).name,
         "format": "geotiff",
         "crs84Extent": format_polygon(*metadata["wgs84Extent"]["coordinates"][0]),
+        "dimensions": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
         "nativeExtent": format_polygon(
             cc["upperLeft"], cc["lowerLeft"], cc["lowerRight"], cc["upperRight"]
         ),
-        "dimensions": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
+        "oid": f"sha256:{oid}",
+        "size": size,
     }
 
     result = {

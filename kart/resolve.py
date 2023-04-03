@@ -91,7 +91,7 @@ def _load_file_resolve_for_tile(rich_conflict, file_path):
     dataset = load_dataset(rich_conflict)
     repo = dataset.repo
     rel_tile_path = os.path.relpath(file_path.resolve(), repo.workdir_path.resolve())
-    tile_summary = dataset.get_tile_summary_from_filesystem_path(file_path)
+    tile_summary = dataset.extract_tile_metadata_from_filesystem_path(file_path)["tile"]
     if not dataset.is_tile_compatible(
         dataset.tile_metadata["format.json"], tile_summary
     ):

@@ -1,16 +1,19 @@
 from enum import IntEnum
 import logging
+import json
+from pathlib import Path
 import re
 from subprocess import CalledProcessError
 
 from osgeo import osr
 
 from kart.crs_util import normalise_wkt
-from kart.list_of_conflicts import ListOfConflicts
 from kart.exceptions import (
     InvalidOperation,
     INVALID_FILE_FORMAT,
 )
+from kart.list_of_conflicts import ListOfConflicts
+from kart.lfs_util import get_hash_and_size_of_file
 from kart.geometry import ring_as_wkt
 from kart.point_cloud import pdal_execute_pipeline
 from kart.point_cloud.schema_util import (
@@ -189,16 +192,20 @@ def extract_pc_tile_metadata(pc_tile_path):
     }
 
     schema_json = pdal_schema_to_kart_schema(metadata["filters.info"]["schema"])
+    oid, size = get_hash_and_size_of_file(pc_tile_path)
 
-    # Keep tile info keys in alphabetical order.
+    # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {
-        # PDAL seems to work best if we give it only the horizontal CRS here:
+        "name": Path(pc_tile_path).name,
+        # Reprojection seems to work best if we give it only the horizontal CRS here:
         "crs84Extent": _calc_crs84_extent(
             native_extent, horizontal_crs or compound_crs
         ),
         "format": get_format_summary(format_json),
-        "nativeExtent": native_extent,
+        "nativeExtent": _format_list_as_str(native_extent),
         "pointCount": info["count"],
+        "oid": f"sha256:{oid}",
+        "size": size,
     }
 
     result = {
@@ -209,6 +216,15 @@ def extract_pc_tile_metadata(pc_tile_path):
     }
 
     return result
+
+
+def _format_list_as_str(array):
+    """
+    We treat a pointer file as a place to store JSON, but its really for storing string-string key-value pairs only.
+    Some of our values are a lists of numbers - we turn them into strings by comma-separating them, and we don't
+    put them inside square brackets as they would be in JSON.
+    """
+    return json.dumps(array, separators=(",", ":"))[1:-1]
 
 
 def get_format_summary(format_info):

@@ -155,8 +155,6 @@ def _process_pointer_file_dict(
             key == "oid" and isinstance(value, str) and not value.startswith("sha256:")
         ):
             value = "sha256:" + value
-        elif hasattr(value, "__iter__") and not isinstance(value, str):
-            value = _format_list_as_str(value)
         result[key] = value
 
     if not encode_to_bytes:
@@ -186,15 +184,6 @@ def _process_pointer_file_dict(
             f"size {standard['size']}\n"
         )
     return result_str.encode("utf8")
-
-
-def _format_list_as_str(array):
-    """
-    We treat a pointer file as a place to store JSON, but its really for storing string-string key-value pairs only.
-    Some of our values are a lists of numbers - we turn them into strings by comma-separating them, and we don't
-    put them inside square brackets as they would be in JSON.
-    """
-    return json.dumps(array, separators=(",", ":"))[1:-1]
 
 
 def _iter_pointer_file_keys(

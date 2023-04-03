@@ -125,9 +125,7 @@ class RasterV1(TileDataset):
             elif extract_metadata:
                 tile_metadata = extract_raster_tile_metadata(wc_path)
                 tilename_to_metadata[wc_path.name] = tile_metadata
-                new_tile_summary = self.get_tile_summary_from_workdir_path(
-                    wc_path, tile_metadata=tile_metadata
-                )
+                new_tile_summary = tile_metadata["tile"]
 
                 new_half_delta = tilename, new_tile_summary
             else:

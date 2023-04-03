@@ -264,30 +264,6 @@ class TileDataset(BaseDataset):
         else:
             return wc_path
 
-    def get_tile_summary_from_workdir_path(self, path, *, tile_metadata=None):
-        """Generates a tile summary for a path to a tile in the working copy."""
-        path = self._workdir_path(path)
-        return self.get_tile_summary_from_filesystem_path(
-            path, tile_metadata=tile_metadata
-        )
-
-    def get_tile_summary_from_filesystem_path(self, path, *, tile_metadata=None):
-        """
-        Generates a tile summary from a pathlib.Path for a file somewhere on the filesystem.
-        If the tile_metadata is already known, this may be supplied too to avoid extra work.
-        """
-        if not tile_metadata:
-            tile_metadata = self.extract_tile_metadata_from_filesystem_path(path)
-        if "tile" in tile_metadata:
-            tile_metadata = tile_metadata["tile"]
-        oid, size = get_hash_and_size_of_file(path)
-        return {
-            "name": path.name,
-            **normalise_pointer_file_dict(tile_metadata),
-            "oid": f"sha256:{oid}",
-            "size": size,
-        }
-
     @classmethod
     def extract_tile_metadata_from_filesystem_path(cls, path):
         raise NotImplementedError()
