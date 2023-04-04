@@ -34,7 +34,7 @@ from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tile import ALL_TILE_DATASET_TYPES
 from kart.tile.tile_dataset import TileDataset
-from kart.tile.tilename_util import remove_any_tile_extension
+from kart.tile.tilename_util import remove_any_tile_extension, PAM_SUFFIX
 from kart.working_copy import WorkingCopyPart
 
 
@@ -458,7 +458,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             pointer_blob = tile_dataset.get_blob_at(path, missing_ok=True)
             if pointer_blob:
                 yield pointer_blob
-            pam_path = path + ".aux.xml"
+            pam_path = path + PAM_SUFFIX
             pam_pointer_blob = tile_dataset.get_blob_at(pam_path, missing_ok=True)
             if pam_pointer_blob:
                 yield pam_pointer_blob
@@ -623,7 +623,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     )
                     if not lfs_path.is_file():
                         click.echo(
-                            f"Couldn't find PAM file {tilename} locally - skipping...",
+                            f"Couldn't find PAM file {pam_name} locally - skipping...",
                             err=True,
                         )
                         continue

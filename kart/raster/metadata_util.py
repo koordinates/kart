@@ -7,7 +7,7 @@ from kart.crs_util import normalise_wkt
 from kart.geometry import ring_as_wkt
 from kart.list_of_conflicts import ListOfConflicts
 from kart.lfs_util import get_hash_and_size_of_file
-from kart.tile.tilename_util import find_similar_files_case_insensitive
+from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUFFIX
 from kart.schema import Schema, ColumnSchema
 
 
@@ -102,7 +102,7 @@ def extract_raster_tile_metadata(raster_tile_path):
     try:
         raster_tile_path = Path(raster_tile_path)
         expected_pam_path = raster_tile_path.with_name(
-            raster_tile_path.name + ".aux.xml"
+            raster_tile_path.name + PAM_SUFFIX
         )
         pams = find_similar_files_case_insensitive(expected_pam_path)
         if len(pams) == 1:

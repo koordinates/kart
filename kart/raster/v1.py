@@ -20,7 +20,11 @@ from kart.raster.tilename_util import (
     set_tile_extension,
 )
 from kart.tile.tile_dataset import TileDataset
-from kart.tile.tilename_util import find_similar_files_case_insensitive
+from kart.tile.tilename_util import (
+    find_similar_files_case_insensitive,
+    PAM_SUFFIX,
+    LEN_PAM_SUFFIX,
+)
 
 
 class RasterV1(TileDataset):
@@ -88,8 +92,8 @@ class RasterV1(TileDataset):
         changed_pams = set()
         # Copy across the tile deltas (these already include pamOid fields etc where appropriate).
         for key, delta in raw_diff.items():
-            if key.endswith(".aux.xml"):
-                changed_pams.add(key[:-8])
+            if key.endswith(PAM_SUFFIX):
+                changed_pams.add(key[:-LEN_PAM_SUFFIX])
             else:
                 result[key] = delta
 
@@ -204,9 +208,9 @@ class RasterV1(TileDataset):
         """
         result = set()
         for path in tile_and_pam_paths:
-            if path.lower().endswith(".aux.xml"):
+            if path.lower().endswith(PAM_SUFFIX):
                 tile_paths = find_similar_files_case_insensitive(
-                    self._workdir_path(path[:-8])
+                    self._workdir_path(path[:-LEN_PAM_SUFFIX])
                 )
                 wc_path = self._workdir_path("")
                 result.update(str(t.relative_to(wc_path)) for t in tile_paths)
@@ -227,17 +231,17 @@ class RasterV1(TileDataset):
     @property
     def tile_count(self):
         """The total number of tiles in this dataset, not including PAM files."""
-        if self.inner_tree is not None:
-            try:
-                subtree = self.inner_tree / self.TILE_PATH
-                return sum(
-                    1
-                    for blob in all_blobs_in_tree(subtree)
-                    if not blob.name.endswith(".aux.xml")
-                )
-            except KeyError:
-                pass
-        return 0
+        if self.inner_tree is None:
+            return 0
+        try:
+            subtree = self.inner_tree / self.TILE_PATH
+        except KeyError:
+            return 0
+        return sum(
+            1
+            for blob in all_blobs_in_tree(subtree)
+            if not blob.name.endswith(PAM_SUFFIX)
+        )
 
     def get_tile_summary_promise(
         self, tilename=None, *, path=None, pointer_blob=None, missing_ok=False
@@ -252,7 +256,7 @@ class RasterV1(TileDataset):
             pointer_blob = self.get_blob_at(path, missing_ok=missing_ok)
         if not pointer_blob:
             return None
-        pam_path = path + ".aux.xml"
+        pam_path = path + PAM_SUFFIX
         pam_pointer_blob = self.get_blob_at(pam_path, missing_ok=True)
         return functools.partial(
             self.get_tile_summary_from_pointer_blob, pointer_blob, pam_pointer_blob
@@ -266,7 +270,7 @@ class RasterV1(TileDataset):
         if pam_pointer_blob is not None:
             # PAM files deltas are output in the same delta as the tile they are attached to.
             pam_summary = super().get_tile_summary_from_pointer_blob(pam_pointer_blob)
-            result["pamName"] = result["name"] + ".aux.xml"
+            result["pamName"] = result["name"] + PAM_SUFFIX
             result["pamOid"] = pam_summary["oid"]
             result["pamSize"] = pam_summary["size"]
         return result
@@ -302,20 +306,17 @@ class RasterV1(TileDataset):
                         oid=pointer_dict["oid"], size=pointer_dict["size"]
                     )
 
-                    pam_name, pam_source_name, pam_oid, pam_size = (
-                        delta.new_value.get("pamName"),
-                        delta.new_value.get("pamSourceName"),
-                        delta.new_value.get("pamOid"),
-                        delta.new_value.get("pamSize"),
-                    )
-                    pam_source_name = pam_source_name or pam_name
+                    pam_name = delta.new_value.get("pamName")
+                    pam_source_name = delta.new_value.get("pamSourceName") or pam_name
+                    pam_oid = delta.new_value.get("pamOid")
+                    pam_size = delta.new_value.get("pamSize")
 
                 else:  # delete:
                     tilename = delta.old_key
                     tile_blob_path = self.tilename_to_blob_path(tilename, relative=True)
                     object_builder.remove(tile_blob_path)
 
-                pam_blob_path = tile_blob_path + ".aux.xml"
+                pam_blob_path = tile_blob_path + PAM_SUFFIX
                 if pam_name is not None:
                     path_in_wc = self._workdir_path(f"{self.path}/{pam_source_name}")
                     pointer_dict = copy_file_to_local_lfs_cache(

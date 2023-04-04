@@ -6,6 +6,11 @@ import re
 # and GDAL sometimes creates temporary files alongside TIF files that start with a "." and are best ignored.
 TILE_BASENAME_PATTERN = r"([^/.][^/]*)"
 
+# Suffix for persistent auxiliary metadata.
+# Internally, this suffix is always stored lower-case, but during imports and commits, should be used in a case-insensitive way.
+PAM_SUFFIX = ".aux.xml"
+LEN_PAM_SUFFIX = len(PAM_SUFFIX)
+
 
 def remove_any_tile_extension(filename):
     """Removes any kind of tile extension."""

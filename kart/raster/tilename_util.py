@@ -1,6 +1,6 @@
 import re
 
-from kart.tile.tilename_util import TILE_BASENAME_PATTERN
+from kart.tile.tilename_util import TILE_BASENAME_PATTERN, PAM_SUFFIX
 
 
 def remove_tile_extension(filename, remove_pam_suffix=False):
@@ -21,7 +21,7 @@ def set_tile_extension(filename, ext=None, tile_format=None):
     # Not much to do here since we only support one tile-format currently: a GeoTIFF that may or may not be COG.
     # TODO: maybe checkout as tif vs tiff should be user configurable.
     if ext is None:
-        ext = ".tif.aux.xml" if filename.endswith(".aux.xml") else ".tif"
+        ext = ".tif.aux.xml" if filename.endswith(PAM_SUFFIX) else ".tif"
 
     return remove_tile_extension(filename, remove_pam_suffix=True) + ext
 
