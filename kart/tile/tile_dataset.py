@@ -120,7 +120,7 @@ class TileDataset(BaseDataset):
 
     @property
     def tile_count(self):
-        """The total number of features in this dataset."""
+        """The total number of tiles in this dataset."""
         return self.count_blobs_in_subtree(self.TILE_PATH)
 
     def tile_lfs_hashes(

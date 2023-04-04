@@ -159,7 +159,7 @@ def test_import_single_geotiff_with_rat(
 
             # NOTE: this particular format is still subject to change.
             assert r.stdout.splitlines()[6:] == [
-                "+++ erorisk_silcdb4:meta:bands/band-1-categories.json",
+                "+++ erorisk_silcdb4:meta:band/band-1-categories.json",
                 "+ {",
                 '+   "1": "High landslide risk - delivery to stream",',
                 '+   "2": "High landslide risk - non-delivery to steam",',
@@ -167,7 +167,7 @@ def test_import_single_geotiff_with_rat(
                 '+   "4": "Severe earthflow risk",',
                 '+   "5": "Gully risk"',
                 "+ }",
-                "+++ erorisk_silcdb4:meta:bands/band-1-rat.xml",
+                "+++ erorisk_silcdb4:meta:band/band-1-rat.xml",
                 '+ <GDALRasterAttributeTable Row0Min="0" BinSize="1" tableType="thematic">',
                 '+     <FieldDefn index="0">',
                 "+         <Name>Histogram</Name>",
@@ -262,6 +262,7 @@ def test_import_single_geotiff_with_rat(
                 "+                             nativeExtent = POLYGON((1573869.73 5155224.347,1573869.73 5143379.674,1585294.591 5143379.674,1585294.591 5155224.347,1573869.73 5155224.347))",
                 "+                                      oid = sha256:c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
                 "+                                     size = 604652",
+                "+                                  pamName = erorisk_silcdb4.tif.aux.xml",
                 "+                                   pamOid = sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
                 "+                                  pamSize = 36908",
             ]

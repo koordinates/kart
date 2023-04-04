@@ -211,10 +211,6 @@ class PointCloudV1(TileDataset):
     def apply_tile_diff(
         self, tile_diff, object_builder, *, resolve_missing_values_from_ds=None
     ):
-        lfs_objects_path = self.repo.gitdir_path / "lfs" / "objects"
-        lfs_tmp_path = lfs_objects_path / "tmp"
-        lfs_tmp_path.mkdir(parents=True, exist_ok=True)
-
         with object_builder.chdir(self.inner_path):
             for delta in tile_diff.values():
 
