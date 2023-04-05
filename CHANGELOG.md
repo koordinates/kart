@@ -8,7 +8,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 - Fix the issue where re-importing the same shapefile with `--replace-existing` would show spurious schema changes (and therefore row changes). [#791](https://github.com/koordinates/kart/issues/791)
 - Added support for committing new layers to a kart repository with `add-dataset` and the table name. [#249](https://github.com/koordinates/kart/issues/249)
-- Switched the crs84Extent field for point-cloud tiles to store a 4-point-polygons (instead of an axis-aligned envelope).
+- Switched the crs84Extent field for point-cloud tiles to store a 4-point-polygons (instead of an axis-aligned envelope). [#809](https://github.com/koordinates/kart/pull/809)
+- Improved progress reporting when importing tiles, in line with working copy checkout.
 
 - Added support for `--diff-format` option under `kart show` command to display different level of detail depending on the user's needs.  [#721](https://github.com/koordinates/kart/issues/721)
 

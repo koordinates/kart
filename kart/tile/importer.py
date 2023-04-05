@@ -30,10 +30,10 @@ from kart.lfs_util import (
     merge_dicts_to_pointer_file_bytes,
     dict_to_pointer_file_bytes,
     copy_file_to_local_lfs_cache,
-    get_hash_and_size_of_file,
 )
-from kart.meta_items import MetaItemFileType
 from kart.list_of_conflicts import ListOfConflicts
+from kart.meta_items import MetaItemFileType
+from kart.progress_util import progress_bar
 from kart.output_util import format_json_for_output, format_wkt_for_output
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,
@@ -135,11 +135,15 @@ class TileImporter:
             if not (Path() / source).is_file():
                 raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
 
-        existing_dataset = self.get_existing_dataset()
-        existing_metadata = existing_dataset.tile_metadata if existing_dataset else None
-        include_existing_metadata = update_existing and existing_dataset is not None
+        self.existing_dataset = self.get_existing_dataset()
+        self.existing_metadata = (
+            self.existing_dataset.tile_metadata if self.existing_dataset else None
+        )
+        self.include_existing_metadata = (
+            update_existing and self.existing_dataset is not None
+        )
 
-        if delete and existing_dataset is None:
+        if delete and self.existing_dataset is None:
             # Trying to delete specific paths from a nonexistent dataset?
             # This suggests the caller is confused.
             raise InvalidOperation(
@@ -151,15 +155,18 @@ class TileImporter:
         self.source_to_hash_and_size = {}
 
         if sources:
-            for source in sources:
-                click.echo(f"Checking {source}...          \r", nl=False)
-                tile_metadata = self.extract_tile_metadata(source)
-                self.source_to_metadata[source] = tile_metadata
-                self.source_to_hash_and_size[source] = (
-                    tile_metadata["tile"]["oid"],
-                    tile_metadata["tile"]["size"],
-                )
-            click.echo()
+            progress = progress_bar(
+                total=len(sources), unit="tile", desc="Checking tiles"
+            )
+            with progress as p:
+                for source in sources:
+                    tile_metadata = self.extract_tile_metadata(source)
+                    self.source_to_metadata[source] = tile_metadata
+                    self.source_to_hash_and_size[source] = (
+                        tile_metadata["tile"]["oid"],
+                        tile_metadata["tile"]["size"],
+                    )
+                    p.update(1)
 
             self.check_metadata_pre_convert()
 
@@ -171,8 +178,8 @@ class TileImporter:
             self.check_for_non_homogenous_metadata(
                 merged_source_metadata, future_tense=0
             )
-            if include_existing_metadata:
-                all_metadata.append(existing_metadata)
+            if self.include_existing_metadata:
+                all_metadata.append(self.existing_metadata)
             self.predicted_merged_metadata = self.get_predicted_merged_metadata(
                 all_metadata
             )
@@ -182,8 +189,6 @@ class TileImporter:
 
         # Set up LFS hooks. This is also in `kart init`, but not every existing Kart repo will have these hooks.
         install_lfs_hooks(self.repo)
-
-        dataset_inner_path = f"{dataset_path}/{self.DATASET_CLASS.DATASET_DIRNAME}"
 
         # Metadata in this dict is updated as we convert some or all tiles to COPC.
         self.source_to_imported_metadata = {}
@@ -210,6 +215,10 @@ class TileImporter:
             self.repo, None, message, fast_import_on_branch, self.repo.head_commit
         )
 
+        self.dataset_inner_path = (
+            f"{self.dataset_path}/{self.DATASET_CLASS.DATASET_DIRNAME}"
+        )
+
         with git_fast_import(
             self.repo, *FastImportSettings().as_args(), "--quiet"
         ) as proc:
@@ -224,7 +233,7 @@ class TileImporter:
                 root_tree = self.repo.head_tree
                 for tile_name in delete:
                     # Check that the blob exists; if not, error out
-                    blob_path = existing_dataset.tilename_to_blob_path(tile_name)
+                    blob_path = self.existing_dataset.tilename_to_blob_path(tile_name)
                     try:
                         root_tree / blob_path
                     except KeyError:
@@ -232,71 +241,20 @@ class TileImporter:
 
                     proc.stdin.write(f"D {blob_path}\n".encode("utf8"))
 
-            for source in sources:
-                click.echo(f"Importing {source}...")
-                source_metadata = self.source_to_metadata[source]
-                tilename = self.DATASET_CLASS.tilename_from_path(source)
-                rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
-                    tilename, relative=True
+            if sources:
+                self.import_tiles_to_stream(proc.stdin, sources)
+
+                all_metadata = (
+                    [self.existing_metadata] if self.include_existing_metadata else []
                 )
-                blob_path = f"{dataset_inner_path}/{rel_blob_path}"
-
-                # Check if tile has already been imported previously:
-                if existing_dataset is not None:
-                    existing_summary = existing_dataset.get_tile_summary(
-                        tilename, missing_ok=True
-                    )
-                    if existing_summary:
-                        source_oid = self.source_to_hash_and_size[source][0]
-                        if self.existing_tile_matches_source(
-                            source_oid, existing_summary
-                        ):
-                            # This tile has already been imported before. Reuse it rather than re-importing it.
-                            # Re-importing it could cause it to be re-converted, which is a waste of time,
-                            # and it may not convert the same the second time, which is then a waste of space
-                            # and shows up as a pointless diff.
-                            write_blob_to_stream(
-                                proc.stdin,
-                                blob_path,
-                                (existing_dataset.inner_tree / rel_blob_path).data,
-                            )
-                            include_existing_metadata = True
-                            continue
-
-                conversion_func = self.wrap_conversion_func(
-                    self.get_conversion_func(source_metadata)
+                all_metadata.extend(self.source_to_imported_metadata.values())
+                self.actual_merged_metadata = self.get_actual_merged_metadata(
+                    all_metadata
                 )
-                if conversion_func is None:
-                    self.source_to_imported_metadata[source] = self.source_to_metadata[
-                        source
-                    ]
-                    oid_and_size = self.source_to_hash_and_size[source]
-                else:
-                    oid_and_size = None
-
-                pointer_dict = copy_file_to_local_lfs_cache(
-                    self.repo, source, conversion_func, oid_and_size=oid_and_size
+                self.check_for_non_homogenous_metadata(
+                    self.actual_merged_metadata, future_tense=True
                 )
-                pointer_data = merge_dicts_to_pointer_file_bytes(
-                    self.source_to_imported_metadata[source]["tile"], pointer_dict
-                )
-
-                write_blob_to_stream(proc.stdin, blob_path, pointer_data)
-
-                for sidecar_file, suffix in self.sidecar_files(source):
-                    pointer_dict = copy_file_to_local_lfs_cache(self.repo, sidecar_file)
-                    pointer_data = dict_to_pointer_file_bytes(pointer_dict)
-                    write_blob_to_stream(proc.stdin, blob_path + suffix, pointer_data)
-
-            all_metadata = [existing_metadata] if include_existing_metadata else []
-            all_metadata.extend(self.source_to_imported_metadata.values())
-            self.actual_merged_metadata = self.get_actual_merged_metadata(all_metadata)
-            self.check_for_non_homogenous_metadata(
-                self.actual_merged_metadata, future_tense=True
-            )
-            self.write_meta_blobs_to_stream(
-                proc.stdin, dataset_inner_path, self.actual_merged_metadata
-            )
+                self.write_meta_blobs_to_stream(proc.stdin, self.actual_merged_metadata)
 
         try:
             if amend:
@@ -506,14 +464,74 @@ class TileImporter:
 
         return wrapped_func
 
-    def write_meta_blobs_to_stream(self, stream, dataset_inner_path, merged_metadata):
+    def import_tiles_to_stream(self, stream, sources):
+        progress = progress_bar(total=len(sources), unit="tile", desc="Importing tiles")
+        with progress as p:
+            for source in sources:
+                source_metadata = self.source_to_metadata[source]
+                tilename = self.DATASET_CLASS.tilename_from_path(source)
+                rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
+                    tilename, relative=True
+                )
+                blob_path = f"{self.dataset_inner_path}/{rel_blob_path}"
+
+                # Check if tile has already been imported previously:
+                if self.existing_dataset is not None:
+                    existing_summary = self.existing_dataset.get_tile_summary(
+                        tilename, missing_ok=True
+                    )
+                    if existing_summary:
+                        source_oid = self.source_to_hash_and_size[source][0]
+                        if self.existing_tile_matches_source(
+                            source_oid, existing_summary
+                        ):
+                            # This tile has already been imported before. Reuse it rather than re-importing it.
+                            # Re-importing it could cause it to be re-converted, which is a waste of time,
+                            # and it may not convert the same the second time, which is then a waste of space
+                            # and shows up as a pointless diff.
+                            write_blob_to_stream(
+                                stream,
+                                blob_path,
+                                (self.existing_dataset.inner_tree / rel_blob_path).data,
+                            )
+                            self.include_existing_metadata = True
+                            continue
+
+                conversion_func = self.wrap_conversion_func(
+                    self.get_conversion_func(source_metadata)
+                )
+                if conversion_func is None:
+                    self.source_to_imported_metadata[source] = self.source_to_metadata[
+                        source
+                    ]
+                    oid_and_size = self.source_to_hash_and_size[source]
+                else:
+                    oid_and_size = None
+
+                pointer_dict = copy_file_to_local_lfs_cache(
+                    self.repo, source, conversion_func, oid_and_size=oid_and_size
+                )
+                pointer_data = merge_dicts_to_pointer_file_bytes(
+                    self.source_to_imported_metadata[source]["tile"], pointer_dict
+                )
+
+                write_blob_to_stream(stream, blob_path, pointer_data)
+
+                for sidecar_file, suffix in self.sidecar_files(source):
+                    pointer_dict = copy_file_to_local_lfs_cache(self.repo, sidecar_file)
+                    pointer_data = dict_to_pointer_file_bytes(pointer_dict)
+                    write_blob_to_stream(stream, blob_path + suffix, pointer_data)
+
+                p.update(1)
+
+    def write_meta_blobs_to_stream(self, stream, merged_metadata):
         """Writes the format.json, schema.json and crs.wkt meta items to the dataset."""
         for key, value in merged_metadata.items():
             definition = self.DATASET_CLASS.get_meta_item_definition(key)
             file_type = MetaItemFileType.get_from_definition_or_suffix(definition, key)
             write_blob_to_stream(
                 stream,
-                f"{dataset_inner_path}/meta/{key}",
+                f"{self.dataset_inner_path}/meta/{key}",
                 file_type.encode_to_bytes(value),
             )
 

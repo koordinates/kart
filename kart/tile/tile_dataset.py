@@ -8,17 +8,16 @@ from kart.diff_structs import DeltaDiff
 from kart.diff_format import DiffFormat
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.lfs_util import (
-    get_hash_and_size_of_file,
     get_hash_from_pointer_file,
     get_local_path_from_lfs_hash,
     pointer_file_bytes_to_dict,
-    normalise_pointer_file_dict,
 )
 from kart import meta_items
 from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.progress_util import progress_bar
 from kart.serialise_util import hexhash
 from kart.spatial_filter import SpatialFilter
+from kart.tile.tilename_util import PAM_SUFFIX
 from kart.working_copy import PartType
 
 
@@ -91,15 +90,19 @@ class TileDataset(BaseDataset):
 
         with progress as p:
             for blob in all_blobs_in_tree(tile_tree):
-                n_read += 1
+                if not blob.name.endswith(PAM_SUFFIX):
+                    n_read += 1
                 tile_dict = None
                 if parse_pointer_dicts:
                     tile_dict = pointer_file_bytes_to_dict(blob)
+                # TODO - fix spatial filter to work properly with PAM files.
                 if spatial_filter.matches(tile_dict if parse_pointer_dicts else blob):
-                    n_matched += 1
+                    if not blob.name.endswith(PAM_SUFFIX):
+                        n_matched += 1
                     yield blob, tile_dict
 
-                p.update(1)
+                if not blob.name.endswith(PAM_SUFFIX):
+                    p.update(1)
 
         if show_progress and not spatial_filter.match_all:
             p.write(
