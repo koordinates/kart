@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 
 import click
 
+from kart.diff_format import DiffFormat
+
 from . import is_windows
 from .base_diff_writer import BaseDiffWriter
 from .cli_util import StringFromFile, tool_environment, KartCommand
@@ -48,7 +50,7 @@ class CommitDiffWriter(BaseDiffWriter):
             self.now_outside_spatial_filter = None
 
     def get_repo_diff(self):
-        repo_diff = super().get_repo_diff()
+        repo_diff = super().get_repo_diff(diff_format=DiffFormat.FULL)
 
         if self.record_spatial_filter_stats:
             for ds_path, ds_diff in repo_diff.items():

@@ -1,13 +1,21 @@
 import pygit2
 
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta
+from kart.diff_format import DiffFormat
 from kart.key_filters import DatasetKeyFilter, MetaKeyFilter, UserStringKeyFilter
 
 
 class DatasetDiffMixin:
     """Adds diffing of meta-items to a dataset, by delegating to dataset.meta_items()"""
 
-    def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):
+    # Returns the meta-items diff for this dataset.
+    def diff(
+        self,
+        other,
+        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        reverse=False,
+        diff_format=DiffFormat.FULL,
+    ):
         """
         Generates a Diff from self -> other.
         If reverse is true, generates a diff from other -> self.

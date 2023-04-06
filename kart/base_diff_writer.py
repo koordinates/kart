@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 
 from kart import diff_util
+from kart.diff_format import DiffFormat
 from kart.diff_structs import FILES_KEY, WORKING_COPY_EDIT, BINARY_FILE, Delta
 from kart.exceptions import CrsError, InvalidOperation
 from kart.key_filters import RepoKeyFilter
@@ -256,23 +257,41 @@ class BaseDiffWriter:
                 err=True,
             )
 
-    def write_diff(self):
+    def write_diff(self, diff_format=DiffFormat.FULL):
         """Default implementation for writing a diff. Subclasses can override."""
+        # Entered when -o is text
         self.write_header()
+
+        # If the diff format is NONE, skip getting the diff
+        if diff_format == DiffFormat.NONE:
+            self.write_warnings_footer()
+            return
+        # If the diff format is NO_DATA_CHANGES, check if there is a diff and print True or False
+        elif diff_format == DiffFormat.NO_DATA_CHANGES:
+            self.has_changes = False
+            for ds_path in self.all_ds_paths:
+                self.has_changes |= self.write_ds_diff_for_path(ds_path, diff_format)
+
+            self.write_warnings_footer()
+            return
+
+        # Else, print the entire diff
         self.has_changes = False
         for ds_path in self.all_ds_paths:
-            self.has_changes |= self.write_ds_diff_for_path(ds_path)
+            self.has_changes |= self.write_ds_diff_for_path(
+                ds_path, diff_format=DiffFormat.FULL
+            )
         self.has_changes |= self.write_file_diff(self.get_file_diff())
         self.write_warnings_footer()
 
-    def write_ds_diff_for_path(self, ds_path):
+    def write_ds_diff_for_path(self, ds_path, diff_format=DiffFormat.FULL):
         """Default implementation for writing the diff for a particular dataset. Subclasses can override."""
-        ds_diff = self.get_dataset_diff(ds_path)
+        ds_diff = self.get_dataset_diff(ds_path, diff_format=diff_format)
         has_changes = bool(ds_diff)
-        self.write_ds_diff(ds_path, ds_diff)
+        self.write_ds_diff(ds_path, ds_diff, diff_format=diff_format)
         return has_changes
 
-    def write_ds_diff(self, ds_path, ds_diff):
+    def write_ds_diff(self):
         """For outputting ds_diff, the diff of a particular dataset."""
         raise NotImplementedError()
 
@@ -316,7 +335,7 @@ class BaseDiffWriter:
         result.flags = delta.flags
         return result
 
-    def get_repo_diff(self, include_files=True):
+    def get_repo_diff(self, include_files=True, diff_format=DiffFormat.FULL):
         """
         Generates a RepoDiff containing an entry for every dataset in the repo (that matches self.repo_key_filter).
         """
@@ -328,9 +347,10 @@ class BaseDiffWriter:
             repo_key_filter=self.repo_key_filter,
             convert_to_dataset_format=self.do_convert_to_dataset_format,
             include_files=include_files,
+            diff_format=diff_format,
         )
 
-    def get_dataset_diff(self, ds_path):
+    def get_dataset_diff(self, ds_path, diff_format=DiffFormat.FULL):
         """
         Returns the DatasetDiff object for the dataset at path dataset_path.
 
@@ -350,6 +370,7 @@ class BaseDiffWriter:
             workdir_diff_cache=self.workdir_diff_cache,
             ds_filter=self.repo_key_filter[ds_path],
             convert_to_dataset_format=self.do_convert_to_dataset_format,
+            diff_format=diff_format,
         )
 
     def get_file_diff(self):

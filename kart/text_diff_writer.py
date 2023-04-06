@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from kart.base_diff_writer import BaseDiffWriter
+from kart.diff_format import DiffFormat
 from kart.diff_structs import BINARY_FILE
 from kart.list_of_conflicts import ListOfConflicts
 from kart.output_util import format_wkt_for_output, resolve_output_path
@@ -58,15 +59,17 @@ class TextDiffWriter(BaseDiffWriter):
             click.secho(f"    {line}", **self.pecho)
         click.secho(**self.pecho)
 
-    def write_ds_diff(self, ds_path, ds_diff):
+    def write_ds_diff(self, ds_path, ds_diff, diff_format=DiffFormat.FULL):
         if "meta" in ds_diff:
             for key, delta in ds_diff["meta"].sorted_items():
                 self.write_meta_delta(ds_path, key, delta)
-
-        item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
-        if item_type:
-            for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
-                self.write_dict_delta_only_show_diffs(ds_path, item_type, key, delta)
+        if diff_format != DiffFormat.NO_DATA_CHANGES:
+            item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
+            if item_type:
+                for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
+                    self.write_dict_delta_only_show_diffs(
+                        ds_path, item_type, key, delta
+                    )
 
     def write_full_delta(self, ds_path, item_type, key, delta):
         """Writes the old and new halves of a delta in full - ie, not just those parts that have changed."""

@@ -8,6 +8,7 @@ import pytest
 
 import kart
 from kart.base_diff_writer import BaseDiffWriter
+from kart.diff_format import DiffFormat
 from kart.diff_structs import Delta, DeltaDiff
 from kart.diff_util import get_file_diff
 from kart.json_diff_writers import JsonLinesDiffWriter
@@ -283,7 +284,7 @@ def test_diff_json_lines_with_feature_count_estimate(
 ):
     with data_working_copy("points") as (repo_path, wc):
 
-        def slow_down_the_diff(self, ds_path, ds_diff):
+        def slow_down_the_diff(self, ds_path, ds_diff, diff_format=DiffFormat.FULL):
             time.sleep(1)
 
         # this is a tiny diff, but we make it arbitrarily slower so that we have time to generate the estimate and insert it into the stream
@@ -1201,7 +1202,6 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
         # make the R1 -> WC changes
         repo = KartRepo(repo_path)
         with repo.working_copy.tabular.session() as sess:
-
             EDITS = ((1, "a"), (3, "c1"), (4, "d2"), (8, "h1"))
             for pk, value in EDITS:
                 r = sess.execute(

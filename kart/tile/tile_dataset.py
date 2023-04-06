@@ -5,6 +5,7 @@ from kart.base_dataset import BaseDataset
 from kart.core import all_blobs_in_tree
 from kart.decorators import allow_classmethod
 from kart.diff_structs import DeltaDiff
+from kart.diff_format import DiffFormat
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.lfs_util import (
     get_hash_and_size_of_file,
@@ -268,14 +269,33 @@ class TileDataset(BaseDataset):
     def extract_tile_metadata_from_filesystem_path(cls, path):
         raise NotImplementedError()
 
-    def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):
+    def diff(
+        self,
+        other,
+        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        reverse=False,
+        diff_format=DiffFormat.FULL,
+    ):
         """
         Generates a Diff from self -> other.
         If reverse is true, generates a diff from other -> self.
         """
         ds_diff = super().diff(other, ds_filter=ds_filter, reverse=reverse)
+
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
-        ds_diff["tile"] = self.diff_tile(other, tile_filter, reverse=reverse)
+
+        # If the user is asking for a no data changes diff, just check if the feature subtree is different.
+        if diff_format == DiffFormat.NO_DATA_CHANGES:
+            self_subtree = self.get_subtree("tile")
+            other_subtree = other.get_subtree("tile") if other else self._empty_tree
+            data_changes = self_subtree != other_subtree
+
+            ds_diff["data_changes"]: bool = data_changes
+
+        # Else do a full diff.
+        else:
+            ds_diff["tile"] = self.diff_tile(other, tile_filter, reverse=reverse)
+
         return ds_diff
 
     def diff_tile(self, other, tile_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):

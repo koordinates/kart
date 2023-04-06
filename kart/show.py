@@ -6,6 +6,7 @@ from kart import diff_estimation
 from kart.cli_util import KartCommand, OutputFormatType
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
+from kart.diff_format import DiffFormat
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
 
@@ -76,6 +77,12 @@ from kart.repo import KartRepoState
     type=click.UNPROCESSED,
     shell_complete=ref_or_repo_path_completer,
 )
+@click.option(
+    "--diff-format",
+    type=click.Choice(DiffFormat),
+    default=DiffFormat.FULL,
+    help="Choose the diff format: \n'full' for full diff, 'none' for viewing commit metadata only, or 'no-data-changes' for metadata and a bool indicating the feature/tile tree changes.",
+)
 def show(
     ctx,
     *,
@@ -86,6 +93,7 @@ def show(
     only_feature_count,
     diff_files,
     args,
+    diff_format=DiffFormat.FULL,
 ):
     """
     Shows the given REVISION, or HEAD if none is specified.
@@ -129,7 +137,7 @@ def show(
     )
     diff_writer.full_file_diffs(diff_files)
     diff_writer.include_target_commit_as_header()
-    diff_writer.write_diff()
+    diff_writer.write_diff(diff_format=diff_format)
 
     if exit_code or output_type == "quiet":
         diff_writer.exit_with_code()
@@ -159,10 +167,25 @@ def show(
         "but 'minimal' patches are only applyable if the parent commit is present in the target repo."
     ),
 )
+@click.option(
+    "--diff-format",
+    type=click.Choice(["none", "full", "no-data-changes"]),
+    default="full",
+    help="Choose the diff format",
+)
 # NOTE: this is *required* for now.
 # A future version might create patches from working-copy changes.
 @click.argument("refish", shell_complete=ref_completer)
-def create_patch(ctx, *, refish, json_style, output_path, patch_type, **kwargs):
+def create_patch(
+    ctx,
+    *,
+    refish,
+    json_style,
+    output_path,
+    patch_type,
+    diff_format=DiffFormat.FULL,
+    **kwargs,
+):
     """
     Creates a JSON patch from the given ref.
     The patch can be applied with `kart apply`.
@@ -187,4 +210,4 @@ def create_patch(ctx, *, refish, json_style, output_path, patch_type, **kwargs):
     )
     diff_writer.full_file_diffs(True)
     diff_writer.include_target_commit_as_header()
-    diff_writer.write_diff()
+    diff_writer.write_diff(diff_format=diff_format)
