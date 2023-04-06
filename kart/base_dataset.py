@@ -149,13 +149,13 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
 
     @functools.lru_cache()
     def count_blobs_in_subtree(self, subtree_path):
-        if self.inner_tree is not None:
-            try:
-                subtree = self.inner_tree / subtree_path
-                return sum(1 for blob in all_blobs_in_tree(subtree))
-            except KeyError:
-                pass
-        return 0
+        if self.inner_tree is None:
+            return 0
+        try:
+            subtree = self.inner_tree / subtree_path
+        except KeyError:
+            return 0
+        return sum(1 for blob in all_blobs_in_tree(subtree))
 
     def get_blob_at(self, rel_path, missing_ok=False, from_tree=None):
         """
@@ -215,6 +215,7 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
     def meta_tree(self):
         return self.get_subtree(self.META_PATH)
 
+    @classmethod
     def get_meta_item_definition(self, meta_item_path):
         # Quicker dict lookup:
         definition = self.PATH_META_ITEMS.get(meta_item_path)

@@ -13,4 +13,5 @@ Downsampled to 12.5% of the original resolution.
 
 #### `erosion`
 
-[Highly erodible land 2012 South Island](https://data.mfe.govt.nz/layer/99896-highly-erodible-land-2012-south-island/); Ministry for the Environment of New Zealand; CC-BY
+[Highly erodible land 2012 South Island](https://data.mfe.govt.nz/layer/99896-highly-erodible-land-2012-south-island/); Ministry for the Environment of New Zealand; CC-BY\
+Reprojected to New Zealand Transverse Mercator 2000

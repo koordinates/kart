@@ -4,10 +4,12 @@ import click
 
 from kart.cli_util import StringFromFile, MutexOption, KartCommand
 from kart.completion_shared import file_path_completer
+from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
 from kart.parse_args import parse_import_sources_and_datasets
 from kart.raster.metadata_util import rewrite_and_merge_metadata
 from kart.raster.v1 import RasterV1
 from kart.tile.importer import TileImporter
+from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUFFIX
 
 L = logging.getLogger(__name__)
 
@@ -163,3 +165,19 @@ class RasterImporter(TileImporter):
             source_oid = "sha256:" + source_oid
 
         return existing_summary.get("oid") == source_oid
+
+    def sidecar_files(self, source):
+        source = str(source)
+        if self.DATASET_CLASS.remove_tile_extension(source) == source:
+            return
+
+        pam_path = source + PAM_SUFFIX
+        pams = find_similar_files_case_insensitive(pam_path)
+        if len(pams) == 1:
+            yield pams[0], PAM_SUFFIX
+        if len(pams) > 1:
+            detail = "\n".join(str(p) for p in pams)
+            raise InvalidOperation(
+                f"More than one PAM file found for {source}:\n{detail}",
+                exit_code=INVALID_FILE_FORMAT,
+            )

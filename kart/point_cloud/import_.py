@@ -142,7 +142,7 @@ class PointCloudImporter(TileImporter):
         return f"Importing {len(self.sources)} LAZ tiles as {self.dataset_path}"
 
     def _is_any_las(self, all_metadata):
-        return any(v["format"]["compression"] == "las" for v in all_metadata)
+        return any(v["format.json"]["compression"] == "las" for v in all_metadata)
 
     def check_metadata_pre_convert(self):
         if not self.convert_to_copc and self._is_any_las(
@@ -192,7 +192,7 @@ class PointCloudImporter(TileImporter):
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
     def get_conversion_func(self, source_metadata):
-        if self.convert_to_copc and not is_copc(source_metadata["format"]):
+        if self.convert_to_copc and not is_copc(source_metadata):
             return convert_tile_to_copc
         return None
 
@@ -205,7 +205,7 @@ class PointCloudImporter(TileImporter):
             # The import source we were given has already been imported in its native format.
             # Return True if that's what we would do anyway.
             if self.convert_to_copc:
-                return is_copc(existing_summary["format"])
+                return is_copc(existing_summary)
             else:
                 return True
 
@@ -213,6 +213,6 @@ class PointCloudImporter(TileImporter):
         if existing_summary.get("sourceOid") == source_oid:
             # The import source we were given has already been imported, but converted to COPC.
             # Return True if we were going to convert it to COPC too.
-            return self.convert_to_copc and is_copc(existing_summary["format"])
+            return self.convert_to_copc and is_copc(existing_summary)
 
         return False

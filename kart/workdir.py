@@ -34,7 +34,7 @@ from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tile import ALL_TILE_DATASET_TYPES
 from kart.tile.tile_dataset import TileDataset
-from kart.tile.tilename_util import remove_any_tile_extension
+from kart.tile.tilename_util import remove_any_tile_extension, PAM_SUFFIX
 from kart.working_copy import WorkingCopyPart
 
 
@@ -445,8 +445,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     del tile_diff[tilename]
         return ds_diff
 
-    def _list_new_pointer_blobs_for_diff(self, dataset_diff, point_cloud_dataset):
-        inner_tree = point_cloud_dataset.inner_tree
+    def _list_new_pointer_blobs_for_diff(self, dataset_diff, tile_dataset):
+        inner_tree = tile_dataset.inner_tree
         if not inner_tree:
             return
 
@@ -454,10 +454,14 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         if not tile_diff:
             return
         for tilename in tile_diff.keys():
-            path = point_cloud_dataset.tilename_to_blob_path(tilename, relative=True)
-            pointer_blob = point_cloud_dataset.get_blob_at(path, missing_ok=True)
+            path = tile_dataset.tilename_to_blob_path(tilename, relative=True)
+            pointer_blob = tile_dataset.get_blob_at(path, missing_ok=True)
             if pointer_blob:
                 yield pointer_blob
+            pam_path = path + PAM_SUFFIX
+            pam_pointer_blob = tile_dataset.get_blob_at(pam_path, missing_ok=True)
+            if pam_pointer_blob:
+                yield pam_pointer_blob
 
     def write_full_datasets_to_workdir(self, datasets, track_changes_as_dirty=False):
         dataset_count = len(datasets)
@@ -591,6 +595,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     tile_path.unlink()
                 if not do_update_all:
                     reset_index_files.append(f"{ds_path}/{tilename}")
+                pam_name = tile_delta.old_value.get("pamName")
+                if pam_name:
+                    pam_path = ds_tiles_dir / pam_name
+                    if pam_path.is_file():
+                        pam_path.unlink()
 
             if tile_delta.type in ("update", "insert"):
                 tilename = tile_delta.new_value["name"]
@@ -605,6 +614,22 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 try_reflink(lfs_path, ds_tiles_dir / tilename)
                 if not do_update_all:
                     reset_index_files.append(f"{ds_path}/{tilename}")
+
+                pam_name = tile_delta.new_value.get("pamName")
+                if pam_name:
+                    pam_path = ds_tiles_dir / pam_name
+                    lfs_path = get_local_path_from_lfs_hash(
+                        self.repo, tile_delta.new_value["pamOid"]
+                    )
+                    if not lfs_path.is_file():
+                        click.echo(
+                            f"Couldn't find PAM file {pam_name} locally - skipping...",
+                            err=True,
+                        )
+                        continue
+                    try_reflink(lfs_path, ds_tiles_dir / pam_name)
+                    if not do_update_all:
+                        reset_index_files.append(f"{ds_path}/{pam_name}")
 
         if not track_changes_as_dirty:
             if do_update_all:
@@ -695,7 +720,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
-    def _hard_reset_after_commit_for_converted_tiles(self, datasets, committed_diff):
+    def _hard_reset_after_commit_for_converted_and_renamed_tiles(
+        self, datasets, committed_diff
+    ):
         """
         Look for tiles that were automatically modified as part of the commit operation
         - these will have extra properties like a "sourceName" that differs from "name"
@@ -713,6 +740,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     continue
                 if "sourceName" in new_value or "sourceFormat" in new_value:
                     self._hard_reset_converted_tile(dataset, tile_delta)
+                if "pamSourceName" in new_value:
+                    self._hard_reset_renamed_pam_file(dataset, tile_delta)
 
     def _hard_reset_converted_tile(self, dataset, tile_delta):
         """
@@ -738,6 +767,34 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         else:
             try_reflink(lfs_path, ds_tiles_dir / tilename)
 
+    def _hard_reset_renamed_pam_file(self, dataset, tile_delta):
+        """
+        Update an individual PAM file in the workdir so that it reflects what was actually committed.
+        """
+        tilename = dataset.remove_tile_extension(tile_delta.new_value["name"])
+
+        ds_tiles_dir = (self.path / dataset.path).resolve()
+        # Sanity check to make sure we're not messing with files we shouldn't:
+        assert self.path in ds_tiles_dir.parents
+        assert self.repo.workdir_path in ds_tiles_dir.parents
+        assert ds_tiles_dir.is_dir()
+
+        pam_name_pattern = dataset.get_tile_path_pattern(tilename, is_pam=True)
+        for child in ds_tiles_dir.glob(tilename + ".*"):
+            if pam_name_pattern.fullmatch(child.name) and child.is_file():
+                child.unlink()
+
+        pam_name = tile_delta.new_value["pamName"]
+        lfs_path = get_local_path_from_lfs_hash(
+            self.repo, tile_delta.new_value["pamOid"]
+        )
+        if not lfs_path.is_file():
+            click.echo(
+                f"Couldn't find PAM file {pam_name} locally - skipping...", err=True
+            )
+        else:
+            try_reflink(lfs_path, ds_tiles_dir / pam_name)
+
     def soft_reset_after_commit(
         self,
         commit_or_tree,
@@ -754,7 +811,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         # Handle tiles that were, eg, converted to COPC during the commit - the non-COPC
         # tiles in the workdir now need to be replaced with the COPC ones:
-        self._hard_reset_after_commit_for_converted_tiles(datasets, committed_diff)
+        self._hard_reset_after_commit_for_converted_and_renamed_tiles(
+            datasets, committed_diff
+        )
 
         self._reset_workdir_index_for_datasets(datasets, repo_key_filter=mark_as_clean)
         self.delete_tiles(

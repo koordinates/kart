@@ -8,7 +8,6 @@ import click
 import pygit2
 
 from kart.cli_util import find_param
-from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
     InvalidOperation,
@@ -29,12 +28,13 @@ from kart.key_filters import RepoKeyFilter
 from kart.lfs_util import (
     install_lfs_hooks,
     merge_dicts_to_pointer_file_bytes,
+    dict_to_pointer_file_bytes,
     copy_file_to_local_lfs_cache,
     get_hash_and_size_of_file,
 )
+from kart.meta_items import MetaItemFileType
 from kart.list_of_conflicts import ListOfConflicts
 from kart.output_util import format_json_for_output, format_wkt_for_output
-from kart.serialise_util import json_pack, ensure_bytes
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     extra_blobs_for_version,
@@ -136,7 +136,7 @@ class TileImporter:
                 raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
 
         existing_dataset = self.get_existing_dataset()
-        existing_metadata = self.get_existing_metadata(existing_dataset)
+        existing_metadata = existing_dataset.tile_metadata if existing_dataset else None
         include_existing_metadata = update_existing and existing_dataset is not None
 
         if delete and existing_dataset is None:
@@ -153,8 +153,12 @@ class TileImporter:
         if sources:
             for source in sources:
                 click.echo(f"Checking {source}...          \r", nl=False)
-                self.source_to_metadata[source] = self.extract_tile_metadata(source)
-                self.source_to_hash_and_size[source] = get_hash_and_size_of_file(source)
+                tile_metadata = self.extract_tile_metadata(source)
+                self.source_to_metadata[source] = tile_metadata
+                self.source_to_hash_and_size[source] = (
+                    tile_metadata["tile"]["oid"],
+                    tile_metadata["tile"]["size"],
+                )
             click.echo()
 
             self.check_metadata_pre_convert()
@@ -278,6 +282,11 @@ class TileImporter:
                 )
 
                 write_blob_to_stream(proc.stdin, blob_path, pointer_data)
+
+                for sidecar_file, suffix in self.sidecar_files(source):
+                    pointer_dict = copy_file_to_local_lfs_cache(self.repo, sidecar_file)
+                    pointer_data = dict_to_pointer_file_bytes(pointer_dict)
+                    write_blob_to_stream(proc.stdin, blob_path + suffix, pointer_data)
 
             all_metadata = [existing_metadata] if include_existing_metadata else []
             all_metadata.extend(self.source_to_imported_metadata.values())
@@ -414,17 +423,6 @@ class TileImporter:
             )
         return result
 
-    def get_existing_metadata(self, existing_dataset):
-        """Read the metadata from the pre-existing dataset (ie, to make sure that the new sources conform)."""
-        if existing_dataset is None:
-            return None
-        # Subclasses can override if they have other relevant meta items.
-        return {
-            "crs": existing_dataset.get_meta_item("crs.wkt"),
-            "format": existing_dataset.get_meta_item("format.json"),
-            "schema": existing_dataset.get_meta_item("schema.json"),
-        }
-
     def write_extra_blobs(self, stream):
         # We still need to write .kart.repostructure.version unfortunately, even though it's only relevant to tabular datasets.
         extra_blobs = (
@@ -444,7 +442,11 @@ class TileImporter:
                 merged_metadata, key, future_tense=future_tense
             )
 
-    HUMAN_READABLE_META_ITEM_NAMES = {"format": "file format", "crs": "CRS"}
+    HUMAN_READABLE_META_ITEM_NAMES = {
+        "format.json": "file format",
+        "schema.json": "schema",
+        "crs.wkt": "CRS",
+    }
 
     def _check_for_non_homogenous_meta_item(
         self, merged_metadata, key, future_tense=False
@@ -455,7 +457,9 @@ class TileImporter:
         if not isinstance(value, ListOfConflicts):
             return
 
-        format_func = format_wkt_for_output if key == "crs" else format_json_for_output
+        format_func = (
+            format_wkt_for_output if key.endswith(".wkt") else format_json_for_output
+        )
         disparity = " vs \n".join(
             (format_func(value, sys.stderr) for value in merged_metadata[key])
         )
@@ -504,22 +508,18 @@ class TileImporter:
 
     def write_meta_blobs_to_stream(self, stream, dataset_inner_path, merged_metadata):
         """Writes the format.json, schema.json and crs.wkt meta items to the dataset."""
-        write_blob_to_stream(
-            stream,
-            f"{dataset_inner_path}/meta/format.json",
-            json_pack(merged_metadata["format"]),
-        )
-        write_blob_to_stream(
-            stream,
-            f"{dataset_inner_path}/meta/schema.json",
-            json_pack(merged_metadata["schema"]),
-        )
-        write_blob_to_stream(
-            stream,
-            f"{dataset_inner_path}/meta/crs.wkt",
-            ensure_bytes(normalise_wkt(merged_metadata["crs"])),
-        )
+        for key, value in merged_metadata.items():
+            definition = self.DATASET_CLASS.get_meta_item_definition(key)
+            file_type = MetaItemFileType.get_from_definition_or_suffix(definition, key)
+            write_blob_to_stream(
+                stream,
+                f"{dataset_inner_path}/meta/{key}",
+                file_type.encode_to_bytes(value),
+            )
 
     def missing_parameter(self, param_name):
         """Raise a MissingParameter exception."""
         return click.MissingParameter(param=find_param(self.ctx, param_name))
+
+    def sidecar_files(self, source):
+        return []

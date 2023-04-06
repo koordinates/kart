@@ -91,8 +91,10 @@ def _load_file_resolve_for_tile(rich_conflict, file_path):
     dataset = load_dataset(rich_conflict)
     repo = dataset.repo
     rel_tile_path = os.path.relpath(file_path.resolve(), repo.workdir_path.resolve())
-    tile_summary = dataset.get_tile_summary_from_filesystem_path(file_path)
-    if not dataset.is_tile_compatible(dataset.tile_metadata["format"], tile_summary):
+    tile_summary = dataset.extract_tile_metadata_from_filesystem_path(file_path)["tile"]
+    if not dataset.is_tile_compatible(
+        dataset.tile_metadata["format.json"], tile_summary
+    ):
         # TODO: maybe support type-conversion during resolves like we do during commits.
         raise InvalidOperation(
             f"The tile at {rel_tile_path} does not match the dataset's format"
@@ -251,7 +253,7 @@ def update_workingcopy_with_resolve(
             tilename = dataset.tilename_from_path(r.path)
             pointer_dict = pointer_file_bytes_to_dict(repo[r.id])
             lfs_path = get_local_path_from_lfs_hash(repo, pointer_dict["oid"])
-            filename = set_tile_extension(tilename, tile_format=pointer_dict["format"])
+            filename = set_tile_extension(tilename, tile_format=pointer_dict)
             workdir_path = workdir.path / dataset.path / filename
             if workdir_path.is_file():
                 workdir_path.unlink()

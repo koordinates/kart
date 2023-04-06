@@ -66,6 +66,13 @@ path_extras = [prefix]
 if not is_frozen:
     path_extras += [os.path.join(prefix, "scripts"), os.path.join(prefix, "lib")]
 
+if is_linux:
+    import certifi
+
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    # affects PDAL's libcurl, and possibly other libcurls
+    os.environ["CURL_CA_INFO"] = certifi.where()
+
 # Git
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
 os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
@@ -133,10 +140,6 @@ gdal.UseExceptions()
 ogr.UseExceptions()
 osr.UseExceptions()
 
-if is_linux:
-    import certifi
-
-    os.environ["SSL_CERT_FILE"] = certifi.where()
 
 # Libgit2 options
 import pygit2

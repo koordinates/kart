@@ -121,7 +121,7 @@ class TileDataset(BaseDataset):
 
     @property
     def tile_count(self):
-        """The total number of features in this dataset."""
+        """The total number of tiles in this dataset."""
         return self.count_blobs_in_subtree(self.TILE_PATH)
 
     def tile_lfs_hashes(
@@ -148,7 +148,7 @@ class TileDataset(BaseDataset):
             spatial_filter=spatial_filter, show_progress=show_progress
         ):
             if fix_extensions:
-                tile_format = pointer_dict["format"]
+                tile_format = pointer_dict.get("format")
                 oid = pointer_dict["oid"].split(":", maxsplit=1)[1]
                 yield self.set_tile_extension(blob.name, tile_format=tile_format), oid
             else:
@@ -215,7 +215,7 @@ class TileDataset(BaseDataset):
             tile_pointer_blob, {"name": tile_pointer_blob.name}
         )
         result["name"] = cls.set_tile_extension(
-            result["name"], tile_format=result["format"]
+            result["name"], tile_format=result.get("format")
         )
         # LFS version info is in every pointer file but is not interesting to the user.
         if "version" in result:
@@ -265,30 +265,6 @@ class TileDataset(BaseDataset):
         else:
             return wc_path
 
-    def get_tile_summary_from_workdir_path(self, path, *, tile_metadata=None):
-        """Generates a tile summary for a path to a tile in the working copy."""
-        path = self._workdir_path(path)
-        return self.get_tile_summary_from_filesystem_path(
-            path, tile_metadata=tile_metadata
-        )
-
-    def get_tile_summary_from_filesystem_path(self, path, *, tile_metadata=None):
-        """
-        Generates a tile summary from a pathlib.Path for a file somewhere on the filesystem.
-        If the tile_metadata is already known, this may be supplied too to avoid extra work.
-        """
-        if not tile_metadata:
-            tile_metadata = self.extract_tile_metadata_from_filesystem_path(path)
-        if "tile" in tile_metadata:
-            tile_metadata = tile_metadata["tile"]
-        oid, size = get_hash_and_size_of_file(path)
-        return {
-            "name": path.name,
-            **normalise_pointer_file_dict(tile_metadata),
-            "oid": f"sha256:{oid}",
-            "size": size,
-        }
-
     @classmethod
     def extract_tile_metadata_from_filesystem_path(cls, path):
         raise NotImplementedError()
@@ -318,23 +294,24 @@ class TileDataset(BaseDataset):
 
         # Else do a full diff.
         else:
-            ds_diff["tile"] = DeltaDiff(
-                self.diff_tile(other, tile_filter, reverse=reverse)
-            )
+            ds_diff["tile"] = self.diff_tile(other, tile_filter, reverse=reverse)
+
         return ds_diff
 
     def diff_tile(self, other, tile_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):
         """
-        Yields tile deltas from self -> other, but only for tile that match the tile_filter.
-        If reverse is true, yields tile deltas from other -> self.
+        Returns a DeltaDiff of deltas from self -> other, but only for tiles that match the tile_filter.
+        If reverse is true, returns a DeltaDiff of deltas from other -> self.
         """
-        yield from self.diff_subtree(
-            other,
-            "tile",
-            key_filter=tile_filter,
-            key_decoder_method="tilename_from_path",
-            value_decoder_method="get_tile_summary_promise_from_blob_path",
-            reverse=reverse,
+        return DeltaDiff(
+            self.diff_subtree(
+                other,
+                "tile",
+                key_filter=tile_filter,
+                key_decoder_method="tilename_from_path",
+                value_decoder_method="get_tile_summary_promise_from_blob_path",
+                reverse=reverse,
+            )
         )
 
     def is_clean_slate(self, tile_diff):
@@ -376,7 +353,7 @@ class TileDataset(BaseDataset):
     @property
     def tile_metadata(self):
         return {
-            "format": self.get_meta_item("format.json"),
-            "schema": self.get_meta_item("schema.json"),
-            "crs": self.get_meta_item("crs.wkt"),
+            "format.json": self.get_meta_item("format.json"),
+            "schema.json": self.get_meta_item("schema.json"),
+            "crs.wkt": self.get_meta_item("crs.wkt"),
         }

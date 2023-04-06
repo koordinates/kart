@@ -17,6 +17,12 @@ def set_tile_extension(filename, ext=None, tile_format=None):
     if not ext:
         assert tile_format is not None
         if isinstance(tile_format, dict):
+            if "format.json" in tile_format:
+                tile_format = tile_format["format.json"]
+            elif "format" in tile_format:
+                tile_format = tile_format["format"]
+
+        if isinstance(tile_format, dict):
             # Format info as stored in format.json
             ext = f".{tile_format['compression']}"
         else:
@@ -52,9 +58,11 @@ def get_tile_path_pattern(
     parent_pattern = (
         re.escape(parent_path.rstrip("/") + "/") if parent_path is not None else ""
     )
-    tile_pattern = re.escape(tilename) if tilename is not None else r"([^/.][^/]*)"
+    tile_pattern = (
+        re.escape(tilename) if tilename is not None else TILE_BASENAME_PATTERN
+    )
     version_pattern = (
         r"(?:\.ancestor|\.ours|\.theirs)?" if include_conflict_versions else ""
     )
-    ext_pattern = r"(?:\.[Cc][Oo][Pp][Cc])?\.[Ll][Aa][SsZz]"
+    ext_pattern = r"(?i:\.copc\.laz|\.la[sz])"
     return re.compile(parent_pattern + tile_pattern + version_pattern + ext_pattern)

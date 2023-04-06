@@ -1,7 +1,17 @@
+import logging
+from pathlib import Path
+from xml.dom import minidom
+from xml.dom.minidom import Node
+
 from kart.crs_util import normalise_wkt
 from kart.geometry import ring_as_wkt
 from kart.list_of_conflicts import ListOfConflicts
+from kart.lfs_util import get_hash_and_size_of_file
+from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUFFIX
 from kart.schema import Schema, ColumnSchema
+
+
+L = logging.getLogger("kart.raster.metadata_util")
 
 
 def rewrite_and_merge_metadata(tile_metadata_list):
@@ -11,11 +21,16 @@ def rewrite_and_merge_metadata(tile_metadata_list):
     """
     # TODO - this will get more complicated as we add support for convert-to-COG.
     result = {}
+    all_keys = set()
+    for tm in tile_metadata_list:
+        all_keys.update(tm)
+    # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
+    all_keys.remove("tile")
+    # TODO - handle metadata that doesn't actually conflict but may differ slightly
+    # (eg, slightly different subsets of category labels for the different tiles).
     for tile_metadata in tile_metadata_list:
-        _merge_metadata_field(result, "format", tile_metadata["format"])
-        _merge_metadata_field(result, "schema", tile_metadata["schema"])
-        _merge_metadata_field(result, "crs", tile_metadata["crs"])
-        # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
+        for key in all_keys:
+            _merge_metadata_field(result, key, tile_metadata[key])
     return result
 
 
@@ -31,11 +46,7 @@ def _merge_metadata_field(output, key, value):
         output[key] = ListOfConflicts([existing_value, value])
 
 
-def extract_raster_tile_metadata(
-    raster_tile_path,
-    *,
-    extract_schema=True,
-):
+def extract_raster_tile_metadata(raster_tile_path):
     """
     Use gdalinfo to get any and all raster metadata we can make use of in Kart.
     This includes metadata that must be dataset-homogenous and would be stored in the dataset's /meta/ folder,
@@ -56,37 +67,70 @@ def extract_raster_tile_metadata(
     """
     from osgeo import gdal
 
-    metadata = gdal.Info(str(raster_tile_path), options="-json")
+    metadata = gdal.Info(str(raster_tile_path), options=["-json", "-norat", "-noct"])
 
     # NOTE: this format is still in early stages of design, is subject to change.
 
-    crs = metadata["coordinateSystem"]["wkt"]
-    format_info = {"fileType": "image/tiff; application=geotiff"}
+    format_json = {"fileType": "image/tiff; application=geotiff"}
+    schema_json = gdalinfo_bands_to_kart_schema(metadata["bands"])
+    crs_wkt = metadata["coordinateSystem"]["wkt"]
 
     cc = metadata["cornerCoordinates"]
     size_in_pixels = metadata["size"]
+    oid, size = get_hash_and_size_of_file(raster_tile_path)
+
+    # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {
+        "name": Path(raster_tile_path).name,
         "format": "geotiff",
         "crs84Extent": format_polygon(*metadata["wgs84Extent"]["coordinates"][0]),
+        "dimensions": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
         "nativeExtent": format_polygon(
             cc["upperLeft"], cc["lowerLeft"], cc["lowerRight"], cc["upperRight"]
         ),
-        "dimensions": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
+        "oid": f"sha256:{oid}",
+        "size": size,
     }
 
     result = {
-        "format": format_info,
+        "format.json": format_json,
+        "schema.json": schema_json,
+        "crs.wkt": normalise_wkt(crs_wkt),
         "tile": tile_info,
-        "crs": normalise_wkt(crs),
     }
-    if extract_schema:
-        result["schema"] = gdalinfo_bands_to_kart_schema(metadata["bands"])
+
+    try:
+        raster_tile_path = Path(raster_tile_path)
+        expected_pam_path = raster_tile_path.with_name(
+            raster_tile_path.name + PAM_SUFFIX
+        )
+        pams = find_similar_files_case_insensitive(expected_pam_path)
+        if len(pams) == 1:
+            pam_path = pams[0]
+            result.update(extract_aux_xml_metadata(pam_path))
+
+            if pam_path.name == expected_pam_path.name:
+                tile_info.update({"pamName": pam_path.name})
+            else:
+                tile_info.update(
+                    {"pamSourceName": pam_path.name, "pamName": expected_pam_path.name}
+                )
+
+            pam_oid, pam_size = get_hash_and_size_of_file(pam_path)
+            tile_info.update(
+                {
+                    "pamOid": f"sha256:{pam_oid}",
+                    "pamSize": pam_size,
+                }
+            )
+    except Exception as e:
+        # TODO - how to handle corrupted PAM file.
+        L.warn("Error extracting aux-xml metadata", e)
 
     return result
 
 
 def format_polygon(*points):
-    # TODO - should we just store the axis-aligned extent?
     return "POLYGON(" + ring_as_wkt(*points) + ")"
 
 
@@ -123,7 +167,85 @@ def gdalinfo_band_to_kart_columnschema(gdalinfo_band):
 
     result.update(kart_type_info)
 
-    if "colorInterpretation" in gdalinfo_band:
+    if gdalinfo_band.get("colorInterpretation"):
         result["interpretation"] = gdalinfo_band["colorInterpretation"].lower()
 
+    if gdalinfo_band.get("description"):
+        result["description"] = gdalinfo_band["description"]
+
+    if gdalinfo_band.get("noDataValue") is not None:
+        result["noData"] = gdalinfo_band["noDataValue"]
+        if result["dataType"] == "integer" and isinstance(result["noData"], float):
+            result["noData"] = int(result["noData"])
+
     return ColumnSchema(result)
+
+
+def extract_aux_xml_metadata(aux_xml_path):
+    """
+    Given the path to a tif.aux.xml file, tries to extract the following:
+
+    - the column headings of any raster-attribute-table(s), as "band/band-{band_id}-rat.xml"
+    - the category labels from any raster-attribute-table(s) as "band/band-{band_id}-categories.json"
+    """
+    result = {}
+
+    with minidom.parse(str(aux_xml_path)) as parsed:
+        bands = parsed.getElementsByTagName("PAMRasterBand")
+        for band in bands:
+            category_column = None
+            band_id = band.getAttribute("band")
+            rat = get_element_by_tag_name(band, "GDALRasterAttributeTable")
+            if not rat:
+                continue
+
+            rat_schema = rat.cloneNode(deep=False)
+            for child in rat.childNodes:
+                if getattr(child, "tagName", None) != "FieldDefn":
+                    continue
+                field_defn = child
+                rat_schema.appendChild(remove_xml_whitespace(field_defn))
+                usage = get_element_by_tag_name(field_defn, "Usage")
+                if usage:
+                    usage_text = usage.firstChild.nodeValue.strip()
+                    if usage_text == "2":
+                        category_column = int(field_defn.getAttribute("index"))
+
+            rat_schema_xml = rat_schema.toprettyxml(indent="    ")
+            rat_schema_xml = "\n".join(
+                l for l in rat_schema_xml.split("\n") if not l.isspace()
+            )
+            result[f"band/band-{band_id}-rat.xml"] = rat_schema_xml
+
+            if category_column is not None:
+                category_labels = {}
+                for row in rat.getElementsByTagName("Row"):
+                    row_id = int(row.getAttribute("index"))
+                    category = row.getElementsByTagName("F")[category_column]
+                    if not category.hasChildNodes():
+                        continue
+                    category_text = category.firstChild.nodeValue.strip()
+                    if category_text:
+                        category_labels[row_id] = category_text
+
+                if category_labels:
+                    result[f"band/band-{band_id}-categories.json"] = category_labels
+
+    return result
+
+
+def remove_xml_whitespace(node):
+    """Removes whitespace from xml - toprettyxml() doesn't really work unless you call this first."""
+    for child in node.childNodes:
+        if child.nodeType == Node.TEXT_NODE:
+            if child.nodeValue:
+                child.nodeValue = child.nodeValue.strip()
+        elif child.nodeType == Node.ELEMENT_NODE:
+            remove_xml_whitespace(child)
+    return node
+
+
+def get_element_by_tag_name(element, tag_name):
+    """Returns the first result from getElementsByTagName, if any."""
+    result = element.getElementsByTagName(tag_name)
+    return result[0] if result else None
