@@ -366,3 +366,270 @@ def test_resolve_schema_conflict(data_working_copy, cli_runner):
             "-                                  flavour = vanilla",
             "+                                   colour = white",
         ]
+
+
+def test_resolve_with_renumber__points(data_working_copy, cli_runner):
+    # Use conflicts/points to test that --renumber works okay with other resolves
+    # and with geomtries.
+    with data_working_copy("conflicts/points.tgz") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+        assert repo.state == KartRepoState.MERGING
+
+        r = cli_runner.invoke(["resolve", "--renumber=theirs"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == ["Resolved 1 conflict. 3 conflicts to go."]
+
+        r = cli_runner.invoke(["resolve", "--renumber=theirs"])
+        assert r.exit_code == 20
+        assert "There are no matching unresolved insert/insert conflicts." in r.stderr
+
+        r = cli_runner.invoke(["diff"])
+        # This is the diff from HEAD - "ours_branch" - to the current WC state,
+        # which contains the resolved conflicts, or version "ours" for unresolved conflicts.
+        assert r.stdout.splitlines() == [
+            "--- nz_pa_points_topo_150k:feature:1",
+            "+++ nz_pa_points_topo_150k:feature:1",
+            "-                                     name = ␀",
+            "+                                     name = theirs_version",
+            "+++ nz_pa_points_topo_150k:feature:98002",
+            "+                                      fid = 98002",
+            "+                                     geom = POINT(...)",
+            "+                                  t50_fid = 9999999",
+            "+                               name_ascii = Te Motu-a-kore",
+            "+                               macronated = N",
+            "+                                     name = insert_theirs",
+        ]
+
+        r = cli_runner.invoke(["merge", "--abort"])
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+        assert repo.state == KartRepoState.MERGING
+
+        r = cli_runner.invoke(["resolve", "--renumber=ours"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == ["Resolved 1 conflict. 3 conflicts to go."]
+
+        r = cli_runner.invoke(["diff"])
+        assert r.stdout.splitlines() == [
+            "--- nz_pa_points_topo_150k:feature:1",
+            "+++ nz_pa_points_topo_150k:feature:1",
+            "-                                     name = ␀",
+            "+                                     name = theirs_version",
+            "--- nz_pa_points_topo_150k:feature:98001",
+            "+++ nz_pa_points_topo_150k:feature:98001",
+            "-                                     name = insert_ours",
+            "+                                     name = insert_theirs",
+            "+++ nz_pa_points_topo_150k:feature:98002",
+            "+                                      fid = 98002",
+            "+                                     geom = POINT(...)",
+            "+                                  t50_fid = 9999999",
+            "+                               name_ascii = Te Motu-a-kore",
+            "+                               macronated = N",
+            "+                                     name = insert_ours",
+        ]
+
+        r = cli_runner.invoke(
+            ["resolve", "nz_pa_points_topo_150k:feature:3", "--with=ours"]
+        )
+        r = cli_runner.invoke(
+            ["resolve", "nz_pa_points_topo_150k:feature:4", "--with=ours"]
+        )
+        r = cli_runner.invoke(
+            ["resolve", "nz_pa_points_topo_150k:feature:5", "--with=ours"]
+        )
+        r = cli_runner.invoke(["merge", "--continue", "-m", "Merge with theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["diff", "ancestor_branch...HEAD"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "--- nz_pa_points_topo_150k:feature:1",
+            "+++ nz_pa_points_topo_150k:feature:1",
+            "-                                     name = ␀",
+            "+                                     name = theirs_version",
+            "--- nz_pa_points_topo_150k:feature:2",
+            "+++ nz_pa_points_topo_150k:feature:2",
+            "-                                     name = ␀",
+            "+                                     name = ours_theirs_version",
+            "--- nz_pa_points_topo_150k:feature:3",
+            "+++ nz_pa_points_topo_150k:feature:3",
+            "-                                     name = Tauwhare Pa",
+            "+                                     name = ours_version",
+            "--- nz_pa_points_topo_150k:feature:4",
+            "+++ nz_pa_points_topo_150k:feature:4",
+            "-                                     name = ␀",
+            "+                                     name = ours_version",
+            "--- nz_pa_points_topo_150k:feature:5",
+            "+++ nz_pa_points_topo_150k:feature:5",
+            "-                                     name = ␀",
+            "+                                     name = ours_version",
+            "--- nz_pa_points_topo_150k:feature:6",
+            "+++ nz_pa_points_topo_150k:feature:6",
+            "-                                     name = ␀",
+            "+                                     name = ours_version",
+            "+++ nz_pa_points_topo_150k:feature:98001",
+            "+                                      fid = 98001",
+            "+                                     geom = POINT(...)",
+            "+                                  t50_fid = 9999999",
+            "+                               name_ascii = Te Motu-a-kore",
+            "+                               macronated = N",
+            "+                                     name = insert_theirs",
+            "+++ nz_pa_points_topo_150k:feature:98002",
+            "+                                      fid = 98002",
+            "+                                     geom = POINT(...)",
+            "+                                  t50_fid = 9999999",
+            "+                               name_ascii = Te Motu-a-kore",
+            "+                               macronated = N",
+            "+                                     name = insert_ours",
+        ]
+
+
+@pytest.mark.parametrize("renumber", ("ours", "theirs", "alternating"))
+def test_resolve_with_renumber__multiple_inserts(
+    renumber, data_working_copy, cli_runner
+):
+    # Use a repo with lots of conflicting inserts so we can make sure they don't collide.
+    with data_working_copy("conflicts/inserts.tgz") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+        assert repo.state == KartRepoState.MERGING
+
+        if renumber in ("ours", "theirs"):
+            r = cli_runner.invoke(["resolve", f"--renumber={renumber}"])
+            assert r.exit_code == 0, r.stderr
+            assert (
+                r.stdout.splitlines()[0] == "Resolved 4 conflicts. 0 conflicts to go."
+            )
+
+        else:
+            r = cli_runner.invoke(
+                ["resolve", "boys_names:feature:11", "--renumber=theirs"]
+            )
+            r = cli_runner.invoke(
+                ["resolve", "boys_names:feature:12", "--renumber=ours"]
+            )
+            r = cli_runner.invoke(
+                ["resolve", "boys_names:feature:13", "--renumber=theirs"]
+            )
+            r = cli_runner.invoke(
+                ["resolve", "boys_names:feature:14", "--renumber=ours"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[0] == "Resolved 1 conflict. 0 conflicts to go."
+
+        r = cli_runner.invoke(["merge", "--continue", "-m", "Merge with theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["diff", "ancestor_branch...HEAD"])
+        assert r.exit_code == 0, r.stderr
+
+        # The conflicting PKs from 11-14 are renumbered to 17-20
+        # 15-16 aren't conflicts and so stay where they are.
+
+        if renumber == "ours":
+            assert r.stdout.splitlines() == [
+                "+++ boys_names:feature:11",
+                "+                                 objectid = 11",
+                "+                                     name = Theodore",
+                "+++ boys_names:feature:12",
+                "+                                 objectid = 12",
+                "+                                     name = Thomas",
+                "+++ boys_names:feature:13",
+                "+                                 objectid = 13",
+                "+                                     name = Timothy",
+                "+++ boys_names:feature:14",
+                "+                                 objectid = 14",
+                "+                                     name = Tobias",
+                "+++ boys_names:feature:15",
+                "+                                 objectid = 15",
+                "+                                     name = Otto",
+                "+++ boys_names:feature:16",
+                "+                                 objectid = 16",
+                "+                                     name = Odin",
+                "+++ boys_names:feature:17",
+                "+                                 objectid = 17",
+                "+                                     name = Oscar",
+                "+++ boys_names:feature:18",
+                "+                                 objectid = 18",
+                "+                                     name = Oakley",
+                "+++ boys_names:feature:19",
+                "+                                 objectid = 19",
+                "+                                     name = Oliver",
+                "+++ boys_names:feature:20",
+                "+                                 objectid = 20",
+                "+                                     name = Owen",
+            ]
+        elif renumber == "theirs":
+            assert r.stdout.splitlines() == [
+                "+++ boys_names:feature:11",
+                "+                                 objectid = 11",
+                "+                                     name = Oliver",
+                "+++ boys_names:feature:12",
+                "+                                 objectid = 12",
+                "+                                     name = Owen",
+                "+++ boys_names:feature:13",
+                "+                                 objectid = 13",
+                "+                                     name = Oscar",
+                "+++ boys_names:feature:14",
+                "+                                 objectid = 14",
+                "+                                     name = Oakley",
+                "+++ boys_names:feature:15",
+                "+                                 objectid = 15",
+                "+                                     name = Otto",
+                "+++ boys_names:feature:16",
+                "+                                 objectid = 16",
+                "+                                     name = Odin",
+                "+++ boys_names:feature:17",
+                "+                                 objectid = 17",
+                "+                                     name = Timothy",
+                "+++ boys_names:feature:18",
+                "+                                 objectid = 18",
+                "+                                     name = Tobias",
+                "+++ boys_names:feature:19",
+                "+                                 objectid = 19",
+                "+                                     name = Theodore",
+                "+++ boys_names:feature:20",
+                "+                                 objectid = 20",
+                "+                                     name = Thomas",
+            ]
+        elif renumber == "alternating":
+            assert r.stdout.splitlines() == [
+                "+++ boys_names:feature:11",
+                "+                                 objectid = 11",
+                "+                                     name = Oliver",
+                "+++ boys_names:feature:12",
+                "+                                 objectid = 12",
+                "+                                     name = Thomas",
+                "+++ boys_names:feature:13",
+                "+                                 objectid = 13",
+                "+                                     name = Oscar",
+                "+++ boys_names:feature:14",
+                "+                                 objectid = 14",
+                "+                                     name = Tobias",
+                "+++ boys_names:feature:15",
+                "+                                 objectid = 15",
+                "+                                     name = Otto",
+                "+++ boys_names:feature:16",
+                "+                                 objectid = 16",
+                "+                                     name = Odin",
+                "+++ boys_names:feature:17",
+                "+                                 objectid = 17",
+                "+                                     name = Theodore",
+                "+++ boys_names:feature:18",
+                "+                                 objectid = 18",
+                "+                                     name = Owen",
+                "+++ boys_names:feature:19",
+                "+                                 objectid = 19",
+                "+                                     name = Timothy",
+                "+++ boys_names:feature:20",
+                "+                                 objectid = 20",
+                "+                                     name = Oakley",
+            ]
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0
