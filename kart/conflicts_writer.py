@@ -124,7 +124,7 @@ class BaseConflictsWriter:
         return output_path
 
     def exit_with_code(self):
-        if hasattr(self.merge_context, "conflicts") and self.merge_context.conflicts:
+        if self.merged_index.unresolved_conflicts:
             sys.exit(1)
         else:
             sys.exit(0)

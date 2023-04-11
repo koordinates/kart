@@ -191,7 +191,7 @@ def find_conflict_to_resolve(merged_index, merge_context, conflict_label):
     ds_path = label_parts[0]
     is_meta = len(label_parts) >= 2 and label_parts[1] == "meta"
     for key, conflict3 in merged_index.conflicts.items():
-        rich_conflict = RichConflict(conflict3, merge_context)
+        rich_conflict = RichConflict((key, conflict3), merge_context)
         if key in merged_index.resolves:
             if rich_conflict.label == conflict_label:
                 raise InvalidOperation(
@@ -200,7 +200,7 @@ def find_conflict_to_resolve(merged_index, merge_context, conflict_label):
             continue
 
         if rich_conflict.label == conflict_label:
-            result = key, conflict3, rich_conflict
+            result = rich_conflict
         elif (
             (not is_meta)
             and rich_conflict.decoded_path[0] == ds_path
@@ -301,7 +301,7 @@ def resolve(ctx, with_version, file_path, conflict_label):
         # a user could easily have an extra ":" on the end by accident.
         conflict_label = conflict_label[:-1]
 
-    key, conflict3, rich_conflict = find_conflict_to_resolve(
+    rich_conflict = find_conflict_to_resolve(
         merged_index, merge_context, conflict_label
     )
 
@@ -313,14 +313,16 @@ def resolve(ctx, with_version, file_path, conflict_label):
         res = []
     else:
         assert with_version in ("ancestor", "ours", "theirs")
-        res = [getattr(conflict3, with_version)]
-        if res == [None]:
+        version = getattr(rich_conflict.versions, with_version)
+        if version is None:
             click.echo(
                 f'Version "{with_version}" does not exist - resolving conflict by deleting.'
             )
             res = []
+        else:
+            res = [version.entry]
 
-    merged_index.add_resolve(key, res)
+    merged_index.add_resolve(rich_conflict.key, res)
     merged_index.write_to_repo(repo)
     update_workingcopy_with_resolve(
         repo, merged_index, merge_context, rich_conflict, res

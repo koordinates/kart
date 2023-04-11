@@ -489,7 +489,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         L.info("Dropped spatial index in %.1fs", time.monotonic() - t0)
 
     def _initialise_sequence(self, sess, dataset):
-        start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
+        start = dataset.find_start_of_unassigned_range()
         if start:
             # Strangely, sqlite_sequence has no PK or unique constraints, so we just delete and then insert.
             sess.execute(

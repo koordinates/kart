@@ -221,6 +221,9 @@ class TableV3(RichTableDataset):
             raise ValueError(f"Expected a single pk_value, got {decoded}")
         return decoded[0]
 
+    def find_start_of_unassigned_range(self):
+        return self.feature_path_encoder.find_start_of_unassigned_range(self)
+
     def encode_raw_feature_dict(
         self, raw_feature_dict, legend, relative=False, *, schema=None
     ):

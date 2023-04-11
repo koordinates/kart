@@ -141,7 +141,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         pass
 
     def _initialise_sequence(self, sess, dataset):
-        start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
+        start = dataset.find_start_of_unassigned_range()
         if start:
             seq_name = f"{dataset.table_name}_{dataset.primary_key}_seq"
             seq_exists = sess.scalar(

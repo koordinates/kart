@@ -149,7 +149,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         pass
 
     def _initialise_sequence(self, sess, dataset):
-        start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
+        start = dataset.find_start_of_unassigned_range()
         if start:
             sess.execute(
                 f"ALTER TABLE {self.table_identifier(dataset)} AUTO_INCREMENT = :start;",

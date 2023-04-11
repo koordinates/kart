@@ -648,10 +648,18 @@ class RichConflict:
     """
 
     def __init__(self, entry3, merge_context):
+        # Instead of (ancestor_entry, ours_entry, theirs_entry)
+        # the caller may also supply (key, (ancestor_entry, ours_entry, theirs_entry))
+        # to associate a particular key with this conflict:
+        if isinstance(entry3, tuple) and isinstance(entry3[0], str):
+            self.key, self.entry3 = entry3
+        else:
+            self.key = None
+            self.entry3 = entry3
         self.versions = AncestorOursTheirs(
             *(
                 RichConflictVersion(e, ctx) if e else None
-                for e, ctx in zip(entry3, merge_context.versions)
+                for e, ctx in zip(self.entry3, merge_context.versions)
             )
         )
 

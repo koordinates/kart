@@ -191,7 +191,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         pass
 
     def _initialise_sequence(self, sess, dataset):
-        start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
+        start = dataset.find_start_of_unassigned_range()
         if start:
             quoted_table_name = ".".join(
                 [self.quote(self.db_schema), self.quote(dataset.table_name)]
