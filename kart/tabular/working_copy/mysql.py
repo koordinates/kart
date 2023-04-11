@@ -160,7 +160,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         """Returns the sno-branded name of the trigger reponsible for populating the sno_track table."""
         return f"_sno_track_{trigger_type}"
 
-    def _create_triggers(self, sess, dataset):
+    def create_triggers(self, sess, dataset):
         table_identifier = self.table_identifier(dataset)
         pk_column = self.quote(dataset.primary_key)
 
@@ -210,7 +210,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
     def _suspend_triggers(self, sess, dataset):
         self._drop_triggers(sess, dataset)
         yield
-        self._create_triggers(sess, dataset)
+        self.create_triggers(sess, dataset)
 
     @classmethod
     def try_align_schema_col(cls, old_col_dict, new_col_dict):

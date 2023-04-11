@@ -461,5 +461,55 @@ def test_commit_table_twice(cli_runner, data_working_copy):
             cli_runner.invoke(["add-dataset", new_table, "-m", message1, "-o", "text"])
             cli_runner.invoke(["add-dataset", new_table, "-m", message2, "-o", "text"])
         except InvalidOperation as e:
-            assert (str(e) == f"Table '{new_table}' is already tracked\n",)
+            assert str(e) == f"Table '{new_table}' is already tracked\n"
             assert e.exit_code == NO_CHANGES
+
+
+def test_commit_table_triggers(cli_runner, data_working_copy):
+    new_table = "test_table"
+    message = "test commit"
+
+    # Test how diff handles an existing table with triggers
+    with data_working_copy("points") as (path, wc):
+        repo = KartRepo(path)
+
+        # Test how diff handles a new table after add-dataset
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                f"""CREATE TABLE IF NOT EXISTS {new_table} (test_id int primary key, field1 text, field2 text);"""
+            )
+            sess.execute(
+                f"""INSERT INTO {new_table} (test_id, field1, field2)
+                VALUES
+                    (1, 'value1a', 'value1b'),
+                    (2, 'value2a', 'value2b'),
+                    (3, 'value3a', 'value3b'),
+                    (4, 'value4a', 'value4b'),
+                    (5, 'value5a', 'value5b');"""
+            )
+
+        r = cli_runner.invoke(["add-dataset", new_table, "-m", message, "-o", "text"])
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                f"""DELETE FROM {new_table}
+                    WHERE test_id = 1;"""
+            )
+        r = cli_runner.invoke(["diff", "-o", "json"])
+
+        output = json.loads(r.stdout)
+
+        expected = {
+            "test_table": {
+                "feature": [
+                    {
+                        "-": {
+                            "test_id": 1,
+                            "field1": "value1a",
+                            "field2": "value1b",
+                        }
+                    },
+                ]
+            }
+        }
+
+        assert output["kart.diff/v1+hexwkb"] == expected

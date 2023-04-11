@@ -51,6 +51,9 @@ class TableDataset(BaseDataset, TableImportSource):
 
     @classmethod
     def new_dataset_for_writing(cls, path, schema, repo):
+        """
+        Creates a new dataset instance that can be used to write to a new dataset.
+        """
         result = cls(None, path, repo)
         result._schema = schema
         return result

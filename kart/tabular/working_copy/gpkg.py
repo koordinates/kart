@@ -508,7 +508,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         # Newer repos that use kart branding use _kart_tracking_name.
         return f"gpkg_sno_{dataset.table_name}_{trigger_type}"
 
-    def _create_triggers(self, sess, dataset):
+    def create_triggers(self, sess, dataset):
         table_identifier = self.table_identifier(dataset)
         pk_column = self.quote(dataset.primary_key)
 
@@ -516,7 +516,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         sess.execute(
             text_with_inlined_params(
                 f"""
-                CREATE TRIGGER {self._quoted_tracking_name('ins', dataset)}
+                CREATE TRIGGER IF NOT EXISTS {self._quoted_tracking_name('ins', dataset)}
                    AFTER INSERT ON {table_identifier}
                 BEGIN
                     INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
@@ -530,7 +530,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         sess.execute(
             text_with_inlined_params(
                 f"""
-                CREATE TRIGGER {self._quoted_tracking_name('upd', dataset)}
+                CREATE TRIGGER IF NOT EXISTS {self._quoted_tracking_name('upd', dataset)}
                    AFTER UPDATE ON {table_identifier}
                 BEGIN
                     INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
@@ -544,7 +544,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         sess.execute(
             text_with_inlined_params(
                 f"""
-                CREATE TRIGGER {self._quoted_tracking_name('del', dataset)}
+                CREATE TRIGGER IF NOT EXISTS {self._quoted_tracking_name('del', dataset)}
                    AFTER DELETE ON {table_identifier}
                 BEGIN
                     INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
@@ -564,7 +564,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
     def _suspend_triggers(self, sess, dataset):
         self._drop_triggers(sess, dataset)
         yield
-        self._create_triggers(sess, dataset)
+        self.create_triggers(sess, dataset)
 
     def _is_schema_update_supported(self, schema_delta):
         if not schema_delta.old_value or not schema_delta.new_value:
