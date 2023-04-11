@@ -719,7 +719,15 @@ class TableWorkingCopy(WorkingCopyPart):
         Returns a diff containing all the features in the working copy.
         """
         assert delta_type in (Delta.insert, Delta.delete)
-        pk_field = schema.pk_columns[0].name
+
+        # TODO - support altering the user-provided table to add the PK column
+        # Check that the table has a primary key:
+        try:
+            pk_field = schema.pk_columns[0].name
+        except IndexError:
+            raise NotYetImplemented(
+                "Kart doesn't yet support committing tables with no primary key. Add a primary key column to the table and try again"
+            )
 
         feature_diff = DeltaDiff()
         with self.session() as sess:
