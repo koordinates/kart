@@ -305,6 +305,18 @@ def update_workingcopy_with_resolve(
 
 
 def resolve_conflicts_with_renumber(repo, renumber, conflict_labels):
+    """
+    Resolve one or more insert/insert conflicts by keeping one version unchanged,
+    and renumbering the primary key value of the other version.
+    Only works for feature conflicts with integer primary keys.
+
+    repo - the kart repo
+    renumber - one of "ours" or "theirs"
+    conflict_labels - filter or specify the exact the conflicts to resolve.
+        If not set, renumbers all possible insert/insert conflicts.
+    """
+    assert renumber in ("ours", "theirs")
+
     merged_index = MergedIndex.read_from_repo(repo)
     merge_context = MergeContext.read_from_repo(repo)
 
@@ -351,7 +363,7 @@ def resolve_conflicts_with_renumber(repo, renumber, conflict_labels):
                 keep_version = conflict.versions.ours
                 renumber_version = conflict.versions.theirs
             else:
-                raise RuntimeError(f"Invalid option --renumber={renumber}")
+                raise RuntimeError()
 
             keep_feature = keep_version.feature
             renumber_feature = renumber_version.feature
@@ -390,9 +402,11 @@ def resolve_conflicts_with_renumber(repo, renumber, conflict_labels):
 
 def find_renumber_conflicts_to_resolve(merged_index, merge_context, conflict_labels):
     """
-    Given a conflict label that the user wants to resolve - eg mydataset:feature:1 -
-    loads the unresolved conflict from the merge index.
-    Raises an error if there is no such conflict, or it is already resolved, or cannot yet be resolved.
+    Given one or more conflict labels that the user wants to resolve by renumbering - eg mydataset:feature -
+    loads the matching conflicts from the merge index.
+    Helps the user find renumberable conflicts to some extent (ie, only matches insert/insert conflicts).
+    Helps the user more if no conflict_labels are supplied (ie, only matches feature conflicts with integer PKs).
+    Raises an error if there are no matching conflicts or if some matching conflicts cannot be renumbered.
     """
     conflicts = find_multiple_conflicts_to_resolve(
         merged_index, merge_context, conflict_labels
@@ -417,15 +431,21 @@ def find_renumber_conflicts_to_resolve(merged_index, merge_context, conflict_lab
         else:
             raise NotFound("No matching conflict(s) found", exit_code=NO_CONFLICT)
 
-    non_feature_conflicts = [c for c in conflicts if c.decoded_path[1] != "feature"]
-    if non_feature_conflicts:
-        desc = "\n".join(_summary_of_conflict_labels(non_feature_conflicts))
-        raise InvalidOperation(
-            f"The --renumber option only works for feature conflicts - it cannot resolve the following conflicts:\n{desc}"
-        )
+    if conflict_labels:
+        non_feature_conflicts = [c for c in conflicts if c.decoded_path[1] != "feature"]
+        if non_feature_conflicts:
+            desc = "\n".join(_summary_of_conflict_labels(non_feature_conflicts))
+            raise InvalidOperation(
+                f"The --renumber option only works for feature conflicts - it cannot resolve the following conflicts:\n{desc}"
+            )
+    else:
+        # If the user runs this with no filters, we help them match the renumberable conflicts.
+        conflicts = [c for c in conflicts if c.decoded_path[1] == "feature"]
 
-    affected_datasets = set(c.any_true_version.dataset_path for c in conflicts)
-    for ds_path in affected_datasets:
+    # Check for unresolved meta-conflicts and non-renumberable primary keys:
+    merged_datasets = merge_context.repo.datasets("MERGED_TREE")
+    affected_ds_paths = set(c.any_true_version.dataset_path for c in conflicts)
+    for ds_path in affected_ds_paths:
         if find_multiple_conflicts_to_resolve(
             merged_index, merge_context, [f"{ds_path}:meta"]
         ):
@@ -433,21 +453,34 @@ def find_renumber_conflicts_to_resolve(merged_index, merge_context, conflict_lab
                 f"There are still unresolved meta-item conflicts for dataset {ds_path}. These need to be resolved first."
             )
 
+        dataset = merged_datasets[ds_path]
+        if [c.data_type for c in dataset.schema.pk_columns] != ["integer"]:
+            if conflict_labels:
+                raise InvalidOperation(
+                    f"Dataset {ds_path} does not have an integer primary key, and so conflicts cannot be automatically renumbered."
+                )
+            else:
+                # If the user runs this with no filters, we help them match the renumberable conflicts.
+                conflicts = [c for c in conflicts if c.decoded_path[0] != ds_path]
+
     # We don't have a way to specify only insert/insert conflicts using filters, but --renumber only works for insert/insert conflicts.
     # So, we just implicitly filter out the other types of feature conflict.
-    add_add_conflicts = [
+    conflicts = [
         c
         for c in conflicts
         if c.versions.ancestor is None
         and c.versions.ours is not None
         and c.versions.theirs is not None
     ]
-    if conflicts and not add_add_conflicts:
-        raise InvalidOperation(
-            "The --renumber option only works for insert/insert conficts. There are no matching unresolved insert/insert conflicts."
+
+    if not conflicts:
+        raise NotFound(
+            "The --renumber option only works for unresolved insert/insert conficts with integer primary-keys. "
+            "There are no matching conflicts that can be renumbered.",
+            exit_code=NO_CONFLICT,
         )
 
-    return add_add_conflicts
+    return conflicts
 
 
 def _summary_of_conflict_labels(conflicts):
@@ -481,7 +514,7 @@ def _fix_conflict_label(conflict_label):
         ' - "delete" - the conflict is resolved by simply removing it'
     ),
     cls=MutexOption,
-    exclusive_with=["file_path", "renumber_keys"],
+    exclusive_with=["file_path", "renumber"],
 )
 @click.option(
     "--with-file",
@@ -489,7 +522,7 @@ def _fix_conflict_label(conflict_label):
     type=click.Path(exists=True, dir_okay=False),
     help="Resolve the conflict by accepting the version(s) supplied in the given file.",
     cls=MutexOption,
-    exclusive_with=["with_version", "renumber_keys"],
+    exclusive_with=["with_version", "renumber"],
 )
 @click.option(
     "--renumber",

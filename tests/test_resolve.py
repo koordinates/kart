@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from kart.exceptions import INVALID_OPERATION
+from kart.exceptions import INVALID_OPERATION, NO_CONFLICT
 from kart.tabular.feature_output import feature_as_json
 from kart.merge_util import MergedIndex
 from kart.repo import KartRepoState, KartRepo
@@ -383,8 +383,8 @@ def test_resolve_with_renumber__points(data_working_copy, cli_runner):
         assert r.stdout.splitlines() == ["Resolved 1 conflict. 3 conflicts to go."]
 
         r = cli_runner.invoke(["resolve", "--renumber=theirs"])
-        assert r.exit_code == 20
-        assert "There are no matching unresolved insert/insert conflicts." in r.stderr
+        assert r.exit_code == NO_CONFLICT
+        assert "There are no matching conflicts that can be renumbered." in r.stderr
 
         r = cli_runner.invoke(["diff"])
         # This is the diff from HEAD - "ours_branch" - to the current WC state,
@@ -633,3 +633,24 @@ def test_resolve_with_renumber__multiple_inserts(
 
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0
+
+
+def test_resolve_with_renumber__string_pks(data_working_copy, cli_runner):
+    # Use a repo with lots of conflicting inserts so we can make sure they don't collide.
+    with data_working_copy("conflicts/string-pks.tgz") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r.stderr
+        assert repo.state == KartRepoState.MERGING
+
+        r = cli_runner.invoke(["resolve", "--renumber=theirs"])
+        assert r.exit_code == NO_CONFLICT
+        assert "There are no matching conflicts that can be renumbered." in r.stderr
+
+        r = cli_runner.invoke(["resolve", "nz_waca_adjustments", "--renumber=theirs"])
+        assert r.exit_code == INVALID_OPERATION
+        assert (
+            "Dataset nz_waca_adjustments does not have an integer primary key"
+            in r.stderr
+        )
