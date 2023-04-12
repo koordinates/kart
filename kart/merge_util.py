@@ -258,6 +258,10 @@ class MergedIndex:
                     yield entry
 
     @property
+    def resolved_conflicts(self):
+        return {k: v for k, v in self.conflicts.items() if k in self.resolves}
+
+    @property
     def unresolved_conflicts(self):
         return {k: v for k, v in self.conflicts.items() if k not in self.resolves}
 

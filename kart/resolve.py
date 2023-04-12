@@ -8,14 +8,21 @@ import pygit2
 
 from kart.completion_shared import conflict_completer
 
-from .cli_util import MutexOption, KartCommand
-from .exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
-from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
-from .geometry import geojson_to_gpkg_geom
-from .merge_util import MergeContext, MergedIndex, RichConflict, WorkingCopyMerger
-from .point_cloud.tilename_util import set_tile_extension
-from .reflink_util import try_reflink
-from .repo import KartRepoState
+from kart.cli_util import MutexOption, KartCommand
+from kart.exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
+from kart.lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
+from kart.geometry import geojson_to_gpkg_geom
+from kart.merge_util import (
+    MergeContext,
+    MergedIndex,
+    RichConflict,
+    WorkingCopyMerger,
+    rich_conflicts,
+)
+from kart.point_cloud.tilename_util import set_tile_extension
+from kart.reflink_util import try_reflink
+from kart.repo import KartRepoState
+from kart.key_filters import RepoKeyFilter
 
 
 def ungeojson_feature(feature, dataset):
@@ -179,12 +186,23 @@ def _load_workingcopy_resolve_for_tile(rich_conflict):
     return _load_file_resolve_for_tile(rich_conflict, matching_files[0])
 
 
-def find_conflict_to_resolve(merged_index, merge_context, conflict_label):
+def find_single_conflict_to_resolve(merged_index, merge_context, conflict_labels):
     """
-    Given a conflict label that the user wants to resolve - eg mydataset:feature:1 -
+    Given a single conflict label that the user wants to resolve - eg mydataset:feature:1 -
     loads the unresolved conflict from the merge index.
-    Raises an error if there is no such conflict, or it is already resolved, or cannot yet be resolved.
+    Raises an error if there is no such conflict, or it is already resolved, or cannot yet be resolved,
+    or if the given label(s) match more than one conflict.
     """
+    if len(conflict_labels) == 0:
+        raise click.UsageError("Missing argument: CONFLICT_LABEL")
+
+    if len(conflict_labels) > 1:
+        raise NotYetImplemented(
+            "Sorry, resolving multiple conflicts at once is not yet supported (except when using --renumber)",
+            exit_code=NO_CONFLICT,
+        )
+
+    conflict_label = conflict_labels[0]
 
     result = None
     label_parts = conflict_label.split(":")
@@ -211,8 +229,34 @@ def find_conflict_to_resolve(merged_index, merge_context, conflict_label):
             )
 
     if result is None:
-        raise NotFound(f"No conflict found at {conflict_label}", exit_code=NO_CONFLICT)
+        if find_multiple_conflicts_to_resolve(
+            merged_index, merge_context, [conflict_label]
+        ):
+            raise NotYetImplemented(
+                "Sorry, resolving multiple conflicts at once is not yet supported (except when using --renumber)",
+                exit_code=NO_CONFLICT,
+            )
+        else:
+            raise NotFound(
+                f"No conflict found at {conflict_label}", exit_code=NO_CONFLICT
+            )
+
     return result
+
+
+def find_multiple_conflicts_to_resolve(merged_index, merge_context, user_key_filters):
+    """
+    Given filters that match the conflicts the user wants to resolve - eg mydataset:feature -
+    returns a list of all matching unresolved conflicts as RichConflicts, from the merge index.
+    Returns an empty list if this doesn't match any unresolved conflicts.
+    """
+    repo_key_filter = RepoKeyFilter.build_from_user_patterns(user_key_filters)
+    conflicts = rich_conflicts(
+        merged_index.unresolved_conflicts.items(),
+        merge_context,
+    )
+    conflicts = [c for c in conflicts if c.matches_filter(repo_key_filter)]
+    return conflicts
 
 
 def update_workingcopy_with_resolve(
@@ -260,6 +304,203 @@ def update_workingcopy_with_resolve(
             try_reflink(lfs_path, workdir_path)
 
 
+def resolve_conflicts_with_renumber(repo, renumber, conflict_labels):
+    """
+    Resolve one or more insert/insert conflicts by keeping one version unchanged,
+    and renumbering the primary key value of the other version.
+    Only works for feature conflicts with integer primary keys.
+
+    repo - the kart repo
+    renumber - one of "ours" or "theirs"
+    conflict_labels - filter or specify the exact the conflicts to resolve.
+        If not set, renumbers all possible insert/insert conflicts.
+    """
+    assert renumber in ("ours", "theirs")
+
+    merged_index = MergedIndex.read_from_repo(repo)
+    merge_context = MergeContext.read_from_repo(repo)
+
+    matching_conflicts = find_renumber_conflicts_to_resolve(
+        merged_index, merge_context, conflict_labels
+    )
+    ds_path_to_conflicts = {}
+    for conflict in matching_conflicts:
+        ds_path = conflict.any_true_version.dataset_path
+        ds_path_to_conflicts.setdefault(ds_path, []).append(conflict)
+
+    resolve_paths = [
+        entry.path for resolve in merged_index.resolves.values() for entry in resolve
+    ]
+
+    structure = repo.structure()
+    decoded_resolves = [structure.decode_path(p) for p in resolve_paths]
+    ours_datasets = repo.datasets(merge_context.versions.ours.commit_id)
+    theirs_datasets = repo.datasets(merge_context.versions.theirs.commit_id)
+    merged_datasets = repo.datasets("MERGED_TREE")
+
+    resolved_conflicts = 0
+    ds_path_to_features = {}
+
+    # Renumber either ours or theirs, write the resolves to the merge index.
+    for ds_path, conflicts in ds_path_to_conflicts.items():
+        next_unassigned = max(
+            ours_datasets[ds_path].find_start_of_unassigned_range(),
+            theirs_datasets[ds_path].find_start_of_unassigned_range(),
+        )
+        dataset = merged_datasets[ds_path]
+
+        for decoded_path in decoded_resolves:
+            if decoded_path[0] == ds_path and decoded_path[1] == "feature":
+                next_unassigned = max(next_unassigned, decoded_path[2] + 1)
+
+        ds_features = ds_path_to_features.setdefault(ds_path, [])
+
+        for conflict in conflicts:
+            if renumber == "ours":
+                keep_version = conflict.versions.theirs
+                renumber_version = conflict.versions.ours
+            elif renumber == "theirs":
+                keep_version = conflict.versions.ours
+                renumber_version = conflict.versions.theirs
+            else:
+                raise RuntimeError()
+
+            keep_feature = keep_version.feature
+            renumber_feature = renumber_version.feature
+            renumber_feature[dataset.primary_key] = next_unassigned
+            next_unassigned += 1
+
+            res = [
+                write_feature_to_dataset_entry(f, dataset, dataset.repo)
+                for f in (keep_feature, renumber_feature)
+            ]
+
+            merged_index.add_resolve(conflict.key, res)
+            resolved_conflicts += 1
+            ds_features.append(keep_feature)
+            ds_features.append(renumber_feature)
+
+    merged_index.write_to_repo(repo)
+
+    # Update the working copy to contain the resolves.
+    wc = repo.working_copy.tabular
+    if wc is not None:
+        with wc.session() as sess:
+            for ds_path, features in ds_path_to_features.items():
+                if not features:
+                    continue
+                dataset = merged_datasets[ds_path]
+                sess.execute(wc.insert_or_replace_into_dataset_cmd(dataset), features)
+
+    unresolved_conflicts = len(merged_index.unresolved_conflicts)
+    click.echo(
+        f"Resolved {_pc(resolved_conflicts)}. {_pc(unresolved_conflicts)} to go."
+    )
+    if unresolved_conflicts == 0:
+        click.echo("Use `kart merge --continue` to complete the merge")
+
+
+def find_renumber_conflicts_to_resolve(merged_index, merge_context, conflict_labels):
+    """
+    Given one or more conflict labels that the user wants to resolve by renumbering - eg mydataset:feature -
+    loads the matching conflicts from the merge index.
+    Helps the user find renumberable conflicts to some extent (ie, only matches insert/insert conflicts).
+    Helps the user more if no conflict_labels are supplied (ie, only matches feature conflicts with integer PKs).
+    Raises an error if there are no matching conflicts or if some matching conflicts cannot be renumbered.
+    """
+    conflicts = find_multiple_conflicts_to_resolve(
+        merged_index, merge_context, conflict_labels
+    )
+
+    # Failed to find any matching conflicts - maybe already resolved?
+    if not conflicts:
+        if len(conflict_labels) == 1:
+            conflict_label = conflict_labels[0]
+            matching_resolved_conflicts = rich_conflicts(
+                merged_index.resolved_conflicts, merge_context
+            )
+            if any(c.label == conflict_label for c in matching_resolved_conflicts):
+                raise InvalidOperation(
+                    f"Conflict at {conflict_label} is already resolved"
+                )
+            else:
+                raise NotFound(
+                    f"No matching conflict(s) found at {conflict_label}",
+                    exit_code=NO_CONFLICT,
+                )
+        else:
+            raise NotFound("No matching conflict(s) found", exit_code=NO_CONFLICT)
+
+    if conflict_labels:
+        non_feature_conflicts = [c for c in conflicts if c.decoded_path[1] != "feature"]
+        if non_feature_conflicts:
+            desc = "\n".join(_summary_of_conflict_labels(non_feature_conflicts))
+            raise InvalidOperation(
+                f"The --renumber option only works for feature conflicts - it cannot resolve the following conflicts:\n{desc}"
+            )
+    else:
+        # If the user runs this with no filters, we help them match the renumberable conflicts.
+        conflicts = [c for c in conflicts if c.decoded_path[1] == "feature"]
+
+    # Check for unresolved meta-conflicts and non-renumberable primary keys:
+    merged_datasets = merge_context.repo.datasets("MERGED_TREE")
+    affected_ds_paths = set(c.any_true_version.dataset_path for c in conflicts)
+    for ds_path in affected_ds_paths:
+        if find_multiple_conflicts_to_resolve(
+            merged_index, merge_context, [f"{ds_path}:meta"]
+        ):
+            raise InvalidOperation(
+                f"There are still unresolved meta-item conflicts for dataset {ds_path}. These need to be resolved first."
+            )
+
+        dataset = merged_datasets[ds_path]
+        if [c.data_type for c in dataset.schema.pk_columns] != ["integer"]:
+            if conflict_labels:
+                raise InvalidOperation(
+                    f"Dataset {ds_path} does not have an integer primary key, and so conflicts cannot be automatically renumbered."
+                )
+            else:
+                # If the user runs this with no filters, we help them match the renumberable conflicts.
+                conflicts = [c for c in conflicts if c.decoded_path[0] != ds_path]
+
+    # We don't have a way to specify only insert/insert conflicts using filters, but --renumber only works for insert/insert conflicts.
+    # So, we just implicitly filter out the other types of feature conflict.
+    conflicts = [
+        c
+        for c in conflicts
+        if c.versions.ancestor is None
+        and c.versions.ours is not None
+        and c.versions.theirs is not None
+    ]
+
+    if not conflicts:
+        raise NotFound(
+            "The --renumber option only works for unresolved insert/insert conficts with integer primary-keys. "
+            "There are no matching conflicts that can be renumbered.",
+            exit_code=NO_CONFLICT,
+        )
+
+    return conflicts
+
+
+def _summary_of_conflict_labels(conflicts):
+    if len(conflicts) > 15:
+        return [c.label for c in conflicts[:10]] + ["..."]
+    else:
+        return [c.label for c in conflicts]
+
+
+def _fix_conflict_label(conflict_label):
+    """
+    Due to the way conflict labels are often displayed with ":ancestor" etc on the end,
+    a user could easily have an extra ":" on the end by accident.
+    """
+    rstripped = conflict_label.rstrip(":")
+    if rstripped and len(rstripped) == len(conflict_label) - 1:
+        return rstripped
+    return conflict_label
+
+
 @click.command(cls=KartCommand)
 @click.pass_context
 @click.option(
@@ -273,7 +514,7 @@ def update_workingcopy_with_resolve(
         ' - "delete" - the conflict is resolved by simply removing it'
     ),
     cls=MutexOption,
-    exclusive_with=["file_path"],
+    exclusive_with=["file_path", "renumber"],
 )
 @click.option(
     "--with-file",
@@ -281,28 +522,43 @@ def update_workingcopy_with_resolve(
     type=click.Path(exists=True, dir_okay=False),
     help="Resolve the conflict by accepting the version(s) supplied in the given file.",
     cls=MutexOption,
-    exclusive_with=["with_version"],
+    exclusive_with=["with_version", "renumber"],
+)
+@click.option(
+    "--renumber",
+    type=click.Choice(["ours", "theirs"]),
+    help='Resolve one or more insert/insert conflicts by keeping both versions ("ours" and "theirs")'
+    "but assigning one of the two versions a new primary key value so it doesn't conflict with the other",
+    cls=MutexOption,
+    exclusive_with=["with_version", "file_path"],
 )
 @click.argument(
-    "conflict_label", default=None, required=True, shell_complete=conflict_completer
+    "conflict_labels",
+    nargs=-1,
+    metavar="[CONFLICT_LABELS]",
+    shell_complete=conflict_completer,
 )
-def resolve(ctx, with_version, file_path, conflict_label):
-    """Resolve a merge conflict. So far only supports resolving to any of the three existing versions."""
+def resolve(ctx, with_version, file_path, renumber, conflict_labels):
+    """Resolve a merge conflict, using one of the conflicting versions, or with a user-supplied resolution."""
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.MERGING)
-    if not (with_version or file_path):
-        raise click.UsageError("Choose a resolution using --with or --with-file")
+
+    if not (with_version or file_path or renumber):
+        raise click.UsageError(
+            "Choose a resolution using --with or --with-file or --renumber"
+        )
+
+    conflict_labels = [_fix_conflict_label(c) for c in conflict_labels]
+
+    if renumber:
+        resolve_conflicts_with_renumber(repo, renumber, conflict_labels)
+        return
 
     merged_index = MergedIndex.read_from_repo(repo)
     merge_context = MergeContext.read_from_repo(repo)
 
-    if conflict_label.endswith(":"):
-        # Due to the way conflict labels are often displayed with ":ancestor" etc on the end,
-        # a user could easily have an extra ":" on the end by accident.
-        conflict_label = conflict_label[:-1]
-
-    rich_conflict = find_conflict_to_resolve(
-        merged_index, merge_context, conflict_label
+    rich_conflict = find_single_conflict_to_resolve(
+        merged_index, merge_context, conflict_labels
     )
 
     if file_path:
@@ -329,6 +585,14 @@ def resolve(ctx, with_version, file_path, conflict_label):
     )
 
     unresolved_conflicts = len(merged_index.unresolved_conflicts)
-    click.echo(f"Resolved 1 conflict. {unresolved_conflicts} conflicts to go.")
+    click.echo(f"Resolved 1 conflict. {_pc(unresolved_conflicts)} to go.")
     if unresolved_conflicts == 0:
         click.echo("Use `kart merge --continue` to complete the merge")
+
+
+def _pc(count):
+    """Simple pluraliser for conflict/conflicts"""
+    if count == 1:
+        return "1 conflict"
+    else:
+        return f"{count} conflicts"
