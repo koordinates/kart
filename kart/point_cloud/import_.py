@@ -83,6 +83,14 @@ L = logging.getLogger(__name__)
         "such a commit. This option bypasses the safety"
     ),
 )
+@click.option(
+    "--num-workers",
+    "--num-processes",
+    type=click.INT,
+    help="How many import workers to run in parallel. Defaults to the number of available CPU cores.",
+    default=None,
+    hidden=True,
+)
 @click.option("--dataset-path", "--dataset", help="The dataset's path once imported")
 @click.argument(
     "args",
@@ -93,7 +101,6 @@ L = logging.getLogger(__name__)
 def point_cloud_import(
     ctx,
     convert_to_copc,
-    dataset_path,
     message,
     do_checkout,
     replace_existing,
@@ -101,6 +108,8 @@ def point_cloud_import(
     delete,
     amend,
     allow_empty,
+    num_workers,
+    dataset_path,
     args,
 ):
     """
@@ -127,6 +136,7 @@ def point_cloud_import(
         amend=amend,
         allow_empty=allow_empty,
         sources=sources,
+        num_workers=num_workers,
     )
 
 

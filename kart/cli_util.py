@@ -383,6 +383,7 @@ class JsonFromFile(StringFromFile):
         if self.schema:
             # jsonschema is quite a heavyweight import
             import jsonschema
+
             try:
                 jsonschema.validate(instance=value, schema=self.schema)
             except jsonschema.ValidationError as e:
@@ -500,7 +501,3 @@ def find_param(ctx_or_params, name):
         if param.name == name:
             return param
     raise RuntimeError(f"Couldn't find param: {name}")
-
-
-class RemovalInKart013Warning(UserWarning):
-    pass
