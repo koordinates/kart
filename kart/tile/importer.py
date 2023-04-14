@@ -340,6 +340,11 @@ class TileImporter:
         return self.DATASET_CLASS.extract_tile_metadata_from_filesystem_path(tile_path)
 
     def extract_multiple_tiles_metadata(self, sources):
+        """
+        Like extract_tile_metadata, but works for a list of several tiles. The metadata may
+        be extracted serially or with a thread-pool, depending on the value of self.num_workers.
+        Yields a tuple (source, metadata) for each tile in turn, in some unspecified order.
+        """
         # Single-threaded variant - uses the calling thread.
         if self.num_workers == 1:
             for source in sources:
@@ -573,6 +578,16 @@ class TileImporter:
                 p.update(1)
 
     def copy_multiple_files_to_lfs_cache(self, copy_and_convert_tasks):
+        """
+        Runs all the supplied tasks which hash / convert / copy the source files to the LFS cache.
+        Tasks may be run in series or by a threadpool, depending on self.num_workers.
+        Yields a tuple (source, pointer_dict) for each tile in turn, in some unspecified order, where
+        pointer_dict contains the OID and size that should be written as a pointer-file in order to
+        reference the tile that has been imported to the LFS cache.
+
+        copy_and_convert_tasks - a dict keyed by the source file, as supplied by user, where each
+            value is a task to be run that hashes / converts / copies the tile to the LFS cache as required.
+        """
         # Single-threaded variant - uses the calling thread.
         if self.num_workers == 1:
             for source, task in copy_and_convert_tasks.items():
@@ -609,21 +624,13 @@ class TileImporter:
     def sidecar_files(self, source):
         return []
 
-    MAX_WORKERS = 64
-
     def check_num_workers(self, num_workers):
         if num_workers is None:
-            num_workers = self.get_default_num_workers()
-        if num_workers < 1:
-            num_workers = 1
-        elif num_workers > self.MAX_WORKERS:
-            raise click.UsageError(
-                f"Importing with more than {self.MAX_WORKERS} workers is not supported"
-            )
-        return num_workers
+            return self.get_default_num_workers()
+        else:
+            return max(1, num_workers)
 
     def get_default_num_workers(self):
         num_workers = get_num_available_cores()
-        click.echo(num_workers)
         # that's a float, but we need an int
-        return min(max(1, int(math.ceil(num_workers))), self.MAX_WORKERS)
+        return max(1, int(math.ceil(num_workers)))
