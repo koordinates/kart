@@ -1,8 +1,11 @@
+import concurrent.futures
+import functools
 import logging
+import math
 import os
-import uuid
 from pathlib import Path
 import sys
+import uuid
 
 import click
 import pygit2
@@ -39,6 +42,7 @@ from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     extra_blobs_for_version,
 )
+from kart.utils import get_num_available_cores
 from kart.working_copy import PartType
 
 
@@ -67,6 +71,7 @@ class TileImporter:
         delete,
         amend,
         allow_empty,
+        num_workers,
         sources,
     ):
         """
@@ -81,10 +86,12 @@ class TileImporter:
         delete - list of existing tiles to delete, relevant when updating an existing dataset
         amend - if True, amends the previous commit rather than creating a new import commit
         allow_empty - if True, the import commit will be created even if the dataset is not changed
+        num_workers - specify the number of workers to use, or set to None to use the number of detected cores.
         sources - paths to tiles to import
         """
 
         self.sources = sources
+        self.num_workers = self.check_num_workers(num_workers)
 
         if not sources and not delete:
             # sources aren't required if you use --delete;
@@ -159,8 +166,9 @@ class TileImporter:
                 total=len(sources), unit="tile", desc="Checking tiles"
             )
             with progress as p:
-                for source in sources:
-                    tile_metadata = self.extract_tile_metadata(source)
+                for source, tile_metadata in self.extract_multiple_tiles_metadata(
+                    sources
+                ):
                     self.source_to_metadata[source] = tile_metadata
                     self.source_to_hash_and_size[source] = (
                         tile_metadata["tile"]["oid"],
@@ -331,6 +339,30 @@ class TileImporter:
         """
         return self.DATASET_CLASS.extract_tile_metadata_from_filesystem_path(tile_path)
 
+    def extract_multiple_tiles_metadata(self, sources):
+        """
+        Like extract_tile_metadata, but works for a list of several tiles. The metadata may
+        be extracted serially or with a thread-pool, depending on the value of self.num_workers.
+        Yields a tuple (source, metadata) for each tile in turn, in some unspecified order.
+        """
+        # Single-threaded variant - uses the calling thread.
+        if self.num_workers == 1:
+            for source in sources:
+                yield source, self.extract_tile_metadata(source)
+            return
+
+        # Multi-worker variant - uses a thread-pool, calling thread just receives the results.
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.num_workers
+        ) as executor:
+            future_to_source = {
+                executor.submit(self.extract_tile_metadata, source): source
+                for source in sources
+            }
+            for future in concurrent.futures.as_completed(future_to_source):
+                source = future_to_source[future]
+                yield source, future.result()
+
     def check_metadata_pre_convert(self):
         """
         Use the self.source_to_metadata dict to see if any of the sources individually have properties that prevent
@@ -465,56 +497,77 @@ class TileImporter:
         return wrapped_func
 
     def import_tiles_to_stream(self, stream, sources):
+        already_imported = 0
+        copy_and_convert_tasks = {}
+
+        # First pass - check if the tile is already imported or if it needs to be converted,
+        # set up a callable function that will convert / hash / copy the tile to the right place as needed.
+        # This part is fast and runs single-threaded.
+        for source in sources:
+            source_metadata = self.source_to_metadata[source]
+            tilename = self.DATASET_CLASS.tilename_from_path(source)
+            rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
+                tilename, relative=True
+            )
+            blob_path = f"{self.dataset_inner_path}/{rel_blob_path}"
+
+            # Check if tile has already been imported previously:
+            if self.existing_dataset is not None:
+                existing_summary = self.existing_dataset.get_tile_summary(
+                    tilename, missing_ok=True
+                )
+                if existing_summary:
+                    source_oid = self.source_to_hash_and_size[source][0]
+                    if self.existing_tile_matches_source(source_oid, existing_summary):
+                        # This tile has already been imported before. Reuse it rather than re-importing it.
+                        # Re-importing it could cause it to be re-converted, which is a waste of time,
+                        # and it may not convert the same the second time, which is then a waste of space
+                        # and shows up as a pointless diff.
+                        write_blob_to_stream(
+                            stream,
+                            blob_path,
+                            (self.existing_dataset.inner_tree / rel_blob_path).data,
+                        )
+                        self.include_existing_metadata = True
+                        already_imported += 1
+                        continue
+
+            conversion_func = self.wrap_conversion_func(
+                self.get_conversion_func(source_metadata)
+            )
+            if conversion_func is None:
+                self.source_to_imported_metadata[source] = self.source_to_metadata[
+                    source
+                ]
+                oid_and_size = self.source_to_hash_and_size[source]
+            else:
+                oid_and_size = None
+
+            copy_and_convert_tasks[source] = functools.partial(
+                copy_file_to_local_lfs_cache,
+                self.repo,
+                source,
+                conversion_func,
+                oid_and_size=oid_and_size,
+            )
+
+        # Second pass - actually convert / hash / copy the tile. This part can be multi-worker.
         progress = progress_bar(total=len(sources), unit="tile", desc="Importing tiles")
         with progress as p:
-            for source in sources:
-                source_metadata = self.source_to_metadata[source]
+            p.update(already_imported)
+
+            for source, pointer_dict in self.copy_multiple_files_to_lfs_cache(
+                copy_and_convert_tasks
+            ):
+                pointer_data = merge_dicts_to_pointer_file_bytes(
+                    self.source_to_imported_metadata[source]["tile"], pointer_dict
+                )
+
                 tilename = self.DATASET_CLASS.tilename_from_path(source)
                 rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
                     tilename, relative=True
                 )
                 blob_path = f"{self.dataset_inner_path}/{rel_blob_path}"
-
-                # Check if tile has already been imported previously:
-                if self.existing_dataset is not None:
-                    existing_summary = self.existing_dataset.get_tile_summary(
-                        tilename, missing_ok=True
-                    )
-                    if existing_summary:
-                        source_oid = self.source_to_hash_and_size[source][0]
-                        if self.existing_tile_matches_source(
-                            source_oid, existing_summary
-                        ):
-                            # This tile has already been imported before. Reuse it rather than re-importing it.
-                            # Re-importing it could cause it to be re-converted, which is a waste of time,
-                            # and it may not convert the same the second time, which is then a waste of space
-                            # and shows up as a pointless diff.
-                            write_blob_to_stream(
-                                stream,
-                                blob_path,
-                                (self.existing_dataset.inner_tree / rel_blob_path).data,
-                            )
-                            self.include_existing_metadata = True
-                            continue
-
-                conversion_func = self.wrap_conversion_func(
-                    self.get_conversion_func(source_metadata)
-                )
-                if conversion_func is None:
-                    self.source_to_imported_metadata[source] = self.source_to_metadata[
-                        source
-                    ]
-                    oid_and_size = self.source_to_hash_and_size[source]
-                else:
-                    oid_and_size = None
-
-                pointer_dict = copy_file_to_local_lfs_cache(
-                    self.repo, source, conversion_func, oid_and_size=oid_and_size
-                )
-                pointer_data = merge_dicts_to_pointer_file_bytes(
-                    self.source_to_imported_metadata[source]["tile"], pointer_dict
-                )
-
                 write_blob_to_stream(stream, blob_path, pointer_data)
 
                 for sidecar_file, suffix in self.sidecar_files(source):
@@ -523,6 +576,35 @@ class TileImporter:
                     write_blob_to_stream(stream, blob_path + suffix, pointer_data)
 
                 p.update(1)
+
+    def copy_multiple_files_to_lfs_cache(self, copy_and_convert_tasks):
+        """
+        Runs all the supplied tasks which hash / convert / copy the source files to the LFS cache.
+        Tasks may be run in series or by a threadpool, depending on self.num_workers.
+        Yields a tuple (source, pointer_dict) for each tile in turn, in some unspecified order, where
+        pointer_dict contains the OID and size that should be written as a pointer-file in order to
+        reference the tile that has been imported to the LFS cache.
+
+        copy_and_convert_tasks - a dict keyed by the source file, as supplied by user, where each
+            value is a task to be run that hashes / converts / copies the tile to the LFS cache as required.
+        """
+        # Single-threaded variant - uses the calling thread.
+        if self.num_workers == 1:
+            for source, task in copy_and_convert_tasks.items():
+                yield source, task()
+            return
+
+        # Multi-worker variant - uses a thread-pool, calling thread just receives the results.
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.num_workers
+        ) as executor:
+            future_to_source = {
+                executor.submit(task): source
+                for source, task in copy_and_convert_tasks.items()
+            }
+            for future in concurrent.futures.as_completed(future_to_source):
+                source = future_to_source[future]
+                yield source, future.result()
 
     def write_meta_blobs_to_stream(self, stream, merged_metadata):
         """Writes the format.json, schema.json and crs.wkt meta items to the dataset."""
@@ -541,3 +623,14 @@ class TileImporter:
 
     def sidecar_files(self, source):
         return []
+
+    def check_num_workers(self, num_workers):
+        if num_workers is None:
+            return self.get_default_num_workers()
+        else:
+            return max(1, num_workers)
+
+    def get_default_num_workers(self):
+        num_workers = get_num_available_cores()
+        # that's a float, but we need an int
+        return max(1, int(math.ceil(num_workers)))

@@ -1,4 +1,3 @@
-import warnings
 import click
 
 from kart import is_windows
@@ -8,7 +7,6 @@ from kart.cli_util import (
     StringFromFile,
     IdsFromFile,
     call_and_exit_flag,
-    RemovalInKart013Warning,
     KartCommand,
 )
 from kart.completion_shared import file_path_completer
@@ -157,8 +155,10 @@ def any_at_all(iterable):
     help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
 )
 @click.option(
+    "--num-workers",
     "--num-processes",
-    help="Deprecated (no longer used)",
+    type=click.INT,
+    help="How many import workers to run in parallel. This is not currently supported for tabular import, so this option is ignored.",
     default=None,
     hidden=True,
 )
@@ -189,7 +189,7 @@ def table_import(
     allow_empty,
     max_delta_depth,
     do_checkout,
-    num_processes,
+    num_workers,
     ds_path,
     args,
 ):
@@ -220,12 +220,6 @@ def table_import(
 
     source = args[0]
     tables = args[1:]
-
-    if num_processes is not None:
-        warnings.warn(
-            "--num-processes is deprecated and will be removed in Kart 0.13.",
-            RemovalInKart013Warning,
-        )
 
     if output_format == "json" and not do_list:
         raise click.UsageError(

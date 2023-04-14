@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 
 
-from .cli_util import StringFromFile, RemovalInKart013Warning, KartCommand
+from .cli_util import StringFromFile, KartCommand
 from .completion_shared import file_path_completer
 from .core import check_git_user
 from .dataset_util import validate_dataset_paths
@@ -25,7 +25,7 @@ from .working_copy import PartType
 @click.option(
     "--import",
     "import_from",
-    help='Import a database (all tables): "FORMAT:PATH" eg. "GPKG:my.gpkg"',
+    help='Import a database (all tables): "FORMAT:PATH" eg. "GPKG:my.gpkg". Currently only tabular formats are supported.',
     shell_complete=file_path_completer,
 )
 @click.option(
@@ -74,8 +74,9 @@ from .working_copy import PartType
     help="--depth option to git-fast-import (advanced users only)",
 )
 @click.option(
+    "--num-workers",
     "--num-processes",
-    help="Deprecated (no longer used)",
+    help="How many import workers to run in parallel. This is not currently supported for tabular import, so this option is ignored.",
     default=None,
     hidden=True,
 )
@@ -95,18 +96,13 @@ def init(
     initial_branch,
     wc_location,
     max_delta_depth,
-    num_processes,
+    num_workers,
     spatial_filter_spec,
 ):
     """
     Initialise a new repository and optionally import data.
     DIRECTORY must be empty. Defaults to the current directory.
     """
-    if num_processes is not None:
-        warnings.warn(
-            "--num-processes is deprecated and will be removed in Kart 0.13.",
-            RemovalInKart013Warning,
-        )
 
     if directory is None:
         directory = os.curdir
