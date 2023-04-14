@@ -1,3 +1,4 @@
+import os
 import pygit2
 
 from .exceptions import NO_USER, NotFound
@@ -144,9 +145,16 @@ def walk_tree(top, path="", topdown=True):
 
 def check_git_user(repo=None):
     """
-    Checks whether a user is defined in either the repo configuration or globally
+    Checks whether a user is defined in either the repo configuration or globally.
+    This is how we try and help new a user set up their global config to something sensible.
+    We don't necessarily need the user to do this - running commands like `git var GIT_AUTHOR_IDENT`
+    will generally output a username and email, but it may not be how the user wants to be identified.
 
-    If not, errors with a semi-helpful message
+    This check is skipped if the user is setting some of the GIT_AUTHOR or GIT_COMMITTER env variables -
+    in this case, the user is more advanced and can figure out how to modify the config or the env variables
+    if the end result is not what they want.
+
+    If no user is defined, errors with a message explaining how set user.name and user.email
     """
     if repo:
         cfg = repo.config
@@ -159,11 +167,29 @@ def check_git_user(repo=None):
 
     try:
         user_email = cfg["user.email"]
-        user_name = cfg["user.name"]
-        if user_email and user_name:
-            return (user_email, user_name)
     except KeyError:
-        pass
+        user_email = None
+    try:
+        user_name = cfg["user.name"]
+    except KeyError:
+        user_name = None
+
+    if user_email and user_name:
+        return (user_email, user_name)
+
+    # We don't force the user to set user.name and user.email if they are setting any of the following env variables.
+    # Some variables may be missing, but they may not be needed, and if they are, Git is good at finding some
+    # reasonable values, and if they are not what the user wants, then they should set more of these variables.
+    for var in (
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+    ):
+        if var in os.environ:
+            # This function simply returns (user.email, user.name) even when things are more complicated.
+            # We don't normally use this directly anyway, since what we actually need is author / committer signatures.
+            return (user_email, user_name)
 
     msg = [
         "Please tell me who you are.",

@@ -268,6 +268,11 @@ def test_check_user_config(git_user_config, monkeypatch, data_archive, tmp_path)
         with pytest.raises(click.ClickException) as e:
             check_git_user(repo=None)
         assert "Please tell me who you are" in str(e)
+
+        # The check should always pass if the user is setting these type of env variables:
+        monkeypatch.setenv("GIT_AUTHOR_EMAIL", "user@example.com")
+        check_git_user(repo=None)
+
     finally:
         pygit2.option(
             pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, prev_home
