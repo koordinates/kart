@@ -1,7 +1,7 @@
 {
     "name": "kart-vendor",
     "version-string": "0.1.2",
-    "builtin-baseline": "41ea03f7700a30f2f136806dabe0cd179bb581f0",
+    "builtin-baseline": "1e2a0f54808575de8ac947f2b0df2758c889fe5f",
     "dependencies": [
         {
             "name": "sqlite3",

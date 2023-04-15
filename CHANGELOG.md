@@ -14,6 +14,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Allow for automatically resolving primary key conflicts during a merge using `kart resolve --renumber=(ours|theirs)` [#814](https://github.com/koordinates/kart/issues/814)
 - Improved tile import performance for point-cloud (and eventually raster) by making it multithreaded. [#818](https://github.com/koordinates/kart/pull/818)
 - Fixed a bug where Kart would require `user.name` and `user.email` to be set, even when `GIT_AUTHOR_EMAIL` and similar variables were set in the environment. [#812](https://github.com/koordinates/kart/issues/812)
+- Update native dependencies. [#820](https://github.com/koordinates/kart/pull/820)
 
 ## 0.12.2
 
