@@ -588,8 +588,7 @@ class SpatialFilter:
                     # Geometries definitely don't intersect if envelopes don't intersect.
                     return MatchResult.NON_MATCHING
             except Exception as e:
-                raise
-                L.warn(e)
+                L.warning(e)
                 err = e
 
         # Slow check - geometry intersects geometry?
@@ -599,7 +598,7 @@ class SpatialFilter:
             intersects = self.filter_prep.Intersects(feature_ogr)
             return MatchResult.MATCHING if intersects else MatchResult.NON_MATCHING
         except Exception as e:
-            L.warn(e)
+            L.warning(e)
             err = e
 
         # If we fail to apply the spatial filter - perhaps the geometry is corrupt? - we assume it matches.

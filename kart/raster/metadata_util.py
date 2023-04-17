@@ -160,7 +160,7 @@ def extract_raster_tile_metadata(raster_tile_path):
             )
     except Exception as e:
         # TODO - how to handle corrupted PAM file.
-        L.warn("Error extracting aux-xml metadata", e)
+        L.warning("Error extracting aux-xml metadata %s", e)
 
     return result
 

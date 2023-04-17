@@ -487,7 +487,7 @@ class KartRepo(pygit2.Repository):
         try:
             self.workdir_file(readme_filename).write_text(readme_text)
         except Exception as e:
-            L.warn(e)
+            L.warning(e)
 
     @classmethod
     def get_readme_text(cls, is_bare, branding):

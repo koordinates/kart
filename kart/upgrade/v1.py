@@ -53,7 +53,7 @@ class TableV1(TableDataset):
         if code == self.MSGPACK_EXT_GEOM:
             return Geometry.of(data)  # bytes
         else:
-            self.L.warn("Unexpected msgpack extension: %d", code)
+            self.L.warning("Unexpected msgpack extension: %d", code)
             return msgpack.ExtType(code, data)
 
     @functools.lru_cache()
@@ -99,7 +99,7 @@ class TableV1(TableDataset):
         cid_map = {}
         for te in self.meta_tree / "fields":
             if not isinstance(te, pygit2.Blob):
-                self.L.warn(
+                self.L.warning(
                     "cid_field_map: Unexpected TreeEntry type=%s @ meta/fields/%s",
                     te.type_str,
                     te.name,
@@ -170,7 +170,7 @@ class TableV1(TableDataset):
                         continue
                     elif not hasattr(leaf, "data"):
                         path = f".sno-table/{dir1.name}/{dir2.name}/{leaf.name}"
-                        self.L.warn(
+                        self.L.warning(
                             f"features: No data found at path {path}, type={type(leaf)}"
                         )
                         continue

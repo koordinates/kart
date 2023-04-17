@@ -26,7 +26,7 @@ def _msg_unpack_ext_hook(code, data):
     if code == _EXTENSION_G:
         return Geometry.of(data)
     else:
-        L.warn("Unexpected msgpack extension: %d", code)
+        L.warning("Unexpected msgpack extension: %d", code)
         return msgpack.ExtType(code, data)
 
 

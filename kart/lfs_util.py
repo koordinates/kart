@@ -266,7 +266,7 @@ def pointer_file_bytes_to_dict(
             continue
         parts = line.split(" ", maxsplit=1)
         if len(parts) < 2:
-            L.warn(f"Error parsing pointer file:\n{line}")
+            L.warning(f"Error parsing pointer file:\n{line}")
         key, value = parts
         if key.startswith("ext-0-kart-encoded."):
             if decode_extra_values:

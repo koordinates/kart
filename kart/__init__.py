@@ -131,10 +131,10 @@ if is_windows:
     os.add_dll_directory(_pygit2_spec.submodule_search_locations[0])
 
 # Make sure our SQLite3 build is loaded before Python stdlib one
-import pysqlite3
+import pysqlite3  # noqa
 
 # GDAL Error Handling
-from osgeo import gdal, ogr, osr
+from osgeo import gdal, ogr, osr  # noqa
 
 gdal.UseExceptions()
 ogr.UseExceptions()
@@ -142,7 +142,7 @@ osr.UseExceptions()
 
 
 # Libgit2 options
-import pygit2
+import pygit2  # noqa
 
 pygit2.option(pygit2.GIT_OPT_ENABLE_STRICT_HASH_VERIFICATION, 0)
 
@@ -174,7 +174,7 @@ def _configure_process_cleanup_windows():
     # (ie,  don't ignore them) and this is also inherited by child processes.
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     if not kernel32.SetConsoleCtrlHandler(None, False):
-        L.warn("Error calling SetConsoleCtrlHandler: ", ctypes.get_last_error())
+        L.warning("Error calling SetConsoleCtrlHandler: %s", ctypes.get_last_error())
 
 
 def _configure_process_cleanup_nonwindows():
@@ -186,7 +186,7 @@ def _configure_process_cleanup_nonwindows():
             # No need to do this again for any Kart subprocess of this Kart process.
             os.environ["_KART_PGID_SET"] = "1"
         except OSError as e:
-            L.warn("Error setting Kart PGID - os.setsid() failed.", e)
+            L.warning("Error setting Kart PGID - os.setsid() failed. %s", e)
 
     # If Kart now has its own PGID, which its children share - we want to SIGTERM that when Kart exits.
     if os.getpid() == os.getpgrp():
