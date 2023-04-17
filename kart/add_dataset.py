@@ -1,5 +1,6 @@
 import click
 import sys
+
 from .cli_util import StringFromFile
 from .commit import (
     commit_obj_to_json,
@@ -11,6 +12,7 @@ from .output_util import dump_json_output
 from .working_copy import WorkingCopyPart
 from .exceptions import NO_CHANGES, NotFound, InvalidOperation
 from .status import get_untracked_tables
+from kart.tabular.v3 import TableV3
 
 
 @click.command()
@@ -46,7 +48,9 @@ def add_dataset(ctx, table_name, message, launch_editor, output_format):
 
     To check the new untracked tables, run 'kart status --list-untracked-tables'
     """
+
     repo = ctx.obj.repo
+    wc = repo.working_copy.tabular
 
     # Check that the table is in the list of untracked tables:
     untracked_tables = get_untracked_tables(repo)
@@ -65,6 +69,15 @@ def add_dataset(ctx, table_name, message, launch_editor, output_format):
         )
 
     meta_items = repo.working_copy.tabular.meta_items(table_name)
+
+    # Create a table object from the table_name:
+    table = TableV3.new_dataset_for_writing(table_name, meta_items["schema.json"], repo)
+
+    # Add triggers on a new table if they aren't already present:
+    with wc.session() as sess:
+        wc.create_triggers(sess, table)
+
+    # Add the table to the working copy:
     table_diff = repo.working_copy.tabular.get_diff_for_table_creation(
         table_name, meta_items
     )

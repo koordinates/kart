@@ -1046,7 +1046,7 @@ class TableWorkingCopy(WorkingCopyPart):
                     # Set up a sequence so that the user doesn't have to supply the next int PK.
                     self._initialise_sequence(sess, dataset)
 
-                self._create_triggers(sess, dataset)
+                self.create_triggers(sess, dataset)
                 self._update_last_write_time(sess, dataset, target_commit)
 
                 t1 = time.monotonic()

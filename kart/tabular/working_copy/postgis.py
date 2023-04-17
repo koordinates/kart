@@ -224,7 +224,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         # are namespaced within the table they are attached to, so they don't require a db_schema.
         return trigger_type == "proc"
 
-    def _create_triggers(self, sess, dataset):
+    def create_triggers(self, sess, dataset):
         sess.execute(
             f"""
             CREATE TRIGGER {self._quoted_tracking_name("trigger")}

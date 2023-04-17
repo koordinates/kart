@@ -203,7 +203,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         # Newer repos that use kart branding use _kart_tracking_name.
         return f"{dataset.table_name}_sno_track"
 
-    def _create_triggers(self, sess, dataset):
+    def create_triggers(self, sess, dataset):
         pk_name = dataset.primary_key
         # Placeholders not allowed in CREATE TRIGGER - have to use text_with_inlined_params.
         sess.execute(
