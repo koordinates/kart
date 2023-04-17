@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import re
 from xml.dom import minidom
 from xml.dom.minidom import Node
 
@@ -14,6 +15,9 @@ from kart.schema import Schema, ColumnSchema
 L = logging.getLogger("kart.raster.metadata_util")
 
 
+CATEGORIES_PATTERN = re.compile(r"band/band-(.*)-categories\.json")
+
+
 def rewrite_and_merge_metadata(tile_metadata_list):
     """
     Given a list of tile metadata, merges the parts we expect to be homogenous into a single piece of tile metadata in
@@ -26,24 +30,55 @@ def rewrite_and_merge_metadata(tile_metadata_list):
         all_keys.update(tm)
     # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
     all_keys.remove("tile")
-    # TODO - handle metadata that doesn't actually conflict but may differ slightly
-    # (eg, slightly different subsets of category labels for the different tiles).
+
     for tile_metadata in tile_metadata_list:
         for key in all_keys:
-            _merge_metadata_field(result, key, tile_metadata[key])
+            result[key] = _merge_meta_item(key, result.get(key), tile_metadata.get(key))
     return result
 
 
-def _merge_metadata_field(output, key, value):
-    if key not in output:
-        output[key] = value
-        return
-    existing_value = output[key]
+def _merge_meta_item(key, existing_value, new_value):
+    """
+    Automatically merge a meta-item with another (usually identical) meta-item.
+    If is is not identical, it may still be able to be merged if it doesn't directly conflict -
+    the only example of this currently is that the same category labels need not be defined in
+    every PAM file, so long as no category number is ever defined to be two different labels.
+    If the two meta-item is different and cannot be merged, a ListOfConflicts will be returned instead.
+    """
+
+    if existing_value is None:
+        return new_value
+    if new_value is None:
+        return existing_value
     if isinstance(existing_value, ListOfConflicts):
-        if value not in existing_value:
-            existing_value.append(value)
-    elif existing_value != value:
-        output[key] = ListOfConflicts([existing_value, value])
+        if new_value not in existing_value:
+            existing_value.append(new_value)
+        return existing_value
+    if existing_value != new_value:
+        if CATEGORIES_PATTERN.fullmatch(key):
+            merged_value = _merge_category_labels(existing_value, new_value)
+            if merged_value is not None:
+                return merged_value
+        return ListOfConflicts([existing_value, new_value])
+    return existing_value
+
+
+def _merge_category_labels(old_categories, new_categories):
+    """
+    Merge two dicts of category-labels - returns None if they cannot be merged
+    (which is only the case if a particular number is defined as two different labels).
+    """
+    result = {}
+    all_keys = set()
+    all_keys.update(old_categories)
+    all_keys.update(new_categories)
+    for key in sorted(all_keys, key=int):
+        old = old_categories.get(key)
+        new = new_categories.get(key)
+        if old and new and old != new:
+            return None
+        result[key] = old or new
+    return result
 
 
 def extract_raster_tile_metadata(raster_tile_path):
@@ -222,11 +257,11 @@ def extract_aux_xml_metadata(aux_xml_path):
                 for row in rat.getElementsByTagName("Row"):
                     row_id = int(row.getAttribute("index"))
                     category = row.getElementsByTagName("F")[category_column]
-                    if not category.hasChildNodes():
+                    if not category.firstChild or not category.firstChild.nodeValue:
                         continue
                     category_text = category.firstChild.nodeValue.strip()
                     if category_text:
-                        category_labels[row_id] = category_text
+                        category_labels[str(row_id)] = category_text
 
                 if category_labels:
                     result[f"band/band-{band_id}-categories.json"] = category_labels

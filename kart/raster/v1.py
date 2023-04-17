@@ -188,11 +188,12 @@ class RasterV1(TileDataset):
         for tm in (current_metadata, merged_metadata):
             all_keys.update(tm)
         for key in all_keys:
-            if current_metadata[key] != merged_metadata[key]:
-                meta_diff[key] = Delta.update(
-                    KeyValue.of((key, current_metadata[key])),
-                    KeyValue.of((key, merged_metadata[key])),
-                )
+            old_value = current_metadata.get(key)
+            new_value = merged_metadata.get(key)
+            if old_value != new_value:
+                old_half_delta = (key, old_value) if old_value else None
+                new_half_delta = (key, new_value) if new_value else None
+                meta_diff[key] = Delta(old_half_delta, new_half_delta)
 
         ds_diff = DatasetDiff()
         ds_diff["meta"] = meta_diff
