@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#
+# From https://github.com/rouault/cog_validator/blob/9acfb2f3f05425f1d4e1846bb893418bb9831cf7/validate_cloud_optimized_geotiff.py
+#
 # *****************************************************************************
 #  $Id$
 #
