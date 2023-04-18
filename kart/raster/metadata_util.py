@@ -8,9 +8,9 @@ from kart.crs_util import normalise_wkt
 from kart.geometry import ring_as_wkt
 from kart.list_of_conflicts import ListOfConflicts
 from kart.lfs_util import get_hash_and_size_of_file
-from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUFFIX
+from kart.raster.validate_cloud_optimized_geotiff import validate as validate_cogtiff
 from kart.schema import Schema, ColumnSchema
-
+from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUFFIX
 
 L = logging.getLogger("kart.raster.metadata_util")
 
@@ -106,7 +106,14 @@ def extract_raster_tile_metadata(raster_tile_path):
 
     # NOTE: this format is still in early stages of design, is subject to change.
 
-    format_json = {"fileType": "image/tiff; application=geotiff"}
+    warnings, errors, details = validate_cogtiff(str(raster_tile_path), full_check=True)
+    is_cog = not errors
+
+    filetype = ["image/tiff", "application=geotiff"]
+    if is_cog:
+        filetype.append("profile=cloud-optimized")
+
+    format_json = {"fileType": "; ".join(filetype)}
     schema_json = gdalinfo_bands_to_kart_schema(metadata["bands"])
     crs_wkt = metadata["coordinateSystem"]["wkt"]
 
@@ -117,7 +124,7 @@ def extract_raster_tile_metadata(raster_tile_path):
     # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {
         "name": Path(raster_tile_path).name,
-        "format": "geotiff",
+        "format": "geotiff/cog" if is_cog else "geotiff",
         "crs84Extent": format_polygon(*metadata["wgs84Extent"]["coordinates"][0]),
         "dimensions": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
         "nativeExtent": format_polygon(
