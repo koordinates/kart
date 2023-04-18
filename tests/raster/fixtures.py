@@ -16,7 +16,7 @@ def requires_gdal_info(data_archive_readonly):
     if is_darwin and "CI" in os.environ:
         raise pytest.skip("gdal.Info is not working on macOS on CI")
 
-    with data_archive_readonly("raster/tif-aerial.tgz") as aerial:
+    with data_archive_readonly("raster/cog-aerial.tgz") as aerial:
         try:
             gdal.Info(f"{aerial}/aerial.tif")
             has_gdal_info = True

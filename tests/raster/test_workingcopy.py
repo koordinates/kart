@@ -409,7 +409,7 @@ def test_working_copy_add_similar_rat(
         EXPECTED_TILE_DIFF = [
             "+++ erorisk_si:tile:erorisk_silcdb5",
             "+                                     name = erorisk_silcdb5.tif",
-            "+                                   format = geotiff",
+            "+                                   format = geotiff/cog",
             "+                              crs84Extent = POLYGON((172.6754107 -43.7555641,172.6748326 -43.8622096,172.8170036 -43.8625257,172.8173289 -43.755879,172.6754107 -43.7555641,172.6754107 -43.7555641))",
             "+                               dimensions = 762x790",
             "+                             nativeExtent = POLYGON((1573869.73 5155224.347,1573869.73 5143379.674,1585294.591 5143379.674,1585294.591 5155224.347,1573869.73 5155224.347))",
