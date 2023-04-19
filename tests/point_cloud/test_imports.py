@@ -96,10 +96,10 @@ def test_import_single_las(
 
             r = cli_runner.invoke(["show", "HEAD", "autzen:tile:autzen"])
             assert r.exit_code == 0, r.stderr
-            # The [4:-3] slice chops off:
+            # The [4:-2] slice chops off:
             # * the commit hash and date, they change every time
-            # * the sourceOid, oid and size; they're nondeterministic after conversion.
-            assert r.stdout.splitlines()[4:-3] == [
+            # * the oid and size; they're nondeterministic after conversion.
+            assert r.stdout.splitlines()[4:-2] == [
                 "    Importing 1 LAZ tiles as autzen",
                 "",
                 "+++ autzen:tile:autzen",
@@ -108,6 +108,7 @@ def test_import_single_las(
                 "+                                   format = laz-1.4/copc-1.0",
                 "+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84",
                 "+                               pointCount = 106",
+                "+                                sourceOid = sha256:068a349959a45957184606a0442f8dd69aef24543e11963bc63835301df532f5",
             ]
 
             r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])

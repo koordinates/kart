@@ -6,7 +6,12 @@ from kart.cli_util import StringFromFile, MutexOption, KartCommand
 from kart.completion_shared import file_path_completer
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
 from kart.parse_args import parse_import_sources_and_datasets
-from kart.raster.metadata_util import rewrite_and_merge_metadata
+from kart.raster.gdal_convert import convert_tile_to_cog
+from kart.raster.metadata_util import (
+    rewrite_and_merge_metadata,
+    is_cog,
+    RewriteMetadata,
+)
 from kart.raster.v1 import RasterV1
 from kart.tile.importer import TileImporter
 from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUFFIX
@@ -19,7 +24,7 @@ L = logging.getLogger(__name__)
     "--convert-to-cog/--no-convert-to-cog",
     " /--preserve-format",
     is_flag=True,
-    default=False,
+    default=True,
     help="Whether to convert all GeoTIFFs to COGs (Cloud Optimized GeoTIFFs), or to import all files in their native format.",
 )
 @click.pass_context
@@ -114,9 +119,6 @@ def raster_import(
     """
     repo = ctx.obj.repo
 
-    if convert_to_cog:
-        raise NotImplementedError("Sorry, --convert-to-cog is not yet implemented")
-
     sources, datasets = parse_import_sources_and_datasets(args)
     if datasets:
         problem = "    \n".join(datasets)
@@ -142,9 +144,9 @@ class RasterImporter(TileImporter):
 
     DATASET_CLASS = RasterV1
 
-    def __init__(self, repo, ctx, convert_to_copc):
+    def __init__(self, repo, ctx, convert_to_cog):
         super().__init__(repo, ctx)
-        self.convert_to_copc = convert_to_copc
+        self.convert_to_cog = convert_to_cog
 
     def get_default_message(self):
         return f"Importing {len(self.sources)} GeoTIFF tiles as {self.dataset_path}"
@@ -155,18 +157,24 @@ class RasterImporter(TileImporter):
     def check_metadata_post_convert(self):
         pass
 
-    # These are all pretty simple since we don't do any conversions yet:
-
     def get_merged_source_metadata(self, all_metadata):
-        return rewrite_and_merge_metadata(all_metadata)
+        return rewrite_and_merge_metadata(all_metadata, RewriteMetadata.DROP_PROFILE)
 
     def get_predicted_merged_metadata(self, all_metadata):
-        return rewrite_and_merge_metadata(all_metadata)
+        rewrite_metadata = (
+            RewriteMetadata.AS_IF_CONVERTED_TO_COG
+            if self.convert_to_cog
+            else RewriteMetadata.DROP_PROFILE
+        )
+        return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
     def get_actual_merged_metadata(self, all_metadata):
-        return rewrite_and_merge_metadata(all_metadata)
+        rewrite_metadata = None if self.convert_to_cog else RewriteMetadata.DROP_PROFILE
+        return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
     def get_conversion_func(self, source_metadata):
+        if self.convert_to_cog and not is_cog(source_metadata):
+            return convert_tile_to_cog
         return None
 
     def existing_tile_matches_source(self, source_oid, existing_summary):
@@ -174,7 +182,21 @@ class RasterImporter(TileImporter):
         if not source_oid.startswith("sha256:"):
             source_oid = "sha256:" + source_oid
 
-        return existing_summary.get("oid") == source_oid
+        if existing_summary.get("oid") == source_oid:
+            # The import source we were given has already been imported in its native format.
+            # Return True if that's what we would do anyway.
+            if self.convert_to_cog:
+                return is_cog(existing_summary)
+            else:
+                return True
+
+        # NOTE: this logic would be more complicated if we supported more than one type of conversion.
+        if existing_summary.get("sourceOid") == source_oid:
+            # The import source we were given has already been imported, but converted to COPC.
+            # Return True if we were going to convert it to COPC too.
+            return self.convert_to_cog and is_cog(existing_summary)
+
+        return False
 
     def sidecar_files(self, source):
         source = str(source)
