@@ -1,4 +1,4 @@
-from enum import IntEnum
+from enum import IntFlag
 import logging
 import json
 from pathlib import Path
@@ -27,8 +27,10 @@ from kart.point_cloud.schema_util import (
 L = logging.getLogger(__name__)
 
 
-class RewriteMetadata(IntEnum):
+class RewriteMetadata(IntFlag):
     """Different ways to interpret metadata depending on the type of import."""
+
+    NO_REWRITE = 0x0
 
     # We're about to convert this file to COPC - update the metadata to be as if we'd already done this.
     # This affects both the format and the schema - only certain PDRFs are allowed in COPC, which constrains the schema.
@@ -47,7 +49,9 @@ class RewriteMetadata(IntEnum):
     DROP_SCHEMA = 0x8
 
 
-def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
+def rewrite_and_merge_metadata(
+    tile_metadata_list, rewrite_metadata=RewriteMetadata.NO_REWRITE
+):
     """
     Given a list of tile metadata, merges the parts we expect to be homogenous into a single piece of tile metadata in
     the same format that describes the whole list.
@@ -70,17 +74,15 @@ def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
     return result
 
 
-def rewrite_format(tile_metadata, rewrite_metadata=None):
-    rewrite_metadata = rewrite_metadata or 0
-
+def rewrite_format(tile_metadata, rewrite_metadata=RewriteMetadata.NO_REWRITE):
     orig_format = tile_metadata["format.json"]
-    if rewrite_metadata & RewriteMetadata.DROP_FORMAT:
+    if RewriteMetadata.DROP_FORMAT in rewrite_metadata:
         return {}
-    elif rewrite_metadata & RewriteMetadata.DROP_OPTIMIZATION:
+    elif RewriteMetadata.DROP_OPTIMIZATION in rewrite_metadata:
         return {
             k: v for k, v in orig_format.items() if not k.startswith("optimization")
         }
-    elif rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COPC:
+    elif RewriteMetadata.AS_IF_CONVERTED_TO_COPC in rewrite_metadata:
         orig_pdrf = orig_format["pointDataRecordFormat"]
         new_pdrf = equivalent_copc_pdrf(orig_pdrf)
         return {
@@ -95,14 +97,12 @@ def rewrite_format(tile_metadata, rewrite_metadata=None):
         return orig_format
 
 
-def rewrite_schema(tile_metadata, rewrite_metadata=None):
-    rewrite_metadata = rewrite_metadata or 0
-
-    if rewrite_metadata & RewriteMetadata.DROP_SCHEMA:
+def rewrite_schema(tile_metadata, rewrite_metadata=RewriteMetadata.NO_REWRITE):
+    if RewriteMetadata.DROP_SCHEMA in rewrite_metadata:
         return {}
 
     orig_schema = tile_metadata["schema.json"]
-    if rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COPC:
+    if RewriteMetadata.AS_IF_CONVERTED_TO_COPC in rewrite_metadata:
         orig_pdrf = tile_metadata["format.json"]["pointDataRecordFormat"]
         return get_schema_from_pdrf(equivalent_copc_pdrf(orig_pdrf))
     else:

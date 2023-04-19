@@ -491,8 +491,10 @@ class TileImporter:
         def wrapped_func(source, dest):
             conversion_func(source, dest)
             self.source_to_imported_metadata[source] = self.extract_tile_metadata(dest)
-            source_hash = "sha256:" + self.source_to_hash_and_size[source][0]
-            self.source_to_imported_metadata[source]["tile"]["sourceOid"] = source_hash
+            source_oid = self.source_to_hash_and_size[source][0]
+            if not source_oid.startswith("sha256:"):
+                source_oid = "sha256:" + source_oid
+            self.source_to_imported_metadata[source]["tile"]["sourceOid"] = source_oid
 
         return wrapped_func
 

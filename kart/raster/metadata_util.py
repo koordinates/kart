@@ -1,3 +1,4 @@
+from enum import IntFlag
 import logging
 from pathlib import Path
 import re
@@ -18,26 +19,44 @@ L = logging.getLogger("kart.raster.metadata_util")
 CATEGORIES_PATTERN = re.compile(r"band/band-(.*)-categories\.json")
 
 
-def rewrite_and_merge_metadata(tile_metadata_list):
+class RewriteMetadata(IntFlag):
+    """Different ways to interpret metadata depending on the type of import."""
+
+    NO_REWRITE = 0x0
+
+    # We're about to convert this file to COG - update the metadata to be as if we'd already done this.
+    AS_IF_CONVERTED_TO_COG = 0x1
+
+    # Drop all the profile info from the format info - we don't need to verify it or store it.
+    # (ie, because we don't care about the tiles profile, or, we're about to change the tile's profile anyway.)
+    DROP_PROFILE = 0x2
+
+
+def rewrite_and_merge_metadata(
+    tile_metadata_list, rewrite_metadata=RewriteMetadata.NO_REWRITE
+):
     """
     Given a list of tile metadata, merges the parts we expect to be homogenous into a single piece of tile metadata in
     the same format that describes the whole list.
     """
-    # TODO - this will get more complicated as we add support for convert-to-COG.
     result = {}
     all_keys = set()
     for tm in tile_metadata_list:
         all_keys.update(tm)
     # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
-    all_keys.remove("tile")
+    all_keys.discard("tile")
 
     for tile_metadata in tile_metadata_list:
         for key in all_keys:
-            result[key] = _merge_meta_item(key, result.get(key), tile_metadata.get(key))
+            result[key] = _merge_meta_item(
+                key, result.get(key), tile_metadata.get(key), rewrite_metadata
+            )
     return result
 
 
-def _merge_meta_item(key, existing_value, new_value):
+def _merge_meta_item(
+    key, existing_value, new_value, rewrite_metadata=RewriteMetadata.NO_REWRITE
+):
     """
     Automatically merge a meta-item with another (usually identical) meta-item.
     If is is not identical, it may still be able to be merged if it doesn't directly conflict -
@@ -45,6 +64,8 @@ def _merge_meta_item(key, existing_value, new_value):
     every PAM file, so long as no category number is ever defined to be two different labels.
     If the two meta-item is different and cannot be merged, a ListOfConflicts will be returned instead.
     """
+    if key == "format.json":
+        new_value = _rewrite_format(new_value, rewrite_metadata)
 
     if existing_value is None:
         return new_value
@@ -81,6 +102,14 @@ def _merge_category_labels(old_categories, new_categories):
     return result
 
 
+def _rewrite_format(format_json, rewrite_metadata):
+    if RewriteMetadata.DROP_PROFILE in rewrite_metadata:
+        return {k: v for k, v in format_json.items() if k != "profile"}
+    elif RewriteMetadata.AS_IF_CONVERTED_TO_COG in rewrite_metadata:
+        return {**format_json, "profile": "cloud-optimized"}
+    return format_json
+
+
 def extract_raster_tile_metadata(raster_tile_path):
     """
     Use gdalinfo to get any and all raster metadata we can make use of in Kart.
@@ -109,11 +138,13 @@ def extract_raster_tile_metadata(raster_tile_path):
     warnings, errors, details = validate_cogtiff(str(raster_tile_path), full_check=True)
     is_cog = not errors
 
-    filetype = ["image/tiff", "application=geotiff"]
-    if is_cog:
-        filetype.append("profile=cloud-optimized")
+    format_json = {
+        # TODO: Maybe the whole mimetype isn't needed here - no more information is conveyed by this mimetype
+        # than by the string "geotiff"... or maybe there's some benefit to using the mimetype.
+        "fileType": "image/tiff; application=geotiff",
+        "profile": "cloud-optimized" if is_cog else None,
+    }
 
-    format_json = {"fileType": "; ".join(filetype)}
     schema_json = gdalinfo_bands_to_kart_schema(metadata["bands"])
     crs_wkt = metadata["coordinateSystem"]["wkt"]
 
@@ -291,3 +322,21 @@ def get_element_by_tag_name(element, tag_name):
     """Returns the first result from getElementsByTagName, if any."""
     result = element.getElementsByTagName(tag_name)
     return result[0] if result else None
+
+
+def is_cog(tile_format):
+    tile_format = extract_format(tile_format)
+    if isinstance(tile_format, dict):
+        return tile_format.get("profile") == "cloud-optimized"
+    elif isinstance(tile_format, str):
+        return "cog" in tile_format
+    raise ValueError("Bad tile format")
+
+
+def extract_format(tile_format):
+    if isinstance(tile_format, dict):
+        if "format.json" in tile_format:
+            return tile_format["format.json"]
+        if "format" in tile_format:
+            return tile_format["format"]
+    return tile_format

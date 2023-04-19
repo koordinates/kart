@@ -196,7 +196,9 @@ class PointCloudImporter(TileImporter):
 
     def get_actual_merged_metadata(self, all_metadata):
         rewrite_metadata = (
-            None if self.convert_to_copc else RewriteMetadata.DROP_OPTIMIZATION
+            RewriteMetadata.NO_REWRITE
+            if self.convert_to_copc
+            else RewriteMetadata.DROP_OPTIMIZATION
         )
 
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
