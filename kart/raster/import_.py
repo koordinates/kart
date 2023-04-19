@@ -169,7 +169,11 @@ class RasterImporter(TileImporter):
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
     def get_actual_merged_metadata(self, all_metadata):
-        rewrite_metadata = None if self.convert_to_cog else RewriteMetadata.DROP_PROFILE
+        rewrite_metadata = (
+            RewriteMetadata.NO_REWRITE
+            if self.convert_to_cog
+            else RewriteMetadata.DROP_PROFILE
+        )
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
     def get_conversion_func(self, source_metadata):

@@ -130,7 +130,7 @@ class PointCloudV1(TileDataset):
         if not is_clean_slate:
             metadata_list.insert(0, current_metadata)
 
-        rewrite_metadata = 0
+        rewrite_metadata = RewriteMetadata.NO_REWRITE
         optimization_constraint = current_metadata["format.json"].get("optimization")
         if convert_to_dataset_format:
             rewrite_metadata = (
@@ -140,7 +140,7 @@ class PointCloudV1(TileDataset):
             )
         else:
             rewrite_metadata = (
-                0
+                RewriteMetadata.NO_REWRITE
                 if optimization_constraint == "copc"
                 else RewriteMetadata.DROP_OPTIMIZATION
             )

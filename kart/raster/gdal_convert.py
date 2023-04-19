@@ -1,6 +1,10 @@
 from osgeo import gdal
 
 
+# Setting num-threads to two since we aim to spin up $ALL_CPUS threads and send tile-import GDAL tasks
+# to each thread - if we also configured each GDAL task to use $ALL_CPUS threads, then we would end up
+# spinning up O($ALL_CPUS * $ALL_CPUS) threads, which doesn't make much sense.
+# However, set it to 2 so each task can have a main thread and a compression thread.
 gdal.SetConfigOption("GDAL_NUM_THREADS", "2")
 gdal.SetConfigOption("GDAL_TIFF_INTERNAL_MASK", "TRUE")
 gdal.SetConfigOption("INTERLEAVE_OVERVIEW", "PIXEL")

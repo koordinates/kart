@@ -1,4 +1,4 @@
-from enum import IntEnum
+from enum import IntFlag
 import logging
 from pathlib import Path
 import re
@@ -19,8 +19,10 @@ L = logging.getLogger("kart.raster.metadata_util")
 CATEGORIES_PATTERN = re.compile(r"band/band-(.*)-categories\.json")
 
 
-class RewriteMetadata(IntEnum):
+class RewriteMetadata(IntFlag):
     """Different ways to interpret metadata depending on the type of import."""
+
+    NO_REWRITE = 0x0
 
     # We're about to convert this file to COG - update the metadata to be as if we'd already done this.
     AS_IF_CONVERTED_TO_COG = 0x1
@@ -30,19 +32,19 @@ class RewriteMetadata(IntEnum):
     DROP_PROFILE = 0x2
 
 
-def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
+def rewrite_and_merge_metadata(
+    tile_metadata_list, rewrite_metadata=RewriteMetadata.NO_REWRITE
+):
     """
     Given a list of tile metadata, merges the parts we expect to be homogenous into a single piece of tile metadata in
     the same format that describes the whole list.
     """
-    rewrite_metadata = rewrite_metadata or 0
-
     result = {}
     all_keys = set()
     for tm in tile_metadata_list:
         all_keys.update(tm)
     # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
-    all_keys.remove("tile")
+    all_keys.discard("tile")
 
     for tile_metadata in tile_metadata_list:
         for key in all_keys:
@@ -52,7 +54,9 @@ def rewrite_and_merge_metadata(tile_metadata_list, rewrite_metadata=None):
     return result
 
 
-def _merge_meta_item(key, existing_value, new_value, rewrite_metadata=None):
+def _merge_meta_item(
+    key, existing_value, new_value, rewrite_metadata=RewriteMetadata.NO_REWRITE
+):
     """
     Automatically merge a meta-item with another (usually identical) meta-item.
     If is is not identical, it may still be able to be merged if it doesn't directly conflict -
@@ -60,8 +64,6 @@ def _merge_meta_item(key, existing_value, new_value, rewrite_metadata=None):
     every PAM file, so long as no category number is ever defined to be two different labels.
     If the two meta-item is different and cannot be merged, a ListOfConflicts will be returned instead.
     """
-    rewrite_metadata = rewrite_metadata or 0
-
     if key == "format.json":
         new_value = _rewrite_format(new_value, rewrite_metadata)
 
@@ -101,9 +103,9 @@ def _merge_category_labels(old_categories, new_categories):
 
 
 def _rewrite_format(format_json, rewrite_metadata):
-    if rewrite_metadata & RewriteMetadata.DROP_PROFILE:
+    if RewriteMetadata.DROP_PROFILE in rewrite_metadata:
         return {k: v for k, v in format_json.items() if k != "profile"}
-    elif rewrite_metadata & RewriteMetadata.AS_IF_CONVERTED_TO_COG:
+    elif RewriteMetadata.AS_IF_CONVERTED_TO_COG in rewrite_metadata:
         return {**format_json, "profile": "cloud-optimized"}
     return format_json
 
@@ -137,6 +139,8 @@ def extract_raster_tile_metadata(raster_tile_path):
     is_cog = not errors
 
     format_json = {
+        # TODO: Maybe the whole mimetype isn't needed here - no more information is conveyed by this mimetype
+        # than by the string "geotiff"... or maybe there's some benefit to using the mimetype.
         "fileType": "image/tiff; application=geotiff",
         "profile": "cloud-optimized" if is_cog else None,
     }

@@ -1,5 +1,6 @@
 import pytest
 
+from kart.exceptions import NO_CHANGES
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
 from .fixtures import requires_gdal_info  # noqa
@@ -151,6 +152,16 @@ def test_import_single_non_cog_geotiff(
                     "+                                      oid = sha256:b5a949f332d2d5afbfe9c164a4060e130c7d95d77aa3d48780c2adffc12ff36b",
                     "+                                     size = 552340",
                 ]
+
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    f"{aerial}/aerial.tif",
+                    f"--{convert_option}",
+                    "--replace-existing",
+                ]
+            )
+            assert r.exit_code == NO_CHANGES
 
 
 def test_import_single_cogtiff(
