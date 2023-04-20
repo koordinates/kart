@@ -139,9 +139,7 @@ def extract_raster_tile_metadata(raster_tile_path):
     is_cog = not errors
 
     format_json = {
-        # TODO: Maybe the whole mimetype isn't needed here - no more information is conveyed by this mimetype
-        # than by the string "geotiff"... or maybe there's some benefit to using the mimetype.
-        "fileType": "image/tiff; application=geotiff",
+        "fileType": "geotiff",
         "profile": "cloud-optimized" if is_cog else None,
     }
 
@@ -340,3 +338,16 @@ def extract_format(tile_format):
         if "format" in tile_format:
             return tile_format["format"]
     return tile_format
+
+
+def get_format_summary(format_info):
+    """
+    Given format info as stored in format.json, return a short string summary such as: geotiff/cog
+    """
+    if "format.json" in format_info:
+        format_info = format_info["format.json"]
+
+    format_summary = format_info["fileType"]
+    if format_info["profile"]:
+        format_summary += f"/{format_info['profile']}"
+    return format_summary

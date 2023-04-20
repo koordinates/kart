@@ -121,7 +121,7 @@ def test_import_single_non_cog_geotiff(
                 assert r.stdout.splitlines()[6:] == AERIAL_CRS_DIFF + [
                     "+++ aerial:meta:format.json",
                     "+ {",
-                    '+   "fileType": "image/tiff; application=geotiff"',
+                    '+   "fileType": "geotiff"',
                     "+ }",
                 ] + AERIAL_SCHEMA_DIFF + [
                     "+++ aerial:tile:aerial",
@@ -138,7 +138,7 @@ def test_import_single_non_cog_geotiff(
                 assert r.stdout.splitlines()[6:] == AERIAL_CRS_DIFF + [
                     "+++ aerial:meta:format.json",
                     "+ {",
-                    '+   "fileType": "image/tiff; application=geotiff",',
+                    '+   "fileType": "geotiff",',
                     '+   "profile": "cloud-optimized"',
                     "+ }",
                 ] + AERIAL_SCHEMA_DIFF + [
@@ -196,7 +196,7 @@ def test_import_single_cogtiff(
             assert r.stdout.splitlines()[6:] == AERIAL_CRS_DIFF + [
                 "+++ aerial:meta:format.json",
                 "+ {",
-                '+   "fileType": "image/tiff; application=geotiff",',
+                '+   "fileType": "geotiff",',
                 '+   "profile": "cloud-optimized"',
                 "+ }",
             ] + AERIAL_SCHEMA_DIFF + [
@@ -337,7 +337,7 @@ def test_import_single_geotiff_with_rat(
                 "+ ",
                 "+++ erorisk_silcdb4:meta:format.json",
                 "+ {",
-                '+   "fileType": "image/tiff; application=geotiff",',
+                '+   "fileType": "geotiff",',
                 '+   "profile": "cloud-optimized"',
                 "+ }",
                 "+++ erorisk_silcdb4:meta:schema.json",
