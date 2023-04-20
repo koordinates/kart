@@ -348,6 +348,6 @@ def get_format_summary(format_info):
         format_info = format_info["format.json"]
 
     format_summary = format_info["fileType"]
-    if format_info["profile"]:
-        format_summary += f"/{format_info['profile']}"
+    if format_info.get("profile") == "cloud-optimized":
+        format_summary += "/cog"
     return format_summary
