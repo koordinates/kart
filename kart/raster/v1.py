@@ -299,11 +299,19 @@ class RasterV1(TileDataset):
             result["pamSize"] = pam_summary["size"]
         return result
 
-    def is_tile_compatible(self, ds_format, tile_summary):
+    def is_tile_compatible(self, target_format, tile_summary):
+        """
+        Given the a ormat - either format.json {"fileType": ... "profile": ...}
+        or a format summary string eg "geotiff/cog" -
+        and the tile summary eg {"name": ... "format": ... "oid": ... "size": ... }
+        returns True if the tile is compatible with the target format.
+        """
         tile_format = tile_summary["format"]
-        if isinstance(ds_format, dict):
-            ds_format = get_format_summary(ds_format)
-        return tile_format == ds_format or tile_format.startswith(f"{ds_format}/")
+        if isinstance(target_format, dict):
+            target_format = get_format_summary(target_format)
+        return tile_format == target_format or tile_format.startswith(
+            f"{target_format}/"
+        )
 
     def pre_conversion_tile_summary(self, ds_format, tile_summary):
         """
@@ -331,6 +339,11 @@ class RasterV1(TileDataset):
     def apply_tile_diff(
         self, tile_diff, object_builder, *, resolve_missing_values_from_ds=None
     ):
+        """
+        Applies a tile-diff to the given object builder (so that the diff can be committed),
+        and in the process performs the necessary side effects - converting tiles to the
+        relevant format (where needed) and copying them to the LFS cache (where needed).
+        """
         with object_builder.chdir(self.inner_path):
             for delta in tile_diff.values():
 
@@ -353,14 +366,14 @@ class RasterV1(TileDataset):
                         pointer_dict = copy_file_to_local_lfs_cache(
                             self.repo, path_in_wc, conversion_func
                         )
-                        pointer_dict = merge_pointer_file_dicts(new_val, pointer_dict)
                     else:
                         # Committing in a new tile, preserving its format
                         oid_and_size = new_val["oid"], new_val["size"]
                         pointer_dict = copy_file_to_local_lfs_cache(
                             self.repo, path_in_wc, oid_and_size=oid_and_size
                         )
-                        pointer_dict = merge_pointer_file_dicts(new_val, pointer_dict)
+
+                    pointer_dict = merge_pointer_file_dicts(new_val, pointer_dict)
 
                     tilename = new_val["name"]
                     tile_blob_path = self.tilename_to_blob_path(tilename, relative=True)
