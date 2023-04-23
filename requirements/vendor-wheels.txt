@@ -1,6 +1,6 @@
 cffi==1.15.1
 cryptography==39.0.1
-gdal==3.6.2
+gdal==3.6.3
 psycopg2==2.8.5
 pygit2==1.9.0
 pyodbc==4.0.32

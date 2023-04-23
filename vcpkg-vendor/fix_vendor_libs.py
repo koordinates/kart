@@ -140,6 +140,7 @@ if PLATFORM == "Windows":
         "winhttp.dll",
         "ws2_32.dll",
         "odbc32.dll",
+        "wldap32.dll",
         "python3.dll",
         # python39.dll or similar:
         f"python{sysconfig.get_config_var('py_version_nodot')}.dll",
