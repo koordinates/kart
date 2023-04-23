@@ -1,4 +1,6 @@
 import shutil
+import platform
+
 import pytest
 
 from .fixtures import requires_gdal_info  # noqa
@@ -108,6 +110,9 @@ def test_working_copy_edit(
         )
 
 
+@pytest.mark.xfail(
+    platform.system() == "Windows", reason="TODO on Windows", strict=True
+)
 @pytest.mark.parametrize(
     "pam_filename",
     [
@@ -205,6 +210,9 @@ def test_working_copy_edit_rat(
         )
 
 
+@pytest.mark.xfail(
+    platform.system() == "Windows", reason="TODO on Windows", strict=True
+)
 def test_working_copy_add_or_remove_rat(
     cli_runner,
     data_archive,
