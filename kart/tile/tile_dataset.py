@@ -262,7 +262,7 @@ class TileDataset(BaseDataset):
     def get_tile_summary_promise_from_blob_path(self, path, *, missing_ok=False):
         return self.get_tile_summary_promise(path=path, missing_ok=missing_ok)
 
-    def _workdir_path(self, wc_path):
+    def _workdir_path(self, wc_path=""):
         if isinstance(wc_path, str):
             return self.repo.workdir_file(wc_path)
         else:

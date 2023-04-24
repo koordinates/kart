@@ -206,15 +206,16 @@ class RasterV1(TileDataset):
         Given a list of dirty paths, relative to the workdir -
         return the paths of the tiles (relative to the workdir) that have been affected
         either by editing directly or by editing their PAM files.
+        Uses git-style paths: / is the part separator, regardless of the platform.
         """
         result = set()
+        wc_path = self._workdir_path()
         for path in tile_and_pam_paths:
             if path.lower().endswith(PAM_SUFFIX):
                 tile_paths = find_similar_files_case_insensitive(
                     self._workdir_path(path[:-LEN_PAM_SUFFIX])
                 )
-                wc_path = self._workdir_path("")
-                result.update(str(t.relative_to(wc_path)) for t in tile_paths)
+                result.update("/".join(t.relative_to(wc_path).parts) for t in tile_paths)
             else:
                 result.add(path)
         return result

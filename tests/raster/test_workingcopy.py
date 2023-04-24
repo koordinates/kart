@@ -110,9 +110,6 @@ def test_working_copy_edit(
         )
 
 
-@pytest.mark.xfail(
-    platform.system() == "Windows", reason="TODO on Windows", strict=True
-)
 @pytest.mark.parametrize(
     "pam_filename",
     [
@@ -132,8 +129,11 @@ def test_working_copy_edit_rat(
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0
 
-        pam_path = repo_path / "erorisk_si/erorisk_silcdb4.tif.aux.xml"
-        pam_path.write_text(pam_path.read_text().replace(" risk", " opportunity"))
+        pam_path = repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml"
+        pam_path.write_text(
+            pam_path.read_text().replace(" risk", " opportunity"), newline="\n"
+        )
+        # (Either newline would work but it makes this test consistent on all platforms.)
         pam_path.rename(repo_path / "erorisk_si" / pam_filename)
 
         r = cli_runner.invoke(["status"])
@@ -210,9 +210,6 @@ def test_working_copy_edit_rat(
         )
 
 
-@pytest.mark.xfail(
-    platform.system() == "Windows", reason="TODO on Windows", strict=True
-)
 def test_working_copy_add_or_remove_rat(
     cli_runner,
     data_archive,
@@ -223,7 +220,7 @@ def test_working_copy_add_or_remove_rat(
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0
 
-        pam_path = repo_path / "erorisk_si/erorisk_silcdb4.tif.aux.xml"
+        pam_path = repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml"
         pam_path.rename(
             repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml.obsolete"
         )
