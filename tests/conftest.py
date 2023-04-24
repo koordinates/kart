@@ -571,7 +571,6 @@ def feature_assert_or_skip(name, env_var, has_feature, ci_require=True):
 
 
 class TestHelpers:
-
     # Test Dataset (gpkg-points / points)
     class POINTS:
         ARCHIVE = "points"
@@ -974,24 +973,57 @@ def disable_editor():
 
 
 @pytest.fixture()
-def postgis_db():
+def postgres_db():
     """
-    Using docker, you can run a PostGIS test - such as test_postgis_import - as follows:
+    Using docker, you can run all PostgreSQL /  PostGIS tests - such as test_postgis_import - as follows:
         docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgis/postgis
-        KART_POSTGRES_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k postgis --pdb -vvs -n 0
+        KART_POSTGRES_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k "postgres OR postgis" --pdb -vvs
     """
     if "KART_POSTGRES_URL" not in os.environ:
         raise pytest.skip(
-            "PostGIS tests require configuration - read docstring at conftest.postgis_db"
+            "Postgres tests require configuration - read docstring at conftest.postgres_db"
         )
     engine = Db_Postgis.create_engine(os.environ["KART_POSTGRES_URL"])
-    with engine.connect() as conn:
+    yield engine
+
+
+@pytest.fixture()
+def postgis_db(postgres_db):
+    # See postgres_db for help on running PostGIS tests
+    with postgres_db.connect() as conn:
+        # with engine.connect() as conn:
         # test connection and postgis support
         try:
             conn.execute("SELECT postgis_version();")
         except sqlalchemy.exc.DBAPIError:
             raise pytest.skip("Requires PostGIS")
-    yield engine
+    yield postgres_db
+
+
+@pytest.fixture()
+def no_postgis_db(postgres_db):
+    # See postgres_db for help on running no_postgis_db tests.
+    # Check if the user has superuser access to the database:
+    is_superuser = False
+    with postgres_db.connect() as conn:
+        is_superuser = conn.scalar(
+            "SELECT rolsuper FROM pg_roles WHERE rolname = current_user;"
+        )
+
+    if not is_superuser:
+        raise SystemError("Requires superuser access to the database")
+
+    try:
+        with postgres_db.begin() as transaction:
+            transaction.execute("DROP EXTENSION IF EXISTS postgis;")
+            # Test connection without postgis support
+            transaction.execute("SELECT postgis_version();")
+        yield postgres_db
+
+    except sqlalchemy.exc.DBAPIError:
+        pass
+    else:
+        raise RuntimeError("Expected PostGIS to be removed but it is still present")
 
 
 @pytest.fixture()
