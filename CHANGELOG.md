@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.12.3 (UNRELEASED)
+## 0.12.3
 
 - Fix the issue where re-importing the same shapefile with `--replace-existing` would show spurious schema changes (and therefore row changes). [#791](https://github.com/koordinates/kart/issues/791)
 - Added support for committing new layers to a kart repository with `add-dataset` and the table name. [#249](https://github.com/koordinates/kart/issues/249)
