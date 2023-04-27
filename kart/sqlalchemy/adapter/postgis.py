@@ -148,13 +148,25 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             WHERE TC.constraint_type = 'PRIMARY KEY'
         """
 
+        # Check if postgis extension has been installed and if so, get the geometry type. If not, just get the column info.
+        postgis_installed = is_postgis_installed(sess)
+        if not postgis_installed:
+            geometry_type_sql = "NULL"
+            postgis_typmod_srid = "NULL"
+
+        else:
+            geometry_type_sql = """CASE WHEN udt_name='geometry' THEN
+                        upper(postgis_typmod_type(A.atttypmod)) ELSE NULL END"""
+            postgis_typmod_srid = """CASE WHEN udt_name='geometry' THEN
+                    postgis_typmod_srid(A.atttypmod) ELSE NULL END """
+
         table_info_sql = f"""
             SELECT
                 C.column_name, C.ordinal_position, C.data_type, C.udt_name,
                 C.character_maximum_length, C.numeric_precision, C.numeric_scale,
                 PK.ordinal_position AS pk_ordinal_position,
-                upper(postgis_typmod_type(A.atttypmod)) AS geometry_type,
-                postgis_typmod_srid(A.atttypmod) AS geometry_srid
+                {geometry_type_sql} AS geometry_type,
+                {postgis_typmod_srid} AS geometry_srid
             FROM information_schema.columns C
             LEFT OUTER JOIN ({primary_key_sql}) PK
             ON (PK.table_schema = C.table_schema)
@@ -175,37 +187,41 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             },
         )
         pg_table_info = list(r)
+        if postgis_installed:
+            # Get all the information on the geometry columns that we can get without sampling the geometries:
+            geom_cols_info_sql = """
+                SELECT GC.f_geometry_column AS column_name, GC.srid, SRS.srtext
+                FROM geometry_columns GC
+                LEFT OUTER JOIN spatial_ref_sys SRS ON (GC.srid = SRS.srid)
+                WHERE GC.f_table_schema=:table_schema AND GC.f_table_name=:table_name;
+            """
+            r = sess.execute(
+                geom_cols_info_sql,
+                {"table_schema": db_schema, "table_name": table_name},
+            )
+            geom_cols_info = [cls._filter_row_to_dict(row) for row in r]
 
-        # Get all the information on the geometry columns that we can get without sampling the geometries:
-        geom_cols_info_sql = """
-            SELECT GC.f_geometry_column AS column_name, GC.srid, SRS.srtext
-            FROM geometry_columns GC
-            LEFT OUTER JOIN spatial_ref_sys SRS ON (GC.srid = SRS.srid)
-            WHERE GC.f_table_schema=:table_schema AND GC.f_table_name=:table_name;
-        """
-        r = sess.execute(
-            geom_cols_info_sql,
-            {"table_schema": db_schema, "table_name": table_name},
-        )
-        geom_cols_info = [cls._filter_row_to_dict(row) for row in r]
-
-        # Improve the geometry information by sampling one geometry from each column, where available.
-        for col_info in geom_cols_info:
-            c = col_info["column_name"]
-            row = sess.execute(
-                f"""
-                SELECT ST_Zmflag({cls.quote(c)}) AS zm,
-                ST_SRID({cls.quote(c)}) AS srid, SRS.srtext
-                FROM {table_identifier} LEFT OUTER JOIN spatial_ref_sys SRS
-                ON SRS.srid = ST_SRID({cls.quote(c)})
-                WHERE {cls.quote(c)} IS NOT NULL LIMIT 1;
-                """,
-            ).fetchone()
-            if row:
-                sampled_info = cls._filter_row_to_dict(row)
-                sampled_info["zm"] = cls.ZM_FLAG_TO_STRING.get(sampled_info.get("zm"))
-                # Original col_info from geometry_columns takes precedence, where it exists:
-                col_info.update({**sampled_info, **col_info})
+            # Improve the geometry information by sampling one geometry from each column, where available.
+            for col_info in geom_cols_info:
+                c = col_info["column_name"]
+                row = sess.execute(
+                    f"""
+                    SELECT ST_Zmflag({cls.quote(c)}) AS zm,
+                    ST_SRID({cls.quote(c)}) AS srid, SRS.srtext
+                    FROM {table_identifier} LEFT OUTER JOIN spatial_ref_sys SRS
+                    ON SRS.srid = ST_SRID({cls.quote(c)})
+                    WHERE {cls.quote(c)} IS NOT NULL LIMIT 1;
+                    """,
+                ).fetchone()
+                if row:
+                    sampled_info = cls._filter_row_to_dict(row)
+                    sampled_info["zm"] = cls.ZM_FLAG_TO_STRING.get(
+                        sampled_info.get("zm")
+                    )
+                    # Original col_info from geometry_columns takes precedence, where it exists:
+                    col_info.update({**sampled_info, **col_info})
+        else:
+            geom_cols_info = []
 
         schema = cls.postgis_to_v2_schema(pg_table_info, geom_cols_info, id_salt)
         yield "schema.json", schema
@@ -448,3 +464,11 @@ class TextType(ConverterType):
 
     def python_postread(self, value):
         return str(value) if value is not None else None
+
+
+@staticmethod
+def is_postgis_installed(session):
+    # Run a query to see if PostGIS is installed.
+    query = "SELECT * FROM pg_extension WHERE extname = 'postgis';"
+    result = session.execute(query)
+    return result.rowcount > 0

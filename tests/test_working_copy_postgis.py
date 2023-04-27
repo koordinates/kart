@@ -1,8 +1,6 @@
 import json
 import pytest
 
-import pygit2
-
 from sqlalchemy import inspect
 
 from kart.repo import KartRepo
@@ -11,7 +9,6 @@ from kart.tabular.working_copy.base import TableWorkingCopyStatus
 from kart.sqlalchemy import strip_password
 from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
 from test_working_copy import compute_approximated_types
-
 
 H = pytest.helpers.helpers()
 
@@ -513,7 +510,6 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
             # tests fail, and we want to roll them immediately whether the test passes or fails.
             with pytest.raises(SucceedAndRollback):
                 with table_wc.session() as sess:
-
                     crs = sess.scalar(
                         "SELECT srtext FROM public.spatial_ref_sys WHERE srid=4326"
                     )
