@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.12.4
+## 0.12.4 (UNRELEASED)
 
 - Allow kart to import non-spatial tables from PostgreSQL databases which don't have postGIS extension installed. [#728](https://github.com/koordinates/kart/issues/728)
 
