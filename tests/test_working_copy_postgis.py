@@ -2,6 +2,7 @@ import json
 import pytest
 
 from sqlalchemy import inspect
+import pygit2
 
 from kart.repo import KartRepo
 
