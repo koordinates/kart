@@ -5,8 +5,9 @@ import pytest
 
 from .fixtures import requires_gdal_info  # noqa
 
-from kart.lfs_util import get_hash_and_size_of_file
 from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT
+from kart.lfs_util import get_hash_and_size_of_file
+from kart.repo import KartRepo
 
 
 def test_working_copy_edit(
@@ -532,3 +533,110 @@ def _set_category_labels(pam_path, category_labels):
                     category.firstChild.nodeValue = category_labels[row_id]
 
         pam_path.write_text(parsed.toxml())
+
+
+def test_working_copy_edit__convert_to_cog(
+    cli_runner, data_archive, requires_gdal_info, requires_git_lfs, check_lfs_hashes
+):
+    with data_archive("raster/tif-aerial.tgz") as tif_aerial:
+        with data_archive("raster/aerial.tgz") as repo_path:
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0
+
+            shutil.copy(tif_aerial / "aerial.tif", repo_path / "aerial/aerial2.tif")
+
+            assert get_hash_and_size_of_file(repo_path / "aerial/aerial2.tif") == (
+                "bdbb58a399b60231f7a017fd76659efb0f5c1d82ab892248123d14d9a1e838e1",
+                393860,
+            )
+
+            r = cli_runner.invoke(["status"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines() == [
+                "On branch main",
+                "",
+                "Changes in working copy:",
+                '  (use "kart commit" to commit)',
+                '  (use "kart restore" to discard changes)',
+                "",
+                "  aerial:",
+                "    meta:",
+                "      1 updates",
+                "    tile:",
+                "      1 inserts",
+            ]
+
+            r = cli_runner.invoke(["diff"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines() == [
+                "--- aerial:meta:format.json",
+                "+++ aerial:meta:format.json",
+                "- {",
+                '-   "fileType": "geotiff",',
+                '-   "profile": "cloud-optimized"',
+                "- }",
+                "+ <<<<<<< ",
+                "+ {",
+                '+   "fileType": "geotiff",',
+                '+   "profile": "cloud-optimized"',
+                "+ }",
+                "+ ======== ",
+                "+ {",
+                '+   "fileType": "geotiff",',
+                '+   "profile": null',
+                "+ }",
+                "+ >>>>>>> ",
+                "+++ aerial:tile:aerial2",
+                "+                                     name = aerial2.tif",
+                "+                                   format = geotiff",
+                "+                              crs84Extent = POLYGON((175.1890852 -36.7923968,175.1892991 -36.7999096,175.1988427 -36.7997334,175.1986279 -36.7922207,175.1890852 -36.7923968,175.1890852 -36.7923968))",
+                "+                               dimensions = 426x417",
+                "+                             nativeExtent = POLYGON((1795318.0 5925922.0,1795318.0 5925088.0,1796170.0 5925088.0,1796170.0 5925922.0,1795318.0 5925922.0))",
+                "+                                      oid = sha256:bdbb58a399b60231f7a017fd76659efb0f5c1d82ab892248123d14d9a1e838e1",
+                "+                                     size = 393860",
+            ]
+
+            r = cli_runner.invoke(["commit", "-m", "Add aerial2"])
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+
+            r = cli_runner.invoke(["diff", "--convert-to-dataset-format"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines() == [
+                "+++ aerial:tile:aerial2",
+                "+                                     name = aerial2.tif",
+                "+                                   format = geotiff/cog",
+                "+                             sourceFormat = geotiff",
+                "+                              crs84Extent = POLYGON((175.1890852 -36.7923968,175.1892991 -36.7999096,175.1988427 -36.7997334,175.1986279 -36.7922207,175.1890852 -36.7923968,175.1890852 -36.7923968))",
+                "+                               dimensions = 426x417",
+                "+                             nativeExtent = POLYGON((1795318.0 5925922.0,1795318.0 5925088.0,1796170.0 5925088.0,1796170.0 5925922.0,1795318.0 5925922.0))",
+                "+                                sourceOid = sha256:bdbb58a399b60231f7a017fd76659efb0f5c1d82ab892248123d14d9a1e838e1",
+                "+                               sourceSize = 393860",
+            ]
+
+            r = cli_runner.invoke(
+                ["commit", "--convert-to-dataset-format", "-m", "Add aerial2"]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["show"])
+            assert r.exit_code == 0
+            assert r.stdout.splitlines()[4:] == [
+                "    Add aerial2",
+                "",
+                "+++ aerial:tile:aerial2",
+                "+                                     name = aerial2.tif",
+                "+                              crs84Extent = POLYGON((175.1890852 -36.7923968,175.1892991 -36.7999096,175.1988427 -36.7997334,175.1986279 -36.7922207,175.1890852 -36.7923968,175.1890852 -36.7923968))",
+                "+                               dimensions = 426x417",
+                "+                                   format = geotiff/cog",
+                "+                             nativeExtent = POLYGON((1795318.0 5925922.0,1795318.0 5925088.0,1796170.0 5925088.0,1796170.0 5925922.0,1795318.0 5925922.0))",
+                "+                                sourceOid = sha256:bdbb58a399b60231f7a017fd76659efb0f5c1d82ab892248123d14d9a1e838e1",
+                "+                                      oid = sha256:b5a949f332d2d5afbfe9c164a4060e130c7d95d77aa3d48780c2adffc12ff36b",
+                "+                                     size = 552340",
+            ]
+
+            assert get_hash_and_size_of_file(repo_path / "aerial/aerial2.tif") == (
+                "b5a949f332d2d5afbfe9c164a4060e130c7d95d77aa3d48780c2adffc12ff36b",
+                552340,
+            )
+
+            check_lfs_hashes(KartRepo(repo_path), 2)
