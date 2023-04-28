@@ -1,3 +1,4 @@
+import json
 import os
 
 from osgeo import gdal
@@ -131,17 +132,27 @@ def test_import_various_field_types(tmp_path, postgres_table_with_types, cli_run
 
 
 def test_list_postgres_tables(postgis_db, postgres_table_with_types, cli_runner):
-    r = cli_runner.invoke(["import", "--list", os.environ["KART_POSTGRES_URL"]])
-    assert r.exit_code == 0, r.stderr
-
-    # NOTE: these tables are intentionally absent:
-    # '  public.geography_columns',
-    # '  public.geometry_columns',
-    # '  public.spatial_ref_sys',
-    assert r.stdout.splitlines() == ["Tables found:", "  public.typoes"]
-
     r = cli_runner.invoke(
-        ["import", "--list", os.environ["KART_POSTGRES_URL"] + "/public"]
+        ["import", "--list", os.environ["KART_POSTGRES_URL"], "-ojson"]
     )
     assert r.exit_code == 0, r.stderr
-    assert r.stdout.splitlines() == ["Tables found:", "  typoes"]
+    tables = json.loads(r.stdout)["kart.tables/v1"].keys()
+    assert "public.typoes" in tables
+    # These tables are intentionally absent - the user doesn't want to import them:
+    assert "public.geography_columns" not in tables
+    assert "public.geometry_columns" not in tables
+    assert "public.spatial_ref_sys" not in tables
+
+    # Note that there could be other tables already present since this is the public namespace.
+    # TODO: maybe we shouldn't be putting test tables in the public namespace, even temporarily.
+
+    r = cli_runner.invoke(
+        ["import", "--list", os.environ["KART_POSTGRES_URL"] + "/public", "-ojson"]
+    )
+    assert r.exit_code == 0, r.stderr
+    tables = json.loads(r.stdout)["kart.tables/v1"].keys()
+
+    assert "typoes" in tables
+    assert "geography_columns" not in tables
+    assert "geometry_columns" not in tables
+    assert "spatial_ref_sys" not in tables
