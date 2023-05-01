@@ -1,6 +1,3 @@
-import os
-
-
 def test_import_from_postgres_db_without_postgis_extension(
     no_postgis_db, cli_runner, tmp_path, chdir
 ):
@@ -17,7 +14,7 @@ def test_import_from_postgres_db_without_postgis_extension(
     assert r.exit_code == 0, r
     assert (repo_path / ".kart" / "HEAD").exists()
 
-    postgres_url = os.environ["KART_POSTGRES_URL"]
+    postgres_url = no_postgis_db.original_url
 
     # Import the test_table from the PostgreSQL container:
     with chdir(repo_path):

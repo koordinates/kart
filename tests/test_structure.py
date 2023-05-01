@@ -24,6 +24,7 @@ from kart.tabular.ogr_import_source import postgres_url_to_ogr_conn_str
 from kart.tabular.pk_generation import PkGeneratingTableImportSource
 from kart.repo import KartRepo
 
+from conftest import postgis_db
 
 H = pytest.helpers.helpers()
 
@@ -378,7 +379,7 @@ def quote_ident(part):
 
 @pytest.fixture()
 def postgis_layer(postgis_db, data_archive):
-    postgres_conn_str = postgres_url_to_ogr_conn_str(os.environ["KART_POSTGRES_URL"])
+    postgres_conn_str = postgres_url_to_ogr_conn_str(postgis_db.original_url)
 
     @contextlib.contextmanager
     def _postgis_layer(archive_name, gpkg_name, table):
@@ -414,6 +415,7 @@ def test_postgres_preserves_float_precision(postgis_db):
 
 
 def _test_postgis_import(
+    postgis_engine,
     repo_path,
     cli_runner,
     chdir,
@@ -429,7 +431,7 @@ def _test_postgis_import(
         r = cli_runner.invoke(
             [
                 "import",
-                os.environ["KART_POSTGRES_URL"],
+                postgis_engine.original_url,
                 table_name,
                 *import_args,
             ]
@@ -449,6 +451,7 @@ def _test_postgis_import(
 
 
 def test_postgis_import(
+    postgis_db,
     postgis_layer,
     data_archive,
     tmp_path,
@@ -460,7 +463,11 @@ def test_postgis_import(
         "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
         _test_postgis_import(
-            tmp_path / "repo", cli_runner, chdir, table_name="nz_waca_adjustments"
+            postgis_db,
+            tmp_path / "repo",
+            cli_runner,
+            chdir,
+            table_name="nz_waca_adjustments",
         )
 
 
@@ -485,6 +492,7 @@ def test_postgis_import_from_view(
                 """
             )
         _test_postgis_import(
+            postgis_db,
             tmp_path / "repo",
             cli_runner,
             chdir,
@@ -517,6 +525,7 @@ def test_postgis_import_from_view_with_ogc_fid(
                 """
             )
         _test_postgis_import(
+            postgis_db,
             tmp_path / "repo",
             cli_runner,
             chdir,
@@ -550,6 +559,7 @@ def test_postgis_import_from_view_no_pk(
                 """
             )
         _test_postgis_import(
+            postgis_db,
             repo_path,
             cli_runner,
             chdir,
@@ -581,7 +591,7 @@ def test_postgis_import_from_view_no_pk(
                 "--repo",
                 str(repo_path.resolve()),
                 "import",
-                os.environ["KART_POSTGRES_URL"],
+                postgis_db.original_url,
                 "nz_pa_points_view",
                 "--replace-existing",
             ]
@@ -626,7 +636,7 @@ def test_postgis_import_from_view_no_pk(
                 "--repo",
                 str(repo_path.resolve()),
                 "import",
-                os.environ["KART_POSTGRES_URL"],
+                postgis_db.original_url,
                 "nz_pa_points_view",
                 "--replace-existing",
             ]
@@ -721,6 +731,7 @@ def test_postgis_import_replace_no_ids(
                 """
             )
         _test_postgis_import(
+            postgis_db,
             repo_path,
             cli_runner,
             chdir,
@@ -733,7 +744,7 @@ def test_postgis_import_replace_no_ids(
                 "--repo",
                 str(repo_path.resolve()),
                 "import",
-                os.environ["KART_POSTGRES_URL"],
+                postgis_db.original_url,
                 "nz_waca_adjustments_view",
                 "--replace-ids=",
             ]
@@ -744,7 +755,7 @@ def test_postgis_import_replace_no_ids(
                 "--repo",
                 str(repo_path.resolve()),
                 "import",
-                os.environ["KART_POSTGRES_URL"],
+                postgis_db.original_url,
                 "nz_waca_adjustments_view",
                 "--replace-ids=",
                 # add some meta info so it's not a complete noop
@@ -1069,6 +1080,7 @@ def test_postgis_import_with_sampled_geometry_dimension(
         )
 
         _test_postgis_import(
+            postgis_db,
             tmp_path / "repo",
             cli_runner,
             chdir,
