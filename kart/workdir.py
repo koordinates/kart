@@ -237,9 +237,41 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
         L.info(f"Tree sha: {tree_id}")
         with self.state_session() as sess:
+            self._update_state_table_tree(sess, tree_id)
+
+    def _update_state_table_tree(self, sess, tree_id):
+        """
+        Write the given tree ID to the state table.
+
+        sess - state-table sqlalchemy session.
+        tree_id - str, the hex SHA of the tree at HEAD.
+        """
+        r = sess.execute(
+            upsert(KartState.__table__),
+            {"table_name": "*", "key": "tree", "value": tree_id or ""},
+        )
+        return r.rowcount
+
+    def _update_state_table_spatial_filter_hash(self, sess, spatial_filter_hash):
+        """
+        Write the given spatial filter hash to the state table.
+
+        sess - state-table sqlalchemy session.
+        spatial_filter_hash - str, a hash of the spatial filter.
+        """
+        kart_state = KartState.__table__
+        if spatial_filter_hash:
             r = sess.execute(
-                upsert(KartState.__table__),
-                {"table_name": "*", "key": "tree", "value": tree_id or ""},
+                upsert(kart_state),
+                {
+                    "table_name": "*",
+                    "key": "spatial-filter-hash",
+                    "value": spatial_filter_hash,
+                },
+            )
+        else:
+            r = sess.execute(
+                sa.delete(kart_state).where(kart_state.c.key == "spatial-filter-hash")
             )
         return r.rowcount
 
@@ -403,8 +435,12 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 track_changes_as_dirty=track_changes_as_dirty,
             )
 
-        if not track_changes_as_dirty:
-            self.update_state_table_tree(target_tree_id)
+        with self.state_session() as sess:
+            if not track_changes_as_dirty:
+                self._update_state_table_tree(sess, target_tree_id)
+            self._update_state_table_spatial_filter_hash(
+                sess, self.repo.spatial_filter.hexhash
+            )
 
     def _diff_to_reset(
         self, ds_path, base_datasets, target_datasets, workdir_diff_cache, ds_filter

@@ -2,7 +2,7 @@ import functools
 import os
 
 from kart.base_dataset import BaseDataset
-from kart.core import all_blobs_in_tree
+from kart.core import all_blobs_with_parent_in_tree
 from kart.decorators import allow_classmethod
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, WORKING_COPY_EDIT
 from kart.diff_format import DiffFormat
@@ -20,7 +20,7 @@ from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.progress_util import progress_bar
 from kart.serialise_util import hexhash
 from kart.spatial_filter import SpatialFilter
-from kart.tile.tilename_util import PAM_SUFFIX
+from kart.tile.tilename_util import PAM_SUFFIX, LEN_PAM_SUFFIX
 from kart.working_copy import PartType
 
 
@@ -75,7 +75,7 @@ class TileDataset(BaseDataset):
         parse_pointer_dicts=True,
     ):
         """
-        Returns a generator that yields every tile pointer blob in turn.
+        Returns a generator that yields every tile pointer blob and every PAM file pointer blob in turn.
         Also yields the parsed pointer file as a dict, unless parse_pointer_dicts is False (then it yields None)
         """
         tile_tree = self.tile_tree
@@ -92,19 +92,32 @@ class TileDataset(BaseDataset):
         )
 
         with progress as p:
-            for blob in all_blobs_in_tree(tile_tree):
-                if not blob.name.endswith(PAM_SUFFIX):
-                    n_read += 1
+            for parent, blob in all_blobs_with_parent_in_tree(tile_tree):
+                if blob.name.endswith(PAM_SUFFIX):
+                    is_tile = False
+                    try:
+                        tile_blob = parent / blob.name[:-LEN_PAM_SUFFIX]
+                    except KeyError:
+                        tile_blob = None
+                else:
+                    tile_blob = blob
+                    is_tile = True
+
+                pointer_dict = None
                 tile_dict = None
                 if parse_pointer_dicts:
-                    tile_dict = pointer_file_bytes_to_dict(blob)
-                # TODO - fix spatial filter to work properly with PAM files.
-                if spatial_filter.matches(tile_dict if parse_pointer_dicts else blob):
-                    if not blob.name.endswith(PAM_SUFFIX):
-                        n_matched += 1
-                    yield blob, tile_dict
+                    pointer_dict = pointer_file_bytes_to_dict(blob)
+                    if is_tile:
+                        tile_dict = pointer_dict
 
-                if not blob.name.endswith(PAM_SUFFIX):
+                # Use tile_dict if we have it - saves parsing the blob twice:
+                if spatial_filter.matches(tile_dict or tile_blob):
+                    yield blob, pointer_dict
+                    if is_tile:
+                        n_matched += 1
+
+                if is_tile:
+                    n_read += 1
                     p.update(1)
 
         if show_progress and not spatial_filter.match_all:
