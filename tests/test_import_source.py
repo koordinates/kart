@@ -1,5 +1,4 @@
 import json
-import os
 
 from osgeo import gdal
 
@@ -50,7 +49,9 @@ def postgres_table_with_types(postgis_db):
         )
 
 
-def test_import_various_field_types(tmp_path, postgres_table_with_types, cli_runner):
+def test_postgis_import_various_field_types(
+    postgis_db, tmp_path, postgres_table_with_types, cli_runner
+):
     # Using postgres here because it has the best type preservation
 
     r = cli_runner.invoke(["init", str(tmp_path / "repo1")])
@@ -60,7 +61,7 @@ def test_import_various_field_types(tmp_path, postgres_table_with_types, cli_run
             "-C",
             str(tmp_path / "repo1"),
             "import",
-            os.environ["KART_POSTGRES_URL"],
+            postgis_db.original_url,
             "typoes",
         ],
     )
@@ -88,7 +89,7 @@ def test_import_various_field_types(tmp_path, postgres_table_with_types, cli_run
     }
 
     # Now generate a DBF file, and try again from there.
-    ogr_conn_str = postgres_url_to_ogr_conn_str(os.environ["KART_POSTGRES_URL"])
+    ogr_conn_str = postgres_url_to_ogr_conn_str(postgis_db.original_url)
     gdal.VectorTranslate(
         str(tmp_path / "typoes.dbf"),
         ogr_conn_str,
@@ -132,9 +133,7 @@ def test_import_various_field_types(tmp_path, postgres_table_with_types, cli_run
 
 
 def test_list_postgres_tables(postgis_db, postgres_table_with_types, cli_runner):
-    r = cli_runner.invoke(
-        ["import", "--list", os.environ["KART_POSTGRES_URL"], "-ojson"]
-    )
+    r = cli_runner.invoke(["import", "--list", postgis_db.original_url, "-ojson"])
     assert r.exit_code == 0, r.stderr
     tables = json.loads(r.stdout)["kart.tables/v1"].keys()
     assert "public.typoes" in tables
@@ -147,7 +146,12 @@ def test_list_postgres_tables(postgis_db, postgres_table_with_types, cli_runner)
     # TODO: maybe we shouldn't be putting test tables in the public namespace, even temporarily.
 
     r = cli_runner.invoke(
-        ["import", "--list", os.environ["KART_POSTGRES_URL"] + "/public", "-ojson"]
+        [
+            "import",
+            "--list",
+            postgis_db.original_url + "/public",
+            "-ojson",
+        ]
     )
     assert r.exit_code == 0, r.stderr
     tables = json.loads(r.stdout)["kart.tables/v1"].keys()

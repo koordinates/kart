@@ -972,49 +972,66 @@ def disable_editor():
     os.environ.update(old_environ)
 
 
-@pytest.fixture()
-def postgres_db():
-    """
-    Using docker, you can run all PostgreSQL /  PostGIS tests - such as test_postgis_import - as follows:
-        docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgis/postgis
-        KART_POSTGRES_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k "postgres or postgis" --pdb -vvs
-    """
-    if "KART_POSTGRES_URL" not in os.environ:
-        raise pytest.skip(
-            "Postgres tests require configuration - read docstring at conftest.postgres_db"
-        )
-    engine = Db_Postgis.create_engine(os.environ["KART_POSTGRES_URL"])
-    yield engine
-
-
-def is_postgis_installed(postgres_db):
+def is_postgis_installed(engine):
     # Run a query to see if PostGIS is installed.
-    with postgres_db.connect() as conn:
+    with engine.connect() as conn:
         query = "SELECT * FROM pg_extension WHERE extname = 'postgis';"
         result = conn.execute(query)
         return result.rowcount > 0
 
 
 @pytest.fixture()
-def postgis_db(postgres_db):
-    # See postgres_db for help on running PostGIS tests
-    if not is_postgis_installed(postgres_db):
+def postgis_db():
+    """Using docker, you can run all PostGIS tests - such as test_postgis_import - as follows:
+    docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgis/postgis
+    KART_POSTGIS_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k 'postgres or postgis'
+    """
+
+    if "KART_POSTGIS_URL" in os.environ:
+        engine = Db_Postgis.create_engine(os.environ["KART_POSTGIS_URL"])
+        if not is_postgis_installed(engine):
+            raise AssertionError(
+                "PostGIS extension not found in KART_POSTGIS_URL database"
+            )
+        engine.original_url = os.environ.get("KART_POSTGIS_URL")
+    elif "KART_POSTGRES_URL" in os.environ:
+        engine = Db_Postgis.create_engine(os.environ["KART_POSTGRES_URL"])
+        if not is_postgis_installed(engine):
+            raise pytest.skip("PostGIS extension not found - can't run PostGIS tests")
+        engine.original_url = os.environ.get("KART_POSTGRES_URL")
+    else:
         raise pytest.skip(
-            "PostGIS extension is not installed - can't run PostGIS tests"
+            "PostGIS tests require configuration - set KART_POSTGIS_URL or KART_POSTGRES_URL environment variable"
         )
-    yield postgres_db
+    yield engine
 
 
 @pytest.fixture()
-def no_postgis_db(postgres_db):
-    # See postgres_db for help on running postgres tests
-    # TODO - we originally planned to drop the PostGIS extension temporarily to run these tests,
-    # but there were technical issues. Look into whether this is possible.
-    if is_postgis_installed(postgres_db):
+def no_postgis_db():
+    """There are a few PostgreSQL tests that test Kart's behaviour in a PG database where PostGIS is *not* installed. You can run these tests using docker as follows:
+    docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres/postgres
+    KART_NO_POSTGIS_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k 'postgres or postgis'
+
+    Note that the the majority of PostgreSQL tests use PostGIS - see the postgis_db fixture above.
+    """
+
+    if "KART_NO_POSTGIS_URL" in os.environ:
+        engine = Db_Postgis.create_engine(os.environ["KART_NO_POSTGIS_URL"])
+        if is_postgis_installed(engine):
+            raise AssertionError(
+                "PostGIS extension found in KART_NO_POSTGIS_URL database"
+            )
+        engine.original_url = os.environ.get("KART_NO_POSTGIS_URL")
+    elif "KART_POSTGRES_URL" in os.environ:
+        engine = Db_Postgis.create_engine(os.environ["KART_POSTGRES_URL"])
+        if is_postgis_installed(engine):
+            raise pytest.skip("PostGIS extension found - can't run no_postgis_db tests")
+        engine.original_url = os.environ.get("KART_POSTGRES_URL")
+    else:
         raise pytest.skip(
-            "PostGIS extension is installed - can't run no_postgis_db tests"
+            "Non-PostGIS tests require configuration - set KART_NO_POSTGIS_URL or KART_POSTGRES_URL environment variable"
         )
-    yield postgres_db
+    yield engine
 
 
 @pytest.fixture()
@@ -1030,7 +1047,7 @@ def new_postgis_db_schema(request, postgis_db):
             if create:
                 conn.execute(f"""CREATE SCHEMA "{schema}";""")
         try:
-            url = urlsplit(os.environ["KART_POSTGRES_URL"])
+            url = urlsplit(postgis_db.original_url)
             url_path = url.path.rstrip("/") + "/" + schema
             new_schema_url = urlunsplit(
                 [url.scheme, url.netloc, url_path, url.query, ""]
