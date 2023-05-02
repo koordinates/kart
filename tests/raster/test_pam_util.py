@@ -1,7 +1,9 @@
+from io import StringIO
+
 from osgeo import gdal
 
 from kart.lfs_util import get_hash_and_size_of_file
-from kart.raster.pam_util import is_same_xml_ignoring_stats
+from kart.raster import pam_util
 
 from .fixtures import requires_gdal_info  # noqa
 
@@ -101,6 +103,11 @@ MODIFIED_WITH_STATS = """
 """.lstrip()
 
 
+def is_same_xml_ignoring_stats(lhs, rhs):
+    # pam_util takes string paths or file-like objects, so we wrap our strings in StringIO.
+    return pam_util.is_same_xml_ignoring_stats(StringIO(lhs), StringIO(rhs))
+
+
 def test_is_same_xml_ignoring_stats():
     assert is_same_xml_ignoring_stats(ORIGINAL, ORIGINAL)
     assert is_same_xml_ignoring_stats(ORIGINAL, WITH_STATS)
@@ -113,7 +120,63 @@ def test_is_same_xml_ignoring_stats():
     assert not is_same_xml_ignoring_stats(MODIFIED_WITH_STATS, ORIGINAL)
 
 
-def test_add_stats_to_pam(
+def test_add_stats_to_new_pam(
+    cli_runner,
+    data_archive,
+    requires_gdal_info,
+    requires_git_lfs,
+):
+    with data_archive("raster/aerial.tgz") as repo_path:
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0
+
+        tile_path = repo_path / "aerial" / "aerial.tif"
+        pam_path = repo_path / "aerial" / "aerial.tif.aux.xml"
+
+        assert not pam_path.exists()
+
+        # This sort of command causes stats to be generated, but we don't want
+        # to show it as a diff to the user unless they make further changes:
+        gdal.Info(str(tile_path), options=["-stats", "-hist"])
+
+        assert get_hash_and_size_of_file(pam_path) == (
+            "12f21fc2ce23bea6196caf17878eb959ad845a41aa699e05a830c236eee1cc81",
+            5735,
+        )
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Nothing to commit, working copy clean",
+        ]
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0
+
+        # Real changes are not suppressed:
+        pam_path.write_text("<whatever />")
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Changes in working copy:",
+            '  (use "kart commit" to commit)',
+            '  (use "kart restore" to discard changes)',
+            "",
+            "  aerial:",
+            "    tile:",
+            "      1 updates",
+        ]
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 1
+
+
+def test_add_stats_to_existing_pam(
     cli_runner,
     data_archive,
     requires_gdal_info,

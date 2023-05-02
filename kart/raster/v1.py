@@ -265,26 +265,30 @@ class RasterV1(TileDataset):
         all_keys.update(old_value)
         all_keys.update(new_value)
         for key in all_keys:
-            if not key.startswith("pam") and old_value.get(key) != new_value.get(key):
+            if (not key.startswith("pam")) and old_value.get(key) != new_value.get(key):
                 return False
 
         old_pam_oid = old_value.get("pamOid")
         new_pam_oid = new_value.get("pamOid")
         if old_pam_oid == new_pam_oid:
             return True
-        if old_pam_oid is None or new_pam_oid is None:
-            return False
 
-        old_pam_path = get_local_path_from_lfs_hash(self.repo, old_pam_oid)
-        new_pam_name = new_value.get("pamSourceName") or new_value.get("pamName")
-        new_pam_path = self._workdir_path(f"{self.path}/{new_pam_name}")
-        if not old_pam_path.is_file() or not new_pam_path.is_file():
-            # Can't check if only stats have changed, so don't suppress the change.
-            return False
+        old_pam_path = None
+        if old_pam_oid:
+            old_pam_path = get_local_path_from_lfs_hash(self.repo, old_pam_oid)
+            if not old_pam_path.is_file():
+                return False  # Can't check the contents, so don't suppress the change.
+            old_pam_path = str(old_pam_path)
 
-        return is_same_xml_ignoring_stats(
-            old_pam_path.read_text(), new_pam_path.read_text()
-        )
+        new_pam_path = None
+        if new_pam_oid:
+            new_pam_name = new_value.get("pamSourceName") or new_value.get("pamName")
+            new_pam_path = self._workdir_path(f"{self.path}/{new_pam_name}")
+            if not new_pam_path.is_file():
+                return False  # Can't check the contents, so don't suppress the change.
+            new_pam_path = str(new_pam_path)
+
+        return is_same_xml_ignoring_stats(old_pam_path, new_pam_path)
 
     @property
     def tile_metadata(self):
