@@ -2,13 +2,10 @@ import functools
 import re
 
 from kart.core import all_blobs_in_tree
-from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, WORKING_COPY_EDIT
-from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
+from kart.diff_structs import DeltaDiff, Delta
+from kart.key_filters import FeatureKeyFilter
 from kart.lfs_util import (
-    copy_file_to_local_lfs_cache,
-    dict_to_pointer_file_bytes,
     get_local_path_from_lfs_hash,
-    merge_pointer_file_dicts,
 )
 from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.raster.gdal_convert import convert_tile_to_format
@@ -72,6 +69,14 @@ class RasterV1(TileDataset):
         return extract_raster_tile_metadata(path)
 
     @classmethod
+    def get_format_summary(self, format_json):
+        return get_format_summary(format_json)
+
+    @classmethod
+    def convert_tile_to_format(self, source_path, dest_path, target_format):
+        convert_tile_to_format(source_path, dest_path, target_format)
+
+    @classmethod
     def get_tile_path_pattern(
         cls,
         tilename=None,
@@ -113,134 +118,15 @@ class RasterV1(TileDataset):
 
         return result
 
-    def diff_to_working_copy(
-        self,
-        workdir_diff_cache,
-        ds_filter=DatasetKeyFilter.MATCH_ALL,
-        *,
-        convert_to_dataset_format=False,
-        extract_metadata=True,
-    ):
+    def get_dirty_dataset_paths(self, workdir_diff_cache):
         """
-        Returns a diff of all changes made to this dataset in the working copy.
-
-        convert_to_dataset_format - user wants this converted to dataset's format as it is
-            committed, and wants to see diffs of what this would look like.
-        extract_metadata - if False, don't run gdal.Info to check the tile contents. The resulting diffs
-            are missing almost all of the info about the new tiles, but this is faster and more
-            reliable if this information is not needed.
-        """
-        tile_filter = ds_filter.get("tile", ds_filter.child_type())
-
-        current_metadata = self.tile_metadata
-        dataset_format_to_apply = None
-        if convert_to_dataset_format:
-            dataset_format_to_apply = get_format_summary(current_metadata)
-
-        tilename_to_metadata = {}
-
-        wc_tiles_path_pattern = get_tile_path_pattern(parent_path=self.path)
-
-        tile_diff = DeltaDiff()
-
-        for tile_path in self._non_pam_wc_paths(
-            workdir_diff_cache.dirty_paths_for_dataset(self)
-        ):
-            if not wc_tiles_path_pattern.fullmatch(tile_path):
-                continue
-
-            tilename = self.tilename_from_path(tile_path)
-            if tilename not in tile_filter:
-                continue
-
-            old_tile_summary = self.get_tile_summary_promise(tilename, missing_ok=True)
-            old_half_delta = (tilename, old_tile_summary) if old_tile_summary else None
-
-            wc_path = self._workdir_path(tile_path)
-            if not wc_path.is_file():
-                new_half_delta = None
-            elif extract_metadata:
-                tile_metadata = extract_raster_tile_metadata(wc_path)
-                tilename_to_metadata[wc_path.name] = tile_metadata
-                new_tile_summary = tile_metadata["tile"]
-
-                if dataset_format_to_apply and not self.is_tile_compatible(
-                    dataset_format_to_apply, new_tile_summary
-                ):
-                    new_tile_summary = self.pre_conversion_tile_summary(
-                        dataset_format_to_apply, new_tile_summary
-                    )
-
-                new_half_delta = tilename, new_tile_summary
-            else:
-                new_half_delta = tilename, {"name": wc_path.name}
-
-            tile_delta = Delta(old_half_delta, new_half_delta)
-            tile_delta.flags = WORKING_COPY_EDIT
-
-            if tile_delta.type == "update" and self._only_stats_have_changed(
-                tile_delta
-            ):
-                continue
-
-            tile_diff[tilename] = tile_delta
-
-        if not tile_diff:
-            return DatasetDiff()
-
-        is_clean_slate = self.is_clean_slate(tile_diff)
-        metadata_list = list(tilename_to_metadata.values())
-        no_new_metadata = not metadata_list
-
-        if not is_clean_slate:
-            metadata_list.insert(0, current_metadata)
-
-        rewrite_metadata = RewriteMetadata.NO_REWRITE
-        profile_constraint = current_metadata["format.json"].get("profile")
-        if profile_constraint == "cloud-optimized":
-            rewrite_metadata = (
-                RewriteMetadata.AS_IF_CONVERTED_TO_COG
-                if convert_to_dataset_format
-                else RewriteMetadata.NO_REWRITE
-            )
-        else:
-            rewrite_metadata = RewriteMetadata.DROP_PROFILE
-
-        if no_new_metadata:
-            merged_metadata = current_metadata
-        else:
-            merged_metadata = rewrite_and_merge_metadata(
-                metadata_list, rewrite_metadata
-            )
-
-        meta_diff = DeltaDiff()
-        all_keys = set()
-        for tm in (current_metadata, merged_metadata):
-            all_keys.update(tm)
-        for key in all_keys:
-            old_value = current_metadata.get(key)
-            new_value = merged_metadata.get(key)
-            if old_value != new_value:
-                old_half_delta = (key, old_value) if old_value else None
-                new_half_delta = (key, new_value) if new_value else None
-                meta_diff[key] = Delta(old_half_delta, new_half_delta)
-
-        ds_diff = DatasetDiff()
-        ds_diff["meta"] = meta_diff
-        ds_diff["tile"] = tile_diff
-
-        return ds_diff
-
-    def _non_pam_wc_paths(self, tile_and_pam_paths):
-        """
-        Given a list of dirty paths, relative to the workdir -
-        return the paths of the tiles (relative to the workdir) that have been affected
+        Returns the paths of the tiles (relative to the workdir) that have been affected
         either by editing directly or by editing their PAM files.
         Uses git-style paths: / is the part separator, regardless of the platform.
         """
         result = set()
         wc_path = self._workdir_path()
-        for path in tile_and_pam_paths:
+        for path in workdir_diff_cache.dirty_paths_for_dataset(self):
             if path.lower().endswith(PAM_SUFFIX):
                 tile_paths = find_similar_files_case_insensitive(
                     self._workdir_path(path[:-LEN_PAM_SUFFIX])
@@ -252,7 +138,7 @@ class RasterV1(TileDataset):
                 result.add(path)
         return result
 
-    def _only_stats_have_changed(self, tile_delta):
+    def should_suppress_minor_tile_change(self, tile_delta):
         """
         Given a tile delta where the new value is the current state of the WC,
         return True if the only thing that has changed in the tile since the last commit
@@ -347,30 +233,13 @@ class RasterV1(TileDataset):
             result["pamSize"] = pam_summary["size"]
         return result
 
-    def is_tile_compatible(self, target_format, tile_summary):
-        """
-        Given the a ormat - either format.json {"fileType": ... "profile": ...}
-        or a format summary string eg "geotiff/cog" -
-        and the tile summary eg {"name": ... "format": ... "oid": ... "size": ... }
-        returns True if the tile is compatible with the target format.
-        """
-        tile_format = tile_summary["format"]
+    def get_envisioned_tile_summary(self, tile_summary, target_format):
+        # TODO - merge this with the point-cloud implementation.
         if isinstance(target_format, dict):
             target_format = get_format_summary(target_format)
-        return tile_format == target_format or tile_format.startswith(
-            f"{target_format}/"
-        )
-
-    def pre_conversion_tile_summary(self, ds_format, tile_summary):
-        """
-        Converts a tile-summary - that is, updates the tile-summary to be a mix of the tiles current information
-        (prefixed with "source") and its future information - what it will be once converted - where that is known.
-        """
-        if isinstance(ds_format, dict):
-            ds_format = get_format_summary(ds_format)
 
         envisioned_summary = {
-            "format": ds_format,
+            "format": target_format,
             "oid": None,
             "size": None,
         }
@@ -384,72 +253,16 @@ class RasterV1(TileDataset):
                 result[key] = value
         return result
 
-    def apply_tile_diff(
-        self, tile_diff, object_builder, *, resolve_missing_values_from_ds=None
+    def rewrite_and_merge_metadata(
+        self, current_metadata, metadata_list, convert_to_dataset_format
     ):
-        """
-        Applies a tile-diff to the given object builder (so that the diff can be committed),
-        and in the process performs the necessary side effects - converting tiles to the
-        relevant format (where needed) and copying them to the LFS cache (where needed).
-        """
-        with object_builder.chdir(self.inner_path):
-            for delta in tile_diff.values():
-
-                pam_name, pam_source_name, pam_oid, pam_size = None, None, None, None
-                if delta.type in ("insert", "update"):
-                    # TODO - check if committing .tiff vs .tif always works as intended.
-
-                    new_val = delta.new_value
-                    name = new_val.get("name")
-                    source_name = new_val.get("sourceName") or name
-                    path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
-
-                    if new_val.get("sourceFormat"):
-                        # Converting and then committing a new tile
-
-                        conversion_func = functools.partial(
-                            convert_tile_to_format,
-                            target_format=new_val["format"],
-                        )
-                        pointer_dict = copy_file_to_local_lfs_cache(
-                            self.repo, path_in_wc, conversion_func
-                        )
-                    else:
-                        # Committing in a new tile, preserving its format
-                        oid_and_size = new_val["oid"], new_val["size"]
-                        pointer_dict = copy_file_to_local_lfs_cache(
-                            self.repo, path_in_wc, oid_and_size=oid_and_size
-                        )
-
-                    pointer_dict = merge_pointer_file_dicts(new_val, pointer_dict)
-
-                    tilename = new_val["name"]
-                    tile_blob_path = self.tilename_to_blob_path(tilename, relative=True)
-                    object_builder.insert(
-                        tile_blob_path, dict_to_pointer_file_bytes(pointer_dict)
-                    )
-                    # Update the diff to record what was stored - this is used to reset the workdir.
-                    new_val.update(oid=pointer_dict["oid"], size=pointer_dict["size"])
-
-                    pam_name = new_val.get("pamName")
-                    pam_source_name = new_val.get("pamSourceName") or pam_name
-                    pam_oid = new_val.get("pamOid")
-                    pam_size = new_val.get("pamSize")
-
-                else:  # delete:
-                    tilename = delta.old_key
-                    tile_blob_path = self.tilename_to_blob_path(tilename, relative=True)
-                    object_builder.remove(tile_blob_path)
-
-                pam_blob_path = tile_blob_path + PAM_SUFFIX
-                if pam_name is not None:
-                    path_in_wc = self._workdir_path(f"{self.path}/{pam_source_name}")
-                    pointer_dict = copy_file_to_local_lfs_cache(
-                        self.repo, path_in_wc, oid_and_size=(pam_oid, pam_size)
-                    )
-                    object_builder.insert(
-                        pam_blob_path,
-                        dict_to_pointer_file_bytes(pointer_dict),
-                    )
-                else:
-                    object_builder.remove(pam_blob_path)
+        profile_constraint = current_metadata["format.json"].get("profile")
+        if profile_constraint == "cloud-optimized":
+            rewrite_metadata = (
+                RewriteMetadata.AS_IF_CONVERTED_TO_COG
+                if convert_to_dataset_format
+                else RewriteMetadata.NO_REWRITE
+            )
+        else:
+            rewrite_metadata = RewriteMetadata.DROP_PROFILE
+        return rewrite_and_merge_metadata(metadata_list, rewrite_metadata)
