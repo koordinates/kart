@@ -7,6 +7,7 @@ from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.lfs_util import (
     copy_file_to_local_lfs_cache,
     dict_to_pointer_file_bytes,
+    get_local_path_from_lfs_hash,
     merge_pointer_file_dicts,
 )
 from kart.meta_items import MetaItemDefinition, MetaItemFileType
@@ -17,6 +18,7 @@ from kart.raster.metadata_util import (
     rewrite_and_merge_metadata,
     get_format_summary,
 )
+from kart.raster.pam_util import is_same_xml_ignoring_stats
 from kart.raster.tilename_util import (
     get_tile_path_pattern,
     remove_tile_extension,
@@ -175,6 +177,12 @@ class RasterV1(TileDataset):
 
             tile_delta = Delta(old_half_delta, new_half_delta)
             tile_delta.flags = WORKING_COPY_EDIT
+
+            if tile_delta.type == "update" and self._only_stats_have_changed(
+                tile_delta
+            ):
+                continue
+
             tile_diff[tilename] = tile_delta
 
         if not tile_diff:
@@ -237,10 +245,50 @@ class RasterV1(TileDataset):
                 tile_paths = find_similar_files_case_insensitive(
                     self._workdir_path(path[:-LEN_PAM_SUFFIX])
                 )
-                result.update("/".join(t.relative_to(wc_path).parts) for t in tile_paths)
+                result.update(
+                    "/".join(t.relative_to(wc_path).parts) for t in tile_paths
+                )
             else:
                 result.add(path)
         return result
+
+    def _only_stats_have_changed(self, tile_delta):
+        """
+        Given a tile delta where the new value is the current state of the WC,
+        return True if the only thing that has changed in the tile since the last commit
+        is that stats have been added or removed.
+        """
+        old_value = tile_delta.old_value
+        new_value = tile_delta.new_value
+
+        all_keys = set()
+        all_keys.update(old_value)
+        all_keys.update(new_value)
+        for key in all_keys:
+            if (not key.startswith("pam")) and old_value.get(key) != new_value.get(key):
+                return False
+
+        old_pam_oid = old_value.get("pamOid")
+        new_pam_oid = new_value.get("pamOid")
+        if old_pam_oid == new_pam_oid:
+            return True
+
+        old_pam_path = None
+        if old_pam_oid:
+            old_pam_path = get_local_path_from_lfs_hash(self.repo, old_pam_oid)
+            if not old_pam_path.is_file():
+                return False  # Can't check the contents, so don't suppress the change.
+            old_pam_path = str(old_pam_path)
+
+        new_pam_path = None
+        if new_pam_oid:
+            new_pam_name = new_value.get("pamSourceName") or new_value.get("pamName")
+            new_pam_path = self._workdir_path(f"{self.path}/{new_pam_name}")
+            if not new_pam_path.is_file():
+                return False  # Can't check the contents, so don't suppress the change.
+            new_pam_path = str(new_pam_path)
+
+        return is_same_xml_ignoring_stats(old_pam_path, new_pam_path)
 
     @property
     def tile_metadata(self):
