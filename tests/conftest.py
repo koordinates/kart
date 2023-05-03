@@ -1036,18 +1036,27 @@ def no_postgis_db():
 
 @pytest.fixture()
 def new_postgis_db_schema(request, postgis_db):
+    return _new_pg_schema_for_test(request, postgis_db)
+
+
+@pytest.fixture()
+def new_no_postgis_db_schema(request, no_postgis_db):
+    return _new_pg_schema_for_test(request, no_postgis_db)
+
+
+def _new_pg_schema_for_test(request, engine):
     @contextlib.contextmanager
     def ctx(create=False):
         sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
         schema = f"kart_test_{sha}"
-        with postgis_db.connect() as conn:
+        with engine.connect() as conn:
             # Start by deleting in case it is left over from last test-run...
             conn.execute(f"""DROP SCHEMA IF EXISTS "{schema}" CASCADE;""")
             # Actually create only if create=True, otherwise the test will create it
             if create:
                 conn.execute(f"""CREATE SCHEMA "{schema}";""")
         try:
-            url = urlsplit(postgis_db.original_url)
+            url = urlsplit(engine.original_url)
             url_path = url.path.rstrip("/") + "/" + schema
             new_schema_url = urlunsplit(
                 [url.scheme, url.netloc, url_path, url.query, ""]
@@ -1055,7 +1064,7 @@ def new_postgis_db_schema(request, postgis_db):
             yield new_schema_url, schema
         finally:
             # Clean up - delete it again if it exists.
-            with postgis_db.connect() as conn:
+            with engine.connect() as conn:
                 conn.execute(f"""DROP SCHEMA IF EXISTS "{schema}" CASCADE;""")
 
     return ctx

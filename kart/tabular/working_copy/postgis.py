@@ -1,15 +1,19 @@
 import contextlib
+
 import hashlib
 import logging
+from psycopg2.errors import UndefinedTable
 import time
 
 from kart import crs_util
+
 from kart.sqlalchemy import separate_last_path_part
 from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
 from kart.schema import Schema
 from sqlalchemy import Index
 from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
+from kart.exceptions import InvalidOperation, INVALID_OPERATION
 
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import PostgisKartTables
@@ -337,3 +341,22 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             sess.execute(
                 f"""ALTER TABLE {self.table_identifier(table)} ALTER COLUMN {self.quote(col.name)} TYPE {dest_type};"""
             )
+
+    def _check_for_unsupported_ds_types(self, sess, target_datasets):
+        """Check for spatial datasets and verify if the PostGIS extension is enabled in the database."""
+        for dataset_path, dataset in target_datasets.items():
+            if dataset.is_spatial:
+                spatial_ref_sys_exists = sess.scalar(
+                    """
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema='public' AND table_name='spatial_ref_sys';
+                    """
+                )
+                if spatial_ref_sys_exists:
+                    return
+                else:
+                    raise InvalidOperation(
+                        f"Dataset '{dataset_path}' requires the PostGIS extension to be installed in the working copy.\n"
+                        "Install it with `CREATE EXTENSION postgis;`",
+                        exit_code=INVALID_OPERATION,
+                    )

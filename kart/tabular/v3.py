@@ -450,3 +450,8 @@ class TableV3(RichTableDataset):
             existing_tree,
             resolve_missing_values_from_tree=resolve_missing_values_from_tree,
         )
+
+    @property
+    def is_spatial(self):
+        """Returns True if the dataset is spatial."""
+        return len(self.crs_definitions()) > 0
