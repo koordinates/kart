@@ -83,6 +83,16 @@ def all_trees_with_paths_in_tree(tree, path="", ignore_hidden=True):
         yield from all_trees_with_paths_in_tree(entry, entry_path)
 
 
+def all_blobs_with_parent_in_tree(tree):
+    """Recursively yields all possible (parent, blob) tuples in the given directory tree."""
+    # For anything more complicated than this, you probably need walk_tree below.
+    for entry in tree:
+        if entry.type == pygit2.GIT_OBJ_BLOB:
+            yield tree, entry
+        elif entry.type == pygit2.GIT_OBJ_TREE:
+            yield from all_blobs_with_parent_in_tree(entry)
+
+
 def walk_tree(top, path="", topdown=True):
     """
     Corollary of os.walk() for git Tree objects:

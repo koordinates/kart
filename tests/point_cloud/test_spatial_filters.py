@@ -53,6 +53,8 @@ SOUTH_WEST_TILES = {
     "auckland_3_0.copc.laz",
 }
 
+ALL_AUCKLAND_TILES = {f"auckland_{x}_{y}.copc.laz" for x in range(4) for y in range(4)}
+
 
 def _tile_filenames_in_workdir(repo, ds_path):
     return set(f.name for f in (repo.workdir_path / ds_path).iterdir())
@@ -148,6 +150,11 @@ def test_reclone_pc_with_larger_spatial_filter(
         assert _count_files_in_lfs_cache(repo2) == len(
             SOUTH_EAST_TILES | SOUTH_WEST_TILES
         )
+
+        r = cli_runner.invoke(["-C", repo2_path, "checkout", "--spatial-filter=none"])
+        assert r.exit_code == 0, r.stderr
+        assert _tile_filenames_in_workdir(repo2, "auckland") == ALL_AUCKLAND_TILES
+        assert _count_files_in_lfs_cache(repo2) == len(ALL_AUCKLAND_TILES)
 
 
 def test_spatial_filtered_diff(data_archive, cli_runner, tmp_path, requires_pdal):
