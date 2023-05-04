@@ -10,8 +10,6 @@ import sys
 
 import pygit2
 import sqlalchemy as sa
-from sqlalchemy import Column, Text
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import CreateTable
 
@@ -30,15 +28,13 @@ from kart.lfs_commands import fetch_lfs_blobs_for_pointer_files
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import InputMode, get_input_mode
 from kart.reflink_util import try_reflink
+from kart.sqlalchemy import TableSet
 from kart.sqlalchemy.sqlite import sqlite_engine
-from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tile import ALL_TILE_DATASET_TYPES
 from kart.tile.tile_dataset import TileDataset
 from kart.tile.tilename_util import remove_any_tile_extension, PAM_SUFFIX
 from kart.working_copy import WorkingCopyPart
 
-
-Base = declarative_base()
 
 L = logging.getLogger("kart.workdir")
 
@@ -51,13 +47,23 @@ class FileSystemWorkingCopyStatus(Enum):
     CREATED = auto()
 
 
-class KartState(Base):
-    """kart_state table for the workdir that is maintained in .kart/workdir-state.db"""
+class WorkdirKartTables(TableSet):
+    """Tables for Kart-specific metadata as it is stored in the workdir, using a sqlite DB."""
 
-    __tablename__ = "kart_state"
-    table_name = Column(Text, nullable=False, primary_key=True)
-    key = Column(Text, nullable=False, primary_key=True)
-    value = Column("value", Text, nullable=False)
+    def __init__(self):
+        super().__init__()
+
+        self.kart_state = sa.Table(
+            "kart_state",
+            self.sqlalchemy_metadata,
+            sa.Column("table_name", sa.Text, nullable=False, primary_key=True),
+            sa.Column("key", sa.Text, nullable=False, primary_key=True),
+            sa.Column("value", sa.Text, nullable=False),
+        )
+
+
+# Makes it so WorkdirKartTables table definitions are also accessible at the WorkdirKartTables class itself:
+WorkdirKartTables.copy_tables_to_class()
 
 
 class FileSystemWorkingCopy(WorkingCopyPart):
@@ -91,6 +97,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         self.state_path = repo.gitdir_file("workdir-state.db")
 
         self._required_paths = [self.index_path, self.state_path]
+
+        self.kart_tables = WorkdirKartTables()
 
     @classmethod
     def get(
@@ -174,7 +182,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         engine = sqlite_engine(self.state_path)
         sm = sessionmaker(bind=engine)
         with sm() as s:
-            s.execute(CreateTable(KartState.__table__, if_not_exists=True))
+            s.execute(CreateTable(self.kart_tables.kart_state, if_not_exists=True))
 
     def delete(self):
         """Deletes the index file and state table, and attempts to clean up any datasets in the workdir itself."""
@@ -219,61 +227,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             self._session.close()
             del self._session
             L.debug("session: new/done")
-
-    def get_kart_state_value(self, table_name, key):
-        """Returns the hex tree ID from the state table."""
-        kart_state = KartState.__table__
-        with self.state_session() as sess:
-            return sess.scalar(
-                sa.select([kart_state.c.value]).where(
-                    sa.and_(
-                        kart_state.c.table_name == table_name, kart_state.c.key == key
-                    )
-                )
-            )
-
-    def update_state_table_tree(self, tree):
-        """Write the given tree to the state table."""
-        tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
-        L.info(f"Tree sha: {tree_id}")
-        with self.state_session() as sess:
-            self._update_state_table_tree(sess, tree_id)
-
-    def _update_state_table_tree(self, sess, tree_id):
-        """
-        Write the given tree ID to the state table.
-
-        sess - state-table sqlalchemy session.
-        tree_id - str, the hex SHA of the tree at HEAD.
-        """
-        r = sess.execute(
-            upsert(KartState.__table__),
-            {"table_name": "*", "key": "tree", "value": tree_id or ""},
-        )
-        return r.rowcount
-
-    def _update_state_table_spatial_filter_hash(self, sess, spatial_filter_hash):
-        """
-        Write the given spatial filter hash to the state table.
-
-        sess - state-table sqlalchemy session.
-        spatial_filter_hash - str, a hash of the spatial filter.
-        """
-        kart_state = KartState.__table__
-        if spatial_filter_hash:
-            r = sess.execute(
-                upsert(kart_state),
-                {
-                    "table_name": "*",
-                    "key": "spatial-filter-hash",
-                    "value": spatial_filter_hash,
-                },
-            )
-        else:
-            r = sess.execute(
-                sa.delete(kart_state).where(kart_state.c.key == "spatial-filter-hash")
-            )
-        return r.rowcount
 
     def is_dirty(self):
         """

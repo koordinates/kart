@@ -1,8 +1,9 @@
-import click
+import logging
 from enum import Enum, auto
+
+import click
 import pygit2
-import os
-import sys
+import sqlalchemy as sa
 
 from kart.exceptions import (
     InvalidOperation,
@@ -16,9 +17,14 @@ from kart.exceptions import (
 )
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import get_input_mode, InputMode
+from kart.sqlalchemy.upsert import Upsert as upsert
+
 
 # General code for working copies.
 # Nothing specific to tabular working copies, nor file-based working copies.
+
+
+L = logging.getLogger("kart.working_copy")
 
 
 class PartType(Enum):
@@ -415,15 +421,76 @@ class WorkingCopyPart:
                 self.WORKING_COPY_TYPE_NAME, actual_tree_id, expected_tree_id
             )
 
+    def state_session(self):
+        """Opens a session for reading or writing to the state table."""
+        raise NotImplementedError()
+
+    # The following functions all depend on a piece of commonality between all working copy parts:
+    # They all have a table called something like "kart_state" - the exact definition is found at
+    # self.kart_tables.kart_state - and a session to it can be opened using self.state_session()
+
     def get_tree_id(self):
+        """Returns the hex tree ID from the state table."""
         return self.get_kart_state_value("*", "tree")
 
     def get_spatial_filter_hash(self):
+        """Returns the spatial filter hash from the state table."""
         return self.get_kart_state_value("*", "spatial-filter-hash")
 
     def get_kart_state_value(self, table_name, key):
         """Looks up a value from the kart-state table."""
-        raise NotImplementedError()
+        kart_state = self.kart_tables.kart_state
+        with self.state_session() as sess:
+            return sess.scalar(
+                sa.select([kart_state.c.value]).where(
+                    sa.and_(
+                        kart_state.c.table_name == table_name, kart_state.c.key == key
+                    )
+                )
+            )
+
+    def update_state_table_tree(self, tree):
+        """Write the given tree to the kart-state table."""
+        tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
+        L.info(f"Tree sha: {tree_id}")
+        with self.state_session() as sess:
+            self._update_state_table_tree(sess, tree_id)
+
+    def _update_state_table_tree(self, sess, tree_id):
+        """
+        Write the given tree ID to the state table.
+
+        sess - state-table sqlalchemy session.
+        tree_id - str, the hex SHA of the tree at HEAD.
+        """
+        r = sess.execute(
+            upsert(self.kart_tables.kart_state),
+            {"table_name": "*", "key": "tree", "value": tree_id or ""},
+        )
+        return r.rowcount
+
+    def _update_state_table_spatial_filter_hash(self, sess, spatial_filter_hash):
+        """
+        Write the given spatial filter hash to the state table.
+
+        sess - state-table sqlalchemy session.
+        spatial_filter_hash - str, a hash of the spatial filter.
+        """
+        kart_state = self.kart_tables.kart_state
+        if spatial_filter_hash:
+            r = sess.execute(
+                upsert(kart_state),
+                {
+                    "table_name": "*",
+                    "key": "spatial-filter-hash",
+                    "value": spatial_filter_hash,
+                },
+            )
+        else:
+            r = sess.execute(
+                sa.delete(kart_state).where(kart_state.c.key == "spatial-filter-hash")
+            )
+        return r.rowcount
 
     def reset(
         self,
