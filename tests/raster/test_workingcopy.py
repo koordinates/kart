@@ -4,7 +4,11 @@ import pytest
 
 from .fixtures import requires_gdal_info  # noqa
 
-from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT
+from kart.exceptions import (
+    WORKING_COPY_OR_IMPORT_CONFLICT,
+    NO_CHANGES,
+    INVALID_OPERATION,
+)
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
 
@@ -639,3 +643,105 @@ def test_working_copy_edit__convert_to_cog(
             )
 
             check_lfs_hashes(KartRepo(repo_path), 2)
+
+
+@pytest.mark.parametrize(
+    "tile_filename",
+    [
+        "new.TIF",
+        "new.tiff",
+        "new.TIFF",
+    ],
+)
+def test_working_copy_add_with_non_standard_extension(
+    tile_filename, cli_runner, data_archive, requires_gdal_info
+):
+    with data_archive("raster/aerial.tgz") as repo_path:
+        tile_path = repo_path / "aerial" / "aerial.tif"
+        orig_hash_and_size = get_hash_and_size_of_file(tile_path)
+
+        new_tile_path = repo_path / "aerial" / tile_filename
+        shutil.copy(tile_path, new_tile_path)
+        assert get_hash_and_size_of_file(new_tile_path) == orig_hash_and_size
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Changes in working copy:",
+            '  (use "kart commit" to commit)',
+            '  (use "kart restore" to discard changes)',
+            "",
+            "  aerial:",
+            "    tile:",
+            "      1 inserts",
+        ]
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 1
+
+        r = cli_runner.invoke(["commit", "-m", "insert new tile"])
+        assert r.exit_code == 0, r.stderr
+
+        names = {f.name for f in (repo_path / "aerial").glob("new.*")}
+        assert names == {"new.tif"}
+        assert (
+            get_hash_and_size_of_file(repo_path / "aerial" / "new.tif")
+            == orig_hash_and_size
+        )
+
+
+@pytest.mark.parametrize(
+    "tile_filename",
+    [
+        "aerial.TIF",
+        "aerial.tiff",
+        "aerial.TIFF",
+    ],
+)
+def test_working_copy_rename_extension(
+    tile_filename, cli_runner, data_archive, requires_gdal_info
+):
+    with data_archive("raster/aerial.tgz") as repo_path:
+        tile_path = repo_path / "aerial" / "aerial.tif"
+        orig_hash_and_size = get_hash_and_size_of_file(tile_path)
+
+        new_tile_path = repo_path / "aerial" / tile_filename
+        tile_path.rename(new_tile_path)
+        assert get_hash_and_size_of_file(new_tile_path) == orig_hash_and_size
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Nothing to commit, working copy clean",
+        ]
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0
+
+        r = cli_runner.invoke(["commit", "-m", "rename extension"])
+        assert r.exit_code == NO_CHANGES
+
+        r = cli_runner.invoke(["reset", "--discard-changes"])
+
+        names = {f.name for f in (repo_path / "aerial").glob("aerial.*")}
+        assert names == {"aerial.tif"}
+
+        assert get_hash_and_size_of_file(tile_path) == orig_hash_and_size
+
+
+def test_working_copy_conflicting_extension(
+    cli_runner, data_archive, requires_gdal_info
+):
+    with data_archive("raster/aerial.tgz") as repo_path:
+        tile_path = repo_path / "aerial" / "aerial.tif"
+
+        new_tile_path = repo_path / "aerial" / "aerial.tiff"
+        shutil.copy(tile_path, new_tile_path)
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == INVALID_OPERATION
+        assert "More than one tile found in working copy with the same name" in r.stderr

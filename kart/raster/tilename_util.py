@@ -10,7 +10,7 @@ def remove_tile_extension(filename, remove_pam_suffix=False):
         return (
             match.group(1)
             if remove_pam_suffix
-            else match.group(1) + (match.group(3).lower() if match.group(3) else "")
+            else match.group(1) + (PAM_SUFFIX if match.group(3) else "")
         )
     return filename
 

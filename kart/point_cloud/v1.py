@@ -24,7 +24,7 @@ class PointCloudV1(TileDataset):
     # Much of the implementation is common to all tile datasets - found in TileDataset.
 
     @classmethod
-    def remove_tile_extension(cls, filename):
+    def remove_tile_extension(cls, filename, remove_pam_suffix=None):
         """Given a tile filename, removes the suffix .las or .laz or .copc.las or .copc.laz"""
         return remove_tile_extension(filename)
 
@@ -47,7 +47,12 @@ class PointCloudV1(TileDataset):
 
     @classmethod
     def get_tile_path_pattern(
-        cls, tilename=None, *, parent_path=None, include_conflict_versions=False
+        cls,
+        tilename=None,
+        *,
+        parent_path=None,
+        include_conflict_versions=False,
+        is_pam=None,
     ):
         return get_tile_path_pattern(
             tilename,
@@ -58,27 +63,6 @@ class PointCloudV1(TileDataset):
     def get_dirty_dataset_paths(self, workdir_diff_cache):
         # TODO - improve finding and handling of non-standard tile filenames.
         return workdir_diff_cache.dirty_paths_for_dataset(self)
-
-    def get_envisioned_tile_summary(self, tile_summary, target_format):
-        # TODO - merge this with the raster implementation.
-        if isinstance(target_format, dict):
-            target_format = get_format_summary(target_format)
-
-        envisioned_summary = {
-            "name": set_tile_extension(tile_summary["name"], tile_format=target_format),
-            "format": target_format,
-            "oid": None,
-            "size": None,
-        }
-        result = {}
-        for key, value in tile_summary.items():
-            if envisioned_summary.get(key):
-                result[key] = envisioned_summary[key]
-            if key in envisioned_summary:
-                result["source" + key[0].upper() + key[1:]] = value
-            else:
-                result[key] = value
-        return result
 
     def rewrite_and_merge_metadata(
         self, current_metadata, metadata_list, convert_to_dataset_format

@@ -6,6 +6,7 @@ from kart.core import all_blobs_with_parent_in_tree
 from kart.decorators import allow_classmethod
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, WORKING_COPY_EDIT
 from kart.diff_format import DiffFormat
+from kart.exceptions import InvalidOperation
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.lfs_util import (
     get_hash_from_pointer_file,
@@ -20,7 +21,11 @@ from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.progress_util import progress_bar
 from kart.serialise_util import hexhash
 from kart.spatial_filter import SpatialFilter
-from kart.tile.tilename_util import PAM_SUFFIX, LEN_PAM_SUFFIX
+from kart.tile.tilename_util import (
+    find_similar_files_case_insensitive,
+    PAM_SUFFIX,
+    LEN_PAM_SUFFIX,
+)
 from kart.working_copy import PartType
 
 
@@ -210,12 +215,14 @@ class TileDataset(BaseDataset):
         return f"{self.path}/{tilename}"
 
     @classmethod
-    def tilename_from_path(cls, tile_path):
+    def tilename_from_path(cls, tile_path, remove_pam_suffix=False):
         """Given a path to a tile, return the tile's base name (without containing folders or file extension)."""
-        return cls.remove_tile_extension(os.path.basename(tile_path))
+        return cls.remove_tile_extension(
+            os.path.basename(tile_path), remove_pam_suffix=remove_pam_suffix
+        )
 
     @classmethod
-    def remove_tile_extension(cls, filename):
+    def remove_tile_extension(cls, filename, remove_pam_suffix=False):
         """
         Remove the extension from the given tile's filename.
         What counts as an extension depends on what type of tiles this dataset stores.
@@ -288,11 +295,10 @@ class TileDataset(BaseDataset):
     def get_tile_summary_promise_from_blob_path(self, path, *, missing_ok=False):
         return self.get_tile_summary_promise(path=path, missing_ok=missing_ok)
 
-    def _workdir_path(self, wc_path=""):
-        if isinstance(wc_path, str):
-            return self.repo.workdir_file(wc_path)
-        else:
-            return wc_path
+    @property
+    def path_in_workdir(self):
+        """Returns a pathlib Path of the directory within the workdir where this dataset is checked out."""
+        return self.repo.workdir_file(self.path)
 
     @classmethod
     def extract_tile_metadata_from_filesystem_path(cls, path):
@@ -421,47 +427,39 @@ class TileDataset(BaseDataset):
 
         tilename_to_metadata = {}
 
-        wc_tiles_path_pattern = self.get_tile_path_pattern(parent_path=self.path)
-
         tile_diff = DeltaDiff()
 
-        for tile_path in self.get_dirty_dataset_paths(workdir_diff_cache):
-
-            if not wc_tiles_path_pattern.fullmatch(tile_path):
-                continue
-
-            tilename = self.tilename_from_path(tile_path)
+        for tilename, workdir_path in self.get_dirty_tile_paths(workdir_diff_cache):
             if tilename not in tile_filter:
                 continue
 
             old_tile_summary = self.get_tile_summary_promise(tilename, missing_ok=True)
             old_half_delta = (tilename, old_tile_summary) if old_tile_summary else None
 
-            wc_path = self._workdir_path(tile_path)
-            if not wc_path.is_file():
+            if workdir_path is None:
                 new_half_delta = None
             elif extract_metadata:
-                tile_metadata = self.extract_tile_metadata_from_filesystem_path(wc_path)
-                tilename_to_metadata[wc_path.name] = tile_metadata
-                new_tile_summary = tile_metadata["tile"]
-
-                if target_format and not self.is_tile_compatible(
-                    new_tile_summary, target_format
-                ):
-                    new_tile_summary = self.get_envisioned_tile_summary(
-                        new_tile_summary, target_format
-                    )
+                tile_metadata = self.extract_tile_metadata_from_filesystem_path(
+                    workdir_path
+                )
+                tilename_to_metadata[tilename] = tile_metadata
+                new_tile_summary = self.get_envisioned_tile_summary(
+                    tile_metadata["tile"], target_format
+                )
 
                 new_half_delta = tilename, new_tile_summary
             else:
-                new_half_delta = tilename, {"name": wc_path.name}
+                new_half_delta = tilename, {"sourceName": workdir_path.name}
+
+            if old_half_delta is None and new_half_delta is None:
+                # This can happen by eg editing a .tif.aux.xml file that's not attached to anything.
+                # We detect such an edit, but we don't let you check it in on its own, so there's no diff.
+                continue
 
             tile_delta = Delta(old_half_delta, new_half_delta)
             tile_delta.flags = WORKING_COPY_EDIT
 
-            if tile_delta.type == "update" and self.should_suppress_minor_tile_change(
-                tile_delta
-            ):
+            if self.should_suppress_minor_tile_change(tile_delta):
                 continue
 
             tile_diff[tilename] = tile_delta
@@ -493,16 +491,57 @@ class TileDataset(BaseDataset):
 
         return ds_diff
 
-    def get_dirty_dataset_paths(self, workdir_diff_cache):
+    def get_dirty_tile_paths(self, workdir_diff_cache):
         """
-        Returns the list of paths in the workdir that are inside this dataset
-        that appear to have been edited since the dataset was written to the working copy.
-
-        Uses git-style paths: / is the part separator, regardless of the platform,
-        and the paths are relative to the workdir root.
+        Given the workdir_diff_cache - which contains a git-formatted list of dirty paths within this dataset -
+        yields a list of (tilename, workdir_path) tuples where tilename is the normalised name (without any extension)
+        of the tile affected, and workdir_path is a pathlib Path to the new version of that tile where it currently
+        exists in the workdir (if there is a new version, or None if there is not).
+        Note that the pathlib Path will include an extension, which could be any one of a variety of standard or
+        non-standard extensions: .las .laz .copc.laz .tif .tiff .LAS .LAZ .COPC.LAZ .TIF .TIFF .copc.LAZ etc
         """
+        dataset_path_in_workdir = self.path_in_workdir
 
-        return workdir_diff_cache.dirty_paths_for_dataset(self)
+        tile_or_pam_path_pattern = self.get_tile_path_pattern(parent_path=self.path)
+
+        dirty_tilenames = set()
+        for path in workdir_diff_cache.dirty_paths_for_dataset(self):
+            if not tile_or_pam_path_pattern.fullmatch(path):
+                continue
+            tilename = self.tilename_from_path(path, remove_pam_suffix=False)
+            if tilename.endswith(PAM_SUFFIX):
+                # The tile and the PAM file might not perfectly match in terms of case.
+                # We want to use commit using case of the tile, rather than the the case of the PAM file.
+                tile_path = (
+                    dataset_path_in_workdir / os.path.basename(path)[:-LEN_PAM_SUFFIX]
+                )
+                tile_paths = find_similar_files_case_insensitive(tile_path)
+                for tile_path in tile_paths:
+                    dirty_tilenames.add(self.tilename_from_path(tile_path))
+            else:
+                dirty_tilenames.add(tilename)
+
+        if not dataset_path_in_workdir.is_dir():
+            for tilename in dirty_tilenames:
+                yield tilename, None
+
+        tile_path_pattern = self.get_tile_path_pattern(is_pam=False)
+        for tilename in dirty_tilenames:
+            related_paths = dataset_path_in_workdir.glob(f"{tilename}.*")
+            tile_paths = [
+                p
+                for p in related_paths
+                if p.name.startswith(tilename) and tile_path_pattern.fullmatch(p.name)
+            ]
+            if not tile_paths:
+                yield tilename, None
+            elif len(tile_paths) == 1:
+                yield tilename, tile_paths[0]
+            else:
+                # TODO - instead of erroring immediately, we could instead flag this as a ListOfConflicts.
+                raise InvalidOperation(
+                    f"More than one tile found in working copy with the same name: {self.path}:tile:{tilename}"
+                )
 
     def get_envisioned_tile_summary(self, tile_summary, target_format):
         """
@@ -511,16 +550,65 @@ class TileDataset(BaseDataset):
         converted - where that information is known.
         Not everything can be known: for instance, we cannot know the OID of the converted tile until after
         the conversion is done.
+        If the target_format is None or the tile will not be converted, the only thing we need to envision is that
+        we will standardise the filename (if it is currently non-standard).
         """
-        raise NotImplementedError()
+        if isinstance(target_format, dict):
+            target_format = self.get_format_summary(target_format)
+
+        if target_format is None or self.is_tile_compatible(
+            tile_summary, target_format
+        ):
+            envisioned_summary = {
+                "name": self.set_tile_extension(
+                    tile_summary["name"], tile_format=tile_summary["format"]
+                )
+            }
+        else:
+            envisioned_summary = {
+                "name": self.set_tile_extension(
+                    tile_summary["name"], tile_format=target_format
+                ),
+                "format": target_format,
+                "oid": None,
+                "size": None,
+            }
+
+        result = {}
+        for key, value in tile_summary.items():
+            if envisioned_summary.get(key):
+                result[key] = envisioned_summary[key]
+            if key in envisioned_summary and envisioned_summary[key] != value:
+                source_key = "source" + key[0].upper() + key[1:]
+                if source_key not in tile_summary:
+                    result[source_key] = value
+            else:
+                result[key] = value
+        return result
+
+    SUPPRESS_DIFF_KEYS = {"sourceName", "sourceOid", "sourceSize"}
 
     def should_suppress_minor_tile_change(self, tile_delta):
         """
         Return True if a change to a particular tile is irrelevant or inadvertent and shouldn't
         be shown when a user runs kart diff or kart status.
         """
-        # TODO - add a flag to un-hide these hidden diffs.
-        return False
+        if tile_delta.type != "update":
+            return False
+
+        old_value = tile_delta.old_value
+        new_value = tile_delta.new_value
+
+        all_keys = set()
+        all_keys.update(old_value)
+        all_keys.update(new_value)
+        for key in all_keys:
+            if key in self.SUPPRESS_DIFF_KEYS:
+                continue
+            if old_value.get(key) != new_value.get(key):
+                return False
+
+        return True
 
     def rewrite_and_merge_metadata(
         self, current_metadata, metadata_list, convert_to_dataset_format
@@ -555,7 +643,7 @@ class TileDataset(BaseDataset):
                     new_val = delta.new_value
                     name = new_val.get("name")
                     source_name = new_val.get("sourceName") or name
-                    path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
+                    path_in_wc = self.path_in_workdir / source_name
 
                     if new_val.get("sourceFormat"):
                         # Converting and then committing a new tile
@@ -598,7 +686,7 @@ class TileDataset(BaseDataset):
                     pam_oid = new_val.get("pamOid")
                     pam_size = new_val.get("pamSize")
 
-                    path_in_wc = self._workdir_path(f"{self.path}/{pam_source_name}")
+                    path_in_wc = self.path_in_workdir / pam_source_name
                     pointer_dict = copy_file_to_local_lfs_cache(
                         self.repo, path_in_wc, oid_and_size=(pam_oid, pam_size)
                     )

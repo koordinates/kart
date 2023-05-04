@@ -23,7 +23,6 @@ from kart.raster.tilename_util import (
 )
 from kart.tile.tile_dataset import TileDataset
 from kart.tile.tilename_util import (
-    find_similar_files_case_insensitive,
     PAM_SUFFIX,
     LEN_PAM_SUFFIX,
 )
@@ -55,9 +54,9 @@ class RasterV1(TileDataset):
     )
 
     @classmethod
-    def remove_tile_extension(cls, filename):
+    def remove_tile_extension(cls, filename, remove_pam_suffix=None):
         """Given a tile filename, removes the suffix .tif or .tiff"""
-        return remove_tile_extension(filename)
+        return remove_tile_extension(filename, remove_pam_suffix=remove_pam_suffix)
 
     @classmethod
     def set_tile_extension(cls, filename, ext=None, tile_format=None):
@@ -118,25 +117,15 @@ class RasterV1(TileDataset):
 
         return result
 
-    def get_dirty_dataset_paths(self, workdir_diff_cache):
-        """
-        Returns the paths of the tiles (relative to the workdir) that have been affected
-        either by editing directly or by editing their PAM files.
-        Uses git-style paths: / is the part separator, regardless of the platform.
-        """
-        result = set()
-        wc_path = self._workdir_path()
-        for path in workdir_diff_cache.dirty_paths_for_dataset(self):
-            if path.lower().endswith(PAM_SUFFIX):
-                tile_paths = find_similar_files_case_insensitive(
-                    self._workdir_path(path[:-LEN_PAM_SUFFIX])
-                )
-                result.update(
-                    "/".join(t.relative_to(wc_path).parts) for t in tile_paths
-                )
-            else:
-                result.add(path)
-        return result
+    SUPPRESS_DIFF_KEYS = {
+        "sourceName",
+        "sourceOid",
+        "sourceSize",
+        "pamSourceName",
+        "pamName",
+        "pamOid",
+        "pamSize",
+    }
 
     def should_suppress_minor_tile_change(self, tile_delta):
         """
@@ -144,15 +133,15 @@ class RasterV1(TileDataset):
         return True if the only thing that has changed in the tile since the last commit
         is that stats have been added or removed.
         """
+
+        # Check if something has obviously changed - something that isn't the PAM file:
+        if not super().should_suppress_minor_tile_change(tile_delta):
+            return False
+
+        # Only the PAM file has changed, if anything. See if it is a minor change or not:
+
         old_value = tile_delta.old_value
         new_value = tile_delta.new_value
-
-        all_keys = set()
-        all_keys.update(old_value)
-        all_keys.update(new_value)
-        for key in all_keys:
-            if (not key.startswith("pam")) and old_value.get(key) != new_value.get(key):
-                return False
 
         old_pam_oid = old_value.get("pamOid")
         new_pam_oid = new_value.get("pamOid")
@@ -169,7 +158,7 @@ class RasterV1(TileDataset):
         new_pam_path = None
         if new_pam_oid:
             new_pam_name = new_value.get("pamSourceName") or new_value.get("pamName")
-            new_pam_path = self._workdir_path(f"{self.path}/{new_pam_name}")
+            new_pam_path = self.path_in_workdir / new_pam_name
             if not new_pam_path.is_file():
                 return False  # Can't check the contents, so don't suppress the change.
             new_pam_path = str(new_pam_path)
@@ -231,26 +220,6 @@ class RasterV1(TileDataset):
             result["pamName"] = result["name"] + PAM_SUFFIX
             result["pamOid"] = pam_summary["oid"]
             result["pamSize"] = pam_summary["size"]
-        return result
-
-    def get_envisioned_tile_summary(self, tile_summary, target_format):
-        # TODO - merge this with the point-cloud implementation.
-        if isinstance(target_format, dict):
-            target_format = get_format_summary(target_format)
-
-        envisioned_summary = {
-            "format": target_format,
-            "oid": None,
-            "size": None,
-        }
-        result = {}
-        for key, value in tile_summary.items():
-            if envisioned_summary.get(key):
-                result[key] = envisioned_summary[key]
-            if key in envisioned_summary:
-                result["source" + key[0].upper() + key[1:]] = value
-            else:
-                result[key] = value
         return result
 
     def rewrite_and_merge_metadata(

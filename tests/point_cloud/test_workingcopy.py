@@ -3,9 +3,15 @@ import shutil
 import subprocess
 
 import pygit2
+import pytest
 
 from kart.cli_util import tool_environment
-from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT
+from kart.exceptions import (
+    WORKING_COPY_OR_IMPORT_CONFLICT,
+    NO_CHANGES,
+    INVALID_OPERATION,
+)
+from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
 from kart.point_cloud.metadata_util import extract_pc_tile_metadata
 from .fixtures import requires_pdal  # noqa
@@ -1114,3 +1120,103 @@ def test_working_copy_progress_bar(
             r"auckland: 100%\|█+\| 16/16 \[[0-9:<]+, [0-9\.]+tile/s\]",
             progress_output[-1],
         )
+
+
+@pytest.mark.parametrize(
+    "tile_filename",
+    [
+        "new.COPC.LAZ",
+        "new.laz",
+        "new.LAZ",
+    ],
+)
+def test_working_copy_add_with_non_standard_extension(
+    tile_filename, cli_runner, data_archive, requires_pdal
+):
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        tile_path = repo_path / "auckland" / "auckland_0_0.copc.laz"
+        orig_hash_and_size = get_hash_and_size_of_file(tile_path)
+
+        new_tile_path = repo_path / "auckland" / tile_filename
+        shutil.copy(tile_path, new_tile_path)
+        assert get_hash_and_size_of_file(new_tile_path) == orig_hash_and_size
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Changes in working copy:",
+            '  (use "kart commit" to commit)',
+            '  (use "kart restore" to discard changes)',
+            "",
+            "  auckland:",
+            "    tile:",
+            "      1 inserts",
+        ]
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 1
+
+        r = cli_runner.invoke(["commit", "-m", "insert new tile"])
+        assert r.exit_code == 0, r.stderr
+
+        names = {f.name for f in (repo_path / "auckland").glob("auckland_0_0.*")}
+        assert names == {"auckland_0_0.copc.laz"}
+        assert (
+            get_hash_and_size_of_file(repo_path / "auckland" / "auckland_0_0.copc.laz")
+            == orig_hash_and_size
+        )
+
+
+@pytest.mark.parametrize(
+    "tile_filename",
+    [
+        "auckland_0_0.COPC.LAZ",
+        "auckland_0_0.laz",
+        "auckland_0_0.LAZ",
+    ],
+)
+def test_working_copy_rename_extension(
+    tile_filename, cli_runner, data_archive, requires_pdal
+):
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        tile_path = repo_path / "auckland" / "auckland_0_0.copc.laz"
+        orig_hash_and_size = get_hash_and_size_of_file(tile_path)
+
+        new_tile_path = repo_path / "auckland" / tile_filename
+        tile_path.rename(new_tile_path)
+        assert get_hash_and_size_of_file(new_tile_path) == orig_hash_and_size
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Nothing to commit, working copy clean",
+        ]
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0
+
+        r = cli_runner.invoke(["commit", "-m", "rename extension"])
+        assert r.exit_code == NO_CHANGES
+
+        r = cli_runner.invoke(["reset", "--discard-changes"])
+
+        names = {f.name for f in (repo_path / "auckland").glob("auckland_0_0.*")}
+        assert names == {"auckland_0_0.copc.laz"}
+
+        assert get_hash_and_size_of_file(tile_path) == orig_hash_and_size
+
+
+def test_working_copy_conflicting_extension(cli_runner, data_archive, requires_pdal):
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        tile_path = repo_path / "auckland" / "auckland_0_0.copc.laz"
+
+        new_tile_path = repo_path / "auckland" / "auckland_0_0.laz"
+        shutil.copy(tile_path, new_tile_path)
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == INVALID_OPERATION
+        assert "More than one tile found in working copy with the same name" in r.stderr

@@ -578,12 +578,13 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         for tile_delta in tile_diff.values():
             if tile_delta.type in ("update", "delete"):
-                tilename = tile_delta.old_value["name"]
-                tile_path = ds_tiles_dir / tilename
+                old_val = tile_delta.old_value
+                tile_name = old_val.get("sourceName") or old_val.get("name")
+                tile_path = ds_tiles_dir / tile_name
                 if tile_path.is_file():
                     tile_path.unlink()
                 if not do_update_all:
-                    reset_index_files.append(f"{ds_path}/{tilename}")
+                    reset_index_files.append(f"{ds_path}/{tile_name}")
                 pam_name = tile_delta.old_value.get("pamName")
                 if pam_name:
                     pam_path = ds_tiles_dir / pam_name
@@ -591,18 +592,20 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                         pam_path.unlink()
 
             if tile_delta.type in ("update", "insert"):
-                tilename = tile_delta.new_value["name"]
+                new_val = tile_delta.new_value
+                tile_name = new_val.get("sourceName") or new_val.get("name")
                 lfs_path = get_local_path_from_lfs_hash(
                     self.repo, tile_delta.new_value["oid"]
                 )
                 if not lfs_path.is_file():
                     click.echo(
-                        f"Couldn't find tile {tilename} locally - skipping...", err=True
+                        f"Couldn't find tile {tile_name} locally - skipping...",
+                        err=True,
                     )
                     continue
-                try_reflink(lfs_path, ds_tiles_dir / tilename)
+                try_reflink(lfs_path, ds_tiles_dir / tile_name)
                 if not do_update_all:
-                    reset_index_files.append(f"{ds_path}/{tilename}")
+                    reset_index_files.append(f"{ds_path}/{tile_name}")
 
                 pam_name = tile_delta.new_value.get("pamName")
                 if pam_name:
