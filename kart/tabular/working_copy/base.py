@@ -1294,6 +1294,9 @@ class TableWorkingCopy(WorkingCopyPart):
         )
 
         with self.session() as sess:
+            # Check if the dataset is spatial, and if so, if the WC has any necessary spatial extension installed.
+            self._check_for_unsupported_ds_types(sess, target_datasets)
+
             # Delete old tables
             if ds_deletes:
                 self.drop_tables(
@@ -1524,6 +1527,9 @@ class TableWorkingCopy(WorkingCopyPart):
             self.delete_features(
                 sess, now_outside_spatial_filter, track_changes_as_dirty=False
             )
+
+    def _check_for_unsupported_ds_types(self, sess, target_datasets, schema="public"):
+        pass
 
 
 # Alias state_session to session:

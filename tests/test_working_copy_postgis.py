@@ -798,3 +798,32 @@ def test_checkout_custom_crs(
                 "    },",
                 "  ]",
             ]
+
+
+def test_init_without_postgis(
+    cli_runner, data_archive, new_no_postgis_db_schema, tmp_path
+):
+    """This tests asserts that when trying to import a spatial gpkg into a Postgres wc, which doesn't have Postgis enabled,
+    the correct error message is shown."""
+
+    # Get the URL for the PostgreSQL database without PostGIS
+    # postgres_url = no_postgis_db.original_url + "/test_schema"
+    with data_archive("gpkg-points") as data:
+        table = "nz_pa_points_topo_150k"
+        src_gpkg_path = data / "nz-pa-points-topo-150k.gpkg"
+        with new_no_postgis_db_schema(create=True) as (postgres_url, _):
+            # Initialize the working copy
+            result = cli_runner.invoke(
+                ["init", str(tmp_path / "repo1"), "--workingcopy", postgres_url]
+            )
+            assert result.exit_code == 0, result.stderr
+
+            # Try to import a gpkg file and check the error message
+            result = cli_runner.invoke(
+                ["-C", str(tmp_path / "repo1"), "import", src_gpkg_path]
+            )
+            assert result.exit_code == 20, result.stderr
+            assert (
+                f"Dataset '{table}' requires the PostGIS extension to be installed in the working copy."
+                in result.stderr
+            )

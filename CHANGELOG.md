@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.12.4 (UNRELEASED)
 
 - Allow kart to import non-spatial tables from PostgreSQL databases which don't have postGIS extension installed. [#728](https://github.com/koordinates/kart/issues/728)
+- PostgreSQL working copy no longer requires PostGIS for aspatial datasets. [#729] (https://github.com/koordinates/kart/issues/729)
 - Fixes a bug where the current spatial filter isn't stored in the filesystem working copy, affecting the spatial filtering of point cloud datasets. [#833](https://github.com/koordinates/kart/pull/833)
 
 ## 0.12.3
