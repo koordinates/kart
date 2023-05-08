@@ -1,14 +1,5 @@
-import functools
-
 from kart.tile.tile_dataset import TileDataset
-from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue, WORKING_COPY_EDIT
-from kart.key_filters import DatasetKeyFilter
 from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
-from kart.lfs_util import (
-    copy_file_to_local_lfs_cache,
-    dict_to_pointer_file_bytes,
-    merge_pointer_file_dicts,
-)
 from kart.point_cloud.metadata_util import (
     RewriteMetadata,
     extract_pc_tile_metadata,
@@ -47,6 +38,14 @@ class PointCloudV1(TileDataset):
         return extract_pc_tile_metadata(path)
 
     @classmethod
+    def get_format_summary(self, format_json):
+        return get_format_summary(format_json)
+
+    @classmethod
+    def convert_tile_to_format(self, source_path, dest_path, target_format):
+        convert_tile_to_format(source_path, dest_path, target_format)
+
+    @classmethod
     def get_tile_path_pattern(
         cls, tilename=None, *, parent_path=None, include_conflict_versions=False
     ):
@@ -56,145 +55,18 @@ class PointCloudV1(TileDataset):
             include_conflict_versions=include_conflict_versions,
         )
 
-    def diff_to_working_copy(
-        self,
-        workdir_diff_cache,
-        ds_filter=DatasetKeyFilter.MATCH_ALL,
-        *,
-        convert_to_dataset_format=False,
-        extract_metadata=True,
-    ):
-        """
-        Returns a diff of all changes made to this dataset in the working copy.
+    def get_dirty_dataset_paths(self, workdir_diff_cache):
+        # TODO - improve finding and handling of non-standard tile filenames.
+        return workdir_diff_cache.dirty_paths_for_dataset(self)
 
-        convert_to_dataset_format - user wants this converted to dataset's format as it is
-            committed, and wants to see diffs of what this would look like.
-        extract_metadata - if False, don't run PDAL to check the tile contents. The resulting diffs
-            are missing almost all of the info about the new tiles, but this is faster and more
-            reliable if this information is not needed.
-        """
-        tile_filter = ds_filter.get("tile", ds_filter.child_type())
-
-        current_metadata = self.tile_metadata
-        dataset_format_to_apply = None
-        if convert_to_dataset_format:
-            dataset_format_to_apply = get_format_summary(current_metadata)
-
-        tilename_to_metadata = {}
-
-        wc_tiles_path_pattern = get_tile_path_pattern(parent_path=self.path)
-
-        tile_diff = DeltaDiff()
-
-        for tile_path in workdir_diff_cache.dirty_paths_for_dataset(self):
-            if not wc_tiles_path_pattern.fullmatch(tile_path):
-                continue
-
-            tilename = self.tilename_from_path(tile_path)
-            if tilename not in tile_filter:
-                continue
-
-            old_tile_summary = self.get_tile_summary_promise(tilename, missing_ok=True)
-            old_half_delta = (tilename, old_tile_summary) if old_tile_summary else None
-
-            wc_path = self._workdir_path(tile_path)
-            if not wc_path.is_file():
-                new_half_delta = None
-            elif extract_metadata:
-                tile_metadata = extract_pc_tile_metadata(wc_path)
-                tilename_to_metadata[wc_path.name] = tile_metadata
-                new_tile_summary = tile_metadata["tile"]
-
-                if dataset_format_to_apply and not self.is_tile_compatible(
-                    dataset_format_to_apply, new_tile_summary
-                ):
-                    new_tile_summary = self.pre_conversion_tile_summary(
-                        dataset_format_to_apply, new_tile_summary
-                    )
-
-                new_half_delta = tilename, new_tile_summary
-            else:
-                new_half_delta = tilename, {"name": wc_path.name}
-
-            tile_delta = Delta(old_half_delta, new_half_delta)
-            tile_delta.flags = WORKING_COPY_EDIT
-            tile_diff[tilename] = tile_delta
-
-        if not tile_diff:
-            return DatasetDiff()
-
-        is_clean_slate = self.is_clean_slate(tile_diff)
-        metadata_list = list(tilename_to_metadata.values())
-        no_new_metadata = not metadata_list
-
-        if not is_clean_slate:
-            metadata_list.insert(0, current_metadata)
-
-        rewrite_metadata = RewriteMetadata.NO_REWRITE
-        optimization_constraint = current_metadata["format.json"].get("optimization")
-        if convert_to_dataset_format:
-            rewrite_metadata = (
-                RewriteMetadata.AS_IF_CONVERTED_TO_COPC
-                if optimization_constraint == "copc"
-                else RewriteMetadata.DROP_FORMAT
-            )
-        else:
-            rewrite_metadata = (
-                RewriteMetadata.NO_REWRITE
-                if optimization_constraint == "copc"
-                else RewriteMetadata.DROP_OPTIMIZATION
-            )
-
-        if no_new_metadata:
-            merged_metadata = current_metadata
-        else:
-            merged_metadata = rewrite_and_merge_metadata(
-                metadata_list, rewrite_metadata
-            )
-            if rewrite_metadata & RewriteMetadata.DROP_FORMAT:
-                merged_metadata["format.json"] = current_metadata["format.json"]
-
-        # Make it invalid to try and commit LAS files:
-        merged_format = merged_metadata["format.json"]
-        if (
-            not isinstance(merged_format, ListOfConflicts)
-            and merged_format.get("compression") == "las"
-        ):
-            merged_format = InvalidNewValue([merged_format])
-            merged_format.error_message = "Committing LAS tiles is not supported, unless you specify the --convert-to-dataset-format flag"
-            merged_metadata["format.json"] = merged_format
-
-        meta_diff = DeltaDiff()
-        for key in ("format.json", "schema.json", "crs.wkt"):
-            if current_metadata[key] != merged_metadata[key]:
-                meta_diff[key] = Delta.update(
-                    KeyValue.of((key, current_metadata[key])),
-                    KeyValue.of((key, merged_metadata[key])),
-                )
-
-        ds_diff = DatasetDiff()
-        ds_diff["meta"] = meta_diff
-        ds_diff["tile"] = tile_diff
-
-        return ds_diff
-
-    def is_tile_compatible(self, ds_format, tile_summary):
-        tile_format = tile_summary["format"]
-        if isinstance(ds_format, dict):
-            ds_format = get_format_summary(ds_format)
-        return tile_format == ds_format or tile_format.startswith(f"{ds_format}/")
-
-    def pre_conversion_tile_summary(self, ds_format, tile_summary):
-        """
-        Converts a tile-summary - that is, updates the tile-summary to be a mix of the tiles current information
-        (prefixed with "source") and its future information - what it will be once converted - where that is known.
-        """
-        if isinstance(ds_format, dict):
-            ds_format = get_format_summary(ds_format)
+    def get_envisioned_tile_summary(self, tile_summary, target_format):
+        # TODO - merge this with the raster implementation.
+        if isinstance(target_format, dict):
+            target_format = get_format_summary(target_format)
 
         envisioned_summary = {
-            "name": set_tile_extension(tile_summary["name"], tile_format=ds_format),
-            "format": ds_format,
+            "name": set_tile_extension(tile_summary["name"], tile_format=target_format),
+            "format": target_format,
             "oid": None,
             "size": None,
         }
@@ -208,53 +80,31 @@ class PointCloudV1(TileDataset):
                 result[key] = value
         return result
 
-    def apply_tile_diff(
-        self, tile_diff, object_builder, *, resolve_missing_values_from_ds=None
+    def rewrite_and_merge_metadata(
+        self, current_metadata, metadata_list, convert_to_dataset_format
     ):
-        with object_builder.chdir(self.inner_path):
-            for delta in tile_diff.values():
+        optimization_constraint = current_metadata["format.json"].get("optimization")
+        if optimization_constraint == "copc":
+            rewrite_metadata = (
+                RewriteMetadata.AS_IF_CONVERTED_TO_COPC
+                if convert_to_dataset_format
+                else RewriteMetadata.NO_REWRITE
+            )
+        else:
+            rewrite_metadata = (
+                RewriteMetadata.DROP_FORMAT
+                if convert_to_dataset_format == "copc"
+                else RewriteMetadata.DROP_OPTIMIZATION
+            )
+        return rewrite_and_merge_metadata(metadata_list, rewrite_metadata)
 
-                if delta.type in ("insert", "update"):
-                    # TODO - need more work on normalising / matching names with different extensions
-
-                    if delta.new_value.get("sourceFormat"):
-                        # Converting and then committing a new tile
-                        source_name = delta.new_value.get("sourceName")
-                        path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
-
-                        conversion_func = functools.partial(
-                            convert_tile_to_format,
-                            target_format=delta.new_value["format"],
-                        )
-                        pointer_dict = copy_file_to_local_lfs_cache(
-                            self.repo, path_in_wc, conversion_func
-                        )
-                        pointer_dict = merge_pointer_file_dicts(
-                            delta.new_value, pointer_dict
-                        )
-                    else:
-                        # Committing in a new tile, preserving its format
-                        source_name = delta.new_value.get("name")
-                        path_in_wc = self._workdir_path(f"{self.path}/{source_name}")
-                        oid_and_size = delta.new_value["oid"], delta.new_value["size"]
-                        pointer_dict = copy_file_to_local_lfs_cache(
-                            self.repo, path_in_wc, oid_and_size=oid_and_size
-                        )
-                        pointer_dict = merge_pointer_file_dicts(
-                            delta.new_value, pointer_dict
-                        )
-                    tilename = delta.new_value["name"]
-                    object_builder.insert(
-                        self.tilename_to_blob_path(tilename, relative=True),
-                        dict_to_pointer_file_bytes(pointer_dict),
-                    )
-                    # Update the diff to record what was stored - this is used to reset the workdir.
-                    delta.new_value.update(
-                        oid=pointer_dict["oid"], size=pointer_dict["size"]
-                    )
-
-                else:  # delete:
-                    tilename = delta.old_key
-                    object_builder.remove(
-                        self.tilename_to_blob_path(tilename, relative=True)
-                    )
+    def check_merged_metadata(self, merged_metadata):
+        # Make it invalid to try and commit LAS files:
+        merged_format = merged_metadata["format.json"]
+        if (
+            not isinstance(merged_format, ListOfConflicts)
+            and merged_format.get("compression") == "las"
+        ):
+            merged_format = InvalidNewValue([merged_format])
+            merged_format.error_message = "Committing LAS tiles is not supported, unless you specify the --convert-to-dataset-format flag"
+            merged_metadata["format.json"] = merged_format

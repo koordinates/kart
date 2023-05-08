@@ -742,7 +742,9 @@ class OriginalSpatialFilter(SpatialFilter):
         def extract_geometry(tile):
             if getattr(tile, "type", None) == pygit2.GIT_OBJ_BLOB:
                 tile = pointer_file_bytes_to_dict(tile)
-            native_extent = tile["nativeExtent"]
+            native_extent = tile.get("nativeExtent")
+            if not native_extent:
+                return None
             if native_extent.startswith("POLYGON"):
                 return Geometry.from_wkt(native_extent)
             else:

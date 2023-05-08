@@ -1,7 +1,6 @@
 import contextlib
 import functools
 import logging
-import operator
 import time
 
 import click
@@ -936,49 +935,6 @@ class TableWorkingCopy(WorkingCopyPart):
                 update_delta = delete_delta + insert_delta
                 feature_diff.add_delta(update_delta)
 
-    def update_state_table_tree(self, tree):
-        """Write the given tree to the state table."""
-        tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
-        L.info(f"Tree sha: {tree_id}")
-        with self.session() as sess:
-            self._update_state_table_tree(sess, tree_id)
-
-    def _update_state_table_tree(self, sess, tree_id):
-        """
-        Write the given tree ID to the state table.
-
-        sess - sqlalchemy session.
-        tree_id - str, the hex SHA of the tree at HEAD.
-        """
-        r = sess.execute(
-            upsert(self.kart_tables.kart_state),
-            {"table_name": "*", "key": "tree", "value": tree_id or ""},
-        )
-        return r.rowcount
-
-    def _update_state_table_spatial_filter_hash(self, sess, spatial_filter_hash):
-        """
-        Write the given spatial filter hash to the state table.
-
-        sess - sqlalchemy session.
-        spatial_filter_hash - str, a hash of the spatial filter.
-        """
-        kart_state = self.kart_tables.kart_state
-        if spatial_filter_hash:
-            r = sess.execute(
-                upsert(kart_state),
-                {
-                    "table_name": "*",
-                    "key": "spatial-filter-hash",
-                    "value": spatial_filter_hash,
-                },
-            )
-        else:
-            r = sess.execute(
-                sa.delete(kart_state).where(kart_state.c.key == "spatial-filter-hash")
-            )
-        return r.rowcount
-
     @contextlib.contextmanager
     def _suspend_triggers(self, sess, dataset):
         """Context manager that temporarily disables the triggers that track dirty rows for the given dataset."""
@@ -1574,6 +1530,11 @@ class TableWorkingCopy(WorkingCopyPart):
 
     def _check_for_unsupported_ds_types(self, sess, target_datasets, schema="public"):
         pass
+
+
+# Alias state_session to session:
+# a session the working-copy in general is also a good session for reading/writing the state table.
+TableWorkingCopy.state_session = TableWorkingCopy.session
 
 
 @contextlib.contextmanager

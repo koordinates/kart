@@ -263,5 +263,5 @@ class GpkgTables(TableSet):
         )
 
 
-# Makes GPKG table definitions are also accessible at the GpkgTables class itself:
+# Makes it so GPKG table definitions are also accessible at the GpkgTables class itself:
 GpkgTables.copy_tables_to_class()

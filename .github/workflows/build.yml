@@ -28,7 +28,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
+      KART_POSTGIS_URL: "postgresql://postgres:@localhost:5432/postgres"
       KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
       KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
 
@@ -136,6 +136,13 @@ jobs:
       - name: "test: smoke test"
         run: |
           ./build/kart --version
+
+      - name: "test: create no_postgis environment for tests"
+        shell: bash
+        run: |
+          sudo apt-get -y install postgresql
+          psql postgresql://postgres:@localhost:5432/postgres -c 'CREATE DATABASE no_postgis;'
+          echo "KART_NO_POSTGIS_URL=postgresql://postgres:@localhost:5432/no_postgis" >> $GITHUB_ENV
 
       - name: "test: install database drivers for tests"
         run: |
@@ -252,7 +259,7 @@ jobs:
           - 3306:3306
 
     env:
-      KART_POSTGRES_URL: "postgresql://postgres:@postgis:5432/postgres"
+      KART_POSTGIS_URL: "postgresql://postgres:@postgis:5432/postgres"
       SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
       KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
       ARCH: "${{ matrix.os.arch }}"
@@ -376,6 +383,13 @@ jobs:
         shell: bash
         run: |
           ./build/kart --version
+
+      - name: "test: create no_postgis environment for tests"
+        shell: bash
+        run: |
+          yum install -y postgresql
+          psql postgresql://postgres:@postgis:5432/postgres -c 'CREATE DATABASE no_postgis;'
+          echo "KART_NO_POSTGIS_URL=postgresql://postgres:@postgis:5432/no_postgis" >> $GITHUB_ENV
 
       - name: "test: install MSSQL database drivers for tests"
         if: matrix.os.arch != 'arm64'
