@@ -15,7 +15,11 @@ from memory_repo import MemoryRepo
 from kart import init, fast_import
 from kart.tabular.v3 import TableV3
 from kart.tabular.v3_paths import IntPathEncoder, MsgpackHashPathEncoder
-from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT, NO_CHANGES
+from kart.exceptions import (
+    WORKING_COPY_OR_IMPORT_CONFLICT,
+    NO_CHANGES,
+    NO_IMPORT_SOURCE,
+)
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.schema import Schema
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
@@ -366,6 +370,24 @@ def test_import_from_shp(
         else:
             first_pk = 1424927 if use_existing_col_as_pk else 1
             assert dataset.get_feature(first_pk)["adjusted_n"] == 1122
+
+
+@pytest.mark.slow
+def test_import_missing_shx_file(data_archive, tmp_path, chdir, cli_runner):
+    with data_archive("shapefiles/shp-points-no-shx.tgz") as data:
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        with chdir(repo_path):
+            r = cli_runner.invoke(["init"])
+            assert r.exit_code == 0, r
+
+            source_shp = data / "nz_pa_points_topo_150k_no_shx.shp"
+            r = cli_runner.invoke(["import", source_shp])
+            assert r.exit_code == NO_IMPORT_SOURCE, r
+            assert (
+                "Import source was missing some required files: nz_pa_points_topo_150k_no_shx.shx"
+                in r.stderr
+            )
 
 
 def quote_ident(part):

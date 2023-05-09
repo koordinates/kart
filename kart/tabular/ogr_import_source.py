@@ -132,6 +132,15 @@ class OgrTableImportSource(TableImportSource):
         try:
             ds = cls._ogr_open(ogr_source, **open_kwargs)
         except RuntimeError as e:
+            # Check whether the source is a shapefile, and if so, whether it's missing an .shx file
+            if source.lower().endswith(".shp"):
+                base_filename = os.path.splitext(os.path.basename(source))[0]
+                shx_file = base_filename + ".shx"
+                if not os.path.exists(shx_file):
+                    raise NotFound(
+                        f"Import source was missing some required files: {shx_file}",
+                        exit_code=NO_IMPORT_SOURCE,
+                    ) from e
             raise NotFound(
                 f"{ogr_source!r} doesn't appear to be valid "
                 f"(tried formats: {','.join(allowed_formats) if allowed_formats else '(all)'})\n{e}",
