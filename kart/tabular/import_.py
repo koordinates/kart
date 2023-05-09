@@ -1,4 +1,5 @@
 import click
+import os
 
 from kart import is_windows
 from kart.cli_util import (
@@ -18,6 +19,7 @@ from kart.import_sources import suggest_specs
 from kart.key_filters import RepoKeyFilter
 from kart.tabular.import_source import TableImportSource
 from kart.tabular.pk_generation import PkGeneratingTableImportSource
+from kart.tabular.working_copy.base import TableWorkingCopy
 from kart.working_copy import PartType
 
 
@@ -213,7 +215,6 @@ def table_import(
 
     $ kart table-import --list-formats
     """
-
     if not args:
         click.echo("At least one SOURCE is required for kart table-import.", err=True)
         raise click.UsageError("Usage: kart table-import SOURCE [TABLE-DATASETS...]")
@@ -231,6 +232,21 @@ def table_import(
 
     repo = ctx.obj.repo
     check_git_user(repo)
+
+    # Check if we are importing from the working copy directory, and if so, error out.
+    working_copy = TableWorkingCopy.get(repo)
+    if working_copy is not None:
+        source_abs_path = (
+            os.path.abspath(args[0])
+            if os.path.isabs(args[0])
+            else os.path.abspath(os.path.join(working_copy.path, args[0]))
+        )
+        # Check if the source is a file in the working copy directory:
+        if source_abs_path.startswith(os.path.abspath(working_copy.path)):
+            raise click.UsageError(
+                "Cannot import from the working copy directory.\n"
+                "To import a particular table, use `kart add-dataset` instead."
+            )
 
     base_import_source = TableImportSource.open(source)
     if all_tables:
@@ -329,6 +345,7 @@ def table_import(
     replace_existing_enum = (
         ReplaceExisting.GIVEN if replace_existing else ReplaceExisting.DONT_REPLACE
     )
+
     fast_import_tables(
         repo,
         import_sources,

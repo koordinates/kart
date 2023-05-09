@@ -935,8 +935,8 @@ def test_import_multiple(data_archive, chdir, cli_runner, tmp_path):
     for i, (archive, source_gpkg, table) in enumerate(LAYERS):
         with data_archive(archive) as data:
             with chdir(repo_path):
-                r = cli_runner.invoke(["import", f"GPKG:{data / source_gpkg}", table])
-                assert r.exit_code == 0, r
+                r = cli_runner.invoke(["import", f"{data / source_gpkg}", table])
+                assert r.exit_code == 0, r.stderr
 
                 datasets.append(
                     _import_check(
@@ -949,10 +949,8 @@ def test_import_multiple(data_archive, chdir, cli_runner, tmp_path):
                 assert len([c for c in repo.walk(repo.head.target)]) == i + 1
 
                 if i + 1 == len(LAYERS):
-                    r = cli_runner.invoke(
-                        ["import", f"GPKG:{data / source_gpkg}", table]
-                    )
-                    assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+                    r = cli_runner.invoke(["import", f"{data / source_gpkg}", table])
+                    assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT, r.stderr
 
     # has two commits
     assert len([c for c in repo.walk(repo.head.target)]) == len(LAYERS)

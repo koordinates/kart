@@ -903,7 +903,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
                 r = cli_runner.invoke(
                     [
                         "import",
-                        f"GPKG:{source_path / source_gpkg}",
+                        f"{source_path / source_gpkg}",
                         f"{source_table}:{import_path}",
                     ]
                 )
@@ -912,7 +912,6 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
     with chdir(repo_path):
         # working copy exists
         with Db_GPKG.create_engine("wc.gpkg").connect() as conn:
-
             expected_tables = set(a[3].replace("/", "__") for a in ARCHIVE_PATHS)
             r = conn.execute("SELECT name FROM sqlite_master WHERE type='table';")
             db_tables = set(row[0] for row in r)
@@ -976,14 +975,24 @@ def test_import_existing_wc(
     """Import a new dataset into a repo with an existing working copy. Dataset should get checked out"""
     with data_working_copy("points") as (repo_path, wcdb):
         with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
+            # create a new directory for the source
+            import_dir = tmp_path / "import"
+            import_dir.mkdir()
+            # copy the source to the new directory
+            shutil.copy2(
+                source_path / "nz-waca-adjustments.gpkg",
+                import_dir / "nz-waca-adjustments.gpkg",
+            )
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
+                    f"{str(import_dir / 'nz-waca-adjustments.gpkg')}",
                     H.POLYGONS.LAYER,
                 ]
             )
-            assert r.exit_code == 0, r
+            print(f"Source path: {source_path}")
+            print(f"Import path: {import_dir}")
+            assert r.exit_code == 0, r.stderr
 
         repo = KartRepo(repo_path)
         table_wc = repo.working_copy.tabular
@@ -1005,7 +1014,7 @@ def test_import_existing_wc(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
+                    f"{source_path / 'nz-waca-adjustments.gpkg'}",
                     f"{H.POLYGONS.LAYER}:waca2",
                 ]
             )
@@ -1035,7 +1044,7 @@ def test_init_import_detached_head(data_working_copy, data_archive, chdir, cli_r
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
+                    f"{source_path / 'nz-waca-adjustments.gpkg'}",
                     H.POLYGONS.LAYER,
                 ]
             )
