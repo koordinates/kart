@@ -1,0 +1,13 @@
+diff --git a/src/spatialite/spatialite.c b/src/spatialite/spatialite.c
+index 9d6063d..f3dda37 100644
+--- a/src/spatialite/spatialite.c
++++ b/src/spatialite/spatialite.c
+@@ -53439,7 +53439,7 @@ init_spatialite_extension (sqlite3 * db, char **pzErrMsg,
+ /* setting a timeout handler */
+     sqlite3_busy_timeout (db, 5000);
+ 
+-    return 0;
++    return SQLITE_OK_LOAD_PERMANENTLY;
+ }
+ #endif
+ 

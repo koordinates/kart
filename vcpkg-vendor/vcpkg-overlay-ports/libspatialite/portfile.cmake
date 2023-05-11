@@ -14,6 +14,7 @@ vcpkg_extract_source_archive(
         fix-linux-configure.patch
         gaiaconfig-msvc.patch
         fix-mingw.patch
+        ok-load-permanently.patch
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS unused

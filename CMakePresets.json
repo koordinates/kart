@@ -137,7 +137,7 @@
             "configurePreset": "ci-macos",
             "environment": {
                 "KART_EXPECT_MSSQLDRIVER": "0",
-                "KART_EXPECT_GDAL_INFO": "0"
+                "KART_EXPECT_GDAL_INFO": "1"
             }
         },
         {
