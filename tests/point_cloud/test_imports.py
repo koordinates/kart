@@ -28,7 +28,7 @@ def count_head_tile_changes(cli_runner, dataset_path):
     return inserts, updates, deletes
 
 
-def test_import_single_las(
+def test_import_single_las__convert(
     tmp_path,
     chdir,
     cli_runner,
@@ -45,7 +45,12 @@ def test_import_single_las(
         repo = KartRepo(repo_path)
         with chdir(repo_path):
             r = cli_runner.invoke(
-                ["point-cloud-import", f"{autzen}/autzen.las", "--dataset-path=autzen"]
+                [
+                    "point-cloud-import",
+                    f"{autzen}/autzen.las",
+                    "--dataset-path=autzen",
+                    "--convert-to-copc",
+                ]
             )
             assert r.exit_code == 0, r.stderr
 
@@ -131,7 +136,7 @@ def test_import_single_las(
 
 @pytest.mark.slow
 @pytest.mark.parametrize("command", ["point-cloud-import", "import"])
-def test_import_several_laz(
+def test_import_several_laz__convert(
     command,
     tmp_path,
     chdir,
@@ -154,6 +159,7 @@ def test_import_several_laz(
                     command,
                     *glob(f"{auckland}/auckland_*.laz"),
                     "--dataset-path=auckland",
+                    "--convert-to-copc",
                 ]
             )
             assert r.exit_code == 0, r.stderr
@@ -214,7 +220,7 @@ def test_import_several_laz(
 
 
 @pytest.mark.parametrize("command", ["point-cloud-import", "import"])
-def test_import_single_laz_no_convert(
+def test_import_single_laz__no_convert(
     command,
     tmp_path,
     chdir,
@@ -386,6 +392,7 @@ def test_import_update_existing_non_homogenous(
                     "point-cloud-import",
                     "--dataset-path=auckland",
                     "--update-existing",
+                    "--convert-to-copc",
                     f"{src}/autzen.laz",
                 ]
             )
@@ -497,7 +504,7 @@ def test_import_empty_commit_error(cli_runner, data_archive, requires_pdal):
             assert "No changes to commit" in r.stderr
 
 
-def test_import_single_las_no_convert(
+def test_import_single_las__no_convert(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
     with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
@@ -533,6 +540,7 @@ def test_import_convert_to_copc_mismatched_CRS(
                         *glob(f"{auckland}/auckland_*.laz"),
                         f"{autzen}/autzen.las",
                         "--dataset-path=mixed",
+                        "--convert-to-copc",
                     ]
                 )
                 assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
@@ -573,6 +581,7 @@ def test_import_convert_to_copc_mismatched_schema(
                     f"{autzen}/autzen.las",
                     f"{tmp_path}/converted.laz",
                     "--dataset-path=mixed",
+                    "--convert-to-copc",
                 ]
             )
             assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT

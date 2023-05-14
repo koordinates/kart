@@ -180,7 +180,9 @@ def test_import_single_cogtiff(
 
         repo = KartRepo(repo_path)
         with chdir(repo_path):
-            r = cli_runner.invoke(["import", f"{aerial}/aerial.tif"])
+            r = cli_runner.invoke(
+                ["import", f"{aerial}/aerial.tif", "--convert-to-cog"]
+            )
             assert r.exit_code == 0, r.stderr
 
             check_lfs_hashes(repo, 1)
@@ -192,7 +194,6 @@ def test_import_single_cogtiff(
             r = cli_runner.invoke(["show"])
             assert r.exit_code == 0, r.stderr
 
-            # NOTE: this particular format is still subject to change.
             assert r.stdout.splitlines()[6:] == AERIAL_CRS_DIFF + [
                 "+++ aerial:meta:format.json",
                 "+ {",
@@ -240,7 +241,9 @@ def test_import_single_geotiff_with_rat(
 
         repo = KartRepo(repo_path)
         with chdir(repo_path):
-            r = cli_runner.invoke(["import", f"{erosion}/erorisk_silcdb4.tif"])
+            r = cli_runner.invoke(
+                ["import", f"{erosion}/erorisk_silcdb4.tif", "--convert-to-cog"]
+            )
             assert r.exit_code == 0, r.stderr
 
             check_lfs_hashes(repo, 2)
@@ -252,7 +255,6 @@ def test_import_single_geotiff_with_rat(
             r = cli_runner.invoke(["show"])
             assert r.exit_code == 0, r.stderr
 
-            # NOTE: this particular format is still subject to change.
             assert r.stdout.splitlines()[6:] == [
                 "+++ erorisk_silcdb4:meta:band/band-1-categories.json",
                 "+ {",
