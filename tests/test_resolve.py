@@ -2,6 +2,7 @@ import json
 import pytest
 
 from kart.exceptions import INVALID_OPERATION, NO_CONFLICT
+from kart.geometry import Geometry
 from kart.tabular.feature_output import feature_as_json
 from kart.merge_util import MergedIndex
 from kart.repo import KartRepoState, KartRepo
@@ -33,8 +34,8 @@ def get_json_feature(rs, layer, pk):
         return None
 
 
-def test_resolve_with_version(data_archive, cli_runner):
-    with data_archive("conflicts/polygons.tgz") as repo_path:
+def test_resolve_with_version(data_working_copy, cli_runner):
+    with data_working_copy("conflicts/polygons.tgz") as (repo_path, wc_path):
         repo = KartRepo(repo_path)
 
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
@@ -64,15 +65,35 @@ def test_resolve_with_version(data_archive, cli_runner):
             pk = conflict_id.split(":", 2)[2]
             pk_order += [pk]
 
-            r = cli_runner.invoke(
-                ["resolve", conflict_id, f"--with={next(resolutions)}"]
-            )
+            resolution = next(resolutions)
+            r = cli_runner.invoke(["resolve", conflict_id, f"--with={resolution}"])
             assert r.exit_code == 0, r.stderr
             conflict_ids = get_conflict_ids(cli_runner)
             assert len(conflict_ids) == num_conflicts - 1
 
             resolved_keys = MergedIndex.read_from_repo(repo).resolves.keys()
             ck_order += [k for k in resolved_keys if k not in ck_order]
+
+            if resolution in ("ancestor", "delete"):
+                with repo.working_copy.tabular.session() as sess:
+                    count = sess.scalar(
+                        f"""SELECT COUNT(*) FROM nz_waca_adjustments WHERE id = {pk};"""
+                    )
+                    assert count == 0
+                continue
+
+            # Make sure the resolution was written to the working copy during kart resolve:
+            with repo.working_copy.tabular.session() as sess:
+                survey_reference = sess.scalar(
+                    f"""SELECT survey_reference FROM nz_waca_adjustments WHERE id = {pk};"""
+                )
+                assert survey_reference == f"{resolution}_version"
+
+                geom = sess.scalar(
+                    f"""SELECT geom FROM nz_waca_adjustments WHERE id = {pk};"""
+                )
+                crs_id = Geometry.of(geom).crs_id
+                assert crs_id == 4167
 
         assert len(conflict_ids) == 0
 

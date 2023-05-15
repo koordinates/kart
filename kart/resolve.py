@@ -277,7 +277,9 @@ def update_workingcopy_with_resolve(
         if wc is None:
             return
         dataset = load_dataset(rich_conflict)
-        features = [dataset.get_feature(path=r.path, data=repo[r.id]) for r in res]
+        features = [
+            dataset.get_feature_with_crs_id(path=r.path, data=repo[r.id]) for r in res
+        ]
         with wc.session() as sess:
             wc.delete_features(sess, rich_conflict.as_key_filter())
             if features:
