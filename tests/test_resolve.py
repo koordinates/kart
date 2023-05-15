@@ -77,7 +77,8 @@ def test_resolve_with_version(data_working_copy, cli_runner):
             if resolution in ("ancestor", "delete"):
                 with repo.working_copy.tabular.session() as sess:
                     count = sess.scalar(
-                        f"""SELECT COUNT(*) FROM nz_waca_adjustments WHERE id = {pk};"""
+                        f"""SELECT COUNT(*) FROM nz_waca_adjustments WHERE id = :id;""",
+                        {"id": pk},
                     )
                     assert count == 0
                 continue
@@ -85,7 +86,8 @@ def test_resolve_with_version(data_working_copy, cli_runner):
             # Make sure the resolution was written to the working copy during kart resolve:
             with repo.working_copy.tabular.session() as sess:
                 survey_reference = sess.scalar(
-                    f"""SELECT survey_reference FROM nz_waca_adjustments WHERE id = {pk};"""
+                    f"""SELECT survey_reference FROM nz_waca_adjustments WHERE id = :id;""",
+                    {"id": pk},
                 )
                 assert survey_reference == f"{resolution}_version"
 
