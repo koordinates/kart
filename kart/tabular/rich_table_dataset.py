@@ -57,6 +57,17 @@ class RichTableDataset(TableDataset):
             )
         )
 
+    def get_feature_with_crs_id(self, pk_values=None, *, path=None, data=None):
+        """
+        Same as table_dataset.get_feature(...), but includes the CRS ID from the schema in every Geometry object.
+        By contrast, the returned Geometry from table_dataset.get_feature() will contain a CRS ID of zero,
+        so the schema must be consulted separately to learn about CRS IDs.
+        """
+        return self._add_crs_ids_to_feature(
+            self.get_feature(pk_values=pk_values, path=path, data=data),
+            self._cols_to_crs_ids(),
+        )
+
     def _add_crs_ids_to_features(self, features):
         cols_to_crs_ids = self._cols_to_crs_ids()
 
