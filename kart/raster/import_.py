@@ -22,9 +22,11 @@ L = logging.getLogger(__name__)
 @click.command("raster-import", hidden=True, cls=KartCommand)
 @click.option(
     "--convert-to-cog/--no-convert-to-cog",
+    "--cloud-optimized/--no-cloud-optimized",
+    "--cloud-optimised/--no-cloud-optimised",
     " /--preserve-format",
     is_flag=True,
-    default=False,
+    default=None,
     help="Whether to convert all GeoTIFFs to COGs (Cloud Optimized GeoTIFFs), or to import all files in their native format.",
 )
 @click.pass_context
@@ -126,8 +128,9 @@ def raster_import(
             f"For raster import, every argument should be a GeoTIFF file:\n    {problem}"
         )
 
-    RasterImporter(repo, ctx, convert_to_cog).import_tiles(
+    RasterImporter(repo, ctx).import_tiles(
         dataset_path=dataset_path,
+        convert_to_cloud_optimized=convert_to_cog,
         message=message,
         do_checkout=do_checkout,
         replace_existing=replace_existing,
@@ -144,9 +147,8 @@ class RasterImporter(TileImporter):
 
     DATASET_CLASS = RasterV1
 
-    def __init__(self, repo, ctx, convert_to_cog):
-        super().__init__(repo, ctx)
-        self.convert_to_cog = convert_to_cog
+    CLOUD_OPTIMIZED_VARIANT = "Cloud-Optimized GeoTIFF"
+    CLOUD_OPTIMIZED_VARIANT_ACRONYM = "COG"
 
     def get_default_message(self):
         return f"Importing {len(self.sources)} GeoTIFF tiles as {self.dataset_path}"
@@ -163,7 +165,7 @@ class RasterImporter(TileImporter):
     def get_predicted_merged_metadata(self, all_metadata):
         rewrite_metadata = (
             RewriteMetadata.AS_IF_CONVERTED_TO_COG
-            if self.convert_to_cog
+            if self.convert_to_cloud_optimized
             else RewriteMetadata.DROP_PROFILE
         )
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
@@ -171,13 +173,13 @@ class RasterImporter(TileImporter):
     def get_actual_merged_metadata(self, all_metadata):
         rewrite_metadata = (
             RewriteMetadata.NO_REWRITE
-            if self.convert_to_cog
+            if self.convert_to_cloud_optimized
             else RewriteMetadata.DROP_PROFILE
         )
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
     def get_conversion_func(self, source_metadata):
-        if self.convert_to_cog and not is_cog(source_metadata):
+        if self.convert_to_cloud_optimized and not is_cog(source_metadata):
             return convert_tile_to_cog
         return None
 
@@ -189,7 +191,7 @@ class RasterImporter(TileImporter):
         if existing_summary.get("oid") == source_oid:
             # The import source we were given has already been imported in its native format.
             # Return True if that's what we would do anyway.
-            if self.convert_to_cog:
+            if self.convert_to_cloud_optimized:
                 return is_cog(existing_summary)
             else:
                 return True
@@ -198,7 +200,7 @@ class RasterImporter(TileImporter):
         if existing_summary.get("sourceOid") == source_oid:
             # The import source we were given has already been imported, but converted to COPC.
             # Return True if we were going to convert it to COPC too.
-            return self.convert_to_cog and is_cog(existing_summary)
+            return self.convert_to_cloud_optimized and is_cog(existing_summary)
 
         return False
 

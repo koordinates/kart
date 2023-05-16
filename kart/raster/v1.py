@@ -175,6 +175,9 @@ class RasterV1(TileDataset):
             **self.get_meta_items_matching(self.BAND_CATEGORIES),
         }
 
+    def is_cloud_optimized(self):
+        return self.get_meta_item("format.json").get("profile") == "cloud-optimized"
+
     @property
     def tile_count(self):
         """The total number of tiles in this dataset, not including PAM files."""
