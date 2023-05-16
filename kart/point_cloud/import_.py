@@ -25,7 +25,7 @@ L = logging.getLogger(__name__)
     "--convert-to-copc/--no-convert-to-copc",
     " /--preserve-format",
     is_flag=True,
-    default=True,
+    default=False,
     help="Whether to convert all non-COPC LAS or LAZ files to COPC LAZ files, or to import all files in their native format.",
 )
 @click.option(

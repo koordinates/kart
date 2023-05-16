@@ -11,6 +11,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Fixes a bug where the current spatial filter isn't stored in the filesystem working copy, affecting the spatial filtering of point cloud datasets. [#833](https://github.com/koordinates/kart/pull/833)
 - Fixes pthread_key leaks in a long running Kart process due to repeated loading and unloading of mod_spatialite. [#838](https://github.com/koordinates/kart/pull/838)
 - Fixes a bug where features are written to the working copy without their CRS identifier during `kart resolve`. [#840](https://github.com/koordinates/kart/issues/840)
+- Drop CI testing of amazonlinux:2, replace with amazonlinux:2023. [#838](https://github.com/koordinates/kart/pull/838)
+- Point clouds (or rasters): During import, switched the default behavior from "convert to cloud optimized" to "preserve format". [#839](https://github.com/koordinates/kart/pull/839)
 
 ## 0.12.3
 

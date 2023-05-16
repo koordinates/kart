@@ -24,7 +24,7 @@ L = logging.getLogger(__name__)
     "--convert-to-cog/--no-convert-to-cog",
     " /--preserve-format",
     is_flag=True,
-    default=True,
+    default=False,
     help="Whether to convert all GeoTIFFs to COGs (Cloud Optimized GeoTIFFs), or to import all files in their native format.",
 )
 @click.pass_context
