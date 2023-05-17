@@ -1,6 +1,8 @@
 import json
+import os
 import pytest
 import subprocess
+import pathlib
 
 import kart
 
@@ -252,6 +254,51 @@ def test_commit_files(data_archive, cli_runner):
             ]
         )
         assert r.exit_code == 44, r.stderr
+
+
+def test_commit_files_add_and_delete(data_working_copy, cli_runner):
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        # Set the environment variable
+        os.environ["X_KART_ATTACHMENTS"] = "true"
+        # Define file path
+        file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
+
+        # Make sure the file does not exist yet
+        assert not file_path.exists()
+
+        # Add the file
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "Adding a new file",
+                "my_attachment.txt=My text",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Check that the file exists now
+        assert file_path.exists()
+
+        # Check file contents
+        expected_contents = "My text"
+        actual_contents = file_path.read_text()
+        assert actual_contents == expected_contents
+
+        # Delete the file
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "Deleting a file",
+                "--remove-empty-files",
+                "my_attachment.txt=",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Check that the file does not exist now
+        assert not file_path.exists()
 
 
 def test_commit_files_remove_empty(data_archive, cli_runner):
