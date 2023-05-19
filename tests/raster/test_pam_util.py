@@ -5,8 +5,6 @@ from osgeo import gdal
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.raster import pam_util
 
-from .fixtures import requires_gdal_info  # noqa
-
 
 ORIGINAL = """
 <PAMDataset>
@@ -123,7 +121,6 @@ def test_is_same_xml_ignoring_stats():
 def test_add_stats_to_new_pam(
     cli_runner,
     data_archive,
-    requires_gdal_info,
     requires_git_lfs,
 ):
     with data_archive("raster/aerial.tgz") as repo_path:
@@ -179,7 +176,6 @@ def test_add_stats_to_new_pam(
 def test_add_stats_to_existing_pam(
     cli_runner,
     data_archive,
-    requires_gdal_info,
     requires_git_lfs,
 ):
     with data_archive("raster/erosion.tgz") as repo_path:

@@ -1,12 +1,7 @@
-from .fixtures import requires_gdal_info  # noqa
-
-
 EL_ONLY_FILTER = "EPSG:2193;POLYGON((1770472 5935376, 1774360 5935376, 1774360 5922016, 1770472 5922016, 1770472 5935376))"
 
 
-def test_spatial_filtered_checkout(
-    cli_runner, data_archive, requires_gdal_info, requires_git_lfs
-):
+def test_spatial_filtered_checkout(cli_runner, data_archive, requires_git_lfs):
     with data_archive("raster/elevation.tgz") as repo_path:
         r = cli_runner.invoke(["checkout", f"--spatial-filter={EL_ONLY_FILTER}"])
         assert r.exit_code == 0
@@ -30,7 +25,7 @@ def test_spatial_filtered_checkout(
 
 
 def test_spatial_filtered_checkout__pam_files(
-    cli_runner, data_archive, requires_gdal_info, requires_git_lfs
+    cli_runner, data_archive, requires_git_lfs
 ):
     with data_archive("raster/erosion.tgz") as repo_path:
         # This spatial-filter doesn't match the tile and therefore the associated PAM

@@ -3,7 +3,6 @@ import pytest
 from kart.exceptions import NO_CHANGES
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
-from .fixtures import requires_gdal_info  # noqa
 
 AERIAL_CRS_DIFF = [
     "+++ aerial:meta:crs.wkt",
@@ -92,7 +91,6 @@ def test_import_single_non_cog_geotiff(
     cli_runner,
     data_archive_readonly,
     check_lfs_hashes,
-    requires_gdal_info,
     requires_git_lfs,
 ):
     with data_archive_readonly("raster/tif-aerial.tgz") as aerial:
@@ -170,7 +168,6 @@ def test_import_single_cogtiff(
     cli_runner,
     data_archive_readonly,
     check_lfs_hashes,
-    requires_gdal_info,
     requires_git_lfs,
 ):
     with data_archive_readonly("raster/cog-aerial.tgz") as aerial:
@@ -227,7 +224,6 @@ def test_import_single_geotiff_with_rat(
     cli_runner,
     data_archive,
     check_lfs_hashes,
-    requires_gdal_info,
     requires_git_lfs,
 ):
     with data_archive("raster/cog-erosion.tgz") as erosion:

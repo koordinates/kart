@@ -2,8 +2,6 @@ import shutil
 
 import pytest
 
-from .fixtures import requires_gdal_info  # noqa
-
 from kart.exceptions import (
     WORKING_COPY_OR_IMPORT_CONFLICT,
     NO_CHANGES,
@@ -13,9 +11,7 @@ from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
 
 
-def test_working_copy_edit(
-    cli_runner, data_archive, requires_gdal_info, requires_git_lfs
-):
+def test_working_copy_edit(cli_runner, data_archive, requires_git_lfs):
     with data_archive("raster/aerial.tgz") as repo_path:
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0
@@ -126,7 +122,6 @@ def test_working_copy_edit_rat(
     pam_filename,
     cli_runner,
     data_archive,
-    requires_gdal_info,
     requires_git_lfs,
 ):
     with data_archive("raster/erosion.tgz") as repo_path:
@@ -217,7 +212,6 @@ def test_working_copy_edit_rat(
 def test_working_copy_add_or_remove_rat(
     cli_runner,
     data_archive,
-    requires_gdal_info,
     requires_git_lfs,
 ):
     with data_archive("raster/erosion.tgz") as repo_path:
@@ -400,7 +394,6 @@ def test_working_copy_add_or_remove_rat(
 def test_working_copy_add_similar_rat(
     cli_runner,
     data_archive,
-    requires_gdal_info,
     requires_git_lfs,
 ):
     with data_archive("raster/erosion.tgz") as repo_path:
@@ -539,7 +532,7 @@ def _set_category_labels(pam_path, category_labels):
 
 
 def test_working_copy_edit__convert_to_cog(
-    cli_runner, data_archive, requires_gdal_info, requires_git_lfs, check_lfs_hashes
+    cli_runner, data_archive, requires_git_lfs, check_lfs_hashes
 ):
     with data_archive("raster/tif-aerial.tgz") as tif_aerial:
         with data_archive("raster/aerial.tgz") as repo_path:
@@ -654,7 +647,7 @@ def test_working_copy_edit__convert_to_cog(
     ],
 )
 def test_working_copy_add_with_non_standard_extension(
-    tile_filename, cli_runner, data_archive, requires_gdal_info
+    tile_filename, cli_runner, data_archive
 ):
     with data_archive("raster/aerial.tgz") as repo_path:
         tile_path = repo_path / "aerial" / "aerial.tif"
@@ -700,9 +693,7 @@ def test_working_copy_add_with_non_standard_extension(
         "aerial.TIFF",
     ],
 )
-def test_working_copy_rename_extension(
-    tile_filename, cli_runner, data_archive, requires_gdal_info
-):
+def test_working_copy_rename_extension(tile_filename, cli_runner, data_archive):
     with data_archive("raster/aerial.tgz") as repo_path:
         tile_path = repo_path / "aerial" / "aerial.tif"
         orig_hash_and_size = get_hash_and_size_of_file(tile_path)
@@ -733,9 +724,7 @@ def test_working_copy_rename_extension(
         assert get_hash_and_size_of_file(tile_path) == orig_hash_and_size
 
 
-def test_working_copy_conflicting_extension(
-    cli_runner, data_archive, requires_gdal_info
-):
+def test_working_copy_conflicting_extension(cli_runner, data_archive):
     with data_archive("raster/aerial.tgz") as repo_path:
         tile_path = repo_path / "aerial" / "aerial.tif"
 
