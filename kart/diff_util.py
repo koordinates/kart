@@ -44,7 +44,7 @@ def get_repo_diff(
     include_wc_diff=False,
     workdir_diff_cache=None,
     repo_key_filter=RepoKeyFilter.MATCH_ALL,
-    convert_to_dataset_format=False,
+    convert_to_dataset_format=None,
     include_files=False,
     diff_format=DiffFormat.FULL,
 ):
@@ -98,7 +98,7 @@ def get_dataset_diff(
     include_wc_diff=False,
     workdir_diff_cache=None,
     ds_filter=DatasetKeyFilter.MATCH_ALL,
-    convert_to_dataset_format=False,
+    convert_to_dataset_format=None,
     diff_format=DiffFormat.FULL,
 ):
     """

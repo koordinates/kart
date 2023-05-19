@@ -118,8 +118,9 @@ def feature_count_diff(
     ),
 )
 @click.option(
-    "--convert-to-dataset-format",
+    "--convert-to-dataset-format/--no-convert-to-dataset-format",
     is_flag=True,
+    default=None,
     help="Ignores file format differences in any new files when generating the diff - assumes that the new files will "
     "also committed using --convert-to-dataset-format, so the conversion step will remove the format differences.",
 )

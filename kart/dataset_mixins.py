@@ -52,7 +52,7 @@ class DatasetDiffMixin:
         workdir_diff_cache,
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         *,
-        convert_to_dataset_format=False,
+        convert_to_dataset_format=None,
     ):
         """
         Generates a diff from self to the working-copy.

@@ -111,9 +111,9 @@ class CommitDiffWriter(BaseDiffWriter):
     ),
 )
 @click.option(
-    "--convert-to-dataset-format",
+    "--convert-to-dataset-format/--no-convert-to-dataset-format",
     is_flag=True,
-    default=False,
+    default=None,
     help=(
         "Converts any new files in-place, where needed, to ensure they match the existing dataset's format, immediately "
         "before they are committed."

@@ -140,8 +140,9 @@ def extract_raster_tile_metadata(raster_tile_path):
 
     format_json = {
         "fileType": "geotiff",
-        "profile": "cloud-optimized" if is_cog else None,
     }
+    if is_cog:
+        format_json["profile"] = "cloud-optimized"
 
     schema_json = gdalinfo_bands_to_kart_schema(metadata["bands"])
     crs_wkt = metadata["coordinateSystem"]["wkt"]
