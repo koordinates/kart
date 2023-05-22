@@ -10,16 +10,20 @@ Point Cloud datasets are currently implemented as :doc:`Point Cloud Datasets V1 
 Importing point cloud datasets
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- ``kart import <tile> [<tile>] [<tile>]``
-- ``kart import --dataset=<dataset_name> <tile> [<tile>] [<tile>]``
+- ``kart import <tile> [<tile>] [<tile>] [--convert-to-copc/--preserve-format]``
+- ``kart import --dataset=<dataset_name> <tile> [<tile>] [<tile>] [--convert-to-copc/--preserve-format]``
 
-This command imports one or more point-cloud tiles into the kart repository in the
+This command imports one or more point-cloud tiles into the Kart repository in the
 working directory. All tiles are imported into the same dataset.
 
 The tiles to import must be LAS files of some variant - compressed tiles (LAZ) and cloud-optized tiles (COPC) are allowed.
-By default, all tiles are converted to COPC (`Cloud Optimized Point Cloud <copc_>`_) as they are imported - this storage format
-is preferred as it greatly improves the efficiency with which apps and cloud services can access large point cloud datasets.
-You can specify ``--keep-existing-format`` to keep them as they are.
+
+If ``--convert-to-copc`` is specified, all tiles that are not cloud-optimized will be converted to cloud-optimized as they are imported, and the dataset will
+also have a constraint attached which means that only cloud-optimized tiles can be added. This constraint can be dropped later if needed.
+
+If ``--preserve-format`` is specified, all tiles will be imported as-is, without any conversion step. This is allowed for any kind of compressed tile (LAZ) but not for uncompressed tiles (LAS), which would make the repository unnecessarily large. A further requirement is that the entire dataset must have the same LAZ version (for example, every tile in the dataset uses LAZ 1.4).
+
+If neither option is specified, Kart will prompt to see which you prefer. Importing tiles as cloud-optimized is recommended since web-viewers of point-clouds only work on tiles that have been cloud-optimized - and if you ever decide to publish your repository or some part of it on the internet, it will be easier at that time if the entire revision history of that repository is all in a single, web-viewable format, as opposed to different revisions being web-viewable or not depending on how the tiles were originally sourced. On the other hand, converting non-COPC tiles to the COPC format will make the import take longer.
 
 For more information, see :ref:`Import vectors / tables into an existing repository`.
 
@@ -32,6 +36,14 @@ Making edits
 ~~~~~~~~~~~~
 
 You can use any software you have that can edit a local LAS file to make edits to the working copy, such as `PDAL <pdal_>`_. Overwrite the files in their original location, or add more files to the existing directory, and Kart will pick up the changes - you can see a summary of the newly-added or modified tiles by running ``kart status`` or ``kart diff``. To commit these changes, run ``kart commit``, just as when editing vector or table data.
+
+If you have added more tiles to the diretory that are not compatible with the exiting Kart dataset, you will be asked to supply one of the following options.
+
+If ``--convert-to-dataset-format`` is specified, the newly added tiles will be converted so that they conform to the dataset's format - for instance, by converting them to the COPC format, or by converting them to a different LAZ version.
+
+If ``--no-convert-to-dataset-format`` is specified, the dataset's format will be changed or relaxed so that the new tiles can be added alongside any remaining old tiles, without changing either the new tiles or the old tiles. It may be that this option has no effect and the commit is still disallowed if the resulting set of tiles would not be a allowed as a dataset (ie, it would result in multiple LAZ versions in a single dataset).
+
+Note that these options only apply to the format of the tiles - how they are stored - as opposed to their content. There are no options that automatically change the content of tiles while they are being committed, so keeping the contents coherent is the sole-responsibility of the user. For instance, every tile in a point cloud must have the same CRS. If newly added tiles have a different CRS to the rest of the dataset, they cannot be committed, regardless of which flags are specified, until the user has fixed the CRS issue themselves.
 
 Git LFS
 ~~~~~~~
