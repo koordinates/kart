@@ -79,16 +79,17 @@ AERIAL_SCHEMA_DIFF = [
 
 
 @pytest.mark.parametrize(
-    "convert_option",
+    "convert_option,convert_prompt_input",
     [
-        "--preserve-format",
-        "convert-to-cog?no",
-        "--convert-to-cog",
-        "convert-to-cog?yes",
+        ("--preserve-format", None),
+        (None, "no"),
+        ("--convert-to-cog", None),
+        (None, "yes"),
     ],
 )
 def test_import_single_non_cog_geotiff(
     convert_option,
+    convert_prompt_input,
     tmp_path,
     chdir,
     cli_runner,
@@ -106,13 +107,10 @@ def test_import_single_non_cog_geotiff(
 
         with chdir(repo_path):
             import_cmd = ["import", f"{aerial}/aerial.tif"]
-            if convert_option.startswith("--"):
+            if convert_option is not None:
                 import_cmd.append(convert_option)
-                input = None
-            else:
-                input = convert_option.split("?")[1]
 
-            r = cli_runner.invoke(import_cmd, input=input)
+            r = cli_runner.invoke(import_cmd, input=convert_prompt_input)
             assert r.exit_code == 0, r.stderr
 
             check_lfs_hashes(repo, 1)
@@ -124,7 +122,7 @@ def test_import_single_non_cog_geotiff(
             r = cli_runner.invoke(["show"])
             assert r.exit_code == 0, r.stderr
 
-            if convert_option in ("--preserve-format", "convert-to-cog?no"):
+            if convert_option == "--preserve-format" or convert_prompt_input == "no":
                 assert r.stdout.splitlines()[6:] == AERIAL_CRS_DIFF + [
                     "+++ aerial:meta:format.json",
                     "+ {",
@@ -141,7 +139,7 @@ def test_import_single_non_cog_geotiff(
                     "+                                     size = 393860",
                 ]
 
-            elif convert_option in ("--convert-to-cog", "convert-to-cog?yes"):
+            elif convert_option == "--convert-to-cog" or convert_prompt_input == "yes":
                 assert r.stdout.splitlines()[6:] == AERIAL_CRS_DIFF + [
                     "+++ aerial:meta:format.json",
                     "+ {",
@@ -160,8 +158,8 @@ def test_import_single_non_cog_geotiff(
                     "+                                     size = 552340",
                 ]
 
-            import_cmd = ["import", f"{aerial}/aerial.tif", "--replace-existing"]
-            r = cli_runner.invoke(import_cmd)
+            import_cmd += ["--replace-existing"]
+            r = cli_runner.invoke(import_cmd, input=convert_prompt_input)
             assert r.exit_code == NO_CHANGES
 
 

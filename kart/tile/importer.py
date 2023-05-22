@@ -175,14 +175,9 @@ class TileImporter:
         if sources:
             self.convert_to_cloud_optimized = convert_to_cloud_optimized
             if self.convert_to_cloud_optimized is None:
-                if self.existing_dataset is not None:
-                    self.convert_to_cloud_optimized = (
-                        self.existing_dataset.is_cloud_optimized()
-                    )
-                else:
-                    self.convert_to_cloud_optimized = (
-                        self.prompt_for_convert_to_cloud_optimized()
-                    )
+                self.convert_to_cloud_optimized = (
+                    self.prompt_for_convert_to_cloud_optimized()
+                )
 
             progress = progress_bar(
                 total=len(sources), unit="tile", desc="Checking tiles"
