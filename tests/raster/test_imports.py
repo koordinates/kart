@@ -1,6 +1,6 @@
 import pytest
 
-from kart.exceptions import NO_CHANGES
+from kart.exceptions import INVALID_ARGUMENT, NO_CHANGES
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.repo import KartRepo
 
@@ -78,14 +78,17 @@ AERIAL_SCHEMA_DIFF = [
 
 
 @pytest.mark.parametrize(
-    "convert_option",
+    "convert_option,convert_prompt_input",
     [
-        "preserve-format",
-        "convert-to-cog",
+        ("--preserve-format", None),
+        (None, "no"),
+        ("--convert-to-cog", None),
+        (None, "yes"),
     ],
 )
 def test_import_single_non_cog_geotiff(
     convert_option,
+    convert_prompt_input,
     tmp_path,
     chdir,
     cli_runner,
@@ -101,9 +104,11 @@ def test_import_single_non_cog_geotiff(
         repo = KartRepo(repo_path)
 
         with chdir(repo_path):
-            r = cli_runner.invoke(
-                ["import", f"{aerial}/aerial.tif", f"--{convert_option}"]
-            )
+            import_cmd = ["import", f"{aerial}/aerial.tif"]
+            if convert_option is not None:
+                import_cmd.append(convert_option)
+
+            r = cli_runner.invoke(import_cmd, input=convert_prompt_input)
             assert r.exit_code == 0, r.stderr
 
             check_lfs_hashes(repo, 1)
@@ -115,7 +120,7 @@ def test_import_single_non_cog_geotiff(
             r = cli_runner.invoke(["show"])
             assert r.exit_code == 0, r.stderr
 
-            if convert_option == "preserve-format":
+            if convert_option == "--preserve-format" or convert_prompt_input == "no":
                 assert r.stdout.splitlines()[6:] == AERIAL_CRS_DIFF + [
                     "+++ aerial:meta:format.json",
                     "+ {",
@@ -132,7 +137,7 @@ def test_import_single_non_cog_geotiff(
                     "+                                     size = 393860",
                 ]
 
-            elif convert_option == "convert-to-cog":
+            elif convert_option == "--convert-to-cog" or convert_prompt_input == "yes":
                 assert r.stdout.splitlines()[6:] == AERIAL_CRS_DIFF + [
                     "+++ aerial:meta:format.json",
                     "+ {",
@@ -151,15 +156,26 @@ def test_import_single_non_cog_geotiff(
                     "+                                     size = 552340",
                 ]
 
-            r = cli_runner.invoke(
-                [
-                    "import",
-                    f"{aerial}/aerial.tif",
-                    f"--{convert_option}",
-                    "--replace-existing",
-                ]
-            )
+            import_cmd += ["--replace-existing"]
+            r = cli_runner.invoke(import_cmd, input=convert_prompt_input)
             assert r.exit_code == NO_CHANGES
+
+
+def test_import_no_decision_on_cog(
+    tmp_path,
+    chdir,
+    cli_runner,
+    data_archive_readonly,
+):
+    with data_archive_readonly("raster/tif-aerial.tgz") as aerial:
+        repo_path = tmp_path / "raster-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0, r.stderr
+
+        with chdir(repo_path):
+            r = cli_runner.invoke(["import", f"{aerial}/aerial.tif"])
+            assert r.exit_code == INVALID_ARGUMENT
+            assert "Choose dataset subtype" in r.stderr
 
 
 def test_import_single_cogtiff(

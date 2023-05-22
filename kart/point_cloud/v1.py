@@ -92,3 +92,6 @@ class PointCloudV1(TileDataset):
             merged_format = InvalidNewValue([merged_format])
             merged_format.error_message = "Committing LAS tiles is not supported, unless you specify the --convert-to-dataset-format flag"
             merged_metadata["format.json"] = merged_format
+
+    def is_cloud_optimized(self):
+        return self.get_meta_item("format.json").get("optimization") == "copc"

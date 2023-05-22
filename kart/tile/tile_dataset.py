@@ -401,6 +401,10 @@ class TileDataset(BaseDataset):
             "crs.wkt": self.get_meta_item("crs.wkt"),
         }
 
+    def is_cloud_optimized():
+        """Returns True if this dataset is constrained so that only cloud-optimized tiles can be added to it."""
+        raise NotImplementedError()
+
     def diff_to_working_copy(
         self,
         workdir_diff_cache,

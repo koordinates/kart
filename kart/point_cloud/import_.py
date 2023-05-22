@@ -23,9 +23,11 @@ L = logging.getLogger(__name__)
 @click.pass_context
 @click.option(
     "--convert-to-copc/--no-convert-to-copc",
+    "--cloud-optimized/--no-cloud-optimized",
+    "--cloud-optimised/--no-cloud-optimised",
     " /--preserve-format",
     is_flag=True,
-    default=False,
+    default=None,
     help="Whether to convert all non-COPC LAS or LAZ files to COPC LAZ files, or to import all files in their native format.",
 )
 @click.option(
@@ -126,8 +128,9 @@ def point_cloud_import(
             f"For point-cloud import, every argument should be a LAS/LAZ file:\n    {problem}"
         )
 
-    PointCloudImporter(repo, ctx, convert_to_copc).import_tiles(
+    PointCloudImporter(repo, ctx).import_tiles(
         dataset_path=dataset_path,
+        convert_to_cloud_optimized=convert_to_copc,
         message=message,
         do_checkout=do_checkout,
         replace_existing=replace_existing,
@@ -144,9 +147,11 @@ class PointCloudImporter(TileImporter):
 
     DATASET_CLASS = PointCloudV1
 
-    def __init__(self, repo, ctx, convert_to_copc):
+    CLOUD_OPTIMIZED_VARIANT = "Cloud-Optimized Point Cloud"
+    CLOUD_OPTIMIZED_VARIANT_ACRONYM = "COPC"
+
+    def __init__(self, repo, ctx):
         super().__init__(repo, ctx)
-        self.convert_to_copc = convert_to_copc
 
     def get_default_message(self):
         return f"Importing {len(self.sources)} LAZ tiles as {self.dataset_path}"
@@ -155,7 +160,7 @@ class PointCloudImporter(TileImporter):
         return any(v["format.json"]["compression"] == "las" for v in all_metadata)
 
     def check_metadata_pre_convert(self):
-        if not self.convert_to_copc and self._is_any_las(
+        if not self.convert_to_cloud_optimized and self._is_any_las(
             self.source_to_metadata.values()
         ):
             raise InvalidOperation(
@@ -171,7 +176,7 @@ class PointCloudImporter(TileImporter):
             )
 
     def get_merged_source_metadata(self, all_metadata):
-        if self.convert_to_copc:
+        if self.convert_to_cloud_optimized:
             rewrite_metadata = RewriteMetadata.DROP_FORMAT | RewriteMetadata.DROP_SCHEMA
         else:
             rewrite_metadata = RewriteMetadata.DROP_OPTIMIZATION
@@ -179,7 +184,7 @@ class PointCloudImporter(TileImporter):
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
     def get_predicted_merged_metadata(self, all_metadata):
-        if self.convert_to_copc:
+        if self.convert_to_cloud_optimized:
             # As we check the sources for validity, we care about what the schema will be when we convert to COPC.
             # We don't need to check the format since if a set of tiles are all COPC and all have the same schema,
             # then they all will have the same format. Also, we would rather show the user that, post-conversion, the
@@ -197,14 +202,14 @@ class PointCloudImporter(TileImporter):
     def get_actual_merged_metadata(self, all_metadata):
         rewrite_metadata = (
             RewriteMetadata.NO_REWRITE
-            if self.convert_to_copc
+            if self.convert_to_cloud_optimized
             else RewriteMetadata.DROP_OPTIMIZATION
         )
 
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
     def get_conversion_func(self, source_metadata):
-        if self.convert_to_copc and not is_copc(source_metadata):
+        if self.convert_to_cloud_optimized and not is_copc(source_metadata):
             return convert_tile_to_copc
         return None
 
@@ -216,7 +221,7 @@ class PointCloudImporter(TileImporter):
         if existing_summary.get("oid") == source_oid:
             # The import source we were given has already been imported in its native format.
             # Return True if that's what we would do anyway.
-            if self.convert_to_copc:
+            if self.convert_to_cloud_optimized:
                 return is_copc(existing_summary)
             else:
                 return True
@@ -225,6 +230,6 @@ class PointCloudImporter(TileImporter):
         if existing_summary.get("sourceOid") == source_oid:
             # The import source we were given has already been imported, but converted to COPC.
             # Return True if we were going to convert it to COPC too.
-            return self.convert_to_copc and is_copc(existing_summary)
+            return self.convert_to_cloud_optimized and is_copc(existing_summary)
 
         return False

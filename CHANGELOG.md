@@ -12,7 +12,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Fixes pthread_key leaks in a long running Kart process due to repeated loading and unloading of mod_spatialite. [#838](https://github.com/koordinates/kart/pull/838)
 - Fixes a bug where features are written to the working copy without their CRS identifier during `kart resolve`. [#840](https://github.com/koordinates/kart/issues/840)
 - Drop CI testing of amazonlinux:2, replace with amazonlinux:2023. [#838](https://github.com/koordinates/kart/pull/838)
-- Point clouds (or rasters): During import, switched the default behavior from "convert to cloud optimized" to "preserve format". [#839](https://github.com/koordinates/kart/pull/839)
+- Point clouds (or rasters): during import, require the user to choose if they want to make a "cloud-optimized" dataset or a "preserve-format" dataset. [#842](https://github.com/koordinates/kart/issues/842)
 
 ## 0.12.3
 

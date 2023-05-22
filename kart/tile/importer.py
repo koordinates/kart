@@ -37,7 +37,13 @@ from kart.lfs_util import (
 from kart.list_of_conflicts import ListOfConflicts
 from kart.meta_items import MetaItemFileType
 from kart.progress_util import progress_bar
-from kart.output_util import format_json_for_output, format_wkt_for_output
+from kart.output_util import (
+    format_json_for_output,
+    format_wkt_for_output,
+    InputMode,
+    get_input_mode,
+)
+
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     extra_blobs_for_version,
@@ -64,6 +70,7 @@ class TileImporter:
         self,
         *,
         dataset_path,
+        convert_to_cloud_optimized,
         message,
         do_checkout,
         replace_existing,
@@ -78,6 +85,10 @@ class TileImporter:
         Import the tiles at sources as a new dataset / use them to update an existing dataset.
 
         dataset_path - path to the dataset where the tiles will be imported
+        convert_to_cloud_optimized - whether to automatically convert tiles to cloud-optimized (COPC or COG) while importing.
+            If True, the resulting dataset will also be constrained to only contain cloud-optimized tiles.
+            If False, the user has explicitly opted out of this constraint.
+            If None, we still need to check if the user is aware of this possibility and prompt them to see what they would prefer.
         message - commit message for the import commit
         do_checkout - Whether to create a working copy once the import is finished, if no working copy exists yet
         replace_existing - if True, replace any existing dataset at dataset_path with a new one containing only these tiles
@@ -162,6 +173,12 @@ class TileImporter:
         self.source_to_hash_and_size = {}
 
         if sources:
+            self.convert_to_cloud_optimized = convert_to_cloud_optimized
+            if self.convert_to_cloud_optimized is None:
+                self.convert_to_cloud_optimized = (
+                    self.prompt_for_convert_to_cloud_optimized()
+                )
+
             progress = progress_bar(
                 total=len(sources), unit="tile", desc="Checking tiles"
             )
@@ -636,3 +653,29 @@ class TileImporter:
         num_workers = get_num_available_cores()
         # that's a float, but we need an int
         return max(1, int(math.ceil(num_workers)))
+
+    def prompt_for_convert_to_cloud_optimized(self):
+        variant = self.CLOUD_OPTIMIZED_VARIANT
+        acronym = self.CLOUD_OPTIMIZED_VARIANT_ACRONYM
+        message = (
+            f"Datasets that contain only {variant} files ({acronym} files) "
+            "are better suited to viewing on the web, and it's easier to decide up front to exclusively store "
+            "cloud-optimized tiles than to make the switch later on."
+        )
+
+        if get_input_mode() == InputMode.NO_INPUT:
+            click.echo(message, err=True)
+            click.echo(
+                f"Add the --cloud-optimized option to import these tiles into a {acronym} dataset, converting them to {acronym} files where needed.",
+                err=True,
+            )
+            click.echo(
+                f"Or, add the --preserve-format option to import these tiles as-is into a dataset that allows both {acronym} and non-{acronym} tiles.",
+                err=True,
+            )
+            raise click.UsageError("Choose dataset subtype")
+
+        click.echo(message)
+        return click.confirm(
+            f"Import these tiles into a {acronym}-only dataset, converting them to {acronym} files where needed?",
+        )
