@@ -221,22 +221,22 @@ class BaseDiffWriter:
 
     def write_warnings_footer(self):
         """For writing any footer that is not part of the diff itself. Generally just writes warnings to stderr."""
-        self.write_pk_conflicts_warning_footer()
+        self.write_spatial_filter_conflicts_warning_footer()
         self.write_list_of_conflicts_warning_footer()
 
-    def write_pk_conflicts_warning_footer(self):
+    def write_spatial_filter_conflicts_warning_footer(self):
         """
         Warns about spatial-filter conflicts - deltas that appear to be inserts but would actually overwrite
         items that already exist in a hard-to-see place: outside the spatial filter.
         These warnings are grouped since there could be many primary_keys we need to warn about, each with the same warning.
         """
 
-        pk_conflicts = self.spatial_filter_conflicts
-        if not pk_conflicts:
+        sf_conflicts = self.spatial_filter_conflicts
+        if not sf_conflicts:
             return
 
         conflict_item_types = {}
-        for ds_path, ds_key_filter in pk_conflicts.items():
+        for ds_path, ds_key_filter in sf_conflicts.items():
             item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
             if ds_key_filter.get(item_type):
                 conflict_item_types.setdefault(item_type, []).append(ds_path)
@@ -252,7 +252,7 @@ class BaseDiffWriter:
                 err=True,
             )
             for ds_path in ds_paths:
-                ds_key_filter in pk_conflicts[ds_path]
+                ds_key_filter in sf_conflicts[ds_path]
                 conflict_list = ds_key_filter.get(item_type)
                 if conflict_list:
                     if len(conflict_list) <= 100:

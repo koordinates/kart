@@ -86,25 +86,23 @@ class PointCloudV1(TileDataset):
     def check_merged_metadata(
         self, current_metadata, merged_metadata, convert_to_dataset_format=None
     ):
-        # Make it invalid to try and commit LAS files:
         super().check_merged_metadata(
             current_metadata, merged_metadata, convert_to_dataset_format
         )
 
         merged_format = merged_metadata["format.json"]
 
+        def _ensure_list(arg):
+            return arg if isinstance(arg, list) else [arg]
+
+        def _ensure_error_value(arg):
+            return arg if isinstance(arg, ListOfConflicts) else InvalidNewValue([arg])
+
         # The user can't commit LAS files at all unless they use --convert-to-dataset-format.
-        if any(m.get("compression") == "las" for m in self._ensure_list(merged_format)):
-            merged_format = (
-                merged_format
-                if isinstance(merged_format, ListOfConflicts)
-                else InvalidNewValue([merged_format])
-            )
+        if any(m.get("compression") == "las" for m in _ensure_list(merged_format)):
+            merged_format = _ensure_error_value(merged_format)
             merged_format.error_message = "Committing LAS tiles is not supported, unless you specify the --convert-to-dataset-format flag"
             merged_metadata["format.json"] = merged_format
-
-    def _ensure_list(self, arg):
-        return arg if isinstance(arg, list) else [arg]
 
     def simplify_diff_for_dropping_cloud_optimized(self, current_format, merged_format):
         if (
