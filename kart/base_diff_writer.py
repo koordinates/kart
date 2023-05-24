@@ -12,6 +12,8 @@ from kart.diff_format import DiffFormat
 from kart.diff_structs import FILES_KEY, WORKING_COPY_EDIT, BINARY_FILE, Delta
 from kart.exceptions import CrsError, InvalidOperation
 from kart.key_filters import RepoKeyFilter
+from kart import list_of_conflicts
+from kart.list_of_conflicts import ListOfConflicts
 from kart.promisor_utils import FetchPromisedBlobsProcess, object_is_promised
 from kart.repo import KartRepoState
 from kart.spatial_filter import SpatialFilter
@@ -109,6 +111,8 @@ class BaseDiffWriter:
             self.record_spatial_filter_stats = True
             self.spatial_filter_conflicts = RepoKeyFilter()
 
+        self.list_of_conflicts_warnings = []
+
         self.output_path = self._check_output_path(
             repo, self._normalize_output_path(output_path)
         )
@@ -117,7 +121,7 @@ class BaseDiffWriter:
         self.target_crs = target_crs
 
         self.commit = None
-        self.do_convert_to_dataset_format = False
+        self.do_convert_to_dataset_format = None
         self.do_full_file_diffs = False
 
     def include_target_commit_as_header(self):
@@ -127,7 +131,7 @@ class BaseDiffWriter:
         """
         self.commit = self.target_rs.commit
 
-    def convert_to_dataset_format(self, do_convert_to_dataset_format=True):
+    def convert_to_dataset_format(self, do_convert_to_dataset_format):
         self.do_convert_to_dataset_format = do_convert_to_dataset_format
 
     def full_file_diffs(self, do_full_file_diffs=True):
@@ -217,12 +221,22 @@ class BaseDiffWriter:
 
     def write_warnings_footer(self):
         """For writing any footer that is not part of the diff itself. Generally just writes warnings to stderr."""
-        pk_conflicts = self.spatial_filter_conflicts
-        if not pk_conflicts:
+        self.write_spatial_filter_conflicts_warning_footer()
+        self.write_list_of_conflicts_warning_footer()
+
+    def write_spatial_filter_conflicts_warning_footer(self):
+        """
+        Warns about spatial-filter conflicts - deltas that appear to be inserts but would actually overwrite
+        items that already exist in a hard-to-see place: outside the spatial filter.
+        These warnings are grouped since there could be many primary_keys we need to warn about, each with the same warning.
+        """
+
+        sf_conflicts = self.spatial_filter_conflicts
+        if not sf_conflicts:
             return
 
         conflict_item_types = {}
-        for ds_path, ds_key_filter in pk_conflicts.items():
+        for ds_path, ds_key_filter in sf_conflicts.items():
             item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
             if ds_key_filter.get(item_type):
                 conflict_item_types.setdefault(item_type, []).append(ds_path)
@@ -238,7 +252,7 @@ class BaseDiffWriter:
                 err=True,
             )
             for ds_path in ds_paths:
-                ds_key_filter in pk_conflicts[ds_path]
+                ds_key_filter in sf_conflicts[ds_path]
                 conflict_list = ds_key_filter.get(item_type)
                 if conflict_list:
                     if len(conflict_list) <= 100:
@@ -253,9 +267,23 @@ class BaseDiffWriter:
                         err=True,
                     )
             click.echo(
-                f"  To continue, change the {conflicting_property}s of those {item_type}s.",
+                f"  To continue, change the {conflicting_property}s of those {item_type}s, or specify --allow-spatial-filter-conflicts.",
                 err=True,
             )
+
+    def write_list_of_conflicts_warning_footer(self):
+        """
+        Warns about ListOfConflicts - a delta where we're not sure what the new value should be because there are two different
+        new values to choose from. For instance, the user has managed to provide two different CRSs in one dataset.
+        """
+        if not self.list_of_conflicts_warnings:
+            return
+        # Pretty vague since ListOfConflicts can describe a lot of different types of errors.
+        click.secho(
+            "Warning: Not all changes are committable as-is.", bold=True, err=True
+        )
+        for warning in self.list_of_conflicts_warnings:
+            click.echo(f"  {warning}", err=True)
 
     def write_diff(self, diff_format=DiffFormat.FULL):
         """Default implementation for writing a diff. Subclasses can override."""
@@ -288,6 +316,9 @@ class BaseDiffWriter:
         """Default implementation for writing the diff for a particular dataset. Subclasses can override."""
         ds_diff = self.get_dataset_diff(ds_path, diff_format=diff_format)
         has_changes = bool(ds_diff)
+        list_of_conflicts.extract_error_messages_from_dataset_diff(
+            ds_path, ds_diff, self.list_of_conflicts_warnings
+        )
         self.write_ds_diff(ds_path, ds_diff, diff_format=diff_format)
         return has_changes
 
@@ -315,7 +346,7 @@ class BaseDiffWriter:
         new_blob = get_blob(delta.new)
         delta_is_binary = is_binary(old_blob) or is_binary(new_blob)
 
-        if is_binary(old_blob) or is_binary(new_blob):
+        if delta_is_binary:
             delta.flags |= BINARY_FILE
             if skip_binary_files:
                 return delta
@@ -339,7 +370,7 @@ class BaseDiffWriter:
         """
         Generates a RepoDiff containing an entry for every dataset in the repo (that matches self.repo_key_filter).
         """
-        return diff_util.get_repo_diff(
+        repo_diff = diff_util.get_repo_diff(
             self.base_rs,
             self.target_rs,
             include_wc_diff=self.include_wc_diff,
@@ -349,6 +380,10 @@ class BaseDiffWriter:
             include_files=include_files,
             diff_format=diff_format,
         )
+        list_of_conflicts.extract_error_messages_from_repo_diff(
+            repo_diff, self.list_of_conflicts_warnings
+        )
+        return repo_diff
 
     def get_dataset_diff(self, ds_path, diff_format=DiffFormat.FULL):
         """

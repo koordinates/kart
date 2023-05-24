@@ -213,7 +213,7 @@ def test_spatial_filtered_diff(data_archive, cli_runner, tmp_path, requires_pdal
         assert r.stderr.splitlines() == [
             "Warning: Some names of newly-inserted tiles in the working copy conflict with other tiles outside the spatial filter - if committed, they would overwrite those tiles.",
             "  In dataset auckland the conflicting names are: auckland_0_3",
-            "  To continue, change the names of those tiles.",
+            "  To continue, change the names of those tiles, or specify --allow-spatial-filter-conflicts.",
         ]
 
         r = cli_runner.invoke(["status"])

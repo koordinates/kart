@@ -5,6 +5,7 @@ from kart.point_cloud.metadata_util import (
     extract_pc_tile_metadata,
     rewrite_and_merge_metadata,
     get_format_summary,
+    is_copc,
 )
 from kart.point_cloud.pdal_convert import convert_tile_to_format
 from kart.point_cloud.tilename_util import (
@@ -82,16 +83,43 @@ class PointCloudV1(TileDataset):
             )
         return rewrite_and_merge_metadata(metadata_list, rewrite_metadata)
 
-    def check_merged_metadata(self, merged_metadata):
-        # Make it invalid to try and commit LAS files:
+    def check_merged_metadata(
+        self, current_metadata, merged_metadata, convert_to_dataset_format=None
+    ):
+        super().check_merged_metadata(
+            current_metadata, merged_metadata, convert_to_dataset_format
+        )
+
         merged_format = merged_metadata["format.json"]
-        if (
-            not isinstance(merged_format, ListOfConflicts)
-            and merged_format.get("compression") == "las"
-        ):
-            merged_format = InvalidNewValue([merged_format])
+
+        def _ensure_list(arg):
+            return arg if isinstance(arg, list) else [arg]
+
+        def _ensure_error_value(arg):
+            return arg if isinstance(arg, ListOfConflicts) else InvalidNewValue([arg])
+
+        # The user can't commit LAS files at all unless they use --convert-to-dataset-format.
+        if any(m.get("compression") == "las" for m in _ensure_list(merged_format)):
+            merged_format = _ensure_error_value(merged_format)
             merged_format.error_message = "Committing LAS tiles is not supported, unless you specify the --convert-to-dataset-format flag"
             merged_metadata["format.json"] = merged_format
 
-    def is_cloud_optimized(self):
-        return self.get_meta_item("format.json").get("optimization") == "copc"
+    def simplify_diff_for_dropping_cloud_optimized(self, current_format, merged_format):
+        if (
+            current_format.get("optimization") == "copc"
+            and isinstance(merged_format, ListOfConflicts)
+            and len(merged_format) == 2
+        ):
+            format_list = [current_format, merged_format[0], merged_format[1]]
+            simplified_list = [
+                {k: v for k, v in f.items() if not k.startswith("optimization")}
+                for f in format_list
+            ]
+            if all(f == simplified_list[0] for f in simplified_list):
+                return simplified_list[0]
+        return merged_format
+
+    def is_cloud_optimized(self, format_json=None):
+        if format_json is None:
+            format_json = self.get_meta_item("format.json")
+        return is_copc(format_json)

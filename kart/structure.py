@@ -381,7 +381,7 @@ class RepoStructure:
         if not self.ref:
             raise RuntimeError("Can't commit diff - no reference to add commit to")
 
-        list_of_conflicts.check_diff_is_committable(wcdiff)
+        list_of_conflicts.check_repo_diff_is_committable(wcdiff)
         self.check_values_match_schema(wcdiff)
 
         with packfile_object_builder(self.repo, self.tree) as object_builder:

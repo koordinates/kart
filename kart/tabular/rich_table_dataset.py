@@ -144,7 +144,7 @@ class RichTableDataset(TableDataset):
         workdir_diff_cache,
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         *,
-        convert_to_dataset_format=False,
+        convert_to_dataset_format=None,
     ):
         table_wc = self.repo.working_copy.tabular
         if table_wc is None:

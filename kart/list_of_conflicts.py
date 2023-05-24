@@ -42,17 +42,20 @@ class ListOfConflicts(list):
     - can be resolved by the user selecting which version will be the winner, by name eg ancestor, ours or theirs.
     """
 
-    def print_error_message(self, item_name, ds_path, is_import_cmd=False):
+    def get_error_message(self, item_name, ds_path, is_import_cmd=False):
         error_message = getattr(self, "error_message", None)
         if not error_message:
             error_message = self._generate_error_message(
                 item_name, ds_path, is_import_cmd=is_import_cmd
             )
-        click.echo(error_message, err=True)
+        return error_message
 
     def _generate_error_message(self, item_name, ds_path, is_import_cmd=False):
         verb = "Importing" if is_import_cmd else "Committing"
-        return f"{verb} more than one {item_name!r} for {ds_path!r} is not supported"
+        result = f"{verb} more than one {item_name!r} for {ds_path!r} is not supported."
+        if not is_import_cmd and item_name == "format.json":
+            result += " Specify --convert-to-dataset-format to convert the new tiles to match the dataset's format."
+        return result
 
 
 class InvalidNewValue(ListOfConflicts):
@@ -65,24 +68,35 @@ class InvalidNewValue(ListOfConflicts):
 
     def _generate_error_message(self, item_name, ds_path, is_import_cmd=False):
         verb = "import" if is_import_cmd else "commit"
-        return f"Cannot {verb} invalid {item_name!r} for {ds_path!r}"
+        return f"Cannot {verb} invalid {item_name!r} for {ds_path!r}."
 
 
-def check_diff_is_committable(repo_diff):
-    has_conflicts = False
+def check_repo_diff_is_committable(repo_diff):
+    errors = []
+    extract_error_messages_from_repo_diff(repo_diff, errors)
+    if not errors:
+        return
+
+    for error in errors:
+        click.echo(error, err=True)
+    raise InvalidOperation(
+        "Failed to commit changes",
+        exit_code=WORKING_COPY_OR_IMPORT_CONFLICT,
+    )
+
+
+def extract_error_messages_from_repo_diff(repo_diff, result):
     for ds_path, ds_diff in repo_diff.items():
-        # Currently only meta-items can be over-specified and have ListOfConflicts.
-        if "meta" not in ds_diff:
-            continue
-        for key, item in ds_diff["meta"].items():
-            if isinstance(item.new_value, ListOfConflicts):
-                item.new_value.print_error_message(key, ds_path)
-                has_conflicts = True
-    if has_conflicts:
-        raise InvalidOperation(
-            "Failed to commit changes",
-            exit_code=WORKING_COPY_OR_IMPORT_CONFLICT,
-        )
+        extract_error_messages_from_dataset_diff(ds_path, ds_diff, result)
+
+
+def extract_error_messages_from_dataset_diff(dataset_path, dataset_diff, result):
+    # Currently only meta-items can be over-specified and have ListOfConflicts.
+    if "meta" not in dataset_diff:
+        return
+    for key, item in dataset_diff["meta"].items():
+        if isinstance(item.new_value, ListOfConflicts):
+            result.append(item.new_value.get_error_message(key, dataset_path))
 
 
 def check_sources_are_importable(sources):

@@ -8,6 +8,7 @@ from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, WORKING_COPY_EDIT
 from kart.diff_format import DiffFormat
 from kart.exceptions import InvalidOperation
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
+from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
 from kart.lfs_util import (
     get_hash_from_pointer_file,
     get_local_path_from_lfs_hash,
@@ -410,7 +411,7 @@ class TileDataset(BaseDataset):
         workdir_diff_cache,
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         *,
-        convert_to_dataset_format=False,
+        convert_to_dataset_format=None,
         extract_metadata=True,
     ):
         """
@@ -485,7 +486,9 @@ class TileDataset(BaseDataset):
                 current_metadata, metadata_list, convert_to_dataset_format
             )
 
-        self.check_merged_metadata(merged_metadata)
+        self.check_merged_metadata(
+            current_metadata, merged_metadata, convert_to_dataset_format
+        )
 
         meta_diff = DeltaDiff.diff_dicts(current_metadata, merged_metadata)
 
@@ -624,13 +627,80 @@ class TileDataset(BaseDataset):
         """
         raise NotImplementedError()
 
-    def check_merged_metadata(self, merged_metadata):
+    def check_merged_metadata(
+        self, current_metadata, merged_metadata, convert_to_dataset_format=None
+    ):
         """
         Checks if the resulting merged metadata is allowed by the Kart model.
         Any disallowed meta-items can be flagged by wrapping them in an InvalidNewValue.
-        A ListOfConflicts is already flagged as disallowed - it doesn't need further handling.
+        A ListOfConflicts is already flagged as disallowed -
+        it doesn't need further handling, unless the error message can be improved
         """
-        pass
+        current_format = current_metadata.get("format.json")
+        merged_format = merged_metadata.get("format.json")
+
+        # Check for a ListOfConflicts that would go away if we dropped the optimization constraint.
+        # Note that this will still be disallowed by the rest of this function unless --no-convert-to-dataset-format is specified.
+        merged_format = self.simplify_diff_for_dropping_cloud_optimized(
+            current_format, merged_format
+        )
+        merged_metadata["format.json"] = merged_format
+
+        # Check if format.json has changed - this is allowed, so long as the user explicitly requests
+        # it using --no-convert-to-dataset-format. Otherwise it is not allowed.
+
+        if isinstance(merged_format, ListOfConflicts):
+            # This is already flagged as disallowed - no need to do anything else.
+            return
+
+        if current_format == merged_format:
+            # This is always allowed, so no need to do anything else.
+            return
+
+        # If --convert_to_dataset_format was specified, the new format should already match the old one
+        # thanks to the "envisioned tile summary" logic.
+        assert convert_to_dataset_format is not True
+
+        # If --no-convert-to-dataset-format was specified, we allow format.json to chage.
+        if convert_to_dataset_format is False:
+            return
+
+        # The third and final case is where they have not specified either way. We don't allow a change to
+        # format.json without specifying --no-convert-to-dataset-format.
+        assert convert_to_dataset_format is None
+
+        extra_desc = ""
+        if self.is_cloud_optimized(current_format) and not self.is_cloud_optimized(
+            merged_format
+        ):
+            extra_desc = " from cloud-optimized to non-cloud-optimized"
+
+        merged_format = InvalidNewValue([merged_format])
+        merged_format.error_message = (
+            f"Committing these tiles as-is would change the format of dataset {self.path!r}{extra_desc}. "
+            "Use --convert-to-dataset-format to convert the tiles to the dataset's format while committing them, "
+            "or use --no-convert-to-dataset-format to keep the tiles as they are and change the dataset's format."
+        )
+        merged_metadata["format.json"] = merged_format
+
+    def simplify_diff_for_dropping_cloud_optimized(self, current_format, merged_format):
+        """
+        The diff_to_working_copy function uses roughly the same logic to generate deltas every type of meta-item.
+        Adding new tiles that are incompatible with the old tiles without removing the old tiles will result
+        in a delta like the following (eg if you added a new CRS that was not compatible):
+        crs_delta = Delta(old=old_crs, new=ListOfConflicts(old_crs, new_crs))
+
+        The same logic results in a similar delta when you try to add new tiles that are not cloud-optimized to a
+        cloud-optimized dataset:
+        format_delta = Delta(old=cloud-optimized-format, new=ListOfConflicts(cloud-optimized-format, non-cloud-optimized-format)).
+
+        This function's job is to simplify that to be Delta(old=cloud-optimized-format, non-cloud-optimized-format) since
+        the non-cloud-optimized-format is also valid for the existing cloud-optimized tiles.
+
+        Note that this Delta will still be disallowed by the code in check_merged_metadata if the user has not specified
+        --no-convert-to-dataset-format, which is required whenever the user is making changes to format.json
+        """
+        raise NotImplementedError()
 
     def apply_tile_diff(
         self, tile_diff, object_builder, *, resolve_missing_values_from_ds=None

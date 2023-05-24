@@ -207,7 +207,7 @@ def test_working_copy_meta_edit(
                 "      1 inserts",
             ]
 
-            # The diff has conflicts as the user is adding a dile with a new CRS without deleting the tiles with the old CRS:
+            # The diff has conflicts as the user is adding a tile with a new CRS without deleting the tiles with the old CRS:
             # Same for the format and the schema.
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0, r.stderr
@@ -694,6 +694,7 @@ def test_working_copy_meta_edit(
                 '-   "pointDataRecordFormat": 7,',
                 '-   "pointDataRecordLength": 36',
                 "- }",
+                "+ <<<<<<< ",
                 "+ {",
                 '+   "compression": "laz",',
                 '+   "lasVersion": "1.2",',
@@ -702,6 +703,7 @@ def test_working_copy_meta_edit(
                 '+   "pointDataRecordFormat": 1,',
                 '+   "pointDataRecordLength": 28',
                 "+ }",
+                "+ >>>>>>> ",
                 "--- auckland:meta:schema.json",
                 "+++ auckland:meta:schema.json",
                 "  [",
@@ -798,17 +800,41 @@ def test_working_copy_meta_edit(
                 "  ]",
             ]
 
+            # We can't downgrade the dataset format from COPC to non-COPC without adding extra flags.
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines()[:169] == EXPECTED_META_DIFF
+            assert r.stdout.splitlines()[:171] == EXPECTED_META_DIFF
+            assert (
+                "Committing these tiles as-is would change the format of dataset 'auckland' from cloud-optimized to non-cloud-optimized."
+                in r.stderr
+            )
 
             r = cli_runner.invoke(["commit", "-m", "Edit meta items"])
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
+            assert (
+                "Committing these tiles as-is would change the format of dataset 'auckland' from cloud-optimized to non-cloud-optimized."
+                in r.stderr
+            )
+
+            success_meta_diff = [
+                line
+                for line in EXPECTED_META_DIFF
+                if line not in ("+ <<<<<<< ", "+ >>>>>>> ")
+            ]
+
+            # We can downgrade the dataset format from COPC to non-COPC once we specify --no-convert-to-dataset-format.
+            r = cli_runner.invoke(["diff", "--no-convert-to-dataset-format"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[:169] == success_meta_diff
+            r = cli_runner.invoke(
+                ["commit", "-m", "Edit meta items", "--no-convert-to-dataset-format"]
+            )
             assert r.exit_code == 0, r.stderr
 
             r = cli_runner.invoke(["show"])
             assert (
                 r.stdout.splitlines()[4:175]
-                == ["    Edit meta items", ""] + EXPECTED_META_DIFF
+                == ["    Edit meta items", ""] + success_meta_diff
             )
 
 
@@ -824,10 +850,7 @@ def test_working_copy_commit_las(
 
             r = cli_runner.invoke(["commit", "-m", "Add single LAS file"])
             assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
-            assert (
-                "Committing more than one 'format.json' for 'auckland' is not supported"
-                in r.stderr
-            )
+            assert "Committing LAS tiles is not supported" in r.stderr
 
             # If all the old tiles are deleted, there will no longer be a conflict, but we still can't commit LAS files.
             for tile in tiles_path.glob("auckland_*.copc.laz"):

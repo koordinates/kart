@@ -7,6 +7,7 @@ from kart.key_filters import FeatureKeyFilter
 from kart.lfs_util import (
     get_local_path_from_lfs_hash,
 )
+from kart.list_of_conflicts import ListOfConflicts
 from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.raster.gdal_convert import convert_tile_to_format
 from kart.raster.metadata_util import (
@@ -14,6 +15,7 @@ from kart.raster.metadata_util import (
     extract_raster_tile_metadata,
     rewrite_and_merge_metadata,
     get_format_summary,
+    is_cog,
 )
 from kart.raster.pam_util import is_same_xml_ignoring_stats
 from kart.raster.tilename_util import (
@@ -175,8 +177,10 @@ class RasterV1(TileDataset):
             **self.get_meta_items_matching(self.BAND_CATEGORIES),
         }
 
-    def is_cloud_optimized(self):
-        return self.get_meta_item("format.json").get("profile") == "cloud-optimized"
+    def is_cloud_optimized(self, format_json=None):
+        if format_json is None:
+            format_json = self.get_meta_item("format.json")
+        return is_cog(format_json)
 
     @property
     def tile_count(self):
@@ -238,3 +242,17 @@ class RasterV1(TileDataset):
         else:
             rewrite_metadata = RewriteMetadata.DROP_PROFILE
         return rewrite_and_merge_metadata(metadata_list, rewrite_metadata)
+
+    def simplify_diff_for_dropping_cloud_optimized(self, current_format, merged_format):
+        if (
+            current_format.get("profile") == "cloud-optimized"
+            and isinstance(merged_format, ListOfConflicts)
+            and len(merged_format) == 2
+        ):
+            format_list = [current_format, merged_format[0], merged_format[1]]
+            simplified_list = [
+                {k: v for k, v in f.items() if k != "profile"} for f in format_list
+            ]
+            if all(f == simplified_list[0] for f in simplified_list):
+                return simplified_list[0]
+        return merged_format
