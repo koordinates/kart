@@ -84,8 +84,30 @@ To import more than one point cloud dataset, run the import command more than on
    Note that multiple tiles can be specified at once using your shell's wildcard operator, eg ``kart import <directory>/*.laz``
 -  ``<dataset_name>`` the name of the newly created dataset
 
-By default, all tiles are converted to COPC (`Cloud Optimized Point Cloud <copc_>`_) as they are imported.
-You can specify ``--keep-existing-format`` to keep them as they are.
+You will be prompted as to whether you want to convert all tiles to COPC
+(`Cloud Optimized Point Cloud <copc_>`_) as they are imported, or keep them as
+they are (or you can specify this up front using ``--convert-to-copc`` or
+``--preserve-format`` respectively).
+
+Import raster tiles into an existing repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``kart import <tile> [<tile>] [<tile>]``
+- ``kart import --dataset=<dataset_name> <tile> [<tile>] [<tile>]``
+
+This command imports one or more raster tiles into the kart repository in the
+working directory. All tiles are imported into the same dataset (in contrast to
+importing vectors / tables, where multiple datasets can be imported simultaneously).
+To import more than one raster dataset, run the import command more than once.
+
+-  ``<tile>`` path to a GeoTIFF file.
+   Note that multiple tiles can be specified at once using your shell's wildcard operator, eg ``kart import <directory>/*.tif``
+-  ``<dataset_name>`` the name of the newly created dataset
+
+You will be prompted as to whether you want to convert all tiles to COG
+(`Cloud Optimized GeoTIFF <cog_>`_) as they are imported, or keep them as
+they are (or you can specify this up front using ``--convert-to-cog`` or
+``--preserve-format`` respectively).
 
 Cloning an existing repository
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -122,7 +144,7 @@ currently:
 Creating different types of Working Copy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You can choose the type of working copy you want during an init or clone
+You can choose the type of tabular working copy you want during an init or clone
 operation, eg:
 
 -  ``kart init --workingcopy=PATH.gpkg``
@@ -339,8 +361,8 @@ Other resolutions are also possible, but must be supplied in a file.
 Working with LFS files
 ----------------------
 
-Certain files - point cloud tiles - are considered too large to store in the
-Git Object Database (ODB) that forms the backend of a Kart repository.
+Certain files - point cloud and raster tiles - are considered too large to store
+in the Git Object Database (ODB) that forms the backend of a Kart repository.
 These are stored instead using `Git Large File Storage <git_lfs_>`_ - the ODB
 need only contain "pointer files" that reference where the file can be found
 remotely in the LFS server, or locally in the LFS cache. For more information,

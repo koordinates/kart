@@ -55,6 +55,7 @@ Documentation
    pages/command_reference
    pages/table_datasets
    pages/pointcloud_datasets
+   pages/raster_datasets
    pages/spatial_filtering
    pages/wc_types
    pages/git_lfs

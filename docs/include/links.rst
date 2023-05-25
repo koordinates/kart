@@ -63,8 +63,12 @@
 .. _pygit2: https://github.com/koordinates/pygit2/tree/kx-latest
 
 .. _las: https://en.wikipedia.org/wiki/LAS_file_format
+.. _cog: https://www.cogeo.org/
 .. _copc: https://copc.io/
+.. _gdal: https://gdal.org/
 .. _pdal: https://pdal.io/
+.. _rat: https://gdal.org/doxygen/classGDALRasterAttributeTable.html#details
+.. _pam: https://gdal.org/doxygen/classGDALPamDataset.html#details
 .. _git_lfs: https://git-lfs.com/
 .. _copy_on_write: https://en.wikipedia.org/wiki/Copy-on-write
 .. _kart_github_issue_772: https://github.com/koordinates/kart/issues/772

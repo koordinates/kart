@@ -8,12 +8,13 @@ However, note the following two current limitations to the scope of this working
 
 - Kart support for "attached files" is incomplete, so the only files which will
   be checked out into the working copy are the contents of datasets.
-- The only dataset type which currently uses the file-system working copy is
-  the :doc:`point cloud dataset </pages/development/pointcloud_v1>`
+- There are two types dataset which currently use the file-system working copy:
+  :doc:`Point Cloud datasets </pages/development/pointcloud_v1>` and
+  :doc:`Raster datasets </pages/development/raster_v1>`.
 
 For these reasons, the file-system working copy is not populated in every Kart
-repository, only those which contain point cloud datasets, and the only thing
-in the working copy will be point cloud tiles.
+repository, only those which contain these types of datasets, and the only thing
+in the working copy will be the tiles of those datasets.
 
 Disk usage
 ~~~~~~~~~~
