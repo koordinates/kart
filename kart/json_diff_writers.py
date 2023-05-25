@@ -64,7 +64,6 @@ class JsonDiffWriter(BaseDiffWriter):
         # (This is not quite as bad as it looks, since parts of the diff object are lazily generated.)
         repo_diff = self.get_repo_diff(diff_format=diff_format)
         self.has_changes = bool(repo_diff)
-
         for ds_path, ds_diff in repo_diff.items():
             ds_diff.ds_path = ds_path
 

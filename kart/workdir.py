@@ -1,4 +1,5 @@
 import contextlib
+import os
 import click
 import logging
 from enum import Enum, auto
@@ -7,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from kart.structure import RepoStructure
 
 import pygit2
 import sqlalchemy as sa
@@ -34,7 +36,9 @@ from kart.tile import ALL_TILE_DATASET_TYPES
 from kart.tile.tile_dataset import TileDataset
 from kart.tile.tilename_util import remove_any_tile_extension, PAM_SUFFIX
 from kart.working_copy import WorkingCopyPart
-
+from kart.diff_structs import FILES_KEY, BINARY_FILE, DatasetDiff, RepoDiff
+from kart.diff_util import get_file_diff, get_repo_diff
+from .base_diff_writer import BaseDiffWriter
 
 L = logging.getLogger("kart.workdir")
 
@@ -380,6 +384,12 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             self.write_full_datasets_to_workdir(
                 [target_datasets[d] for d in ds_inserts]
             )
+        # Update the working copy with files that have changed:
+        kart_attachments = os.environ.get("X_KART_ATTACHMENTS")
+        if kart_attachments:
+            if base_tree and target_tree:
+                self.update_file_diffs(base_tree, target_tree)
+
         for ds_path in ds_updates:
             self._update_dataset_in_workdir(
                 ds_path,
@@ -394,6 +404,25 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             self._update_state_table_spatial_filter_hash(
                 sess, self.repo.spatial_filter.hexhash
             )
+
+    def update_file_diffs(self, base_tree, target_tree):
+        """Get the deltas for attachment files and write them to the working copy."""
+        repo = self.repo
+        base_rs = RepoStructure(repo, base_tree)
+        target_rs = RepoStructure(repo, target_tree)
+        attachment_deltas = get_file_diff(base_rs, target_rs)
+
+        for filename, file_delta in attachment_deltas.items():
+            new_path = self.path / filename
+
+            # Delete the old file
+            if file_delta.old and new_path.is_file():
+                new_path.unlink()
+
+            # Create a new file
+            if file_delta.new:
+                blob_data = repo[file_delta.new.value].data
+                new_path.write_bytes(blob_data)
 
     def _diff_to_reset(
         self, ds_path, base_datasets, target_datasets, workdir_diff_cache, ds_filter

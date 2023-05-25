@@ -14,6 +14,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Drop CI testing of amazonlinux:2, replace with amazonlinux:2023. [#838](https://github.com/koordinates/kart/pull/838)
 - Point clouds (or rasters): during import, require the user to choose if they want to make a "cloud-optimized" dataset or a "preserve-format" dataset. [#842](https://github.com/koordinates/kart/issues/842)
 - Point clouds (or rasters): require `--no-convert-to-dataset-format` to add new tiles to a dataset that can be committed as-is but only if the dataset's format is changed. Note `--convert-to-dataset-format` works as before. [#842](https://github.com/koordinates/kart/issues/842)
+- Allow kart to check out attached files into the file-based working copy.
 
 ## 0.12.3
 
