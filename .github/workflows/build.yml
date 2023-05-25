@@ -989,6 +989,17 @@ jobs:
       - name: "msvc setup"
         uses: ilammy/msvc-dev-cmd@v1
 
+      - name: "Harden vcvarsall.bat"
+        shell: pwsh
+        run: |
+          cd 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build'
+          mv vcvarsall.bat orig_vcvarsall.bat
+          echo @'
+          @if not "%VSCMD_DEBUG%" GEQ "3" echo off
+          FOR /F "tokens=*" %%g IN ('powershell -Command "($Env:PATH.split(';') | Select -Unique) -Join ';'"') do (SET PATH=%%g)
+          '@ > vcvarsall.bat
+          type orig_vcvarsall.bat >> vcvarsall.bat
+
       - name: "setup: cmake"
         uses: lukka/get-cmake@latest
         with:
