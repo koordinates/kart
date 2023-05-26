@@ -268,7 +268,7 @@ def test_import_single_geotiff_with_rat(
             assert r.exit_code == 0, r.stderr
 
             assert r.stdout.splitlines()[6:] == [
-                "+++ erorisk_silcdb4:meta:band/band-1-categories.json",
+                "+++ erorisk_silcdb4:meta:band/1/categories.json",
                 "+ {",
                 '+   "1": "High landslide risk - delivery to stream",',
                 '+   "2": "High landslide risk - non-delivery to steam",',
@@ -276,7 +276,7 @@ def test_import_single_geotiff_with_rat(
                 '+   "4": "Severe earthflow risk",',
                 '+   "5": "Gully risk"',
                 "+ }",
-                "+++ erorisk_silcdb4:meta:band/band-1-rat.xml",
+                "+++ erorisk_silcdb4:meta:band/1/rat.xml",
                 '+ <GDALRasterAttributeTable Row0Min="0" BinSize="1" tableType="thematic">',
                 '+     <FieldDefn index="0">',
                 "+         <Name>Histogram</Name>",

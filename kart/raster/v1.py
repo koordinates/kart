@@ -38,10 +38,10 @@ class RasterV1(TileDataset):
     DATASET_DIRNAME = ".raster-dataset.v1"
 
     BAND_RATS = MetaItemDefinition(
-        re.compile(r"band/band-(.*)-rat\.xml"), MetaItemFileType.XML
+        re.compile(r"band/([0-9]+)/rat\.xml"), MetaItemFileType.XML
     )
     BAND_CATEGORIES = MetaItemDefinition(
-        re.compile(r"band/band-(.*)-categories\.json"), MetaItemFileType.JSON
+        re.compile(r"band/([0-9]+)/categories\.json"), MetaItemFileType.JSON
     )
 
     META_ITEMS = (

@@ -16,7 +16,7 @@ from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUF
 L = logging.getLogger("kart.raster.metadata_util")
 
 
-CATEGORIES_PATTERN = re.compile(r"band/band-(.*)-categories\.json")
+CATEGORIES_PATTERN = re.compile(r"band/([0-9]+)/categories\.json")
 
 
 class RewriteMetadata(IntFlag):
@@ -257,8 +257,8 @@ def extract_aux_xml_metadata(aux_xml_path):
     """
     Given the path to a tif.aux.xml file, tries to extract the following:
 
-    - the column headings of any raster-attribute-table(s), as "band/band-{band_id}-rat.xml"
-    - the category labels from any raster-attribute-table(s) as "band/band-{band_id}-categories.json"
+    - the column headings of any raster-attribute-table(s), as "band/{band_id}/rat.xml"
+    - the category labels from any raster-attribute-table(s) as "band/{band_id}/categories.json"
     """
     result = {}
 
@@ -287,7 +287,7 @@ def extract_aux_xml_metadata(aux_xml_path):
             rat_schema_xml = "\n".join(
                 l for l in rat_schema_xml.split("\n") if not l.isspace()
             )
-            result[f"band/band-{band_id}-rat.xml"] = rat_schema_xml
+            result[f"band/{band_id}/rat.xml"] = rat_schema_xml
 
             if category_column is not None:
                 category_labels = {}
@@ -301,7 +301,7 @@ def extract_aux_xml_metadata(aux_xml_path):
                         category_labels[str(row_id)] = category_text
 
                 if category_labels:
-                    result[f"band/band-{band_id}-categories.json"] = category_labels
+                    result[f"band/{band_id}/categories.json"] = category_labels
 
     return result
 

@@ -154,8 +154,8 @@ def test_working_copy_edit_rat(
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0
         EXPECTED_DIFF = [
-            "--- erorisk_si:meta:band/band-1-categories.json",
-            "+++ erorisk_si:meta:band/band-1-categories.json",
+            "--- erorisk_si:meta:band/1/categories.json",
+            "+++ erorisk_si:meta:band/1/categories.json",
             "- {",
             '-   "1": "High landslide risk - delivery to stream",',
             '-   "2": "High landslide risk - non-delivery to steam",',
@@ -242,7 +242,7 @@ def test_working_copy_add_or_remove_rat(
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0
         EXPECTED_DIFF = [
-            "--- erorisk_si:meta:band/band-1-categories.json",
+            "--- erorisk_si:meta:band/1/categories.json",
             "- {",
             '-   "1": "High landslide risk - delivery to stream",',
             '-   "2": "High landslide risk - non-delivery to steam",',
@@ -250,7 +250,7 @@ def test_working_copy_add_or_remove_rat(
             '-   "4": "Severe earthflow risk",',
             '-   "5": "Gully risk"',
             "- }",
-            "--- erorisk_si:meta:band/band-1-rat.xml",
+            "--- erorisk_si:meta:band/1/rat.xml",
             '- <GDALRasterAttributeTable Row0Min="0" BinSize="1" tableType="thematic">',
             '-     <FieldDefn index="0">',
             "-         <Name>Histogram</Name>",
@@ -324,7 +324,7 @@ def test_working_copy_add_or_remove_rat(
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0
         EXPECTED_DIFF = [
-            "+++ erorisk_si:meta:band/band-1-categories.json",
+            "+++ erorisk_si:meta:band/1/categories.json",
             "+ {",
             '+   "1": "High landslide risk - delivery to stream",',
             '+   "2": "High landslide risk - non-delivery to steam",',
@@ -332,7 +332,7 @@ def test_working_copy_add_or_remove_rat(
             '+   "4": "Severe earthflow risk",',
             '+   "5": "Gully risk"',
             "+ }",
-            "+++ erorisk_si:meta:band/band-1-rat.xml",
+            "+++ erorisk_si:meta:band/1/rat.xml",
             '+ <GDALRasterAttributeTable Row0Min="0" BinSize="1" tableType="thematic">',
             '+     <FieldDefn index="0">',
             "+         <Name>Histogram</Name>",
@@ -428,8 +428,8 @@ def test_working_copy_add_similar_rat(
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0
         assert r.stdout.splitlines()[0:26] == [
-            "--- erorisk_si:meta:band/band-1-categories.json",
-            "+++ erorisk_si:meta:band/band-1-categories.json",
+            "--- erorisk_si:meta:band/1/categories.json",
+            "+++ erorisk_si:meta:band/1/categories.json",
             "- {",
             '-   "1": "High landslide risk - delivery to stream",',
             '-   "2": "High landslide risk - non-delivery to steam",',
@@ -459,7 +459,7 @@ def test_working_copy_add_similar_rat(
         r = cli_runner.invoke(["commit", "-m", "Add new tile"])
         assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
         assert (
-            "Committing more than one 'band/band-1-categories.json' for 'erorisk_si' is not supported"
+            "Committing more than one 'band/1/categories.json' for 'erorisk_si' is not supported"
             in r.stderr
         )
 
@@ -468,8 +468,8 @@ def test_working_copy_add_similar_rat(
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0
         EXPECTED_META_DIFF = [
-            "--- erorisk_si:meta:band/band-1-categories.json",
-            "+++ erorisk_si:meta:band/band-1-categories.json",
+            "--- erorisk_si:meta:band/1/categories.json",
+            "+++ erorisk_si:meta:band/1/categories.json",
             "- {",
             '-   "1": "High landslide risk - delivery to stream",',
             '-   "2": "High landslide risk - non-delivery to steam",',
