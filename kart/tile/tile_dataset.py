@@ -237,13 +237,21 @@ class TileDataset(BaseDataset):
         raise NotImplementedError()
 
     @classmethod
-    def get_format_summary(self, format_json):
+    def get_format_summary(cls, format_json):
         """Given a format.json meta-item, returns a string that summarizes the most important aspects of the format."""
         raise NotImplementedError()
 
     @classmethod
-    def convert_tile_to_format(self, source_path, dest_path, target_format):
+    def convert_tile_to_format(cls, source_path, dest_path, target_format):
         """Given a tile at source_path, writes the equivalent tile at dest_path in the target format."""
+        raise NotImplementedError()
+
+    @classmethod
+    def write_mosaic_for_directory(cls, directory_path):
+        """
+        Given a folder containing some point-cloud / raster tiles, write a mosaic file that combines them all into a single
+        "virtual" tile. The mosaic file will contain references to the tiles, rather than replicating their contents.
+        """
         raise NotImplementedError()
 
     @classmethod

@@ -61,6 +61,11 @@ class PointCloudV1(TileDataset):
             include_conflict_versions=include_conflict_versions,
         )
 
+    @classmethod
+    def write_mosaic_for_directory(cls, directory_path):
+        # TODO: Not yet implemented
+        pass
+
     def get_dirty_dataset_paths(self, workdir_diff_cache):
         # TODO - improve finding and handling of non-standard tile filenames.
         return workdir_diff_cache.dirty_paths_for_dataset(self)

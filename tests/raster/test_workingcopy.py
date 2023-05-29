@@ -713,7 +713,7 @@ def test_working_copy_rename_extension(tile_filename, cli_runner, data_archive):
         r = cli_runner.invoke(["reset", "--discard-changes"])
 
         names = {f.name for f in (repo_path / "aerial").glob("aerial.*")}
-        assert names == {"aerial.tif"}
+        assert names == {"aerial.tif", "aerial.vrt"}
 
         assert get_hash_and_size_of_file(tile_path) == orig_hash_and_size
 
@@ -728,3 +728,28 @@ def test_working_copy_conflicting_extension(cli_runner, data_archive):
         r = cli_runner.invoke(["status"])
         assert r.exit_code == INVALID_OPERATION
         assert "More than one tile found in working copy with the same name" in r.stderr
+
+
+def test_working_copy_vrt(cli_runner, data_archive):
+    with data_archive("raster/elevation.tgz") as repo_path:
+        vrt_path = repo_path / "elevation" / "elevation.vrt"
+
+        (repo_path / "elevation" / "EK.tif").unlink()
+
+        r = cli_runner.invoke(["commit", "-m", "Delete EK"])
+        assert r.exit_code == 0, r.stderr
+
+        assert vrt_path.is_file()
+        vrt_text = vrt_path.read_text()
+        assert "Kart maintains this VRT file" in vrt_text
+        assert '<SourceFilename relativeToVRT="1">EL.tif</SourceFilename>' in vrt_text
+        assert "EK.tif" not in vrt_text
+
+        r = cli_runner.invoke(["reset", "HEAD^"])
+        assert r.exit_code == 0, r.stderr
+
+        assert vrt_path.is_file()
+        vrt_text = vrt_path.read_text()
+        assert "Kart maintains this VRT file" in vrt_text
+        assert '<SourceFilename relativeToVRT="1">EL.tif</SourceFilename>' in vrt_text
+        assert '<SourceFilename relativeToVRT="1">EK.tif</SourceFilename>' in vrt_text

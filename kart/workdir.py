@@ -392,7 +392,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         for ds_path in ds_updates:
             self._update_dataset_in_workdir(
-                ds_path,
+                target_datasets[ds_path],
                 update_diffs[ds_path],
                 ds_filter=repo_key_filter[ds_path],
                 track_changes_as_dirty=track_changes_as_dirty,
@@ -505,6 +505,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     continue
                 try_reflink(lfs_path, wc_tiles_dir / tilename)
 
+        self.write_mosaic_for_dataset(dataset)
+
         if not track_changes_as_dirty:
             self._reset_workdir_index_for_datasets(datasets)
 
@@ -590,8 +592,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             self._reset_workdir_index_for_files(reset_index_files)
 
     def _update_dataset_in_workdir(
-        self, ds_path, diff_to_apply, ds_filter, track_changes_as_dirty
+        self, dataset, diff_to_apply, ds_filter, track_changes_as_dirty
     ):
+        ds_path = dataset.path
         ds_tiles_dir = (self.path / ds_path).resolve()
         # Sanity check to make sure we're not messing with files we shouldn't:
         assert self.path in ds_tiles_dir.parents
@@ -651,6 +654,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     try_reflink(lfs_path, ds_tiles_dir / pam_name)
                     if not do_update_all:
                         reset_index_files.append(f"{ds_path}/{pam_name}")
+
+        self.write_mosaic_for_dataset(dataset)
 
         if not track_changes_as_dirty:
             if do_update_all:
@@ -764,6 +769,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 if "pamSourceName" in new_value:
                     self._hard_reset_renamed_pam_file(dataset, tile_delta)
 
+            self.write_mosaic_for_dataset(dataset)
+
     def _hard_reset_converted_tile(self, dataset, tile_delta):
         """
         Update an individual tile in the workdir so that it reflects what was actually committed.
@@ -842,6 +849,10 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         )
 
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
+
+    def write_mosaic_for_dataset(self, dataset):
+        assert isinstance(dataset, TileDataset)
+        dataset.write_mosaic_for_directory((self.path / dataset.path).resolve())
 
     def dirty_paths(self):
         env = tool_environment()
