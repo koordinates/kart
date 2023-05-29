@@ -70,12 +70,18 @@ class RasterV1(TileDataset):
         return extract_raster_tile_metadata(path)
 
     @classmethod
-    def get_format_summary(self, format_json):
+    def get_format_summary(cls, format_json):
         return get_format_summary(format_json)
 
     @classmethod
-    def convert_tile_to_format(self, source_path, dest_path, target_format):
+    def convert_tile_to_format(cls, source_path, dest_path, target_format):
         convert_tile_to_format(source_path, dest_path, target_format)
+
+    @classmethod
+    def write_mosaic_for_directory(cls, directory_path):
+        from kart.raster.mosaic_util import write_vrt_for_directory
+
+        write_vrt_for_directory(directory_path)
 
     @classmethod
     def get_tile_path_pattern(
