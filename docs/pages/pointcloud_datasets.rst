@@ -5,7 +5,9 @@ Working with Point Cloud Datasets
 
 Dataset type
 ~~~~~~~~~~~~
-Point Cloud datasets are currently implemented as :doc:`Point Cloud Datasets V1 </pages/development/pointcloud_v1>`. Kart version controls point cloud tiles themselves as LAZ files, which means the tiles are checked out into the working copy without any conversion step - the contents of the working copy is an accurate reflection of the contents of the dataset itself at a particular point in time.
+Kart internally stores point cloud tiles as LAZ files, which means the tiles are checked out into the working copy without any conversion step - the contents of the working copy is an accurate reflection of the contents of the dataset itself at a particular point in time.
+
+To find out more about the internal storage of point cloud datasets, see :doc:`Point Cloud Datasets V1 </pages/development/pointcloud_v1>`.
 
 Importing point cloud datasets
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -13,8 +15,7 @@ Importing point cloud datasets
 - ``kart import <tile> [<tile>] [<tile>] [--convert-to-copc/--preserve-format]``
 - ``kart import --dataset=<dataset_name> <tile> [<tile>] [<tile>] [--convert-to-copc/--preserve-format]``
 
-This command imports one or more point-cloud tiles into the Kart repository in the
-working directory. All tiles are imported into the same dataset.
+This command imports one or more point cloud tiles into the Kart repository. All tiles are imported into the same dataset.
 
 The tiles to import must be LAS files of some variant - compressed tiles (LAZ) and cloud-optized tiles (COPC) are allowed.
 
@@ -34,7 +35,7 @@ For more information, see :ref:`Import vectors / tables into an existing reposit
 Working copy
 ~~~~~~~~~~~~
 
-Point cloud datasets are stored in a file-system based working copy associated with the Kart repository. This working copy is found in folders inside the Kart repository, one folder for each point cloud dataset, with the same name as the dataset. Since the file system working copy is simply in the Kart repository, it doesn't need to be configured, and you don't need any special software to connect to it.
+Point cloud datasets are stored in a filesystem-based working copy associated with the Kart repository. This working copy is found in folders inside the repository, one folder for each raster dataset, with the same name as the dataset.
 
 Making edits
 ~~~~~~~~~~~~

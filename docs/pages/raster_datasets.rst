@@ -6,7 +6,7 @@ Working with Raster Datasets
 Dataset type
 ~~~~~~~~~~~~
 Kart internally stores raster tiles as GeoTIFF files, which means the tiles are checked out into the working copy without any conversion step - the contents of the working copy is an accurate reflection of the contents of the dataset itself at a particular point in time.
- 
+
 To find out more about the internal storage of raster datasets, see :doc:`Raster Datasets V1 </pages/development/raster_v1>`.
 
 Importing raster datasets

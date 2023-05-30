@@ -39,7 +39,7 @@ Contains the title of the dataset, encoded using UTF-8. The title is freeform te
 ``meta/description``
 ^^^^^^^^^^^^^^^^^^^^
 
-A long-form description of the dataset, encoded using UTF-8. The description is freeform text and has no enforced length limit.
+A long-form description of the dataset, encoded using UTF-8. The description is freeform text.
 
 ``meta/format.json``
 ^^^^^^^^^^^^^^^^^^^^
