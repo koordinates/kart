@@ -15,6 +15,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Point clouds (or rasters): during import, require the user to choose if they want to make a "cloud-optimized" dataset or a "preserve-format" dataset. [#842](https://github.com/koordinates/kart/issues/842)
 - Point clouds (or rasters): require `--no-convert-to-dataset-format` to add new tiles to a dataset that can be committed as-is but only if the dataset's format is changed. Note `--convert-to-dataset-format` works as before. [#842](https://github.com/koordinates/kart/issues/842)
 - Allow kart to check out attached files into the file-based working copy.
+- Fixes a bug where tab-completion wasn't working with helper mode, affects macOS and Linux. [#851](https://github.com/koordinates/kart/pull/851)
 
 ## 0.12.3
 

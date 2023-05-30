@@ -15,12 +15,14 @@ try:
 except ImportError:
     shellingham = None
 
+
 def provide_default_shell():
-    if os.name == 'posix':
-        return os.environ.get('SHELL', '')
-    elif os.name == 'nt':
-        return os.environ.get('COMSPEC', '')
-    raise NotImplementedError(f'OS {os.name!r} support not available')
+    if os.name == "posix":
+        return os.environ.get("SHELL", "")
+    elif os.name == "nt":
+        return os.environ.get("COMSPEC", "")
+    raise NotImplementedError(f"OS {os.name!r} support not available")
+
 
 class Shells(str, Enum):
     bash = "bash"
@@ -185,37 +187,28 @@ def install_powershell(*, prog_name: str, complete_var: str, shell: str) -> Path
 
 def install_tab_completion(
     shell: Optional[str] = None,
-    prog_name: Optional[str] = None,
-    complete_var: Optional[str] = None,
 ) -> Tuple[str, Path]:
-    prog_name = prog_name or click.get_current_context().find_root().info_name
-    assert prog_name
-    if complete_var is None:
-        complete_var = "_{}_COMPLETE".format(prog_name.replace("-", "_").upper())
     if shell is None and shellingham is not None:
         try:
             shell, _ = shellingham.detect_shell()
         except shellingham.ShellDetectionFailure:
             shell = os.path.basename(provide_default_shell())
+
+    # Hardcode these variables - kart helper means that click can get mixed up between KART and KART_CLI,
+    # but this means we always use KART in practise.
+    kwargs = {"prog_name": "kart", "complete_var": "_KART_COMPLETE", "shell": shell}
+
     if shell == "bash":
-        installed_path = install_bash(
-            prog_name=prog_name, complete_var=complete_var, shell=shell
-        )
+        installed_path = install_bash(**kwargs)
         return shell, installed_path
     elif shell == "zsh":
-        installed_path = install_zsh(
-            prog_name=prog_name, complete_var=complete_var, shell=shell
-        )
+        installed_path = install_zsh(**kwargs)
         return shell, installed_path
     elif shell == "fish":
-        installed_path = install_fish(
-            prog_name=prog_name, complete_var=complete_var, shell=shell
-        )
+        installed_path = install_fish(**kwargs)
         return shell, installed_path
     elif shell in {"powershell", "pwsh"}:
-        installed_path = install_powershell(
-            prog_name=prog_name, complete_var=complete_var, shell=shell
-        )
+        installed_path = install_powershell(**kwargs)
         return shell, installed_path
     else:
         click.echo(f"Shell {shell} is not supported.")
