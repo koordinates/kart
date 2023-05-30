@@ -5,7 +5,9 @@ Working with Raster Datasets
 
 Dataset type
 ~~~~~~~~~~~~
-Raster datasets are currently implemented as :doc:`Raster Datasets V1 </pages/development/raster_v1>`. Kart version controls raster tiles themselves as GeoTIFF files, which means the tiles are checked out into the working copy without any conversion step - the contents of the working copy is an accurate reflection of the contents of the dataset itself at a particular point in time.
+Kart internally stores raster tiles as GeoTIFF files, which means the tiles are checked out into the working copy without any conversion step - the contents of the working copy is an accurate reflection of the contents of the dataset itself at a particular point in time.
+ 
+To find out more about the internal storage of raster datasets, see :doc:`Raster Datasets V1 </pages/development/raster_v1>`.
 
 Importing raster datasets
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -13,8 +15,7 @@ Importing raster datasets
 - ``kart import <tile> [<tile>] [<tile>] [--convert-to-cog/--preserve-format]``
 - ``kart import --dataset=<dataset_name> <tile> [<tile>] [<tile>] [--convert-to-cog/--preserve-format]``
 
-This command imports one or more raster tiles into the Kart repository in the
-working directory. All tiles are imported into the same dataset.
+This command imports one or more raster tiles into the Kart repository. All tiles are imported into the same dataset.
 
 The tiles to import must be GeoTIFF files of some variant - and cloud-optized GeoTIFFs (COGs) are allowed.
 
@@ -34,7 +35,7 @@ For more information, see :ref:`Import vectors / tables into an existing reposit
 Working copy
 ~~~~~~~~~~~~
 
-Raster datasets are stored in a file-system based working copy associated with the Kart repository. This working copy is found in folders inside the Kart repository, one folder for each raster dataset, with the same name as the dataset. Since the file system working copy is simply in the Kart repository, it doesn't need to be configured, and you don't need any special software to connect to it.
+Raster datasets are stored in a filesystem-based working copy associated with the Kart repository. This working copy is found in folders inside the repository, one folder for each raster dataset, with the same name as the dataset.
 
 Making edits
 ~~~~~~~~~~~~

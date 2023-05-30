@@ -4,7 +4,7 @@ Raster Datasets V1
 Overall structure
 ~~~~~~~~~~~~~~~~~
 
-A V1 raster dataset is a folder named ``.raster-dataset.v1`` that contains two folders. These are ``meta`` which contains information about the entire dataset, irrespective of a particular tile - and ``tile``, which contains raster tiles in the ``GeoTIFF`` format. The schema file contains information about each band that is stored for each grid-cell / pixel in the raster. The "name" of the dataset is the path to the ``.raster-dataset.v1`` folder.
+A V1 raster dataset is a folder named ``.raster-dataset.v1`` that contains two folders. These are ``meta`` which contains information about the entire dataset, irrespective of a particular tile - and ``tile``, which contains raster tiles in the ``GeoTIFF`` format. The schema file contains information about each band in the raster. The "name" of the dataset is the path to the ``.raster-dataset.v1`` folder.
 
 For example, here is the basic folder structure of a dataset named
 ``aerials/north-head``:
@@ -34,12 +34,12 @@ The following items are stored in the meta part of the dataset, and have the fol
 ``meta/title``
 ^^^^^^^^^^^^^^
 
-Contains the title of the dataset, encoded using UTF-8. The title is freeform text, clients could if they desired include HTML tags or markdown in the title.
+Contains the title of the dataset, encoded using UTF-8. The title is freeform text.
 
 ``meta/description``
 ^^^^^^^^^^^^^^^^^^^^
 
-Contains the title of the dataset, encoded using UTF-8. The description is freeform text, clients could if they desired include HTML tags or markdown in the title.
+A long-form description of the dataset, encoded using UTF-8. The description is freeform text and has no enforced length limit.
 
 ``meta/format.json``
 ^^^^^^^^^^^^^^^^^^^^
@@ -61,14 +61,14 @@ For example, here is the format of a dataset that has both constraints:
       "profile": "cloud-optimized"
     }
 
-If the cloud-optimized constraint is relaxed, such that both COGs and non-COGs are allowed, then the relevant field is ommitted.
+If the cloud-optimized constraint is relaxed, such that both COGs and non-COGs are allowed, then the ``profile`` field is omitted.
 
 .. _raster-meta-schema-json:
 
 ``meta/schema.json``
 ^^^^^^^^^^^^^^^^^^^^
 
-Contains information about the "bands" of information, that is, each unit of data that is stored per-pixel. This item has a similar format as in other types of datasets, but one important difference is that the each band in a raster dataset has no identifying ID or name - the properties that identify a raster band are the following:
+Contains information about the "bands" of information, that is, each unit of data that is stored per-pixel. This item has a similar format as in other types of datasets, but one important difference is that the bands in a raster dataset have no identifying ID or name. The properties that identify a raster band are the following:
 
 1. Its position in the list.
 2. It's "interpretation" (if it has one), which describes how to interpret a band in terms of letting it contribute to the color of the pixel / grid cell.
@@ -216,7 +216,7 @@ If a particular band has a raster-attribute-table, it must have the same raster 
 This is indexed starting at one - ``band/1/categories.json`` is for the first band, ``band/2/categories.json`` is for the second band, and so on. Only certain bands will have this metadata attached.
 
 This JSON object describes a mapping from each possible value that the band can take, to a freeform text description of what that value means. As a simple example,
-it could be ``{"1": "Land", "2": "Water"}``. This information is extracted from the `Persistent Auxiliary Metadata <pam_>`_ (PAM) files (the ``.aux.xml`` files)associated with the tiles, if there are any.
+it could be ``{"1": "Land", "2": "Water"}``. This information is extracted from the `Persistent Auxiliary Metadata <pam_>`_ (PAM) files (the ``.aux.xml`` files) associated with the tiles, if there are any.
 
 If a particular band has categories, it must be the same categories for every tile: that is, every instance of that raster attribute table attached to each tile should have same category labels. However, this rule is relaxed slightly in that not every category need be defined for every tile - if one tile has defined categories for the values "1" and "2", but its neighbor only does so for the value "1", that is allowed, so long as they agree on what "1" means.
 
