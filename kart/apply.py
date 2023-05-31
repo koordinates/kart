@@ -285,7 +285,7 @@ def apply_patch(
         # from that revision.
         try:
             # this only resolves if it's a commit or tree ID, not if it's a symref
-            patch_tree = repo.get(metadata["base"]).peel(pygit2.Tree)
+            patch_tree = repo[metadata["base"]].peel(pygit2.Tree)
             resolve_missing_values_from_rs = repo.structure(patch_tree)
         except KeyError:
             # this might be fine (if it's a 'full' patch), but maybe we should warn?
