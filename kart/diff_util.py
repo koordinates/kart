@@ -59,7 +59,7 @@ def get_repo_diff(
         to save repeated work.
     repo_key_filter - controls which datasets (and PK values) match and are included in the diff.
     convert_to_dataset_format - whether to show the diff of what would be committed if files were
-       converted to dataset format at commit-time (ie, for point-cloud tiles)
+       converted to dataset format at commit-time (ie, for point-cloud and raster tiles)
     include_files - whether to include a DatasetDiff in the result for changes to files that
        are simply standalone files, rather than part of a dataset's contents.
     """

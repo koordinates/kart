@@ -21,6 +21,7 @@ from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
 from kart.structs import CommitWithReference
 from kart.spatial_filter import SpatialFilter
+from kart.tile import ALL_TILE_DATASET_TYPES
 
 EMPTY_SHA = "0" * 40
 
@@ -100,7 +101,7 @@ def ls_files(ctx, show_size, all, ref1, ref2):
 @click.argument("remote_url", required=False)
 def pre_push(ctx, remote_name, remote_url, dry_run):
     """
-    Re-implementation of git-lfs pre-push - but, only searches for pointer blobs at **/.point-cloud-dataset.v?/tile/**
+    Re-implementation of git-lfs pre-push - but, only searches for pointer blobs at **/.<tile-based-dataset>/tile/**
     (In contrast with git-lfs pre-push, which scans any and all blobs, looking for pointer files).
     This means it won't encounter any features that are missing due to spatial filtering, which git-lfs stumbles over.
     """
@@ -124,8 +125,8 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
         repo, start_commits, [f"--remotes={remote_name}", *stop_commits]
     ):
         # Because of the way a Kart repo is laid out, we know that:
-        # All LFS pointer files are blobs inside **/.point-cloud-dataset.v?/tile/**
-        # All blobs inside **/.point-cloud-dataset.v?/tile/** are LFS pointer files.
+        # All LFS pointer files are blobs inside **/.*-dataset.v?/tile/** and conversely,
+        # All blobs inside **/.*-dataset.v?/tile/** are LFS pointer files.
         lfs_oids.add(get_hash_from_pointer_file(pointer_blob))
 
     if dry_run:
@@ -273,7 +274,9 @@ def fetch_lfs_blobs_for_commits(
 
     pointer_file_oids = set()
     for commit in commits:
-        for dataset in repo.datasets(commit, filter_dataset_type="point-cloud"):
+        for dataset in repo.datasets(
+            commit, filter_dataset_type=ALL_TILE_DATASET_TYPES
+        ):
             pointer_file_oids.update(
                 blob.hex
                 for blob in dataset.tile_pointer_blobs(spatial_filter=spatial_filter)
@@ -391,7 +394,7 @@ def gc(ctx, dry_run):
 
     spatial_filter = repo.spatial_filter
     checked_out_lfs_oids = set()
-    for dataset in repo.datasets("HEAD", filter_dataset_type="point-cloud"):
+    for dataset in repo.datasets("HEAD", filter_dataset_type=ALL_TILE_DATASET_TYPES):
         checked_out_lfs_oids.update(dataset.tile_lfs_hashes(spatial_filter))
 
     to_delete = set()

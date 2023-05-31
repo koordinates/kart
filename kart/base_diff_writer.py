@@ -607,7 +607,7 @@ class BaseDiffWriter:
         dataset = self._get_old_or_new_dataset(ds_path)
         if dataset.DATASET_TYPE != "table":
             # So far, table datasets are the only ones which have deltas transformed to the target CRS.
-            # TODO - support transformed output for point-cloud datasets too.
+            # TODO - support transformed output for tile-based datasets too.
             return None, None
 
         def _get_transform(source_crs):

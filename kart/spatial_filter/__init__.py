@@ -719,7 +719,7 @@ class OriginalSpatialFilter(SpatialFilter):
         """
         Transform this spatial filter so that it matches the CRS of the given dataset.
         The resulting spatial filter will also have the extract_geometry function set such that
-        it can extract a flattened-to-2D point-cloud extent out of a tile summary.
+        it can extract a flattened-to-2D tile extent out of a tile summary.
         """
         if self.match_all:
             return SpatialFilter._MATCH_ALL
