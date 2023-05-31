@@ -71,7 +71,7 @@ If the cloud-optimized constraint is relaxed, such that both COGs and non-COGs a
 Contains information about the "bands" of information, that is, each unit of data that is stored per-pixel. This item has a similar format as in other types of datasets, but one important difference is that the bands in a raster dataset have no identifying ID or name. The properties that identify a raster band are the following:
 
 1. Its position in the list.
-2. It's "interpretation" (if it has one), which describes how to interpret a band in terms of letting it contribute to the color of the pixel / grid cell.
+2. Its "interpretation" (if it has one), which describes how to interpret a band in terms of letting it contribute to the color of the pixel / grid cell.
 
 Two example schemas follow - a more in-depth explanation of the possible fields is found below under the heading “Syntax”.
 
