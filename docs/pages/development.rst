@@ -7,6 +7,7 @@ Development
    development/datasets
    development/table_v3
    development/pointcloud_v1
+   development/raster_v1
    development/legacy_datasets
    development/table_v1
    development/table_v2

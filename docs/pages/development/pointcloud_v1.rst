@@ -39,16 +39,12 @@ the following structure.
 ``meta/title``
 ^^^^^^^^^^^^^^
 
-Contains the title of the dataset, encoded using UTF-8. The title is
-freeform text, clients could if they desired include HTML tags or
-markdown in the title.
+Contains the title of the dataset, encoded using UTF-8. The title is freeform text.
 
 ``meta/description``
 ^^^^^^^^^^^^^^^^^^^^
 
-Contains the title of the dataset, encoded using UTF-8. The description
-is freeform text, clients could if they desired include HTML tags or
-markdown in the title.
+A long-form description of the dataset, encoded using UTF-8. The description is freeform text.
 
 ``meta/format.json``
 ^^^^^^^^^^^^^^^^^^^^
