@@ -403,7 +403,9 @@ def load_commands_from_args(args, skip_first_arg=True):
 def entrypoint():
     freeze_support()
     load_commands_from_args(sys.argv)
-    cli()
+    # Don't let helper mode mess up the usage-text, or the shell complete environment variables.
+    prog_name = "kart" if os.path.basename(sys.argv[0]) == "kart_cli" else None
+    cli(prog_name=prog_name, complete_var="_KART_COMPLETE")
 
 
 if __name__ == "__main__":

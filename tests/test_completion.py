@@ -27,7 +27,7 @@ def test_completion_install_bash(cli_runner):
     r = cli_runner.invoke(["install", "tab-completion", "--shell", "bash"])
     new_text = bash_completion_path.read_text()
     bash_completion_path.write_text(text)
-    install_source = os.path.join(".bash_completions", "cli.sh")
+    install_source = os.path.join(".bash_completions", "kart.sh")
     assert install_source not in text
     assert install_source in new_text
     assert "completion installed in" in r.stdout
@@ -36,7 +36,7 @@ def test_completion_install_bash(cli_runner):
     assert install_source_path.is_file()
     install_content = install_source_path.read_text()
     install_source_path.unlink()
-    assert "complete -o nosort -F _cli_completion cli" in install_content
+    assert "complete -o nosort -F _kart_completion kart" in install_content
 
 
 def test_completion_install_zsh(cli_runner):
@@ -53,21 +53,21 @@ def test_completion_install_zsh(cli_runner):
     assert zfunc_fragment in new_text
     assert "completion installed in" in r.stdout
     assert "Completion will take effect once you restart the terminal" in r.stdout
-    install_source_path = Path.home() / os.path.join(".zfunc", "_cli")
+    install_source_path = Path.home() / os.path.join(".zfunc", "_kart")
     assert install_source_path.is_file()
     install_content = install_source_path.read_text()
     install_source_path.unlink()
-    assert "compdef _cli_completion cli" in install_content
+    assert "compdef _kart_completion kart" in install_content
 
 
 def test_completion_install_fish(cli_runner):
     completion_path: Path = Path.home() / os.path.join(
-        ".config", "fish", "completions", "cli.fish"
+        ".config", "fish", "completions", "kart.fish"
     )
     r = cli_runner.invoke(["install", "tab-completion", "--shell", "fish"])
     new_text = completion_path.read_text()
     completion_path.unlink()
-    assert "complete --no-files --command cli" in new_text
+    assert "complete --no-files --command kart" in new_text
     assert "completion installed in" in r.stdout
     assert "Completion will take effect once you restart the terminal" in r.stdout
 

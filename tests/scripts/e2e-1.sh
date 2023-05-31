@@ -45,6 +45,8 @@ set -x
 echo "Using helper mode: ${KART_USE_HELPER:-?}"
 
 kart -vvvv install tab-completion --shell auto
+# This checks our tab-completion works with _KART_COMPLETE (and not _KART_CLI_COMPLETE)
+COMP_WORDS="kart sta" COMP_CWORD=1 _KART_COMPLETE=bash_complete kart sta
 
 kart init --initial-branch=main .
 kart config user.name "Kart E2E Test 1"

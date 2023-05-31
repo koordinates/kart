@@ -233,7 +233,13 @@ def helper(ctx, socket_filename, timeout, args):
                     _helper_log(f"semid={semid}")
                     try:
                         _helper_log("invoking cli()...")
-                        cli()
+                        # Don't let helper mode mess up the usage-text, or the shell complete environment variables.
+                        prog_name = (
+                            "kart"
+                            if os.path.basename(sys.argv[0]) == "kart_cli"
+                            else None
+                        )
+                        cli(prog_name=prog_name, complete_var="_KART_COMPLETE")
                     except SystemExit as system_exit:
                         """exit is called in the commands but we ignore as we need to clean up the caller"""
                         # TODO - do we ever see negative exit codes from cli (git etc)?
