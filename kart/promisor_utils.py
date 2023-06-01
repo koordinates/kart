@@ -1,9 +1,8 @@
-import subprocess
 from contextlib import contextmanager
 from enum import IntEnum
 
-from .cli_util import tool_environment
-from .exceptions import NotFound, SubprocessError
+from kart.exceptions import NotFound, SubprocessError
+from kart import subprocess_util as subprocess
 
 
 class LibgitSubcode(IntEnum):
@@ -113,7 +112,6 @@ class FetchPromisedBlobsProcess:
             self.cmd,
             cwd=self.repo.path,
             stdin=subprocess.PIPE,
-            env=tool_environment(),
             bufsize=41,  # Works as line buffering
         )
 

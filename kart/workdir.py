@@ -6,7 +6,6 @@ from enum import Enum, auto
 import functools
 from pathlib import Path
 import shutil
-import subprocess
 import sys
 from kart.structure import RepoStructure
 
@@ -16,8 +15,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import CreateTable
 
 
-from kart.cli_util import tool_environment
 from kart import diff_util
+from kart.diff_util import get_file_diff
 from kart.diff_structs import Delta, DatasetDiff
 from kart.exceptions import (
     NotFound,
@@ -32,13 +31,11 @@ from kart.output_util import InputMode, get_input_mode
 from kart.reflink_util import try_reflink
 from kart.sqlalchemy import TableSet
 from kart.sqlalchemy.sqlite import sqlite_engine
+from kart import subprocess_util as subprocess
 from kart.tile import ALL_TILE_DATASET_TYPES
 from kart.tile.tile_dataset import TileDataset
 from kart.tile.tilename_util import remove_any_tile_extension, PAM_SUFFIX
 from kart.working_copy import WorkingCopyPart
-from kart.diff_structs import FILES_KEY, BINARY_FILE, DatasetDiff, RepoDiff
-from kart.diff_util import get_file_diff, get_repo_diff
-from .base_diff_writer import BaseDiffWriter
 
 L = logging.getLogger("kart.workdir")
 
@@ -671,7 +668,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         paths = [path(d) for d in datasets]
 
-        env = tool_environment()
+        env = subprocess.tool_environment()
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
         try:
@@ -730,7 +727,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         # the file's `stat` information - this allows for an optimisation where diffs can be generated
         # without hashing the working copy files. pygit2.Index doesn't give easy access to this info.
 
-        env = tool_environment()
+        env = subprocess.tool_environment()
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
         try:
@@ -855,7 +852,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         dataset.write_mosaic_for_directory((self.path / dataset.path).resolve())
 
     def dirty_paths(self):
-        env = tool_environment()
+        env = subprocess.tool_environment()
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
         try:

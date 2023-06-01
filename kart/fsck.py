@@ -1,12 +1,12 @@
 import os
-import subprocess
 
 import click
 
-from .cli_util import tool_environment, KartCommand
-from .exceptions import NO_WORKING_COPY, NotFound
-from .geometry import normalise_gpkg_geom
-from .sqlalchemy.gpkg import Db_GPKG
+from kart.cli_util import KartCommand
+from kart.exceptions import NO_WORKING_COPY, NotFound
+from kart.geometry import normalise_gpkg_geom
+from kart import subprocess_util as subprocess
+from kart.sqlalchemy.gpkg import Db_GPKG
 
 
 def _fsck_reset(repo, working_copy, dataset_paths):
@@ -32,7 +32,7 @@ def fsck(ctx, reset_datasets, fsck_args):
 
     click.echo("Checking repository integrity...")
     r = subprocess.call(
-        ["git", "-C", repo.path, "fsck"] + list(fsck_args), env=tool_environment()
+        ["git", "-C", repo.path, "fsck"] + list(fsck_args),
     )
     if r:
         click.Abort()

@@ -1,7 +1,6 @@
 import functools
 import logging
 import math
-import subprocess
 import sys
 import time
 
@@ -9,8 +8,10 @@ import click
 import pygit2
 from osgeo import ogr, osr
 from pysqlite3 import dbapi2 as sqlite
+from sqlalchemy import Column, Table
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.types import BLOB
 
-from kart.cli_util import tool_environment
 from kart.crs_util import make_crs, normalise_wkt
 from kart.exceptions import InvalidOperation, SubprocessError
 from kart.geometry import Geometry
@@ -20,9 +21,8 @@ from kart.serialise_util import msg_unpack
 from kart.sqlalchemy import TableSet
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.structs import CommitWithReference
-from sqlalchemy import Column, Table
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.types import BLOB
+from kart import subprocess_util as subprocess
+
 
 L = logging.getLogger("kart.spatial_filter.index")
 
@@ -150,11 +150,7 @@ class CrsHelper:
             *self.start_stop_spec,
         ]
         try:
-            commits = subprocess.check_output(
-                cmd,
-                encoding="utf8",
-                env=tool_environment(),
-            )
+            commits = subprocess.check_output(cmd, encoding="utf8")
         except subprocess.CalledProcessError as e:
             raise SubprocessError(
                 f"There was a problem with git rev-list: {e}", called_process_error=e
@@ -230,13 +226,7 @@ def _minimal_description_of_commit_set(repo, commits):
     """
     cmd = ["git", "-C", repo.path, "merge-base", "--independent"] + list(commits)
     try:
-        r = subprocess.run(
-            cmd,
-            encoding="utf8",
-            check=True,
-            capture_output=True,
-            env=tool_environment(),
-        )
+        r = subprocess.run(cmd, encoding="utf8", check=True, capture_output=True)
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
             f"There was a problem with git merge-base: {e}", called_process_error=e
@@ -1013,13 +1003,7 @@ def resolve_all_commit_refs(repo):
     """Returns the set of all branch heads, refs, HEAD, as commit SHAs."""
     cmd = ["git", "-C", repo.path, "show-ref", "--hash", "--head"]
     try:
-        r = subprocess.run(
-            cmd,
-            encoding="utf8",
-            check=True,
-            capture_output=True,
-            env=tool_environment(),
-        )
+        r = subprocess.run(cmd, encoding="utf8", check=True, capture_output=True)
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
             f"There was a problem with git show-ref: {e}", called_process_error=e

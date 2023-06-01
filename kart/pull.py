@@ -1,14 +1,12 @@
 import logging
-import os
-import subprocess
 
 import click
 
+from kart.cli_util import KartCommand
 from kart.completion_shared import ref_completer
-
-from . import merge
-from .cli_util import tool_environment, KartCommand
-from .exceptions import NO_BRANCH, NotFound
+from kart.exceptions import NO_BRANCH, NotFound
+from kart import merge
+from kart import subprocess_util as subprocess
 
 L = logging.getLogger("kart.pull")
 
@@ -96,7 +94,6 @@ def pull(ctx, ff, ff_only, launch_editor, do_progress, repository, refspecs):
             repository,
             *refspecs,
         ],
-        env=tool_environment(),
     )
 
     # now merge with FETCH_HEAD

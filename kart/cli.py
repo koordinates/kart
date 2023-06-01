@@ -7,7 +7,6 @@ import os
 from multiprocessing import freeze_support
 import pathlib
 import re
-import subprocess
 import sys
 import traceback
 from pathlib import Path
@@ -16,15 +15,14 @@ import click
 import pygit2
 
 from . import core, is_darwin, is_linux, is_windows  # noqa
-from .cli_util import (
+from kart.cli_util import (
     add_help_subcommand,
     call_and_exit_flag,
-    tool_environment,
     KartGroup,
 )
-from .context import Context
+from kart.context import Context
 from kart.parse_args import PreserveDoubleDash
-from kart.subprocess_util import run_then_exit
+from kart import subprocess_util as subprocess
 
 MODULE_COMMANDS = {
     "annotations.cli": {"build-annotations"},
@@ -99,7 +97,7 @@ def print_version(ctx):
     click.echo(f"Kart v{get_version()}, Copyright (c) Kart Contributors")
 
     git_version = (
-        subprocess.check_output(["git", "--version"], env=tool_environment())
+        subprocess.check_output(["git", "--version"])
         .decode("ascii")
         .strip()
         .split()[-1]
@@ -107,13 +105,11 @@ def print_version(ctx):
 
     gitlfs_version = re.match(
         r"git-lfs/([^ ]+) \(",
-        subprocess.check_output(
-            ["git-lfs", "version"], env=tool_environment(), text=True
-        ),
+        subprocess.check_output(["git-lfs", "version"], text=True),
     ).group(1)
 
     pdal_version = (
-        subprocess.check_output(["pdal", "--version"], env=tool_environment())
+        subprocess.check_output(["pdal", "--version"])
         .decode("ascii")
         .strip()
         .split()[2]
@@ -302,7 +298,7 @@ def git(ctx, args):
     repo_params = []
     if ctx.obj.user_repo_path:
         repo_params = ["-C", ctx.obj.user_repo_path]
-    run_then_exit(["git", *repo_params, *args])
+    subprocess.run_then_exit(["git", *repo_params, *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
@@ -315,7 +311,7 @@ def lfs(ctx, args):
     repo_params = []
     if ctx.obj.user_repo_path:
         repo_params = ["-C", ctx.obj.user_repo_path]
-    run_then_exit(["git", *repo_params, "lfs", *args])
+    subprocess.run_then_exit(["git", *repo_params, "lfs", *args])
 
 
 @cli.command(

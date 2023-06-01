@@ -8,7 +8,6 @@ import os
 import random
 import re
 import shutil
-import subprocess
 import tarfile
 import time
 import uuid
@@ -34,6 +33,7 @@ from kart.repo import KartRepo  # noqa: E402
 from kart.sqlalchemy.postgis import Db_Postgis  # noqa: E402
 from kart.sqlalchemy.sqlserver import Db_SqlServer  # noqa: E402
 from kart.sqlalchemy.mysql import Db_MySql  # noqa: E402
+from kart import subprocess_util as subprocess
 
 
 pytest_plugins = ["helpers_namespace"]
@@ -421,7 +421,7 @@ class KartCliRunner(CliRunner):
 
     def invoke(self, args=None, **kwargs):
         from kart.cli import load_commands_from_args, cli
-        from kart.cli_util import init_git_config
+        from kart.subprocess_util import init_git_config
 
         init_git_config.cache_clear()
 
@@ -1199,10 +1199,8 @@ def dodgy_restore(cli_runner):
 
 @pytest.fixture(scope="session")
 def requires_git_lfs():
-    from kart.cli_util import tool_environment
-
     try:
-        r = subprocess.run(["git", "lfs", "--version"], env=tool_environment())
+        r = subprocess.run(["git", "lfs", "--version"])
         has_git_lfs = r.returncode == 0
     except OSError:
         has_git_lfs = False

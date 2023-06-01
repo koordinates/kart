@@ -1,8 +1,7 @@
-import subprocess
-
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
 from kart.point_cloud.metadata_util import is_copc, get_las_version
 from kart.point_cloud import pdal_execute_pipeline
+from kart import subprocess_util as subprocess
 
 
 def convert_tile_to_format(source, dest, target_format):

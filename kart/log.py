@@ -1,4 +1,3 @@
-import subprocess
 import sys
 import logging
 from datetime import datetime, timedelta, timezone
@@ -6,10 +5,10 @@ from datetime import datetime, timedelta, timezone
 import click
 
 from kart import diff_estimation
-from kart.cli_util import OutputFormatType, tool_environment
+from kart.cli_util import OutputFormatType
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
-from kart.subprocess_util import run_then_exit
+from kart import subprocess_util as subprocess
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import dump_json_output
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
@@ -40,7 +39,6 @@ def find_dataset(ds_path, repo, commits):
             encoding="utf8",
             check=True,
             capture_output=True,
-            env=tool_environment(),
         )
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
@@ -267,7 +265,7 @@ def log(
         if fmt:
             options.append(f"--format={fmt}")
         cmd = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
-        run_then_exit(cmd)
+        subprocess.run_then_exit(cmd)
 
     elif output_type in ("json", "json-lines"):
         if kwargs.get("graph"):
@@ -290,7 +288,6 @@ def log(
                 encoding="utf8",
                 check=True,
                 capture_output=True,
-                env=tool_environment(),
             )
         except subprocess.CalledProcessError as e:
             raise SubprocessError(
