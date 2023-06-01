@@ -24,7 +24,7 @@ from .cli_util import (
 )
 from .context import Context
 from kart.parse_args import PreserveDoubleDash
-from kart.subprocess_util import run
+from kart.subprocess_util import run_then_exit
 
 MODULE_COMMANDS = {
     "annotations.cli": {"build-annotations"},
@@ -299,10 +299,10 @@ def git(ctx, args):
     """
     Run an arbitrary Git command, using kart's packaged Git
     """
-    params = []
+    repo_params = []
     if ctx.obj.user_repo_path:
-        params += ["-C", ctx.obj.user_repo_path]
-    run("git", [*params, *args])
+        repo_params = ["-C", ctx.obj.user_repo_path]
+    run_then_exit(["git", *repo_params, *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
@@ -311,13 +311,11 @@ def git(ctx, args):
 def lfs(ctx, args):
     """
     Run an arbitrary Git LFS command, using Kart's packaged Git.
-    Git LFS is not yet packaged with Kart so this will not work unless your Kart environment has Git LFS installed.
     """
-    params = []
+    repo_params = []
     if ctx.obj.user_repo_path:
-        params += ["-C", ctx.obj.user_repo_path]
-    params += ["lfs"]
-    run("git", [*params, *args])
+        repo_params = ["-C", ctx.obj.user_repo_path]
+    run_then_exit(["git", *repo_params, "lfs", *args])
 
 
 @cli.command(

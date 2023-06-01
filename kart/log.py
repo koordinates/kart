@@ -9,7 +9,7 @@ from kart import diff_estimation
 from kart.cli_util import OutputFormatType, tool_environment
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
-from kart.subprocess_util import run
+from kart.subprocess_util import run_then_exit
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import dump_json_output
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
@@ -266,8 +266,8 @@ def log(
     if output_type == "text":
         if fmt:
             options.append(f"--format={fmt}")
-        git_args = ["-C", repo.path, "log", *options, *commits, "--", *paths]
-        run("git", git_args)
+        cmd = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
+        run_then_exit(cmd)
 
     elif output_type in ("json", "json-lines"):
         if kwargs.get("graph"):

@@ -6,7 +6,6 @@ from asyncio import IncompleteReadError, LimitOverrunError
 from asyncio.subprocess import PIPE
 from functools import partial
 
-from . import is_windows
 from .cli_util import tool_environment
 
 
@@ -135,7 +134,7 @@ def subprocess_tee(cmd, **kwargs):
     return return_code, stdout, stderr
 
 
-def run_with_capture(cmd, args, env):
+def run_with_capture_then_exit(cmd):
     # In testing, .run must be set to capture_output and so use PIPEs to communicate
     # with the process to run whereas in normal operation the standard streams of
     # this process are passed into subprocess.run.
@@ -144,7 +143,12 @@ def run_with_capture(cmd, args, env):
     # io wrapper.
     # This io wrapper is not compatible with the stdin= kwarg to .run - in that case
     # it gets treated as a file like object and fails.
-    p = subprocess.run([cmd] + args, capture_output=True, encoding="utf-8", env=env)
+    p = subprocess.run(
+        cmd,
+        capture_output=True,
+        encoding="utf-8",
+        env=tool_environment(os.environ),
+    )
     sys.stdout.write(p.stdout)
     sys.stdout.flush()
     sys.stderr.write(p.stderr)
@@ -152,25 +156,24 @@ def run_with_capture(cmd, args, env):
     sys.exit(p.returncode)
 
 
-def run(cmd, args):
+def run_then_exit(cmd):
     """
-    Run a process and wait for it to exit, this is required
-    when in helper mode as using execvpe overwrites the process so
-    the caller can't be notified when the command is complete.
-
-    The subprocess uses this processes standard streams.
-
-    If called in test then use capture mode rather than passing in 'real' standard
-    streams.
+    Works like subprocess.run, but has the following three differences.
+    1. Simplified - unlike subprocess.run, you can't configure streams, env, encoding, etc.
+       The environment used is tool_environment(), which is generally the right one.
+    2. Kart exits as soon as the subprocess exits, with the same return code as the subprocess.
+    3. Changes behaviour during testing to buffer output using PIPEs instead of connecting stdout and
+       stderr directly. This means that the test harness can read the subprocess stdout and stderr exactly
+       as if Kart had written directly. The downside (the reason we don't run like this always) is that
+       it buffers all the output until the process has finished, so the user wouldn't see progress.
     """
-    env = tool_environment(os.environ)
     if "_KART_RUN_WITH_CAPTURE" in os.environ:
-        run_with_capture(cmd, args, env)
+        run_with_capture_then_exit(cmd)
     else:
         p = subprocess.run(
-            [cmd] + args,
+            cmd,
             encoding="utf-8",
-            env=env,
+            env=tool_environment(os.environ),
             stdin=sys.stdin,
             stdout=sys.stdout,
             stderr=sys.stderr,
