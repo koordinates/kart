@@ -192,30 +192,6 @@ int is_helper_enabled()
 }
 
 /**
- * @brief Check whether using the helper is allowed for this kart command.
- * the helper is disallowed for certain commands since they need to be able to launch an editor.
- * Launching an editor from the helper doesn't work since it's not properly attached to the terminal.
- * @return 0 no, 1 yes
- */
-int is_helper_allowed(char **argv) {
-    char **arg_ptr;
-    for (arg_ptr = argv; *arg_ptr != NULL; arg_ptr++) {
-        if (strncmp(*arg_ptr, "-", 1) == 0 || strcmp(*arg_ptr, "kart") == 0) {
-            // Skip options.
-            continue;
-        }
-        // kart commit, kart merge, and kart pull can all spawn an editor for the commit message.
-        if (strcmp(*arg_ptr, "commit") == 0 ||
-            strcmp(*arg_ptr, "merge") == 0 ||
-            strcmp(*arg_ptr, "pull") == 0) {
-            return 0;
-        }
-        return 1;
-    }
-    return 1;
-}
-
-/**
  * @brief Exit signal handler for SIGALRM
  */
 void exit_on_alarm(int sig)
@@ -241,7 +217,7 @@ int main(int argc, char **argv, char **environ)
         exit(1);
     }
 
-    if (is_helper_enabled() && is_helper_allowed(argv))
+    if (is_helper_enabled())
     {
         debug("enabled %s, pid=%d\n", cmd_path, getpid());
 
