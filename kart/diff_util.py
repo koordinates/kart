@@ -1,13 +1,12 @@
 import logging
 import re
-import subprocess
 
-from kart.cli_util import tool_environment
 from kart.diff_format import DiffFormat
 from kart.diff_structs import FILES_KEY, Delta, DeltaDiff, DatasetDiff, RepoDiff
 from kart.exceptions import SubprocessError
 from kart.key_filters import DatasetKeyFilter, RepoKeyFilter
 from kart.structure import RepoStructure
+from kart import subprocess_util as subprocess
 
 L = logging.getLogger("kart.diff_util")
 
@@ -202,15 +201,7 @@ def get_file_diff(
         ":^**/.*dataset*/**",  # Data inside datasets
     ]
     try:
-        lines = (
-            subprocess.check_output(
-                cmd,
-                encoding="utf8",
-                env=tool_environment(),
-            )
-            .strip()
-            .splitlines()
-        )
+        lines = subprocess.check_output(cmd, encoding="utf8").strip().splitlines()
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
             f"There was a problem with git diff: {e}", called_process_error=e

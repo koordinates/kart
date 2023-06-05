@@ -1,5 +1,4 @@
 import logging
-import subprocess
 import time
 import uuid
 from contextlib import contextmanager
@@ -8,16 +7,16 @@ from enum import Enum, auto
 import click
 import pygit2
 
-from .cli_util import tool_environment
-from .exceptions import NO_CHANGES, InvalidOperation, NotFound, SubprocessError
+from kart.exceptions import NO_CHANGES, InvalidOperation, NotFound, SubprocessError
+from kart import subprocess_util as subprocess
 from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     dataset_class_for_version,
     extra_blobs_for_version,
 )
-from .tabular.import_source import TableImportSource
-from .tabular.pk_generation import PkGeneratingTableImportSource
-from .timestamps import minutes_to_tz_offset
+from kart.tabular.import_source import TableImportSource
+from kart.tabular.pk_generation import PkGeneratingTableImportSource
+from kart.timestamps import minutes_to_tz_offset
 
 L = logging.getLogger("kart.fast_import")
 
@@ -143,7 +142,6 @@ def git_fast_import(repo, *args):
         ["git", "fast-import", "--done", *args],
         cwd=repo.path,
         stdin=subprocess.PIPE,
-        env=tool_environment(),
         bufsize=128 * 1024,
         stderr=subprocess.DEVNULL,
     )

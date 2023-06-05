@@ -1,6 +1,6 @@
-import subprocess
-from kart.cli_util import tool_environment
 import pytest
+
+from kart import subprocess_util as subprocess
 
 
 # using a fixture instead of a skipif decorator means we get one aggregated skip
@@ -8,7 +8,7 @@ import pytest
 @pytest.fixture(scope="session")
 def requires_pdal():
     try:
-        r = subprocess.run(["pdal", "--version"], env=tool_environment())
+        r = subprocess.run(["pdal", "--version"])
         has_pdal = r.returncode == 0
     except OSError:
         has_pdal = False

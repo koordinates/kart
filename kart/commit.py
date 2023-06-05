@@ -2,34 +2,33 @@ import os
 import re
 import shlex
 import shutil
-import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 
 import click
 
+from kart import is_windows
+from kart.base_diff_writer import BaseDiffWriter
+from kart.cli_util import StringFromFile, KartCommand
+from kart.core import check_git_user
 from kart.diff_format import DiffFormat
-
-from . import is_windows
-from .base_diff_writer import BaseDiffWriter
-from .cli_util import StringFromFile, tool_environment, KartCommand
-from .core import check_git_user
-from .exceptions import (
+from kart.exceptions import (
     NO_CHANGES,
     SPATIAL_FILTER_CONFLICT,
     InvalidOperation,
     NotFound,
     SubprocessError,
 )
-from .key_filters import RepoKeyFilter
-from .output_util import dump_json_output
-from .repo import KartRepoFiles
-from .status import (
+from kart.key_filters import RepoKeyFilter
+from kart.output_util import dump_json_output
+from kart.repo import KartRepoFiles
+from kart.status import (
     diff_status_to_text,
     get_branch_status_message,
     get_diff_status_message,
 )
-from .timestamps import (
+from kart import subprocess_util as subprocess
+from kart.timestamps import (
     commit_time_to_text,
     datetime_to_iso8601_utc,
     timedelta_to_iso8601_tz,
@@ -269,7 +268,7 @@ def user_edit_file(path):
 
 
 def run_editor_cmd(editor_cmd):
-    subprocess.check_call(editor_cmd, shell=True, env=tool_environment())
+    subprocess.check_call(editor_cmd, shell=True)
 
 
 def commit_obj_to_json(commit, repo, wc_diff):

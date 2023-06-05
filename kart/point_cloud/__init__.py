@@ -1,10 +1,9 @@
 import json
 from pathlib import Path
-import subprocess
 import tempfile
 
 from kart import is_windows
-from kart.cli_util import tool_environment
+from kart import subprocess_util as subprocess
 
 
 def pdal_execute_pipeline(pipeline, *, env_overrides=None):
@@ -13,7 +12,7 @@ def pdal_execute_pipeline(pipeline, *, env_overrides=None):
     Returns a list of metadata output from each stage.
     """
 
-    env = tool_environment()
+    env = subprocess.tool_environment()
     # NOTE: Kart itself doesn't currently use env_overrides, but don't remove it.
     # PDAL uses environment variables for various purposes, and this is helpful for `kart ext-run` scripts.
     env.update(env_overrides or {})

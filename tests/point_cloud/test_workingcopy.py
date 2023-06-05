@@ -1,19 +1,18 @@
 import re
 import shutil
-import subprocess
 
 import pygit2
 import pytest
 
-from kart.cli_util import tool_environment
 from kart.exceptions import (
     WORKING_COPY_OR_IMPORT_CONFLICT,
     NO_CHANGES,
     INVALID_OPERATION,
 )
 from kart.lfs_util import get_hash_and_size_of_file
-from kart.repo import KartRepo
 from kart.point_cloud.metadata_util import extract_pc_tile_metadata
+from kart.repo import KartRepo
+from kart import subprocess_util as subprocess
 from .fixtures import requires_pdal  # noqa
 
 
@@ -980,7 +979,7 @@ def test_working_copy_mtime_updated(cli_runner, data_archive, requires_pdal):
         assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
 
         repo = KartRepo(repo_path)
-        env = tool_environment()
+        env = subprocess.tool_environment()
         env["GIT_INDEX_FILE"] = str(repo.working_copy.workdir.index_path)
 
         def get_touched_files():

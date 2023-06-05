@@ -2,13 +2,15 @@ import os
 import re
 import sys
 import platform
-import subprocess
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Tuple, Optional, Any, Dict, List
 
 import click
 from click.shell_completion import _SOURCE_BASH, _SOURCE_ZSH, _SOURCE_FISH
+
+from kart import subprocess_util as subprocess
+
 
 try:
     import shellingham

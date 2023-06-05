@@ -1,22 +1,22 @@
 import functools
-import subprocess
 
 import click
 import pygit2
-from .completion_shared import ref_completer
 
-from .cli_util import tool_environment
-from .exceptions import (
+from kart.cli_util import KartCommand
+from kart.completion_shared import ref_completer
+from kart.exceptions import (
     NO_BRANCH,
     NO_COMMIT,
     InvalidOperation,
     NotFound,
 )
-from .key_filters import RepoKeyFilter
-from .promisor_utils import get_partial_clone_envelope
-from .spatial_filter import SpatialFilterString, spatial_filter_help_text
-from .structs import CommitWithReference
-from kart.cli_util import KartCommand
+from kart.key_filters import RepoKeyFilter
+from kart.promisor_utils import get_partial_clone_envelope
+from kart.spatial_filter import SpatialFilterString, spatial_filter_help_text
+from kart.structs import CommitWithReference
+from kart import subprocess_util as subprocess
+
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`kart commit`) or"
@@ -193,7 +193,6 @@ def checkout(
 def _git_fetch_supports_flag(repo, flag):
     r = subprocess.run(
         ["git", "fetch", "?", f"--{flag}"],
-        env=tool_environment(),
         cwd=repo.workdir_path,
         capture_output=True,
         text=True,

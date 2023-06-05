@@ -1,12 +1,111 @@
 import asyncio
+import functools
 import os
+from pathlib import Path
+import platform
 import subprocess
 import sys
 from asyncio import IncompleteReadError, LimitOverrunError
-from asyncio.subprocess import PIPE
 from functools import partial
 
-from .cli_util import tool_environment
+# Package kart.subprocess_util is a drop-in replacement for subprocess which handles some things
+# that kart will generally want to do when calling a subprocess, as well as having some extra
+# functionality that the subprocess module does not. Here are the things it can do:
+
+# 1. tool_environment() - this makes sure that when we call git, git-lfs, pdal etc, we have the right
+# environment including the right PATH that includes the kart bin/ directory.
+
+# Every method here - run, call, check_call, check_output, run_and_tee_output, run_then_exit -
+# sets the environment to be the tool_environment() if no other environment is supplied.
+
+# 2. sys.stdin, sys.stdout, sys.stderr: When Kart is run in helper mode, these variables are updated
+# each time a new kart process connects to the helper daemon to be the same as the file-descriptors
+# from the calling process. This is due to the following flow:
+
+# User opens a new terminal, which has its stdin,stdout,stderr connected to eg /dev/tty1
+# User runs kart - actually the lightweight kart.c executable. It too is connected to /dev/tty1
+# kart.c executable connects to *this process* - a longer running `kart helper` python daemon.
+# Its stdin,stdout,stderr will already be connected to *something* - depending on what it did last -
+# but now its stdin,stdout,stderr need to be updated to /dev/tty1 to match the kart.c executable.
+# These file-descriptors are sent to the `kart helper` daemon using `sendmsg`.
+# The variables sys.stdin, sys.stdout and sys.stderr and updated using these new values.
+# This means that the python process can now use these variables as normal, and everything -
+# click.echo, print, etc - works exactly as if the user had just run the kart python process directly.
+
+# Except: Somewhere deep inside python, the original file-descriptors for stdin, stdout and stderr
+# are still stored. This shows up if we do a call such as subprocess.run(["pwd"]) without explicitly
+# setting stdin, stdout, stderr - these parameters don't default to sys.stdin, sys.stdout and
+# sys.stderr (which is what we would like) but instead default to the original value of stdin,
+# stdout, and stderr. This would mean that the subprocess that Kart runs could end up connected
+# to a different tty to Kart itself, which is obviously not what we want. So, in this module,
+# we simply fix the defaults of these parameters to be sys.stdin, sys.stdout, and sys.stderr,
+# anytime that this process is run in helper mode.
+
+# Every method here - run, call, check_call, check_output, run_and_tee_output, run_then_exit -
+# makes sure to set these parameters explicitly when run in helper mode.
+
+# 3. Capturing output during testing: similar to #2, the click test harness updates sys.stdout
+# and sys.stderr to special values that capture the output so that it can be checked in asserts.
+# Theoretically, the code from #2 would handle this perfectly too, except that unfortunately
+# these special values of sys.stdin and sys.stderr don't have file-descriptors attached and
+# so can't be used in calls to subprocess.run. Since this is only an issue during testing, we
+# instead just set the stdout and stderr to PIPE, capture the subprocess output, and then write
+# it to the special values of sys.stdout and sys.stderr. This breaks real-time progress output
+# for the subprocess but this is not important during testing.
+
+# This fix is only applied to run_and_tee_output and run_then_exit. For correctness, it should be
+# applied to other subprocess calls, but in practice, all of our tests that make asserts about
+# subprocess output rely only on run_then_exit - in the other cases, the test will be unaware
+# of the output from the subprocess, but we don't make any asserts based on it.
+# We could if needed apply this fix to the other methods (with a little more complexity - other
+# methods might have set the stdout / stderr parameters already).
+
+# 4. Two extra functions: run_and_tee_output, run_and_then_exit.
+
+
+CalledProcessError = subprocess.CalledProcessError
+DEVNULL = subprocess.DEVNULL
+PIPE = subprocess.PIPE
+
+
+def run(cmd, **kwargs):
+    return subprocess.run(cmd, **add_default_kwargs(kwargs))
+
+
+def call(cmd, **kwargs):
+    return subprocess.call(cmd, **add_default_kwargs(kwargs))
+
+
+def check_call(cmd, **kwargs):
+    return subprocess.check_call(cmd, **add_default_kwargs(kwargs))
+
+
+def check_output(cmd, **kwargs):
+    return subprocess.check_output(cmd, **add_default_kwargs(kwargs, check_output=True))
+
+
+def Popen(cmd, **kwargs):
+    return subprocess.Popen(cmd, **add_default_kwargs(kwargs))
+
+
+def add_default_kwargs(kwargs_dict, check_output=False):
+    # Set up the environment if not supplied by the caller.
+    if "env" not in kwargs_dict:
+        kwargs_dict.setdefault("env", tool_environment())
+
+    # Specifically set sys.stdin, sys.stderr, sys.stdout if this is running via helper mode.
+    # See the explanation for why we need this at the top of the file.
+    if os.environ.get("KART_HELPER_PID"):
+        if "input" not in kwargs_dict:
+            kwargs_dict.setdefault("stdin", sys.stdin)
+
+        capture_output = kwargs_dict.get("capture_output", False)
+        if not check_output and not capture_output:
+            kwargs_dict.setdefault("stdout", sys.stdout)
+        if not capture_output:
+            kwargs_dict.setdefault("stderr", sys.stderr)
+
+    return kwargs_dict
 
 
 async def read_stream_and_display(stream, display):
@@ -124,36 +223,16 @@ async def read_until_any_of(stream, separators=b"\n"):
     return bytes(chunk)
 
 
-def subprocess_tee(cmd, **kwargs):
+def run_and_tee_output(cmd, **kwargs):
     """
     Run a subprocess and *don't* capture its output - let stdout and stderr display as per usual -
     - but also *do* capture its output so that we can inspect it.
     Returns a tuple of (exit-code, stdout output string, stderr output string).
     """
+    if "env" not in kwargs:
+        kwargs.setdefault("env", tool_environment())
     return_code, stdout, stderr = asyncio.run(read_and_display(cmd, **kwargs))
     return return_code, stdout, stderr
-
-
-def run_with_capture_then_exit(cmd):
-    # In testing, .run must be set to capture_output and so use PIPEs to communicate
-    # with the process to run whereas in normal operation the standard streams of
-    # this process are passed into subprocess.run.
-    # Capturing the output in a PIPE and then writing to sys.stdout is compatible
-    # with click.testing which sets sys.stdout and sys.stderr to a custom
-    # io wrapper.
-    # This io wrapper is not compatible with the stdin= kwarg to .run - in that case
-    # it gets treated as a file like object and fails.
-    p = subprocess.run(
-        cmd,
-        capture_output=True,
-        encoding="utf-8",
-        env=tool_environment(os.environ),
-    )
-    sys.stdout.write(p.stdout)
-    sys.stdout.flush()
-    sys.stderr.write(p.stderr)
-    sys.stderr.flush()
-    sys.exit(p.returncode)
 
 
 def run_then_exit(cmd):
@@ -168,14 +247,142 @@ def run_then_exit(cmd):
        it buffers all the output until the process has finished, so the user wouldn't see progress.
     """
     if "_KART_RUN_WITH_CAPTURE" in os.environ:
-        run_with_capture_then_exit(cmd)
+        _run_with_capture_then_exit(cmd)
     else:
         p = subprocess.run(
             cmd,
             encoding="utf-8",
-            env=tool_environment(os.environ),
+            env=tool_environment(),
             stdin=sys.stdin,
             stdout=sys.stdout,
             stderr=sys.stderr,
         )
         sys.exit(p.returncode)
+
+
+def _run_with_capture_then_exit(cmd):
+    # In testing, .run must be set to capture_output and so use PIPEs to communicate
+    # with the process to run whereas in normal operation the standard streams of
+    # this process are passed into subprocess.run.
+    # Capturing the output in a PIPE and then writing to sys.stdout is compatible
+    # with click.testing which sets sys.stdout and sys.stderr to a custom
+    # io wrapper.
+    # This io wrapper is not compatible with the stdin= kwarg to .run - in that case
+    # it gets treated as a file like object and fails.
+    p = subprocess.run(
+        cmd,
+        capture_output=True,
+        encoding="utf-8",
+        env=tool_environment(),
+    )
+    sys.stdout.write(p.stdout)
+    sys.stdout.flush()
+    sys.stderr.write(p.stderr)
+    sys.stderr.flush()
+    sys.exit(p.returncode)
+
+
+def tool_environment(env=None):
+    """Returns a dict of environment for launching an external process."""
+    # Adds our GIT_CONFIG_PARAMETERS to os.environ, so that if we launch git as a subprocess, it will have the config we want.
+    # TODO - a bit strange that this function modifies both the actual os.environ and the tool_environment that generally inherits
+    # from it - we should stick to modifying one or the other.
+    init_git_config()
+    # TODO - tool_environment would be easier to use if you could supply it with a dict of extra environment variables that
+    # you need, instead of having to supply the entire env.
+    env = (env or os.environ).copy()
+
+    # Add kart bin directory to the start of the path:
+    kart_bin_path = str(Path(sys.executable).parents[0])
+    if "PATH" in env:
+        env["PATH"] = kart_bin_path + os.pathsep + env["PATH"]
+    else:
+        env["PATH"] = kart_bin_path
+
+    if platform.system() == "Linux":
+        # https://pyinstaller.readthedocs.io/en/stable/runtime-information.html#ld-library-path-libpath-considerations
+        if "LD_LIBRARY_PATH_ORIG" in env:
+            env["LD_LIBRARY_PATH"] = env["LD_LIBRARY_PATH_ORIG"]
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    return env
+
+
+_ORIG_GIT_CONFIG_PARAMETERS = os.environ.get("GIT_CONFIG_PARAMETERS")
+
+
+# These are all the Kart defaults that differ from git's defaults.
+# (all of these can still be overridden by setting them in a git config file.)
+GIT_CONFIG_DEFAULT_OVERRIDES = {
+    # git will change to this branch sooner or later, but hasn't yet.
+    "init.defaultBranch": "main",
+    # Deltified objects seem to affect clone and diff performance really badly
+    # for Kart repos. So we disable them by default.
+    "pack.depth": 0,
+    "pack.window": 0,
+}
+if platform.system() == "Linux":
+    import certifi
+
+    GIT_CONFIG_DEFAULT_OVERRIDES["http.sslCAInfo"] = certifi.where()
+
+# These are the settings that Kart always *overrides* in git config.
+# i.e. regardless of your local git settings, kart will use these settings instead.
+GIT_CONFIG_FORCE_OVERRIDES = {
+    # We use base64 for feature paths.
+    # "kcya" and "kcyA" are *not* the same feature; that way lies data loss
+    "core.ignoreCase": "false",
+}
+
+
+# from https://github.com/git/git/blob/ebf3c04b262aa27fbb97f8a0156c2347fecafafb/quote.c#L12-L44
+def _git_sq_quote_buf(src):
+    dst = src.replace("'", r"'\''").replace("!", r"'\!'")
+    return f"'{dst}'"
+
+
+@functools.lru_cache()
+def init_git_config():
+    """
+    Initialises default config values that differ from git's defaults.
+    """
+    configs = list(_pygit2_configs())
+    new_config_params = []
+    for k, v in GIT_CONFIG_DEFAULT_OVERRIDES.items():
+        for config in configs:
+            if k in config:
+                break
+        else:
+            new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
+    for k, v in GIT_CONFIG_FORCE_OVERRIDES.items():
+        new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
+
+    if new_config_params:
+        os.environ["GIT_CONFIG_PARAMETERS"] = " ".join(
+            filter(None, [*new_config_params, _ORIG_GIT_CONFIG_PARAMETERS])
+        )
+
+
+def _pygit2_configs():
+    """
+    Yields pygit2.Config objects in order of decreasing specificity.
+    """
+    import pygit2
+
+    try:
+        # ~/.gitconfig
+        yield pygit2.Config.get_global_config()
+    except OSError:
+        pass
+    try:
+        # ~/.config/git/config
+        yield pygit2.Config.get_xdg_config()
+    except OSError:
+        pass
+
+    if "GIT_CONFIG_NOSYSTEM" not in os.environ:
+        # /etc/gitconfig
+        try:
+            yield pygit2.Config.get_system_config()
+        except OSError:
+            pass

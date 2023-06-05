@@ -1,19 +1,15 @@
-import functools
 import io
 import json
-import os
 import logging
 import platform
-import warnings
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 
 import click
-import pygit2
 from click.core import Argument
 from click.shell_completion import CompletionItem
+
+from kart import subprocess_util as subprocess
 
 L = logging.getLogger("kart.cli_util")
 
@@ -109,107 +105,6 @@ def render_windows(command_path: str) -> bytes:
     if not text_page.exists():
         raise FileNotFoundError(f"{text_page} not found at given path")
     click.echo_via_pager(text_page.read_text())
-
-
-def _pygit2_configs():
-    """
-    Yields pygit2.Config objects in order of decreasing specificity.
-    """
-    try:
-        # ~/.gitconfig
-        yield pygit2.Config.get_global_config()
-    except OSError:
-        pass
-    try:
-        # ~/.config/git/config
-        yield pygit2.Config.get_xdg_config()
-    except OSError:
-        pass
-
-    if "GIT_CONFIG_NOSYSTEM" not in os.environ:
-        # /etc/gitconfig
-        try:
-            yield pygit2.Config.get_system_config()
-        except OSError:
-            pass
-
-
-# These are all the Kart defaults that differ from git's defaults.
-# (all of these can still be overridden by setting them in a git config file.)
-GIT_CONFIG_DEFAULT_OVERRIDES = {
-    # git will change to this branch sooner or later, but hasn't yet.
-    "init.defaultBranch": "main",
-    # Deltified objects seem to affect clone and diff performance really badly
-    # for Kart repos. So we disable them by default.
-    "pack.depth": 0,
-    "pack.window": 0,
-}
-if platform.system() == "Linux":
-    import certifi
-
-    GIT_CONFIG_DEFAULT_OVERRIDES["http.sslCAInfo"] = certifi.where()
-
-# These are the settings that Kart always *overrides* in git config.
-# i.e. regardless of your local git settings, kart will use these settings instead.
-GIT_CONFIG_FORCE_OVERRIDES = {
-    # We use base64 for feature paths.
-    # "kcya" and "kcyA" are *not* the same feature; that way lies data loss
-    "core.ignoreCase": "false",
-}
-
-
-# from https://github.com/git/git/blob/ebf3c04b262aa27fbb97f8a0156c2347fecafafb/quote.c#L12-L44
-def _git_sq_quote_buf(src):
-    dst = src.replace("'", r"'\''").replace("!", r"'\!'")
-    return f"'{dst}'"
-
-
-_ORIG_GIT_CONFIG_PARAMETERS = os.environ.get("GIT_CONFIG_PARAMETERS")
-
-
-@functools.lru_cache()
-def init_git_config():
-    """
-    Initialises default config values that differ from git's defaults.
-    """
-    configs = list(_pygit2_configs())
-    new_config_params = []
-    for k, v in GIT_CONFIG_DEFAULT_OVERRIDES.items():
-        for config in configs:
-            if k in config:
-                break
-        else:
-            new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
-    for k, v in GIT_CONFIG_FORCE_OVERRIDES.items():
-        new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
-
-    if new_config_params:
-        os.environ["GIT_CONFIG_PARAMETERS"] = " ".join(
-            filter(None, [*new_config_params, _ORIG_GIT_CONFIG_PARAMETERS])
-        )
-
-
-def tool_environment(env=None):
-    """
-    Returns a dict of environment for launching an external process
-    """
-    init_git_config()
-    env = (env or os.environ).copy()
-
-    # Add kart bin directory to the start of the path:
-    kart_bin_path = str(Path(sys.executable).parents[0])
-    if "PATH" in env:
-        env["PATH"] = kart_bin_path + os.pathsep + env["PATH"]
-    else:
-        env["PATH"] = kart_bin_path
-
-    if platform.system() == "Linux":
-        # https://pyinstaller.readthedocs.io/en/stable/runtime-information.html#ld-library-path-libpath-considerations
-        if "LD_LIBRARY_PATH_ORIG" in env:
-            env["LD_LIBRARY_PATH"] = env["LD_LIBRARY_PATH_ORIG"]
-        else:
-            env.pop("LD_LIBRARY_PATH", None)
-    return env
 
 
 def add_help_subcommand(group):

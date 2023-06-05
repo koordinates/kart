@@ -10,7 +10,6 @@ import pygit2
 import pytest
 
 from kart import cli
-from kart.cli_util import tool_environment
 
 
 H = pytest.helpers.helpers()
@@ -78,30 +77,6 @@ def test_config(empty_gitconfig, cli_runner):
     r = cli_runner.invoke(["config", "init.defaultBranch"])
     assert r.exit_code == 0, r.stderr
     assert r.stdout == "main\n"
-
-
-def test_cli_tool_environment():
-    env_exec = tool_environment()
-    assert len(env_exec)
-    assert env_exec is not os.environ
-    assert sys.executable.startswith(env_exec["PATH"].split(os.pathsep)[0])
-
-    if platform.system() == "Linux":
-        env_in = {"LD_LIBRARY_PATH": "bob", "LD_LIBRARY_PATH_ORIG": "alex", "my": "me"}
-        env_exec = tool_environment(env_in)
-        assert env_exec is not env_in
-        assert env_exec["LD_LIBRARY_PATH"] == "alex"
-        assert env_exec["my"] == "me"
-
-        env_in = {"LD_LIBRARY_PATH": "bob", "my": "me"}
-        env_exec = tool_environment(env_in)
-        assert "LD_LIBRARY_PATH" not in env_exec
-    else:
-        env_in = {"my": "me"}
-        env_exec = tool_environment(env_in)
-        assert env_exec is not env_in
-        env_exec.pop("PATH", None)
-        assert env_exec == env_in
 
 
 def test_ext_run(tmp_path, cli_runner, sys_path_reset):

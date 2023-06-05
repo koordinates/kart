@@ -1,11 +1,9 @@
 import json
 import os
-import subprocess
 import tempfile
 
 import pytest
 
-from kart.cli_util import tool_environment
 from kart.exceptions import (
     INVALID_ARGUMENT,
     NO_SPATIAL_FILTER,
@@ -15,6 +13,7 @@ from kart.exceptions import (
 from kart.geometry import ring_as_wkt, bbox_as_wkt_polygon
 from kart.promisor_utils import FetchPromisedBlobsProcess, LibgitSubcode
 from kart.repo import KartRepo
+from kart import subprocess_util as subprocess
 
 H = pytest.helpers.helpers()
 
@@ -25,13 +24,11 @@ def git_supports_filter_extensions():
     with tempfile.TemporaryDirectory() as td:
         subprocess.run(
             ["git", "-C", td, "init", "--quiet", "."],
-            env=tool_environment(),
             check=True,
         )
 
         p = subprocess.run(
             ["git", "-C", td, "rev-list", "--filter=extension:z", "--objects"],
-            env=tool_environment(),
             stderr=subprocess.PIPE,
             text=True,
         )
@@ -69,7 +66,6 @@ def git_supports_spatial_filter(git_supports_filter_extensions):
     with tempfile.TemporaryDirectory() as td:
         subprocess.run(
             ["git", "-C", td, "init", "--quiet", "."],
-            env=tool_environment(),
             check=True,
         )
 
@@ -82,7 +78,6 @@ def git_supports_spatial_filter(git_supports_filter_extensions):
                 "--max-count=1",
                 "--filter=extension:spatial=1,2,3,4",
             ],
-            env=tool_environment(),
             stderr=subprocess.PIPE,
             text=True,
         )

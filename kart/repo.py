@@ -2,7 +2,6 @@ import logging
 import os
 import re
 import struct
-import subprocess
 import sys
 from enum import Enum
 from functools import lru_cache
@@ -11,9 +10,8 @@ from pathlib import Path
 import click
 import pygit2
 
-from . import is_windows
-from .cli_util import tool_environment
-from .exceptions import (
+from kart import is_windows
+from kart.exceptions import (
     NO_REPOSITORY,
     NO_SPATIAL_FILTER_INDEX,
     InvalidOperation,
@@ -29,9 +27,10 @@ from kart.tabular.version import (
     ensure_supported_repo_wide_version,
     get_repo_wide_version,
 )
-from .structure import RepoStructure
-from .timestamps import tz_offset_to_minutes
-from .working_copy import WorkingCopy
+from kart.structure import RepoStructure
+from kart import subprocess_util as subprocess
+from kart.timestamps import tz_offset_to_minutes
+from kart.working_copy import WorkingCopy
 
 L = logging.getLogger("kart.repo")
 
@@ -372,9 +371,7 @@ class KartRepo(pygit2.Repository):
 
     @classmethod
     def _create_with_git_command(cls, cmd, gitdir_path, temp_workdir_path=None):
-        from .subprocess_util import subprocess_tee
-
-        returncode, stdout, stderr = subprocess_tee(cmd, env=tool_environment())
+        returncode, stdout, stderr = subprocess.run_and_tee_output(cmd)
         if returncode != 0:
             raise SubprocessError(
                 f"Error calling {cmd[0]} {cmd[1]}", exit_code=returncode, stderr=stderr
@@ -527,10 +524,8 @@ class KartRepo(pygit2.Repository):
         if is_windows:
             # Hide .git and .kart
             # Best effort: if it doesn't work for some reason, continue anyway.
-            subprocess.call(["attrib", "+h", str(dot_git_path)], env=tool_environment())
-            subprocess.call(
-                ["attrib", "+h", str(dot_kart_path)], env=tool_environment()
-            )
+            subprocess.call(["attrib", "+h", str(dot_git_path)])
+            subprocess.call(["attrib", "+h", str(dot_kart_path)])
 
     @property
     def branding(self):
@@ -637,9 +632,7 @@ class KartRepo(pygit2.Repository):
     def invoke_git(self, *args, **kwargs):
         try:
             args = ["git", *args]
-            subprocess.check_call(
-                args, env=tool_environment(), cwd=self.workdir_path, **kwargs
-            )
+            subprocess.check_call(args, cwd=self.workdir_path, **kwargs)
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
@@ -758,7 +751,7 @@ class KartRepo(pygit2.Repository):
             ["git", "var", f"GIT_{person_type}_IDENT"],
             cwd=self.path,
             encoding="utf8",
-            env=tool_environment(env),
+            env=subprocess.tool_environment(env),
         )
         m = self._GIT_VAR_OUTPUT_RE.match(output)
         kwargs = m.groupdict()
@@ -817,9 +810,7 @@ class KartRepo(pygit2.Repository):
         # Caused by https://github.com/libgit2/libgit2/issues/6123
         try:
             args = ["git", "-C", self.path, "merge-base", str(oid1), str(oid2)]
-            output = subprocess.check_output(
-                args, encoding="utf8", env=tool_environment()
-            )
+            output = subprocess.check_output(args, encoding="utf8")
             return pygit2.Oid(hex=output.strip())
         except subprocess.CalledProcessError:
             return None

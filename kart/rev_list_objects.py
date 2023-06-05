@@ -2,13 +2,12 @@
 # For example, reachable from commits A, B, C, but not from D, E, F (which have already been taken care of).
 
 import re
-import subprocess
 
 import pygit2
 
 from kart.core import all_trees_with_paths_in_tree
-from kart.cli_util import tool_environment
 from kart.exceptions import SubprocessError
+from kart import subprocess_util as subprocess
 
 
 def _rev_list_commits_command(repo):
@@ -51,11 +50,7 @@ def rev_list_object_oids(repo, start_commits, stop_commits, pathspecs):
     ]
     try:
         with subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            encoding="utf8",
-            env=tool_environment(),
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding="utf8"
         ) as p:
             p.stdin.write("\n".join(["--", *pathspecs]))
             p.stdin.close()
@@ -83,12 +78,7 @@ def get_dataset_pathspecs(repo, start_commits, stop_commits, dirname_filter):
     ]
     result = set()
     try:
-        with subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            encoding="utf8",
-            env=tool_environment(),
-        ) as p:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, encoding="utf8") as p:
             for line in p.stdout:
                 commit = repo[line.strip()]
                 for tree_path, tree in all_trees_with_paths_in_tree(commit.tree):

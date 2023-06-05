@@ -3,13 +3,12 @@ import itertools
 import os
 import pygit2
 import re
-import subprocess
 import sys
 import tempfile
 
 import click
 
-from kart.cli_util import KartGroup, add_help_subcommand, tool_environment
+from kart.cli_util import KartGroup, add_help_subcommand
 from kart.exceptions import SubprocessError, InvalidOperation
 from kart.lfs_util import (
     pointer_file_bytes_to_dict,
@@ -19,8 +18,9 @@ from kart.lfs_util import (
 from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
-from kart.structs import CommitWithReference
 from kart.spatial_filter import SpatialFilter
+from kart.structs import CommitWithReference
+from kart import subprocess_util as subprocess
 from kart.tile import ALL_TILE_DATASET_TYPES
 
 EMPTY_SHA = "0" * 40
@@ -172,7 +172,6 @@ def push_lfs_oids(repo, remote_name, lfs_oids):
 def _git_lfs_supports_stdin(repo):
     r = subprocess.run(
         ["git-lfs", "push", "?", "--object-id", "--stdin"],
-        env=tool_environment(),
         cwd=repo.workdir_path,
         capture_output=True,
         text=True,
@@ -190,7 +189,6 @@ def _push_lfs_oids_using_stdin(repo, remote_name, lfs_oids):
             # TODO - capture progress reporting and do our own.
             subprocess.check_call(
                 ["git-lfs", "push", remote_name, "--object-id", "--stdin"],
-                env=tool_environment(),
                 cwd=repo.workdir_path,
                 stdin=oid_file,
             )
@@ -205,7 +203,6 @@ def _push_lfs_oids_using_args(repo, remote_name, lfs_oids):
         # TODO - capture progress reporting and do our own.
         subprocess.check_call(
             ["git-lfs", "push", remote_name, "--object-id", *lfs_oids],
-            env=tool_environment(),
             cwd=repo.workdir_path,
         )
     except subprocess.CalledProcessError as e:
@@ -346,7 +343,6 @@ def fetch_lfs_blobs_for_pointer_files(
         extra_kwargs = {"stdout": subprocess.DEVNULL} if quiet else {}
         subprocess.check_call(
             ["git-lfs", "fetch", remote_name, tree.hex],
-            env=tool_environment(),
             cwd=repo.workdir_path,
             **extra_kwargs,
         )

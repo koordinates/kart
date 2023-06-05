@@ -1,10 +1,10 @@
-import subprocess
 import threading
 
 import pygit2
 
 from kart.diff_util import get_dataset_diff
 from kart.exceptions import SubprocessError
+from kart import subprocess_util as subprocess
 
 ACCURACY_SUBTREE_SAMPLES = {
     "veryfast": 2,
