@@ -20,9 +20,26 @@ from functools import partial
 
 # 2. sys.stdin, sys.stdout, sys.stderr: When Kart is run in helper mode, these variables are updated
 # each time a new kart process connects to the helper daemon to be the same as the file-descriptors
-# from the calling process. However, the default stdin,stderr,stdout parameters of subprocess.call
-# are not updated accordingly - that means, when running in helper mode, these parameters need to
-# be set explicitly every time a subprocess is called.
+# from the calling process. This is due to the following flow:
+
+# User opens a new terminal, which has its stdin,stdout,stderr connected to eg /dev/tty1
+# User runs kart - actually the lightweight kart.c executable. It too is connected to /dev/tty1
+# kart.c executable connects to *this process* - a longer running `kart helper` python daemon.
+# Its stdin,stdout,stderr will already be connected to *something* - depending on what it did last -
+# but now its stdin,stdout,stderr need to be updated to /dev/tty1 to match the kart.c executable.
+# These file-descriptors are sent to the `kart helper` daemon using `sendmsg`.
+# The variables sys.stdin, sys.stdout and sys.stderr and updated using these new values.
+# This means that the python process can now use these variables as normal, and everything -
+# click.echo, print, etc - works exactly as if the user had just run the kart python process directly.
+
+# Except: Somewhere deep inside python, the original file-descriptors for stdin, stdout and stderr
+# are still stored. This shows up if we do a call such as subprocess.run(["pwd"]) without explicitly
+# setting stdin, stdout, stderr - these parameters don't default to sys.stdin, sys.stdout and
+# sys.stderr (which is what we would like) but instead default to the original value of stdin,
+# stdout, and stderr. This would mean that the subprocess that Kart runs could end up connected
+# to a different tty to Kart itself, which is obviously not what we want. So, in this module,
+# we simply fix the defaults of these parameters to be sys.stdin, sys.stdout, and sys.stderr,
+# anytime that this process is run in helper mode.
 
 # Every method here - run, call, check_call, check_output, run_and_tee_output, run_then_exit -
 # makes sure to set these parameters explicitly when run in helper mode.
@@ -77,6 +94,7 @@ def add_default_kwargs(kwargs_dict, check_output=False):
         kwargs_dict.setdefault("env", tool_environment())
 
     # Specifically set sys.stdin, sys.stderr, sys.stdout if this is running via helper mode.
+    # See the explanation for why we need this at the top of the file.
     if os.environ.get("KART_HELPER_PID"):
         if "input" not in kwargs_dict:
             kwargs_dict.setdefault("stdin", sys.stdin)
@@ -266,7 +284,12 @@ def _run_with_capture_then_exit(cmd):
 
 def tool_environment(env=None):
     """Returns a dict of environment for launching an external process."""
+    # Adds our GIT_CONFIG_PARAMETERS to os.environ, so that if we launch git as a subprocess, it will have the config we want.
+    # TODO - a bit strange that this function modifies both the actual os.environ and the tool_environment that generally inherits
+    # from it - we should stick to modifying one or the other.
     init_git_config()
+    # TODO - tool_environment would be easier to use if you could supply it with a dict of extra environment variables that
+    # you need, instead of having to supply the entire env.
     env = (env or os.environ).copy()
 
     # Add kart bin directory to the start of the path:
