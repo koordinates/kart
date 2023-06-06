@@ -737,21 +737,21 @@ class KartRepo(pygit2.Repository):
         # 'git var' lets us use the environment variables to
         # control the user info, e.g. GIT_AUTHOR_DATE.
         # libgit2/pygit2 doesn't handle those env vars at all :(
-        env = os.environ.copy()
+        env_overrides = {}
 
         name = overrides.pop("name", None)
         if name is not None:
-            env[f"GIT_{person_type}_NAME"] = name
+            env_overrides[f"GIT_{person_type}_NAME"] = name
 
         email = overrides.pop("email", None)
         if email is not None:
-            env[f"GIT_{person_type}_EMAIL"] = email
+            env_overrides[f"GIT_{person_type}_EMAIL"] = email
 
         output = subprocess.check_output(
             ["git", "var", f"GIT_{person_type}_IDENT"],
             cwd=self.path,
             encoding="utf8",
-            env=subprocess.tool_environment(env),
+            env_overrides=env_overrides,
         )
         m = self._GIT_VAR_OUTPUT_RE.match(output)
         kwargs = m.groupdict()

@@ -979,8 +979,7 @@ def test_working_copy_mtime_updated(cli_runner, data_archive, requires_pdal):
         assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
 
         repo = KartRepo(repo_path)
-        env = subprocess.tool_environment()
-        env["GIT_INDEX_FILE"] = str(repo.working_copy.workdir.index_path)
+        env_overrides = {"GIT_INDEX_FILE": str(repo.working_copy.workdir.index_path)}
 
         def get_touched_files():
             # git diff-files never compares OIDs - it just lists files which appear
@@ -988,7 +987,10 @@ def test_working_copy_mtime_updated(cli_runner, data_archive, requires_pdal):
             cmd = ["git", "diff-files"]
             return (
                 subprocess.check_output(
-                    cmd, env=env, encoding="utf-8", cwd=repo.workdir_path
+                    cmd,
+                    env_overrides=env_overrides,
+                    encoding="utf-8",
+                    cwd=repo.workdir_path,
                 )
                 .strip()
                 .splitlines()

@@ -89,11 +89,18 @@ def Popen(cmd, **kwargs):
 
 
 def add_default_kwargs(kwargs_dict, check_output=False):
-    # Set up the environment if not supplied by the caller.
-    if "env" not in kwargs_dict:
-        kwargs_dict.setdefault("env", tool_environment())
+    # We could allow the caller to supply the env, but env_overrides is generally more useful.
+    # You can disable this assert if you are sure you need this (and not env_overrides).
+    assert "env" not in kwargs_dict
 
-    # Specifically set sys.stdin, sys.stderr, sys.stdout if this is running via helper mode.
+    if "env_overrides" in kwargs_dict:
+        env = tool_environment(env_overrides=kwargs_dict.pop("env_overrides"))
+    else:
+        env = tool_environment()
+
+    kwargs_dict["env"] = env
+
+    # Explicitly set sys.stdin, sys.stderr, sys.stdout if this is running via helper mode.
     # See the explanation for why we need this at the top of the file.
     if os.environ.get("KART_HELPER_PID"):
         if "input" not in kwargs_dict:
@@ -282,15 +289,21 @@ def _run_with_capture_then_exit(cmd):
     sys.exit(p.returncode)
 
 
-def tool_environment(env=None):
-    """Returns a dict of environment for launching an external process."""
+def tool_environment(*, base_env=None, env_overrides=None):
+    """
+    Returns a dict of environment variables for launching an external process.
+    Sets the PATH, GIT_CONFIG_PARAMETERS, etc appropriately.
+
+    base_env - the environment to start from, defaults to os.environ if not set.
+    env_overrides - any extra environment variables to add after the tool-environment
+    """
     # Adds our GIT_CONFIG_PARAMETERS to os.environ, so that if we launch git as a subprocess, it will have the config we want.
     # TODO - a bit strange that this function modifies both the actual os.environ and the tool_environment that generally inherits
     # from it - we should stick to modifying one or the other.
     init_git_config()
     # TODO - tool_environment would be easier to use if you could supply it with a dict of extra environment variables that
     # you need, instead of having to supply the entire env.
-    env = (env or os.environ).copy()
+    env = (base_env or os.environ).copy()
 
     # Add kart bin directory to the start of the path:
     kart_bin_path = str(Path(sys.executable).parents[0])
@@ -305,6 +318,9 @@ def tool_environment(env=None):
             env["LD_LIBRARY_PATH"] = env["LD_LIBRARY_PATH_ORIG"]
         else:
             env.pop("LD_LIBRARY_PATH", None)
+
+    if env_overrides:
+        env.update(env_overrides)
     return env
 
 

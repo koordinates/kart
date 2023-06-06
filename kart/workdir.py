@@ -668,8 +668,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         paths = [path(d) for d in datasets]
 
-        env = subprocess.tool_environment()
-        env["GIT_INDEX_FILE"] = str(self.index_path)
+        env_overrides = {"GIT_INDEX_FILE": str(self.index_path)}
 
         try:
             # Use Git to figure out which files in the in the index need to be updated.
@@ -684,7 +683,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 *paths,
             ]
             output_lines = (
-                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                subprocess.check_output(
+                    cmd, env_overrides=env_overrides, encoding="utf-8", cwd=self.path
+                )
                 .strip()
                 .splitlines()
             )
@@ -727,15 +728,14 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         # the file's `stat` information - this allows for an optimisation where diffs can be generated
         # without hashing the working copy files. pygit2.Index doesn't give easy access to this info.
 
-        env = subprocess.tool_environment()
-        env["GIT_INDEX_FILE"] = str(self.index_path)
+        env_overrides = {"GIT_INDEX_FILE": str(self.index_path)}
 
         try:
             cmd = ["git", "update-index", "--add", "--remove", "-z", "--stdin"]
             subprocess.run(
                 cmd,
                 check=True,
-                env=env,
+                env_overrides=env_overrides,
                 cwd=self.path,
                 input="\0".join(file_paths),
                 encoding="utf-8",
@@ -852,22 +852,25 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         dataset.write_mosaic_for_directory((self.path / dataset.path).resolve())
 
     def dirty_paths(self):
-        env = subprocess.tool_environment()
-        env["GIT_INDEX_FILE"] = str(self.index_path)
+        env_overrides = {"GIT_INDEX_FILE": str(self.index_path)}
 
         try:
             # This finds all files in the index that have been modified - and updates any mtimes in the index
             # if the mtimes are stale but the files are actually unchanged (as in GIT_DIFF_UPDATE_INDEX).
             cmd = ["git", "diff", "--name-only"]
             output_lines = (
-                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                subprocess.check_output(
+                    cmd, env_overrides=env_overrides, encoding="utf-8", cwd=self.path
+                )
                 .strip()
                 .splitlines()
             )
             # This finds all untracked files that are not in the index.
             cmd = ["git", "ls-files", "--others", "--exclude-standard"]
             output_lines += (
-                subprocess.check_output(cmd, env=env, encoding="utf-8", cwd=self.path)
+                subprocess.check_output(
+                    cmd, env_overrides=env_overrides, encoding="utf-8", cwd=self.path
+                )
                 .strip()
                 .splitlines()
             )
