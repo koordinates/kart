@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import click
 
 from kart import is_windows
@@ -231,6 +233,7 @@ def table_import(
 
     repo = ctx.obj.repo
     check_git_user(repo)
+    check_for_import_from_within_working_copy(repo, source)
 
     base_import_source = TableImportSource.open(source)
     if all_tables:
@@ -347,3 +350,44 @@ def table_import(
         repo_key_filter=RepoKeyFilter.datasets(new_ds_paths),
         create_parts_if_missing=parts_to_create,
     )
+
+
+def check_for_import_from_within_working_copy(repo, source):
+    """Don't allow an import from a source that is already within the working copy."""
+    from kart.sqlalchemy import (
+        DbType,
+        strip_username_and_password,
+        truncate_to_path_length,
+    )
+
+    wc_location = repo.workingcopy_location
+    if not wc_location:
+        return
+    wc_type = DbType.from_spec(wc_location)
+    source_type = DbType.from_spec(source)
+    if not wc_type or not source_type or wc_type != source_type:
+        return
+
+    if wc_type == DbType.GPKG:
+        source_path = Path(source)
+        is_wc_import = _same_file(repo.workdir_path / wc_location, source_path)
+    else:
+        wc_location = strip_username_and_password(wc_location)
+        source = strip_username_and_password(source)
+        source = truncate_to_path_length(
+            source, wc_type.path_length_for_table_container
+        )
+        is_wc_import = wc_location == source
+
+    if is_wc_import:
+        raise click.UsageError(
+            "Import-source is already inside working-copy.\n"
+            "The `kart import` command creates a new Kart dataset that is a copy of a supplied import-source that is external to Kart.\n"
+            "It looks like you want Kart to start tracking and take control of a table that is already inside Kart's working copy.\n"
+            "To have Kart start tracking a table that is already inside the working copy, use `kart add-dataset TABLENAME`\n"
+            "To see a list of tables inside the working copy that are untracked, use `kart status --list-untracked-tables`\n"
+        )
+
+
+def _same_file(path1, path2):
+    return path1.exists() and path2.exists() and path1.samefile(path2)
