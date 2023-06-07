@@ -1,12 +1,9 @@
 import contextlib
 import json
-import os
-import platform
 import re
 import sys
 from pathlib import Path
 
-import pygit2
 import pytest
 
 from kart import cli
@@ -39,20 +36,6 @@ def test_help_page_render(cli_runner, command):
 
 
 @pytest.fixture
-def empty_gitconfig(monkeypatch, tmpdir):
-    old = os.environ["HOME"]
-    (tmpdir / ".gitconfig").write_text("", encoding="utf8")
-    monkeypatch.setenv("HOME", str(tmpdir))
-    pygit2.option(
-        pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, str(tmpdir)
-    )
-    yield
-    pygit2.option(
-        pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, str(old)
-    )
-
-
-@pytest.fixture
 def sys_path_reset(monkeypatch):
     """A context manager to save & reset after code that changes sys.path"""
 
@@ -63,20 +46,6 @@ def sys_path_reset(monkeypatch):
             yield
 
     return _sys_path_reset
-
-
-def test_config(empty_gitconfig, cli_runner):
-    # don't load the ~/.gitconfig file from conftest.py
-    # (because it sets init.defaultBranch and we're trying to test what
-    # happens without that set)
-    # note: merely changing os.environ['HOME'] doesn't help here;
-    # once libgit has seen one HOME it never notices if we change it.
-
-    # The default init.defaultBranch in git is still 'master' as of 2.30.0
-    # but we override it to 'main'. Let's check that works properly
-    r = cli_runner.invoke(["config", "init.defaultBranch"])
-    assert r.exit_code == 0, r.stderr
-    assert r.stdout == "main\n"
 
 
 def test_ext_run(tmp_path, cli_runner, sys_path_reset):

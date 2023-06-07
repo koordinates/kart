@@ -421,9 +421,6 @@ class KartCliRunner(CliRunner):
 
     def invoke(self, args=None, **kwargs):
         from kart.cli import load_commands_from_args, cli
-        from kart.subprocess_util import init_git_config
-
-        init_git_config.cache_clear()
 
         if args:
             # force everything to strings (eg. PathLike objects, numbers)

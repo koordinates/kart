@@ -295,22 +295,14 @@ def tool_environment(*, base_env=None, env_overrides=None):
     Sets the PATH, GIT_CONFIG_PARAMETERS, etc appropriately.
 
     base_env - the environment to start from, defaults to os.environ if not set.
-    env_overrides - any extra environment variables to add after the tool-environment
+    env_overrides - any caller-provided extra environment variables to add after the tool-environment
+        is configured.
     """
-    # Adds our GIT_CONFIG_PARAMETERS to os.environ, so that if we launch git as a subprocess, it will have the config we want.
-    # TODO - a bit strange that this function modifies both the actual os.environ and the tool_environment that generally inherits
-    # from it - we should stick to modifying one or the other.
-    init_git_config()
-    # TODO - tool_environment would be easier to use if you could supply it with a dict of extra environment variables that
-    # you need, instead of having to supply the entire env.
     env = (base_env or os.environ).copy()
 
-    # Add kart bin directory to the start of the path:
-    kart_bin_path = str(Path(sys.executable).parents[0])
-    if "PATH" in env:
-        env["PATH"] = kart_bin_path + os.pathsep + env["PATH"]
-    else:
-        env["PATH"] = kart_bin_path
+    tool_env_overrides = get_tool_environment_overrides()
+    _merge_env_variable(env, "PATH", tool_env_overrides, env, os.pathsep)
+    _merge_env_variable(env, "GIT_CONFIG_PARAMETERS", tool_env_overrides, env, " ")
 
     if platform.system() == "Linux":
         # https://pyinstaller.readthedocs.io/en/stable/runtime-information.html#ld-library-path-libpath-considerations
@@ -324,7 +316,29 @@ def tool_environment(*, base_env=None, env_overrides=None):
     return env
 
 
-_ORIG_GIT_CONFIG_PARAMETERS = os.environ.get("GIT_CONFIG_PARAMETERS")
+def _merge_env_variable(output_dict, key, lhs_dict, rhs_dict, separator):
+    lhs_value = lhs_dict.get(key)
+    rhs_value = rhs_dict.get(key)
+    if lhs_value or rhs_value:
+        output_dict[key] = _merge_env_variable_value(lhs_value, rhs_value, separator)
+
+
+def _merge_env_variable_value(lhs_value, rhs_value, separator):
+    if not lhs_value:
+        return rhs_value
+    if not rhs_value:
+        return lhs_value
+    return f"{lhs_value}{separator}{rhs_value}"
+
+
+@functools.lru_cache(maxsize=1)
+def get_tool_environment_overrides():
+    return {
+        # Add kart bin directory to the start of the path:
+        "PATH": str(Path(sys.executable).parents[0]),
+        # Modify git config:
+        "GIT_CONFIG_PARAMETERS": get_git_config_parameters(),
+    }
 
 
 # These are all the Kart defaults that differ from git's defaults.
@@ -351,14 +365,7 @@ GIT_CONFIG_FORCE_OVERRIDES = {
 }
 
 
-# from https://github.com/git/git/blob/ebf3c04b262aa27fbb97f8a0156c2347fecafafb/quote.c#L12-L44
-def _git_sq_quote_buf(src):
-    dst = src.replace("'", r"'\''").replace("!", r"'\!'")
-    return f"'{dst}'"
-
-
-@functools.lru_cache()
-def init_git_config():
+def get_git_config_parameters():
     """
     Initialises default config values that differ from git's defaults.
     """
@@ -370,13 +377,17 @@ def init_git_config():
                 break
         else:
             new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
+
     for k, v in GIT_CONFIG_FORCE_OVERRIDES.items():
         new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
 
-    if new_config_params:
-        os.environ["GIT_CONFIG_PARAMETERS"] = " ".join(
-            filter(None, [*new_config_params, _ORIG_GIT_CONFIG_PARAMETERS])
-        )
+    return " ".join(new_config_params)
+
+
+# from https://github.com/git/git/blob/ebf3c04b262aa27fbb97f8a0156c2347fecafafb/quote.c#L12-L44
+def _git_sq_quote_buf(src):
+    dst = src.replace("'", r"'\''").replace("!", r"'\!'")
+    return f"'{dst}'"
 
 
 def _pygit2_configs():
