@@ -233,7 +233,7 @@ def table_import(
 
     repo = ctx.obj.repo
     check_git_user(repo)
-    check_for_import_from_within_working_copy(repo, source)
+    check_for_import_from_within_working_copy(repo, source, tables)
 
     base_import_source = TableImportSource.open(source)
     if all_tables:
@@ -352,13 +352,14 @@ def table_import(
     )
 
 
-def check_for_import_from_within_working_copy(repo, source):
+def check_for_import_from_within_working_copy(repo, source, tables):
     """Don't allow an import from a source that is already within the working copy."""
-    from kart.sqlalchemy import (
-        DbType,
-        strip_username_and_password,
-        truncate_to_path_length,
-    )
+    from kart.sqlalchemy import DbType, strip_username_and_password, strip_query
+
+    if tables and all(":" in t for t in tables):
+        # Every table has been renamed.
+        # User can import from the WC as long as they rename everything, although it's a bit of a strange thing to do.
+        return
 
     wc_location = repo.workingcopy_location
     if not wc_location:
@@ -372,18 +373,20 @@ def check_for_import_from_within_working_copy(repo, source):
         source_path = Path(source)
         is_wc_import = _same_file(repo.workdir_path / wc_location, source_path)
     else:
-        wc_location = strip_username_and_password(wc_location)
-        source = strip_username_and_password(source)
-        source = truncate_to_path_length(
-            source, wc_type.path_length_for_table_container
-        )
-        is_wc_import = wc_location == source
+
+        def normalise_uri(uri):
+            uri = strip_username_and_password(uri)
+            uri = strip_query(uri)
+            return uri.rstrip("/")
+
+        wc_location = normalise_uri(wc_location)
+        source = normalise_uri(source)
+        is_wc_import = wc_location == source or source.startswith(wc_location + "/")
 
     if is_wc_import:
         raise click.UsageError(
             "Import-source is already inside working-copy.\n"
-            "The `kart import` command creates a new Kart dataset that is a copy of a supplied import-source that is external to Kart.\n"
-            "It looks like you want Kart to start tracking and take control of a table that is already inside Kart's working copy.\n"
+            "The `kart import` command creates a new Kart dataset by copying from an import-source that is external to Kart.\n"
             "To have Kart start tracking a table that is already inside the working copy, use `kart add-dataset TABLENAME`\n"
             "To see a list of tables inside the working copy that are untracked, use `kart status --list-untracked-tables`\n"
         )

@@ -135,6 +135,14 @@ def strip_password(uri):
     return p.geturl()
 
 
+def strip_query(uri):
+    """Removes query parameters from URI."""
+    p = urlsplit(uri)
+    if p.query is not None:
+        p = p._replace(query=None)
+    return p.geturl()
+
+
 def separate_last_path_part(uri):
     """
     Removes the last part of the path from a URI and returns it separately.
@@ -151,26 +159,6 @@ def separate_last_path_part(uri):
         [url.scheme, url.netloc, modified_url_path, url.query, ""]
     )
     return (modified_url, last_part)
-
-
-def truncate_to_path_length(uri, path_length):
-    """
-    Removes any number of path-parts from a URI to truncate it to the required length.
-    Eg, with path_length of 1, it would truncate SCHEME://HOST/DBNAME/DBSCHEMA/TABLE to SCHEME://HOST/DBNAME
-    Or with path_lengh of 2, it would truncate SCHEME://HOST/DBNAME/DBSCHEMA/TABLE to SCHEME://HOST/DBNAME/DBSCHEMA
-    If the uri's path length is already as short or shorter as the given path length, then it has no effect.
-    """
-    url = urlsplit(uri)
-    url_path = PurePosixPath(url.path)
-    current_path_length = len(url_path.parents)
-    if current_path_length <= path_length:
-        return uri
-
-    modified_url_path = str(url_path.parents[-1 - path_length])
-    modified_url = urlunsplit(
-        [url.scheme, url.netloc, modified_url_path, url.query, ""]
-    )
-    return modified_url
 
 
 def text_with_inlined_params(text, params):
