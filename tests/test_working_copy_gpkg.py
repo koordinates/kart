@@ -1191,22 +1191,13 @@ def test_checkout_custom_crs(data_working_copy, cli_runner, dodgy_restore):
         ]
 
 
-def test_checkout_and_status_with_no_crs(
+def test_checkout_with_no_crs(
     data_working_copy,
     tmp_path,
     cli_runner,
 ):
-    repo_path = tmp_path / "repo"
-    repo_path.mkdir()
-
     with data_working_copy("points-no-crs") as (repo_dir, wc):
-        r = cli_runner.invoke(
-            [
-                "-C",
-                str(repo_dir),
-                "status",
-            ]
-        )
+        r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r.stderr
 
 

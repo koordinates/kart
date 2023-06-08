@@ -206,6 +206,9 @@ def create_workingcopy(ctx, parts, delete_existing, discard_changes, tabular_loc
     created with a default name based on the repository name.
     """
     repo = ctx.obj.repo
+    if repo.is_bare:
+        raise InvalidOperation("Can't create a working copy for a bare repository")
+
     if repo.head_is_unborn:
         raise InvalidOperation(
             "Can't create a working copy for an empty repository — first import some data with `kart import`"
