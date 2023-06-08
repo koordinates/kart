@@ -1221,3 +1221,38 @@ def test_init_import_with_no_crs(
             ]
         )
         assert r.exit_code == 0, r.stderr
+
+
+def test_import_from_wc(data_working_copy, cli_runner):
+    with data_working_copy("points") as (repo_path, wcdb):
+        r = cli_runner.invoke(["import", wcdb])
+        assert r.exit_code == 2
+        assert "Import-source is already inside working-copy." in r.stderr
+
+        r = cli_runner.invoke(
+            [
+                "config",
+                "kart.workingcopy.location",
+                "postgresql://user1:pass1@localhost:15432/postgres/example",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(
+            [
+                "import",
+                "postgresql://user2:pass2@localhost:15432/postgres/example",
+                "table",
+            ]
+        )
+        assert r.exit_code == 2
+        assert "Import-source is already inside working-copy." in r.stderr
+
+        r = cli_runner.invoke(
+            [
+                "import",
+                "postgresql://user2:pass2@localhost:15432/postgres/example/table",
+            ]
+        )
+        assert r.exit_code == 2
+        assert "Import-source is already inside working-copy." in r.stderr

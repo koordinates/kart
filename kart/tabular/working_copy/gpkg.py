@@ -89,7 +89,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
     @classmethod
     def normalise_location(cls, wc_location, repo):
         """Rewrites a relative path (relative to the current directory) as relative to the repo.workdir_path."""
-        gpkg_path = Path(wc_location)
+        gpkg_path = Path(wc_location).expanduser()
         if not gpkg_path.is_absolute():
             try:
                 return str(

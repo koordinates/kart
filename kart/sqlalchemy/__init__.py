@@ -135,11 +135,19 @@ def strip_password(uri):
     return p.geturl()
 
 
+def strip_query(uri):
+    """Removes query parameters from URI."""
+    p = urlsplit(uri)
+    if p.query is not None:
+        p = p._replace(query=None)
+    return p.geturl()
+
+
 def separate_last_path_part(uri):
     """
     Removes the last part of the path from a URI and returns it separately.
     Generally useful for connecting to the URI but at a less specific level than the one given,
-    Eg, when given a URI of the form SCHEME://HOST/DNAME/DBSCHEMA, we want to connect to SCHEME://HOST/DBNAME
+    Eg, when given a URI of the form SCHEME://HOST/DBNAME/DBSCHEMA, we want to connect to SCHEME://HOST/DBNAME
     and then specify the DBSCHEMA separately in each query.
     """
     url = urlsplit(uri)
