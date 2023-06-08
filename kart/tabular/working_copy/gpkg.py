@@ -193,7 +193,8 @@ class WorkingCopy_GPKG(TableWorkingCopy):
     def create_and_initialise(self):
         with self.session() as sess:
             # Create standard GPKG tables:
-            GpkgTables().create_all(sess)
+            GpkgTables.create_all(sess)
+            GpkgTables.init_table_contents(sess)
             # Create Kart-specific tables:
             self.kart_tables.create_all(sess)
 

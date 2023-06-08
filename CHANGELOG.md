@@ -18,6 +18,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Fixes a bug where tab-completion wasn't working with helper mode, affects macOS and Linux. [#851](https://github.com/koordinates/kart/pull/851)
 - Fixes a bug where git-lfs (and potentially other subprocesses) wasn't working reliably with helper mode, affects macOS and Linux. [#853](https://github.com/koordinates/kart/issues/853)
 - `import` now informs the user to use `add-dataset` instead if they try to import a table that is already inside the working copy. [#249](https://github.com/koordinates/kart/issues/249)
+- Fixes a bug where datasets with no CRS couldn't be checked out into a Geopackage working copy. [#855](https://github.com/koordinates/kart/issues/855)
 
 ## 0.12.3
 
