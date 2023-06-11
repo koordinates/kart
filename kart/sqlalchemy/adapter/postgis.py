@@ -1,5 +1,5 @@
-import decimal
 import re
+import struct
 
 from osgeo.osr import SpatialReference
 from psycopg2.extensions import Binary
@@ -368,10 +368,12 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             return BlobType
         elif col.data_type == "date":
             return DateType
+        elif col.data_type == "float":
+            return FloatType(col.get("size", 32))
         elif col.data_type == "interval":
             return IntervalType
         elif col.data_type == "numeric":
-            return NumericType
+            return TextType
         elif col.data_type == "time":
             return TimeType
         elif col.data_type == "timestamp":
@@ -409,23 +411,24 @@ class DateType(ConverterType):
 
 
 @aliased_converter_type
+class FloatType(ConverterType):
+    float32_packer = struct.Struct("@f")
+
+    def __init__(self, size):
+        self.size = size
+
+    def python_postread(self, value):
+        if value is not None and self.size == 32:
+            return self.float32_packer.unpack(self.float32_packer.pack(value))[0]
+        return value
+
+
+@aliased_converter_type
 class IntervalType(ConverterType):
     """ConverterType to that casts intervals to text - ISO8601 mode is set for durations so this does what we want."""
 
     def sql_read(self, column):
         return sa.cast(column, TEXT)
-
-
-@aliased_converter_type
-class NumericType(ConverterType):
-    """ConverterType to read numerics as text. They are stored in PG as NUMERIC but we read them back as text."""
-
-    def python_postread(self, value):
-        return (
-            str(value).rstrip("0").rstrip(".")
-            if isinstance(value, decimal.Decimal)
-            else value
-        )
 
 
 @aliased_converter_type
@@ -460,7 +463,10 @@ class TimestampType(ConverterType):
 
 @aliased_converter_type
 class TextType(ConverterType):
-    """ConverterType to that casts everything to text in the Python layer. Handles things like UUIDs."""
+    """
+    ConverterType to that casts everything to text in the Python layer. Handles NUMERICs (which Kart stores as text),
+    sometimes rarer things like UUIDs.
+    """
 
     def python_postread(self, value):
         return str(value) if value is not None else None
