@@ -262,6 +262,47 @@ class GpkgTables(TableSet):
             ),
         )
 
+    EPSG_4326_WKT = (
+        'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],'
+        'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]'
+    )
+
+    GPKG_SPATIAL_REF_SYS_INITIAL_CONTENTS = [
+        {
+            "srs_name": "Undefined cartesian SRS",
+            "srs_id": -1,
+            "organization": "NONE",
+            "organization_coordsys_id": -1,
+            "definition": "undefined",
+            "description": "undefined cartesian coordinate reference system",
+        },
+        {
+            "srs_name": "Undefined geographic SRS",
+            "srs_id": 0,
+            "organization": "NONE",
+            "organization_coordsys_id": 0,
+            "definition": "undefined",
+            "description": "undefined geographic coordinate reference system",
+        },
+        {
+            "srs_name": "WGS 84 geodetic",
+            "srs_id": 4326,
+            "organization": "EPSG",
+            "organization_coordsys_id": 4326,
+            "definition": EPSG_4326_WKT,
+            "description": "longitude/latitude coordinates in decimal degrees on the WGS 84 spheroid",
+        },
+    ]
+
+    @classmethod
+    def init_table_contents(cls, sess):
+        from kart.sqlalchemy.upsert import Upsert as upsert
+
+        sess.execute(
+            upsert(cls.gpkg_spatial_ref_sys),
+            cls.GPKG_SPATIAL_REF_SYS_INITIAL_CONTENTS,
+        )
+
 
 # Makes it so GPKG table definitions are also accessible at the GpkgTables class itself:
 GpkgTables.copy_tables_to_class()

@@ -1214,7 +1214,6 @@ def test_init_import_with_no_crs(
         r = cli_runner.invoke(
             [
                 "init",
-                "--bare",
                 "--import",
                 f"gpkg:{data / 'nz-pa-points-topo-150k.gpkg'}",
                 str(repo_path),

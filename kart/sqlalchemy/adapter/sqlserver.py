@@ -333,7 +333,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             (r for r in ms_crs_info if r["column_name"] == ms_col_info["column_name"]),
             None,
         )
-        if crs_row:
+        if crs_row and crs_row["srid"]:
             auth_name = crs_row["authority_name"]
             auth_code = crs_row["authorized_spatial_reference_id"]
             if not auth_name and not auth_code:
