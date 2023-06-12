@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 
 import click
-from osgeo import gdal
 
 import sqlalchemy as sa
 from kart import crs_util
