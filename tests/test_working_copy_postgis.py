@@ -598,7 +598,9 @@ def test_values_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
             repo.config["kart.workingcopy.location"] = postgres_url
-            r = cli_runner.invoke(["checkout"])
+            # Postgres default NUMERIC (no precision or scale provided) can store decimal places, unlike in other DBs.
+            # Make sure we roundtrip them properly.
+            r = cli_runner.invoke(["checkout", "unconstrained-numerics"])
 
             with repo.working_copy.tabular.session() as sess:
                 # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.

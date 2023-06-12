@@ -906,6 +906,8 @@ def test_values_roundtrip(data_working_copy, cli_runner):
     # If values roundtripping code isn't working for certain types,
     # we could get spurious diffs on those values.
     with data_working_copy("types") as (repo_path, wc_path):
+        # Geopackage can store any type of numerics it likes since it approximates them as text.
+        r = cli_runner.invoke(["checkout", "unconstrained-numerics"])
         repo = KartRepo(repo_path)
         with repo.working_copy.tabular.session() as sess:
             # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
