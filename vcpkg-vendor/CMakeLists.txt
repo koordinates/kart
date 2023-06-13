@@ -257,14 +257,14 @@ include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
-set(PYGIT2_WHEEL_VER 1.9.0)
+set(PYGIT2_WHEEL_VER 1.12.1)
 ExternalProject_Add(
   pygit2
   GIT_REPOSITORY https://github.com/koordinates/pygit2.git
-  GIT_TAG kart-v0.11.1
+  GIT_TAG kart-pygit-v1.12.1
   GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv unofficial::git2::git2
+  DEPENDS wheelBuildEnv unofficial::git2::libgit2package
   EXCLUDE_FROM_ALL ON
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
