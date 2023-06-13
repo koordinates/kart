@@ -412,6 +412,18 @@ class DateType(ConverterType):
 
 @aliased_converter_type
 class FloatType(ConverterType):
+    """
+    When reading floats from Postgres, the float data is (apparently) read using decimal, instead of the storage format (IEEE binary).
+    However, PG ensures that the number of decimal digits output is sufficient to uniquely describe the IEEE float32 or float64,
+    so no data is lost.
+    By the time we get to python_postread, value is a Python float (which is a float64) and contains the stored data.
+    The float64 values at this point as exactly as we would want. However, the float32 values have extra bits as a result
+    of briefly being transferred in decimal, which means they are differ from the stored float32 value by a tiny amount -
+    less than the precision of a float32. Rounding the result to be a float32 and so setting all the extra bits back to zero
+    means that the float32 we store in Kart is the same as what was stored in PG, which is what we want, as opposed to storing
+    the float32 plus the decimal-artifact extra bits.
+    """
+
     float32_packer = struct.Struct("@f")
 
     def __init__(self, size):
@@ -425,7 +437,10 @@ class FloatType(ConverterType):
 
 @aliased_converter_type
 class IntervalType(ConverterType):
-    """ConverterType to that casts intervals to text - ISO8601 mode is set for durations so this does what we want."""
+    """
+    ConverterType to that casts intervals to text - ISO8601 mode is set for durations so this does what we want.
+    An ISO8601 duration (which is what we store in the Kart model) looks something like this: P1DT12H36M
+    """
 
     def sql_read(self, column):
         return sa.cast(column, TEXT)
