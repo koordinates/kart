@@ -20,6 +20,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - `import` now informs the user to use `add-dataset` instead if they try to import a table that is already inside the working copy. [#249](https://github.com/koordinates/kart/issues/249)
 - Fixes a bug where datasets with no CRS couldn't be checked out into a Geopackage working copy. [#855](https://github.com/koordinates/kart/issues/855)
 - Fixes a bad data-loss bug where whole-number numerics read from a Postgres database were losing trailing zeroes (eg 100 was read as 1). [#863](https://github.com/koordinates/kart/issues/863)
+- Upgrade libgit2 to v1.6.4, pygit2 to v1.12.1 (plus Kart-specific changes). [#868](https://github.com/koordinates/kart/pull/868)
 
 ## 0.12.3
 
