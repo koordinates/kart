@@ -20,7 +20,7 @@ class Db_MySql(BaseDb):
             dbcur = mysql_conn.cursor()
             # +00:00 is UTC, but unlike UTC, it works even without a timezone DB.
             dbcur.execute("SET time_zone='+00:00';")
-            dbcur.execute("SET sql_mode = 'ANSI_QUOTES';")
+            dbcur.execute("SET sql_mode = 'ANSI_QUOTES,NO_AUTO_VALUE_ON_ZERO';")
 
         url = urlsplit(msurl)
         if url.scheme != cls.CANONICAL_SCHEME:

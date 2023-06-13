@@ -1,5 +1,3 @@
-import decimal
-
 import sqlalchemy as sa
 from kart import crs_util
 from kart.exceptions import NotYetImplemented
@@ -324,7 +322,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         elif col.data_type == "date":
             return DateType
         elif col.data_type == "numeric":
-            return NumericType
+            return TextType
         elif col.data_type == "time":
             return TimeType
         elif col.data_type == "timestamp":
@@ -395,18 +393,6 @@ class FloatType(ConverterType):
 
 
 @aliased_converter_type
-class NumericType(ConverterType):
-    """ConverterType to read numerics as text. They are stored in MySQL as NUMERIC but we read them back as text."""
-
-    def python_postread(self, value):
-        return (
-            str(value).rstrip("0").rstrip(".")
-            if isinstance(value, decimal.Decimal)
-            else value
-        )
-
-
-@aliased_converter_type
 class TimeType(ConverterType):
     # ConverterType to read Times as text. They are stored in MySQL as Times but we read them back as text.
     def sql_read(self, col):
@@ -435,7 +421,10 @@ class TimestampType(ConverterType):
 
 @aliased_converter_type
 class TextType(ConverterType):
-    """ConverterType to that casts everything to text in the Python layer. Handles things like UUIDs."""
+    """
+    ConverterType to that casts everything to text in the Python layer. Handles NUMERICs (which Kart stores as text),
+    sometimes rarer things like UUIDs.
+    """
 
     def python_postread(self, value):
         return str(value) if value is not None else None

@@ -1,5 +1,5 @@
-import decimal
 import re
+import struct
 
 from osgeo.osr import SpatialReference
 from psycopg2.extensions import Binary
@@ -368,10 +368,12 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             return BlobType
         elif col.data_type == "date":
             return DateType
+        elif col.data_type == "float":
+            return FloatType(col.get("size", 32))
         elif col.data_type == "interval":
             return IntervalType
         elif col.data_type == "numeric":
-            return NumericType
+            return TextType
         elif col.data_type == "time":
             return TimeType
         elif col.data_type == "timestamp":
@@ -409,23 +411,39 @@ class DateType(ConverterType):
 
 
 @aliased_converter_type
-class IntervalType(ConverterType):
-    """ConverterType to that casts intervals to text - ISO8601 mode is set for durations so this does what we want."""
+class FloatType(ConverterType):
+    """
+    When reading floats from Postgres, the float data is (apparently) read using decimal, instead of the storage format (IEEE binary).
+    However, PG ensures that the number of decimal digits output is sufficient to uniquely describe the IEEE float32 or float64,
+    so no data is lost.
+    By the time we get to python_postread, value is a Python float (which is a float64) and contains the stored data.
+    The float64 values at this point as exactly as we would want. However, the float32 values have extra bits as a result
+    of briefly being transferred in decimal, which means they are differ from the stored float32 value by a tiny amount -
+    less than the precision of a float32. Rounding the result to be a float32 and so setting all the extra bits back to zero
+    means that the float32 we store in Kart is the same as what was stored in PG, which is what we want, as opposed to storing
+    the float32 plus the decimal-artifact extra bits.
+    """
 
-    def sql_read(self, column):
-        return sa.cast(column, TEXT)
+    float32_packer = struct.Struct("@f")
+
+    def __init__(self, size):
+        self.size = size
+
+    def python_postread(self, value):
+        if value is not None and self.size == 32:
+            return self.float32_packer.unpack(self.float32_packer.pack(value))[0]
+        return value
 
 
 @aliased_converter_type
-class NumericType(ConverterType):
-    """ConverterType to read numerics as text. They are stored in PG as NUMERIC but we read them back as text."""
+class IntervalType(ConverterType):
+    """
+    ConverterType to that casts intervals to text - ISO8601 mode is set for durations so this does what we want.
+    An ISO8601 duration (which is what we store in the Kart model) looks something like this: P1DT12H36M
+    """
 
-    def python_postread(self, value):
-        return (
-            str(value).rstrip("0").rstrip(".")
-            if isinstance(value, decimal.Decimal)
-            else value
-        )
+    def sql_read(self, column):
+        return sa.cast(column, TEXT)
 
 
 @aliased_converter_type
@@ -460,7 +478,10 @@ class TimestampType(ConverterType):
 
 @aliased_converter_type
 class TextType(ConverterType):
-    """ConverterType to that casts everything to text in the Python layer. Handles things like UUIDs."""
+    """
+    ConverterType to that casts everything to text in the Python layer. Handles NUMERICs (which Kart stores as text),
+    sometimes rarer things like UUIDs.
+    """
 
     def python_postread(self, value):
         return str(value) if value is not None else None
