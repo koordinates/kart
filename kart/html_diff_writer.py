@@ -1,6 +1,7 @@
 import json
 import string
 import sys
+import os
 import webbrowser
 from pathlib import Path
 
@@ -28,11 +29,12 @@ class HtmlDiffWriter(BaseDiffWriter):
         return output_path or repo.workdir_path / "DIFF.html"
 
     def write_diff(self, diff_format=DiffFormat.FULL):
+        template_path = self.html_template or (Path(kart.package_data_path) / "diff-view.html")
+        if not os.path.exists(template_path):
+            raise click.UsageError("Html template not found")
         if diff_format != DiffFormat.FULL:
             raise click.UsageError("Html format only supports full diffs")
-        with open(
-            Path(kart.package_data_path) / "diff-view.html", "r", encoding="utf8"
-        ) as ft:
+        with open(template_path, "r", encoding="utf8") as ft:
             template = string.Template(ft.read())
 
         repo_diff = self.get_repo_diff(diff_format=diff_format)
