@@ -4,10 +4,26 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.12.4 (UNRELEASED)
+## 0.13.0
+
+### Major fix: Corruption of Postgres NUMERIC values
+
+⚠️ This release fixes a bug causing corruption of NUMERIC fields when read from Postgres databases. [#863](https://github.com/koordinates/kart/issues/863)
+
+If your repositories use the NUMERIC or NUMERIC(a,b) types and were imported/committed from a Postgres source or working copy, you may have lost data.
+
+Specifically, any numeric values with a scale of zero (no digits after the decimal point) were affected. If the only numerics in your repositories were defined with a scale greater than zero, no data corruption should have occured.
+
+For example, a value of 100 in a postgres database with the type NUMERIC(10, 0) or NUMERIC would have been imported as 1 - losing its trailing zeroes.
+
+However, a value of 100.0 in a field declared as NUMERIC(10, 1) would not have been affected.
+
+Other data types (integer, floating-point etc) are not affected, and repos sourced from other SQL databases (Geopackage, MSSQL, MySQL) were not affected.
+
+### Other changes
 
 - Allow kart to import non-spatial tables from PostgreSQL databases which don't have postGIS extension installed. [#728](https://github.com/koordinates/kart/issues/728)
-- PostgreSQL working copy no longer requires PostGIS for aspatial datasets. [#729] (https://github.com/koordinates/kart/issues/729)
+- PostgreSQL working copy no longer requires PostGIS for aspatial datasets. [#729](https://github.com/koordinates/kart/issues/729)
 - Fixes a bug where the current spatial filter isn't stored in the filesystem working copy, affecting the spatial filtering of point cloud datasets. [#833](https://github.com/koordinates/kart/pull/833)
 - Fixes pthread_key leaks in a long running Kart process due to repeated loading and unloading of mod_spatialite. [#838](https://github.com/koordinates/kart/pull/838)
 - Fixes a bug where features are written to the working copy without their CRS identifier during `kart resolve`. [#840](https://github.com/koordinates/kart/issues/840)
@@ -19,7 +35,6 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Fixes a bug where git-lfs (and potentially other subprocesses) wasn't working reliably with helper mode, affects macOS and Linux. [#853](https://github.com/koordinates/kart/issues/853)
 - `import` now informs the user to use `add-dataset` instead if they try to import a table that is already inside the working copy. [#249](https://github.com/koordinates/kart/issues/249)
 - Fixes a bug where datasets with no CRS couldn't be checked out into a Geopackage working copy. [#855](https://github.com/koordinates/kart/issues/855)
-- Fixes a bad data-loss bug where whole-number numerics read from a Postgres database were losing trailing zeroes (eg 100 was read as 1). [#863](https://github.com/koordinates/kart/issues/863)
 - Upgrade libgit2 to v1.6.4, pygit2 to v1.12.1 (plus Kart-specific changes). [#868](https://github.com/koordinates/kart/pull/868)
 
 ## 0.12.3
