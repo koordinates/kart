@@ -194,7 +194,7 @@ int is_helper_enabled()
 /**
  * @brief Exit signal handler for SIGALRM
  */
-void exit_on_alarm(int sig)
+void exit_on_sigalrm(int sig)
 {
     int semval = semctl(semid, SEMNUM, GETVAL);
     if (semval < 0)
@@ -207,6 +207,21 @@ void exit_on_alarm(int sig)
     semctl(semid, SEMNUM, IPC_RMID);
     debug("sigalrm: semid=%d semval=%d exit_code=%d\n", semid, semval, exit_code);
     exit(exit_code);
+}
+
+char *socket_filename;
+
+/**
+ * @brief Exit signal handler for SIGINT
+ */
+void exit_on_sigint(int sig)
+{
+    putchar('\n');
+    const char* kill_cmd_template = "lsof -t '%s' | xargs kill";
+    char* kill_cmd = malloc(strlen(kill_cmd_template) + strlen(socket_filename) + 2);
+    sprintf(kill_cmd, kill_cmd_template, socket_filename);
+    system(kill_cmd);
+    exit(128 + sig);
 }
 
 int main(int argc, char **argv, char **environ)
@@ -267,7 +282,7 @@ int main(int argc, char **argv, char **environ)
         int fp = open(getcwd(NULL, 0), O_RDONLY);
         int fds[4] = {fileno(stdin), fileno(stdout), fileno(stderr), fp};
 
-        char *socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.socket") + 2);
+        socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.socket") + 2);
         sprintf(socket_filename, "%s/%s", getenv("HOME"), ".kart.socket");
         int socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -370,7 +385,8 @@ int main(int argc, char **argv, char **environ)
         memcpy((int *)CMSG_DATA(cmsg), fds, sizeof(fds));
         msg.msg_controllen = cmsg->cmsg_len;
 
-        signal(SIGALRM, exit_on_alarm);
+        signal(SIGALRM, exit_on_sigalrm);
+        signal(SIGINT, exit_on_sigint);
 
         if (sendmsg(socket_fd, &msg, 0) < 0)
         {
