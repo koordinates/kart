@@ -145,6 +145,7 @@ def test_import_several_laz__convert(
     check_lfs_hashes,
     requires_pdal,
     requires_git_lfs,
+    check_tile_is_reflinked,
 ):
     # Using postgres here because it has the best type preservation
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
@@ -217,6 +218,9 @@ def test_import_several_laz__convert(
                     assert (
                         repo_path / "auckland" / f"auckland_{x}_{y}.copc.laz"
                     ).is_file()
+                    check_tile_is_reflinked(
+                        repo_path / "auckland" / f"auckland_{x}_{y}.copc.laz", repo
+                    )
 
 
 @pytest.mark.parametrize("command", ["point-cloud-import", "import"])

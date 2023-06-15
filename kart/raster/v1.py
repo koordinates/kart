@@ -91,12 +91,14 @@ class RasterV1(TileDataset):
         parent_path=None,
         include_conflict_versions=False,
         is_pam=None,
+        ignore_tile_case=False,
     ):
         return get_tile_path_pattern(
             tilename,
             parent_path=parent_path,
             include_conflict_versions=include_conflict_versions,
             is_pam=is_pam,
+            ignore_tile_case=ignore_tile_case,
         )
 
     def diff_tile(self, other, tile_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):

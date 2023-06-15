@@ -27,7 +27,12 @@ def set_tile_extension(filename, ext=None, tile_format=None):
 
 
 def get_tile_path_pattern(
-    tilename=None, *, parent_path=None, include_conflict_versions=False, is_pam=None
+    tilename=None,
+    *,
+    parent_path=None,
+    include_conflict_versions=False,
+    is_pam=None,
+    ignore_tile_case=False,
 ):
     """
     Given a tilename eg "mytile" and a parent_path eg "myfolder",
@@ -49,6 +54,8 @@ def get_tile_path_pattern(
     tile_pattern = (
         re.escape(tilename) if tilename is not None else TILE_BASENAME_PATTERN
     )
+    if ignore_tile_case:
+        tile_pattern = rf"(?i:{tile_pattern})"
     version_pattern = (
         r"(?:\.ancestor|\.ours|\.theirs)?" if include_conflict_versions else ""
     )

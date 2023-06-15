@@ -54,11 +54,13 @@ class PointCloudV1(TileDataset):
         parent_path=None,
         include_conflict_versions=False,
         is_pam=None,
+        ignore_tile_case=False,
     ):
         return get_tile_path_pattern(
             tilename,
             parent_path=parent_path,
             include_conflict_versions=include_conflict_versions,
+            ignore_tile_case=ignore_tile_case,
         )
 
     @classmethod
