@@ -100,6 +100,10 @@ class Doc:
         self.version = get_version()
         self.short_help = get_short_help_str(ctx.command)
         self.description = ctx.command.help
+        # Click help text uses special character \b to mean retain formatting,
+        # but our converter can't use this.
+        if self.description:
+            self.description = self.description.replace("\b", "")
         self.synopsis = " ".join(ctx.command.collect_usage_pieces(ctx))
         self.options = list(
             filter(None, (p.get_help_record(ctx) for p in ctx.command.params))
