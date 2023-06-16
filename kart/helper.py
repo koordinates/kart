@@ -133,6 +133,7 @@ def helper(ctx, socket_filename, timeout, args):
             else:
                 # child
                 _helper_log("post-fork")
+
                 payload, fds = recv_json_and_fds(client, maxfds=4)
                 if not payload or len(fds) != 4:
                     click.echo(
@@ -169,6 +170,16 @@ def helper(ctx, socket_filename, timeout, args):
                         f"Payload:\n{repr(payload)}",
                     )
                 else:
+                    try:
+                        # Join the process group of the calling process - so that if they get killed, we get killed to.
+                        os.setpgid(0, calling_environment["pid"])
+                        os.environ["_KART_PGID_SET"] = "1"
+                    except Exception as e:
+                        # Kart will still work even if this fails: it just means SIGINT Ctrl+C might not work properly.
+                        # We'll just log it and hope for the best.
+                        _helper_log(f"error joining caller's process group: {e}")
+                        pass
+
                     sys.argv[1:] = calling_environment["argv"][1:]
                     _helper_log(f"cmd={' '.join(calling_environment['argv'])}")
                     os.environ.clear()

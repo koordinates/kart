@@ -209,18 +209,14 @@ void exit_on_sigalrm(int sig)
     exit(exit_code);
 }
 
-char *socket_filename;
-
 /**
- * @brief Exit signal handler for SIGINT
+ * @brief Exit signal handler for SIGINT.
+ * Tries to kill the whole process group.
  */
 void exit_on_sigint(int sig)
 {
     putchar('\n');
-    const char* kill_cmd_template = "lsof -t '%s' | xargs kill";
-    char* kill_cmd = malloc(strlen(kill_cmd_template) + strlen(socket_filename) + 2);
-    sprintf(kill_cmd, kill_cmd_template, socket_filename);
-    system(kill_cmd);
+    killpg(0, sig);
     exit(128 + sig);
 }
 
@@ -235,6 +231,10 @@ int main(int argc, char **argv, char **environ)
     if (is_helper_enabled())
     {
         debug("enabled %s, pid=%d\n", cmd_path, getpid());
+
+        // Make this process the leader of a process group:
+        // The procress-group ID (pgid) will be the same as the pid.
+        setpgrp();
 
         // start or use an existing helper process
         char **env_ptr;
@@ -282,7 +282,7 @@ int main(int argc, char **argv, char **environ)
         int fp = open(getcwd(NULL, 0), O_RDONLY);
         int fds[4] = {fileno(stdin), fileno(stdout), fileno(stderr), fp};
 
-        socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.socket") + 2);
+        char *socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.socket") + 2);
         sprintf(socket_filename, "%s/%s", getenv("HOME"), ".kart.socket");
         int socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 

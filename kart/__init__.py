@@ -200,7 +200,7 @@ def _configure_process_cleanup_nonwindows():
                 return
             _kart_process_group_killed = True
             try:
-                os.killpg(os.getpid(), signum)
+                os.killpg(0, signum)
             except Exception:
                 pass
             sys.exit(128 + signum)
