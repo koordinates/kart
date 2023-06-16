@@ -115,7 +115,7 @@ def raster_import(
     args,
 ):
     """
-    Experimental command for importing a dataset of raster tiles.
+    Import a dataset of raster tiles.
 
     SOURCES should be one or more GeoTIFF files (or wildcards that match multiple GeoTIFF files).
     """

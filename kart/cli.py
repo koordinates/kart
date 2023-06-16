@@ -44,6 +44,7 @@ MODULE_COMMANDS = {
     "merge": {"merge"},
     "meta": {"commit-files", "meta"},
     "pull": {"pull"},
+    "raster.import_": {"raster-import"},
     "resolve": {"resolve"},
     "show": {"create-patch", "show"},
     "spatial_filter": {"spatial-filter"},

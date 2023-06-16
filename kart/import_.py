@@ -71,6 +71,7 @@ def import_(ctx, args, **kwargs):
     \b
     kart table-import
     kart point-cloud-import
+    kart raster-import
 
     For more information on the supported types of import-sources and how to specify them,
     try `kart import --list-formats`
