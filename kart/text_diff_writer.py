@@ -116,7 +116,7 @@ class TextDiffWriter(BaseDiffWriter):
     @classmethod
     def _format_item(cls, item, item_name):
         if isinstance(item, ListOfConflicts):
-            conflict_output = "\n======== \n".join(
+            conflict_output = click.style("\n======== \n", fg="cyan", reset=False).join(
                 cls._format_item(i, item_name) for i in item
             )
             return f"<<<<<<< \n{conflict_output}\n>>>>>>> "
