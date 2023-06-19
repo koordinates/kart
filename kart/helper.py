@@ -28,7 +28,7 @@ def _helper_log(msg):
 @click.option(
     "--socket",
     "socket_filename",
-    default=Path.home() / ".kart.socket",
+    default=Path.home() / f".kart.{os.getsid(0)}.socket",
     show_default=True,
     help="What socket to use",
 )

@@ -282,8 +282,8 @@ int main(int argc, char **argv, char **environ)
         int fp = open(getcwd(NULL, 0), O_RDONLY);
         int fds[4] = {fileno(stdin), fileno(stdout), fileno(stderr), fp};
 
-        char *socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.socket") + 2);
-        sprintf(socket_filename, "%s/%s", getenv("HOME"), ".kart.socket");
+        char *socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.1234567890.socket") + 2);
+        sprintf(socket_filename, "%s/.kart.%d.socket", getenv("HOME"), getsid(0));
         int socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
         struct sockaddr_un addr;
@@ -304,8 +304,6 @@ int main(int argc, char **argv, char **environ)
                 // process are left open in it
                 if (fork() == 0)
                 {
-                    setsid();
-
                     // start helper in background and wait
                     char *helper_argv[] = {&cmd_path[0], "helper", "--socket", socket_filename, NULL};
 
