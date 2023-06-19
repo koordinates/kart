@@ -23,12 +23,18 @@ def _helper_log(msg):
             log_file.write(f"{datetime.now()} [{os.getpid()}]: {msg}\n")
 
 
+def getsid():
+    if hasattr(os, "getsid"):
+        return os.getsid(0)
+    return 0
+
+
 @click.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.option(
     "--socket",
     "socket_filename",
-    default=Path.home() / f".kart.{os.getsid(0)}.socket",
+    default=Path.home() / f".kart.{getsid()}.socket",
     show_default=True,
     help="What socket to use",
 )
