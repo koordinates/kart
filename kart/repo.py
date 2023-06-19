@@ -443,8 +443,7 @@ class KartRepo(pygit2.Repository):
         if spatial_filter_spec:
             spatial_filter_spec.write_config(self)
 
-        if not self.get_config_str("filter.lfs.process"):
-            self.write_lfs_filter_config()
+        self.write_lfs_filter_config()
 
     def write_lfs_filter_config(self):
         # TODO - try to bundle this config with the bundled Git, instead of once per repo.
@@ -465,6 +464,10 @@ class KartRepo(pygit2.Repository):
             f.write("**/.*-dataset*/tile/** filter=lfs diff=lfs merge=lfs -text\n")
             f.write("*.laz filter=lfs diff=lfs merge=lfs -text\n")
             f.write("*.las filter=lfs diff=lfs merge=lfs -text\n")
+            f.write("*.tif filter=lfs diff=lfs merge=lfs -text\n")
+            f.write("*.tiff filter=lfs diff=lfs merge=lfs -text\n")
+            f.write("*.tif.aux.xml filter=lfs diff=lfs merge=lfs -text\n")
+            f.write("*.tiff.aux.xml filter=lfs diff=lfs merge=lfs -text\n")
 
         # Files potentially in workdir that should not be checked in:
         with (info_path / "exclude").open("a+") as f:
