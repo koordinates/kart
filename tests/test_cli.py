@@ -137,11 +137,9 @@ def main(ctx, args):
 """
 
 
+@pytest.mark.skipif(is_windows, reason="No SIGINT on windows")
 @pytest.mark.parametrize("use_helper", [False, True])
 def test_sigint_handling_unix(use_helper, tmp_path):
-    if is_windows:
-        return
-
     import subprocess
 
     kart_bin_dir = Path(sys.executable).parent
