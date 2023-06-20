@@ -149,7 +149,7 @@ def print_version(ctx):
     # report on whether this was run through helper mode
     helper_pid = os.environ.get("KART_HELPER_PID")
     if helper_pid:
-        click.echo(f"Executed via helper, PID: {helper_pid}")
+        click.echo(f"Executed via helper, SID={os.getsid(0)} PID={helper_pid}")
 
     ctx.exit()
 

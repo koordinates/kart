@@ -194,7 +194,7 @@ int is_helper_enabled()
 /**
  * @brief Exit signal handler for SIGALRM
  */
-void exit_on_alarm(int sig)
+void exit_on_sigalrm(int sig)
 {
     int semval = semctl(semid, SEMNUM, GETVAL);
     if (semval < 0)
@@ -209,6 +209,17 @@ void exit_on_alarm(int sig)
     exit(exit_code);
 }
 
+/**
+ * @brief Exit signal handler for SIGINT.
+ * Tries to kill the whole process group.
+ */
+void exit_on_sigint(int sig)
+{
+    putchar('\n');
+    killpg(0, sig);
+    exit(128 + sig);
+}
+
 int main(int argc, char **argv, char **environ)
 {
     char cmd_path[PATH_MAX];
@@ -220,6 +231,10 @@ int main(int argc, char **argv, char **environ)
     if (is_helper_enabled())
     {
         debug("enabled %s, pid=%d\n", cmd_path, getpid());
+
+        // Make this process the leader of a process group:
+        // The procress-group ID (pgid) will be the same as the pid.
+        setpgrp();
 
         // start or use an existing helper process
         char **env_ptr;
@@ -267,8 +282,15 @@ int main(int argc, char **argv, char **environ)
         int fp = open(getcwd(NULL, 0), O_RDONLY);
         int fds[4] = {fileno(stdin), fileno(stdout), fileno(stderr), fp};
 
-        char *socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.socket") + 2);
-        sprintf(socket_filename, "%s/%s", getenv("HOME"), ".kart.socket");
+        size_t socket_filename_sz = strlen(getenv("HOME")) + strlen("/.kart..socket") + sizeof(pid_t) * 3 + 1;
+        char *socket_filename = malloc(socket_filename_sz);
+        int r = snprintf(socket_filename, socket_filename_sz, "%s/.kart.%d.socket", getenv("HOME"), getsid(0));
+        if (r < 0 || (size_t) r >= socket_filename_sz)
+        {
+            fprintf(stderr, "Error allocating socket filename\n");
+            exit(1);
+        }
+
         int socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
         struct sockaddr_un addr;
@@ -289,8 +311,6 @@ int main(int argc, char **argv, char **environ)
                 // process are left open in it
                 if (fork() == 0)
                 {
-                    setsid();
-
                     // start helper in background and wait
                     char *helper_argv[] = {&cmd_path[0], "helper", "--socket", socket_filename, NULL};
 
@@ -370,7 +390,8 @@ int main(int argc, char **argv, char **environ)
         memcpy((int *)CMSG_DATA(cmsg), fds, sizeof(fds));
         msg.msg_controllen = cmsg->cmsg_len;
 
-        signal(SIGALRM, exit_on_alarm);
+        signal(SIGALRM, exit_on_sigalrm);
+        signal(SIGINT, exit_on_sigint);
 
         if (sendmsg(socket_fd, &msg, 0) < 0)
         {

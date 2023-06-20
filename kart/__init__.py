@@ -182,11 +182,11 @@ def _configure_process_cleanup_nonwindows():
     # to attempt to give Kart it's own process group ID (PGID)
     if "_KART_PGID_SET" not in os.environ and os.getpid() != os.getpgrp():
         try:
-            os.setsid()
+            os.setpgrp()
             # No need to do this again for any Kart subprocess of this Kart process.
             os.environ["_KART_PGID_SET"] = "1"
         except OSError as e:
-            L.warning("Error setting Kart PGID - os.setsid() failed. %s", e)
+            L.warning("Error setting Kart PGID - os.setpgrp() failed. %s", e)
 
     # If Kart now has its own PGID, which its children share - we want to SIGTERM that when Kart exits.
     if os.getpid() == os.getpgrp():
@@ -199,7 +199,10 @@ def _configure_process_cleanup_nonwindows():
             if _kart_process_group_killed:
                 return
             _kart_process_group_killed = True
-            os.killpg(os.getpid(), signum)
+            try:
+                os.killpg(0, signum)
+            except Exception:
+                pass
             sys.exit(128 + signum)
 
         signal.signal(signal.SIGTERM, _cleanup_process_group)

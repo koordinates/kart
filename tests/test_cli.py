@@ -1,12 +1,15 @@
 import contextlib
 import json
+import os
 import re
-import sys
 from pathlib import Path
+import signal
+import sys
+from time import sleep
 
 import pytest
 
-from kart import cli
+from kart import cli, is_windows
 
 
 H = pytest.helpers.helpers()
@@ -109,3 +112,93 @@ def test_ext_run(tmp_path, cli_runner, sys_path_reset):
     assert (val1, val2) == (False, 3)
     assert Path(sfile) == (tmp_path / "three.py")
     assert sname == "kart.ext_run.three"
+
+
+TEST_SIGINT_PY = r"""
+import datetime
+import os
+import sys
+from time import sleep
+
+
+def main(ctx, args):
+    print(os.getpid())
+    fork_id = os.fork()
+    if fork_id == 0:
+        with open(args[0], 'w') as output:
+            while True:
+                output.write(datetime.datetime.now().isoformat() + '\n')
+                output.flush()
+                sleep(0.01)
+    else:
+        print(fork_id)
+        sys.stdout.flush()
+        os.wait()
+"""
+
+
+@pytest.mark.skipif(is_windows, reason="No SIGINT on windows")
+@pytest.mark.parametrize("use_helper", [False, True])
+def test_sigint_handling_unix(use_helper, tmp_path):
+    import subprocess
+
+    kart_bin_dir = Path(sys.executable).parent
+    kart_exe = kart_bin_dir / "kart"
+    kart_cli_exe = kart_bin_dir / "kart_cli"
+
+    kart_with_helper_mode = kart_exe if kart_cli_exe.is_file() else kart_cli_exe
+    kart_without_helper = kart_cli_exe if kart_cli_exe.is_file() else kart_exe
+
+    if use_helper and not kart_with_helper_mode.is_file():
+        raise pytest.skip(f"Couldn't find kart helper mode in {kart_bin_dir}")
+
+    kart_to_use = kart_with_helper_mode if use_helper else kart_without_helper
+    assert kart_to_use.is_file(), "Couldn't find kart"
+
+    # working example
+    test_sigint_py_path = tmp_path / "test_sigint.py"
+    with open(test_sigint_py_path, "wt") as fs:
+        fs.write(TEST_SIGINT_PY)
+
+    subprocess_output_path = tmp_path / "output"
+
+    env = os.environ.copy()
+    env.pop("_KART_PGID_SET", None)
+    env.pop("NO_CONFIGURE_PROCESS_CLEANUP", None)
+
+    p = subprocess.Popen(
+        [
+            str(kart_to_use),
+            "ext-run",
+            str(test_sigint_py_path),
+            str(subprocess_output_path),
+        ],
+        encoding="utf8",
+        env=env,
+        stdout=subprocess.PIPE,
+    )
+    sleep(1)
+    child_pid = int(p.stdout.readline())
+    grandchild_pid = int(p.stdout.readline())
+
+    # The new kart process should be in a new process group.
+    assert os.getpgid(0) != os.getpgid(child_pid)
+    # And its subprocess should be in the same process group.
+    assert os.getpgid(child_pid) == os.getpgid(grandchild_pid)
+
+    # Time goes past and grandchild keeps writing output
+    output_size_1 = subprocess_output_path.stat().st_size
+    sleep(1)
+    assert p.poll() == None  # Grandchild subprocess keeps running...
+    output_size_2 = subprocess_output_path.stat().st_size
+    assert output_size_2 > output_size_1  # Grandchild output keeps growing...
+
+    os.kill(child_pid, signal.SIGINT)
+    sleep(1)
+    assert p.poll() != None
+
+    # Time goes past but granchild's output has stopped.
+    output_size_3 = subprocess_output_path.stat().st_size
+    sleep(1)
+    output_size_4 = subprocess_output_path.stat().st_size
+    assert output_size_3 == output_size_4
