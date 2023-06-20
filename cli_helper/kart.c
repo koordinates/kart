@@ -282,8 +282,15 @@ int main(int argc, char **argv, char **environ)
         int fp = open(getcwd(NULL, 0), O_RDONLY);
         int fds[4] = {fileno(stdin), fileno(stdout), fileno(stderr), fp};
 
-        char *socket_filename = malloc(strlen(getenv("HOME")) + strlen(".kart.1234567890.socket") + 2);
-        sprintf(socket_filename, "%s/.kart.%d.socket", getenv("HOME"), getsid(0));
+        size_t socket_filename_sz = strlen(getenv("HOME")) + strlen("/.kart..socket") + sizeof(pid_t) * 3 + 1;
+        char *socket_filename = malloc(socket_filename_sz);
+        int r = snprintf(socket_filename, socket_filename_sz, "%s/.kart.%d.socket", getenv("HOME"), getsid(0));
+        if (r < 0 || (size_t) r >= socket_filename_sz)
+        {
+            fprintf(stderr, "Error allocating socket filename\n");
+            exit(1);
+        }
+
         int socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
         struct sockaddr_un addr;

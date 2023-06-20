@@ -167,8 +167,6 @@ def test_sigint_handling_unix(use_helper, tmp_path):
         env=env,
         stdout=subprocess.PIPE,
     )
-    child_pid = p.pid
-
     sleep(1)
     child_pid = int(p.stdout.readline())
     grandchild_pid = int(p.stdout.readline())

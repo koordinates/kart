@@ -180,7 +180,7 @@ def helper(ctx, socket_filename, timeout, args):
                         # Join the process group of the calling process - so that if they get killed, we get killed to.
                         os.setpgid(0, calling_environment["pid"])
                         os.environ["_KART_PGID_SET"] = "1"
-                    except Exception as e:
+                    except OSError as e:
                         # Kart will still work even if this fails: it just means SIGINT Ctrl+C might not work properly.
                         # We'll just log it and hope for the best.
                         _helper_log(f"error joining caller's process group: {e}")
