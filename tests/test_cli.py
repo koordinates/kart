@@ -114,6 +114,29 @@ def test_ext_run(tmp_path, cli_runner, sys_path_reset):
     assert sname == "kart.ext_run.three"
 
 
+TEST_SIGINT_PY = r"""
+import datetime
+import os
+import sys
+from time import sleep
+
+
+def main(ctx, args):
+    print(os.getpid())
+    fork_id = os.fork()
+    if fork_id == 0:
+        with open(args[0], 'w') as output:
+            while True:
+                output.write(datetime.datetime.now().isoformat() + '\n')
+                output.flush()
+                sleep(0.01)
+    else:
+        print(fork_id)
+        sys.stdout.flush()
+        os.wait()
+"""
+
+
 @pytest.mark.parametrize("use_helper", [False, True])
 def test_sigint_handling_unix(use_helper, tmp_path):
     if is_windows:
@@ -135,34 +158,23 @@ def test_sigint_handling_unix(use_helper, tmp_path):
     assert kart_to_use.is_file(), "Couldn't find kart"
 
     # working example
-    with open(tmp_path / "test.py", "wt") as fs:
-        fs.write(
-            "\n".join(
-                [
-                    "import os",
-                    "import sys",
-                    "from time import sleep",
-                    "",
-                    "def main(ctx, args):",
-                    "  print(os.getpid())",
-                    "  fork_id = os.fork()",
-                    "  if fork_id == 0:",
-                    "    sleep(100)",
-                    "  else:",
-                    "    print(fork_id)",
-                    "    sys.stdout.flush()",
-                    "    os.wait()",
-                    "",
-                ]
-            )
-        )
+    test_sigint_py_path = tmp_path / "test_sigint.py"
+    with open(test_sigint_py_path, "wt") as fs:
+        fs.write(TEST_SIGINT_PY)
+
+    subprocess_output_path = tmp_path / "output"
 
     env = os.environ.copy()
     env.pop("_KART_PGID_SET", None)
     env.pop("NO_CONFIGURE_PROCESS_CLEANUP", None)
 
     p = subprocess.Popen(
-        [str(kart_to_use), "ext-run", str(tmp_path / "test.py")],
+        [
+            str(kart_to_use),
+            "ext-run",
+            str(test_sigint_py_path),
+            str(subprocess_output_path),
+        ],
         encoding="utf8",
         env=env,
         stdout=subprocess.PIPE,
@@ -175,21 +187,20 @@ def test_sigint_handling_unix(use_helper, tmp_path):
     assert os.getpgid(0) != os.getpgid(child_pid)
     # And its subprocess should be in the same process group.
     assert os.getpgid(child_pid) == os.getpgid(grandchild_pid)
-    orig_pgid = os.getpgid(child_pid)
 
-    assert p.poll() == None
+    # Time goes past and grandchild keeps writing output
+    output_size_1 = subprocess_output_path.stat().st_size
+    sleep(1)
+    assert p.poll() == None  # Grandchild subprocess keeps running...
+    output_size_2 = subprocess_output_path.stat().st_size
+    assert output_size_2 > output_size_1  # Grandchild output keeps growing...
+
     os.kill(child_pid, signal.SIGINT)
-
     sleep(1)
     assert p.poll() != None
 
-    def safe_get_pgid(pid):
-        try:
-            return os.getpgid(pid)
-        except Exception:
-            return -1
-
-    # The child and grandchildren should now both be dead.
-    # Their PIDs may now belong to other processes, but at least, they won't be in the same process group as before.
-    assert safe_get_pgid(child_pid) != orig_pgid
-    assert safe_get_pgid(grandchild_pid) != orig_pgid
+    # Time goes past but granchild's output has stopped.
+    output_size_3 = subprocess_output_path.stat().st_size
+    sleep(1)
+    output_size_4 = subprocess_output_path.stat().st_size
+    assert output_size_3 == output_size_4
