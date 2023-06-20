@@ -1,9 +1,12 @@
 import io
 import json
 import logging
+import os
+from pathlib import Path
 import platform
 import shutil
-from pathlib import Path
+import signal
+
 
 import click
 from click.core import Argument
@@ -83,6 +86,9 @@ def render(command_path: str):
 
 
 def render_posix(command_path: str) -> None:
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        raise click.ClickException("Not a tty, printing raw help.")
+
     from kart import prefix
 
     man_page = Path(prefix) / "help" / f'{command_path.replace(" ", "-")}.1'
@@ -94,6 +100,15 @@ def render_posix(command_path: str) -> None:
             f"{cmdline[0]} not found in PATH, printing raw help."
         )
     L.debug("Running command: %s", cmdline)
+
+    # When launching `man`, we have to ignore SIGINT - if we do our usual kill everything on SIGINT, it messes up the terminal.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+    # This is a signal to the kart-helper-caller (if there is one) to ignore SIGINT too:
+    kart_caller_pid = os.environ.get("KART_CALLER_PID")
+    if kart_caller_pid:
+        os.kill(int(kart_caller_pid), signal.SIGUSR1)
+
     p = subprocess.Popen(cmdline)
     p.communicate()
 

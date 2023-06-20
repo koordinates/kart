@@ -194,6 +194,7 @@ def helper(ctx, socket_filename, timeout, args):
                             **calling_environment["environ"],
                             **required_environment,
                             "KART_HELPER_PID": str(os.getppid()),
+                            "KART_CALLER_PID": str(calling_environment["pid"]),
                         }
                     )
 

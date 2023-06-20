@@ -220,6 +220,12 @@ void exit_on_sigint(int sig)
     exit(128 + sig);
 }
 
+void handle_sigusr1(int sig) {
+    // This lets the child signal to us that we shouldn't try to kill kart when SIGINT (Ctrl+C) occurs.
+    signal(SIGINT, SIG_IGN);
+    sleep(86400);
+}
+
 int main(int argc, char **argv, char **environ)
 {
     char cmd_path[PATH_MAX];
@@ -392,6 +398,7 @@ int main(int argc, char **argv, char **environ)
 
         signal(SIGALRM, exit_on_sigalrm);
         signal(SIGINT, exit_on_sigint);
+        signal(SIGUSR1, handle_sigusr1);
 
         if (sendmsg(socket_fd, &msg, 0) < 0)
         {
