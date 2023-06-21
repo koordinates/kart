@@ -1248,12 +1248,9 @@ def test_working_copy_conflicting_extension(cli_runner, data_archive, requires_p
         assert "More than one tile found in working copy with the same name" in r.stderr
 
 
+@pytest.mark.skipif(is_windows, reason="copy-on-write not supported on windows")
 def test_working_copy_reflink(cli_runner, data_archive, check_tile_is_reflinked):
-    if is_windows:
-        # Nothing to test, so let's mark test will show as "passed".
-        return
-
-    # From now on, this test will show as passed if Kart's reflinks are working,
+    # This test will show as passed if Kart's reflinks are working,
     # skipped if reflinks are not supported on this filesystem or if we can't detect them,
     # and failed if reflinks are supported but Kart fails to make use of them.
 
