@@ -1227,6 +1227,11 @@ def check_lfs_hashes(requires_git_lfs):
             file_hash, size = get_hash_and_size_of_file(file)
             assert file_hash == file.name
 
+            odb_hash = pygit2.hashfile(file)
+            assert (
+                odb_hash not in repo
+            ), f"Tile sha256:{file_hash} aka {odb_hash} should not be in ODB"
+
         if expected_file_count is not None:
             assert file_count == expected_file_count
 
