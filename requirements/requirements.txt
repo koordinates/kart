@@ -16,7 +16,7 @@ certifi==2022.12.7
     #   reflink
 click==8.1.3
     # via -r requirements.in
-#cryptography==38.0.3
+#cryptography==41.0.0
     # via -r vendor-wheels.txt
 docutils==0.17.1
     # via
@@ -48,8 +48,8 @@ pyrsistent==0.19.2
     # via jsonschema
 #pysqlite3==0.4.5
     # via -r vendor-wheels.txt
-reflink==0.2.1
-    # via -r requirements.in
+#reflink==0.2.1
+    # via -r vendor-wheels.txt
 rst2txt==1.1.0
     # via -r requirements.in
 shellingham==1.5.0

@@ -13,7 +13,6 @@ rst2txt
 shellingham
 sqlalchemy
 tqdm
-reflink
 jsonschema>=4.3
 
 # these are only here for dependencies, we build them in vcpkg-vendor,

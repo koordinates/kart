@@ -392,6 +392,28 @@ ExternalProject_Get_Property(cryptography INSTALL_DIR)
 list(APPEND WHEEL_LIST
      ${INSTALL_DIR}/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
+#
+# reflink wheel
+#
+
+set(REFLINK_WHEEL_VER 0.2.1)
+ExternalProject_Add(
+  reflink
+  URL https://files.pythonhosted.org/packages/6f/f3/9b59f07d3add9e34e97f3e29ab863ab13c0c01aa1f6cccdbabda9fd957f2/reflink-0.2.1.tar.gz
+  URL_HASH SHA256=c9253582db24413bfd703abfc1b2a49de78f31b4907239f286e9a1929a1e6e3a
+  DOWNLOAD_NO_PROGRESS ON
+  BUILD_IN_SOURCE ON
+  DEPENDS wheelBuildEnv
+  EXCLUDE_FROM_ALL ON
+  BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
+  COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
+                  <TMP_DIR>/dist/reflink-${REFLINK_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+ExternalProject_Get_Property(reflink INSTALL_DIR)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/reflink-${REFLINK_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
+
 # ##################################################################################################
 # OTHER LIBS AND BINS
 # ##################################################################################################
@@ -580,6 +602,7 @@ add_custom_target(
           pyodbc
           pysqlite3
           cryptography
+          reflink
   COMMENT "Python vendor wheels")
 
 set(VENDOR_CONFIG _kart_env.py)

@@ -5,3 +5,4 @@ psycopg2==2.8.5
 pygit2==1.9.0
 pyodbc==4.0.32
 pysqlite3==0.4.5
+reflink==0.2.1
