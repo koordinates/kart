@@ -6,6 +6,13 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.14.0 (UNRELEASED)
 
+### Major changes
+
+- First and foremost: raster datasets! Kart now supports raster datasets, which track changes to a set of GeoTIFF files. To get started, see
+ [Raster Datasets](https://docs.kartproject.org/en/latest/pages/raster_datasets.html) [#794](https://github.com/koordinates/kart/issues/794)
+
+### Other changes
+
 - Fixes a bug where SIGINT (Ctrl+C) wasn't terminating Kart when using helper mode, affects macOS and Linux. [#869](https://github.com/koordinates/kart/pull/869)
 - Fixes a bug where reflink wasn't working on macOS, leading to larger size on disk for point cloud datasets. [#876](https://github.com/koordinates/kart/issues/876)
 
