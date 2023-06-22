@@ -1,4 +1,5 @@
 import functools
+import os
 import re
 
 from kart.core import all_blobs_in_tree
@@ -81,7 +82,8 @@ class RasterV1(TileDataset):
     def write_mosaic_for_directory(cls, directory_path):
         from kart.raster.mosaic_util import write_vrt_for_directory
 
-        write_vrt_for_directory(directory_path)
+        if os.environ.get("KART_RASTER_VRTS"):
+            write_vrt_for_directory(directory_path)
 
     @classmethod
     def get_tile_path_pattern(

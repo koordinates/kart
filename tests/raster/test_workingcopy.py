@@ -732,7 +732,9 @@ def test_working_copy_conflicting_extension(cli_runner, data_archive):
         assert "More than one tile found in working copy with the same name" in r.stderr
 
 
-def test_working_copy_vrt(cli_runner, data_archive):
+def test_working_copy_vrt(cli_runner, data_archive, monkeypatch):
+    monkeypatch.setenv("KART_RASTER_VRTS", "1")
+
     with data_archive("raster/elevation.tgz") as repo_path:
         vrt_path = repo_path / "elevation" / "elevation.vrt"
 
@@ -755,6 +757,20 @@ def test_working_copy_vrt(cli_runner, data_archive):
         assert "Kart maintains this VRT file" in vrt_text
         assert '<SourceFilename relativeToVRT="1">EL.tif</SourceFilename>' in vrt_text
         assert '<SourceFilename relativeToVRT="1">EK.tif</SourceFilename>' in vrt_text
+
+
+def test_working_copy_vrt_disabled(cli_runner, data_archive, monkeypatch):
+    with data_archive("raster/elevation.tgz") as repo_path:
+
+        shutil.rmtree(repo_path / "elevation")
+
+        r = cli_runner.invoke(
+            ["create-workingcopy", "--delete-existing", "--discard-changes"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        vrt_path = repo_path / "elevation" / "elevation.vrt"
+        assert not vrt_path.is_file()
 
 
 @pytest.mark.skipif(is_windows, reason="copy-on-write not supported on windows")
