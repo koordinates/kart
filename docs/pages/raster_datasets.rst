@@ -55,3 +55,7 @@ For instance, every tile in a dataset must have the same CRS. If newly added til
 Git LFS
 ~~~~~~~
 For technical reasons, raster tiles are stored within the repository using `Git LFS <git_lfs_>`_, instead of the more fundamental backend store which is the "Git Object Database". For more details, see the section on :doc:`Git LFS </pages/git_lfs>`.
+
+VRT files
+~~~~~~~~~
+Setting an environment variable ``KART_RASTER_VRTS=1`` when creating the Kart working copy or checking out a commit will cause Kart to create a `VRT <vrt_>`_ (Virtual Raster) file for each raster dataset. This single file comprises a mosaic of all the tiles in the working copy that belong to that dataset, so that if you load this file in your tile-editing software, you have effectively loaded the entire dataset. The individual tiles are referenced by the VRT, rather than the data from each tile being duplicated in the VRT. Creation of VRTs is still experimental but should become the default in a future version of Kart.
