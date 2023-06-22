@@ -1236,3 +1236,68 @@ def check_lfs_hashes(requires_git_lfs):
             assert file_count == expected_file_count
 
     return _check_lfs_hashes
+
+
+@pytest.fixture()
+def check_tile_is_reflinked():
+    """
+    Makes sure that a particular tile is reflinked to the same tile in the LFS cache.
+    Makes no asserts at all
+    - on windows, where we don't support reflinks.
+    - if reflink is not supported on the filesystem.
+    - if we lack the tools to check if files are reflinked (clone_checker or )
+    """
+
+    import shutil
+    import subprocess
+
+    import reflink
+
+    from kart import is_windows
+    from kart.lfs_util import get_hash_and_size_of_file, get_local_path_from_lfs_hash
+
+    clone_checker = shutil.which("clone_checker")
+    fienode = shutil.which("fienode")
+    has_checker = bool(clone_checker or fienode)
+
+    def _check_tile_is_reflinked(tile_path, repo, do_raise_skip=False):
+        if is_windows:
+            if do_raise_skip:
+                raise pytest.skip("Reflink is not supported on windows")
+            else:
+                return
+
+        reflink_supported = reflink.supported_at(str(repo.workdir_path))
+        if not reflink_supported:
+            if do_raise_skip:
+                raise pytest.skip("Reflink is not supported on this filesystem")
+            else:
+                return
+
+        if not has_checker:
+            if do_raise_skip:
+                raise pytest.skip(
+                    "Can't check if tiles are reflinked: install dyorgio/apfs-clone-checker or pwaller/fienode to check reflinks"
+                )
+            else:
+                return
+
+        tile_hash, size = get_hash_and_size_of_file(tile_path)
+        lfs_path = get_local_path_from_lfs_hash(repo, tile_hash)
+
+        if clone_checker:
+            output = subprocess.check_output(
+                [clone_checker, str(tile_path), str(lfs_path)], encoding="utf8"
+            )
+            assert (
+                output.strip() == "1"
+            ), f"{tile_path} and {lfs_path} should be reflinked"
+
+        elif fienode:
+            fienode1 = subprocess.check_output([fienode, str(tile_path)])
+            fienode2 = subprocess.check_output([fienode, str(lfs_path)])
+            assert (
+                fienode1 == fienode2
+            ), f"{tile_path} and {lfs_path} should be reflinked"
+
+    return _check_tile_is_reflinked

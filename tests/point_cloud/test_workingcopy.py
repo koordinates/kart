@@ -1,9 +1,11 @@
 import re
 import shutil
 
+import reflink
 import pygit2
 import pytest
 
+from kart import is_windows
 from kart.exceptions import (
     WORKING_COPY_OR_IMPORT_CONFLICT,
     NO_CHANGES,
@@ -1244,3 +1246,25 @@ def test_working_copy_conflicting_extension(cli_runner, data_archive, requires_p
         r = cli_runner.invoke(["status"])
         assert r.exit_code == INVALID_OPERATION
         assert "More than one tile found in working copy with the same name" in r.stderr
+
+
+@pytest.mark.skipif(is_windows, reason="copy-on-write not supported on windows")
+def test_working_copy_reflink(cli_runner, data_archive, check_tile_is_reflinked):
+    # This test will show as passed if Kart's reflinks are working,
+    # skipped if reflinks are not supported on this filesystem or if we can't detect them,
+    # and failed if reflinks are supported but Kart fails to make use of them.
+
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+
+        # Extracting a repo that was tarred probably doesn't give you reflinks -
+        # so we recreate the working copy so that we do get reflinks.
+        cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+
+        for x in range(4):
+            for y in range(4):
+                check_tile_is_reflinked(
+                    repo_path / "auckland" / f"auckland_{x}_{y}.copc.laz",
+                    repo,
+                    do_raise_skip=True,
+                )

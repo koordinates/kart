@@ -151,6 +151,12 @@ jobs:
           sudo apt-get update -q -y
           sudo ACCEPT_EULA=Y apt-get install -q -y msodbcsql17
 
+      - name: "test: install fienode for reflink testing"
+        run: |
+          curl -L https://github.com/pwaller/fienode/releases/download/v1.0/fienode-linux-amd64 --output fienode
+          chmod +x fienode
+          mv fienode /usr/local/bin/
+
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10
         with:
@@ -861,6 +867,14 @@ jobs:
       - name: "test: smoke test"
         run: |
           ./build/kart --version
+
+      - name: "test: install clone_checker for reflink testing"
+        run: |
+          git clone https://github.com/dyorgio/apfs-clone-checker.git
+          cd apfs-clone-checker
+          gcc clone_checker.c -o clone_checker
+          chmod +x clone_checker
+          mv clone_checker /usr/local/bin/
 
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10

@@ -4,6 +4,11 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.14.0 (UNRELEASED)
+
+- Fixes a bug where SIGINT (Ctrl+C) wasn't terminating Kart when using helper mode, affects macOS and Linux. [#869](https://github.com/koordinates/kart/pull/869)
+- Fixes a bug where reflink wasn't working on macOS, leading to larger size on disk for point cloud datasets. [#876](https://github.com/koordinates/kart/issues/876)
+
 ## 0.13.0
 
 ### Major fix: Corruption of Postgres NUMERIC values

@@ -12,8 +12,15 @@ set(REQUIREMENTS_DEPS
     PARENT_SCOPE)
 
 # fixme: use a list from somewhere else
-set(WHEEL_DEPS cryptography psycopg2 pygit2 gdal cffi pysqlite3
-               # pyodbc: this is OS-qualified already in requirements.in
+set(WHEEL_DEPS
+    cryptography
+    psycopg2
+    pygit2
+    gdal
+    cffi
+    pysqlite3
+    reflink
+    # pyodbc: this is OS-qualified already in requirements.in
 )
 
 set(PIP_COMPILE_COMMAND

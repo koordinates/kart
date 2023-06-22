@@ -1,7 +1,9 @@
+import pytest
 import shutil
 
-import pytest
+import reflink
 
+from kart import is_windows
 from kart.exceptions import (
     WORKING_COPY_OR_IMPORT_CONFLICT,
     NO_CHANGES,
@@ -753,3 +755,21 @@ def test_working_copy_vrt(cli_runner, data_archive):
         assert "Kart maintains this VRT file" in vrt_text
         assert '<SourceFilename relativeToVRT="1">EL.tif</SourceFilename>' in vrt_text
         assert '<SourceFilename relativeToVRT="1">EK.tif</SourceFilename>' in vrt_text
+
+
+@pytest.mark.skipif(is_windows, reason="copy-on-write not supported on windows")
+def test_working_copy_reflink(cli_runner, data_archive, check_tile_is_reflinked):
+    # This test will show as passed if Kart's reflinks are working,
+    # skipped if reflinks are not supported on this filesystem or if we can't detect them,
+    # and failed if reflinks are supported but Kart fails to make use of them.
+
+    with data_archive("raster/aerial.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+
+        # Extracting a repo that was tarred probably doesn't give you reflinks -
+        # so we recreate the working copy so that we do get reflinks.
+        cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+
+        check_tile_is_reflinked(
+            repo_path / "aerial" / "aerial.tif", repo, do_raise_skip=True
+        )

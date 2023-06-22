@@ -185,6 +185,7 @@ def test_import_single_cogtiff(
     data_archive_readonly,
     check_lfs_hashes,
     requires_git_lfs,
+    check_tile_is_reflinked,
 ):
     with data_archive_readonly("raster/cog-aerial.tgz") as aerial:
         repo_path = tmp_path / "raster-repo"
@@ -199,6 +200,7 @@ def test_import_single_cogtiff(
             assert r.exit_code == 0, r.stderr
 
             check_lfs_hashes(repo, 1)
+            check_tile_is_reflinked(repo_path / "aerial" / "aerial.tif", repo)
 
             r = cli_runner.invoke(["data", "ls"])
             assert r.exit_code == 0, r.stderr
@@ -241,6 +243,7 @@ def test_import_single_geotiff_with_rat(
     data_archive,
     check_lfs_hashes,
     requires_git_lfs,
+    check_tile_is_reflinked,
 ):
     with data_archive("raster/cog-erosion.tgz") as erosion:
         # The PAM file should be found in a case-insensitive way
@@ -379,6 +382,7 @@ def test_import_single_geotiff_with_rat(
 
             tif = repo_path / "erorisk_silcdb4" / "erorisk_silcdb4.tif"
             assert tif.is_file()
+            check_tile_is_reflinked(tif, repo)
             assert get_hash_and_size_of_file(tif) == (
                 "c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
                 604652,
@@ -388,6 +392,7 @@ def test_import_single_geotiff_with_rat(
             # b) normalise all extensions in the working copy (to lowercase).
             pam = repo_path / "erorisk_silcdb4" / "erorisk_silcdb4.tif.aux.xml"
             assert pam.is_file()
+            check_tile_is_reflinked(pam, repo)
             assert get_hash_and_size_of_file(pam) == (
                 "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
                 36908,

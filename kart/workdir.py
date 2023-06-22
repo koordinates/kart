@@ -34,7 +34,11 @@ from kart.sqlalchemy.sqlite import sqlite_engine
 from kart import subprocess_util as subprocess
 from kart.tile import ALL_TILE_DATASET_TYPES
 from kart.tile.tile_dataset import TileDataset
-from kart.tile.tilename_util import remove_any_tile_extension, PAM_SUFFIX
+from kart.tile.tilename_util import (
+    remove_any_tile_extension,
+    case_insensitive,
+    PAM_SUFFIX,
+)
 from kart.working_copy import WorkingCopyPart
 
 L = logging.getLogger("kart.workdir")
@@ -804,8 +808,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         assert self.repo.workdir_path in ds_tiles_dir.parents
         assert ds_tiles_dir.is_dir()
 
-        pam_name_pattern = dataset.get_tile_path_pattern(tilename, is_pam=True)
-        for child in ds_tiles_dir.glob(tilename + ".*"):
+        pam_name_pattern = dataset.get_tile_path_pattern(
+            tilename, is_pam=True, ignore_tile_case=True
+        )
+
+        for child in ds_tiles_dir.glob(case_insensitive(tilename) + ".*"):
             if pam_name_pattern.fullmatch(child.name) and child.is_file():
                 child.unlink()
 
