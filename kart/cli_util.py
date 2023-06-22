@@ -6,6 +6,7 @@ from pathlib import Path
 import platform
 import shutil
 import signal
+import sys
 
 
 import click
