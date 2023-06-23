@@ -69,6 +69,7 @@
 .. _pdal: https://pdal.io/
 .. _rat: https://gdal.org/doxygen/classGDALRasterAttributeTable.html#details
 .. _pam: https://gdal.org/doxygen/classGDALPamDataset.html#details
+.. _vrt: https://gdal.org/drivers/raster/vrt.html
 .. _git_lfs: https://git-lfs.com/
 .. _copy_on_write: https://en.wikipedia.org/wiki/Copy-on-write
 .. _kart_github_issue_772: https://github.com/koordinates/kart/issues/772
