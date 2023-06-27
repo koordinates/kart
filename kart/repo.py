@@ -371,10 +371,12 @@ class KartRepo(pygit2.Repository):
 
     @classmethod
     def _create_with_git_command(cls, cmd, gitdir_path, temp_workdir_path=None):
-        returncode, stdout, stderr = subprocess.run_and_tee_output(cmd)
-        if returncode != 0:
+        proc = subprocess.run_and_tee_output(cmd, tee_stderr=not is_windows)
+        if proc.returncode != 0:
             raise SubprocessError(
-                f"Error calling {cmd[0]} {cmd[1]}", exit_code=returncode, stderr=stderr
+                f"Error calling {cmd[0]} {cmd[1]}",
+                exit_code=proc.returncode,
+                stderr=b"" if is_windows else proc.stderr,
             )
 
         result = KartRepo(gitdir_path, validate=False)
