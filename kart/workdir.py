@@ -161,7 +161,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         msg = [
             "Copy-on-write is not supported on this filesystem.",
-            "Currently Kart must create two copies of point cloud tiles to support full distributed version control features.",
+            "Currently Kart must create two copies of tiles to support full distributed version control features.",
             "For more info, see https://docs.kartproject.org/en/latest/pages/git_lfs.html#disk-usage",
         ]
         click.echo("\n".join(msg), err=True)
