@@ -147,6 +147,12 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 exit_code=NO_WORKING_COPY,
             )
 
+    COPY_ON_WRITE_WARNING = [
+        "Copy-on-write is not supported on this filesystem.",
+        "Currently Kart must create two copies of tiles to support full distributed version control features.",
+        "For more info, see https://docs.kartproject.org/en/latest/pages/git_lfs.html#disk-usage",
+    ]
+
     def check_if_reflink_okay(self):
         """Makes sure that reflink is working, or failing that, that the user has been made aware that reflink is not working."""
         if self.repo.get_config_str("kart.reflink.warningShown"):
@@ -159,12 +165,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             # Reflink is supported - no need to warn user about anything.
             return True
 
-        msg = [
-            "Copy-on-write is not supported on this filesystem.",
-            "Currently Kart must create two copies of tiles to support full distributed version control features.",
-            "For more info, see https://docs.kartproject.org/en/latest/pages/git_lfs.html#disk-usage",
-        ]
-        click.echo("\n".join(msg), err=True)
+        click.echo("\n".join(self.COPY_ON_WRITE_WARNING), err=True)
 
         if get_input_mode() is not InputMode.INTERACTIVE:
             # Can't ask the user what they think - we've logged a warning, carry on regardless.

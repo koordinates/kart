@@ -1,7 +1,6 @@
 import re
 import shutil
 
-import reflink
 import pygit2
 import pytest
 
@@ -15,6 +14,7 @@ from kart.lfs_util import get_hash_and_size_of_file
 from kart.point_cloud.metadata_util import extract_pc_tile_metadata
 from kart.repo import KartRepo
 from kart import subprocess_util as subprocess
+from kart.workdir import FileSystemWorkingCopy
 from .fixtures import requires_pdal  # noqa
 
 
@@ -1116,12 +1116,12 @@ def test_lfs_gc(cli_runner, data_archive, monkeypatch):
 
 
 def _remove_copy_on_write_warning(stderr_output):
-    if len(stderr_output) > 3 and stderr_output[0:3] == [
-        "Copy-on-write is not supported on this filesystem.",
-        "Currently Kart must create two copies of point cloud tiles to support full distributed version control features.",
-        "For more info, see https://docs.kartproject.org/en/latest/pages/git_lfs.html#disk-usage",
-    ]:
-        return stderr_output[3:]
+    warning = FileSystemWorkingCopy.COPY_ON_WRITE_WARNING
+    if (
+        len(stderr_output) >= len(warning)
+        and stderr_output[0 : len(warning)] == warning
+    ):
+        return stderr_output[len(warning) :]
     return stderr_output
 
 
