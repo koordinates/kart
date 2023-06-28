@@ -127,12 +127,13 @@ async def read_stream_and_display(stream, display):
     return b"".join(output)
 
 
-async def read_and_display(cmd, **kwargs):
-    """Capture cmd's stdout and stderr while displaying them as they arrive (line by line)."""
-    # start process
-    process = await asyncio.create_subprocess_exec(
-        *cmd, stdout=PIPE, stderr=PIPE, **kwargs
-    )
+async def read_and_display(cmd, tee_stdout=False, tee_stderr=False, **kwargs):
+    """Capture cmd's stdout and/or stderr while displaying them as they arrive (line by line)."""
+    if tee_stdout:
+        kwargs["stdout"] = PIPE
+    if tee_stderr:
+        kwargs["stderr"] = PIPE
+    process = await asyncio.create_subprocess_exec(*cmd, **kwargs)
 
     def display(stream, output):
         stream.buffer.write(output)
@@ -140,17 +141,27 @@ async def read_and_display(cmd, **kwargs):
 
     # Read child's stdout/stderr concurrently (capture and display)
     try:
-        stdout, stderr = await asyncio.gather(
-            read_stream_and_display(process.stdout, partial(display, sys.stdout)),
-            read_stream_and_display(process.stderr, partial(display, sys.stderr)),
-        )
+        stream_coroutines = []
+        if tee_stdout:
+            stream_coroutines.append(
+                read_stream_and_display(process.stdout, partial(display, sys.stdout))
+            )
+        if tee_stderr:
+            stream_coroutines.append(
+                read_stream_and_display(process.stderr, partial(display, sys.stderr))
+            )
+        outputs = list(await asyncio.gather(*stream_coroutines))
     except Exception:
         process.kill()
         raise
     finally:
         # Wait for the process to exit
-        return_code = await process.wait()
-    return return_code, stdout, stderr
+        await process.wait()
+    if tee_stdout:
+        process.stdout = outputs.pop(0)
+    if tee_stderr:
+        process.stderr = outputs.pop(0)
+    return process
 
 
 async def read_universal_line(stream):
@@ -230,16 +241,24 @@ async def read_until_any_of(stream, separators=b"\n"):
     return bytes(chunk)
 
 
-def run_and_tee_output(cmd, **kwargs):
+def run_and_tee_output(cmd, tee_stdout=False, tee_stderr=False, **kwargs):
     """
     Run a subprocess and *don't* capture its output - let stdout and stderr display as per usual -
     - but also *do* capture its output so that we can inspect it.
     Returns a tuple of (exit-code, stdout output string, stderr output string).
     """
-    if "env" not in kwargs:
-        kwargs.setdefault("env", tool_environment())
-    return_code, stdout, stderr = asyncio.run(read_and_display(cmd, **kwargs))
-    return return_code, stdout, stderr
+    if "_KART_RUN_WITH_CAPTURE" in os.environ:
+        tee_stdout = True
+        tee_stderr = True
+    proc = asyncio.run(
+        read_and_display(
+            cmd,
+            tee_stdout=tee_stdout,
+            tee_stderr=tee_stderr,
+            **add_default_kwargs(kwargs),
+        )
+    )
+    return proc
 
 
 def run_then_exit(cmd):

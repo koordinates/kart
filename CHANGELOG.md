@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.14.1 (UNRELEASED)
+
+- Fixes a bug where Git subprocesses (such as git clone) don't prompt the user for credentials or to resolve SSH issues on Windows. [#852](https://github.com/koordinates/kart/issues/852)
+
 ## 0.14.0
 
 ### Major changes
