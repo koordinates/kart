@@ -8,10 +8,8 @@ import html5lib
 import pytest
 
 import kart
-from kart.base_diff_writer import BaseDiffWriter
 from kart.diff_format import DiffFormat
 from kart.diff_structs import Delta, DeltaDiff
-from kart.diff_util import get_file_diff
 from kart.json_diff_writers import JsonLinesDiffWriter
 from kart.geometry import hex_wkb_to_ogr
 from kart.repo import KartRepo
@@ -30,10 +28,10 @@ def _check_html_output(s):
     document = parser.parse(s)
     # find the <script> element containing data
     el = document.find("./head/script[@id='kart-data']")
-    # find the JSON
-    m = re.match(r"\s*const DATA=(.*);\s*$", el.text, flags=re.DOTALL)
+    # Make sure we're parsing it as JSON.
+    assert el.attrib == {"id": "kart-data", "type": "application/json"}
     # validate it
-    return json.loads(m.group(1))
+    return json.loads(el.text)
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)

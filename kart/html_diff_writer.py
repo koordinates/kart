@@ -1,3 +1,4 @@
+import html
 import json
 import string
 import sys
@@ -59,7 +60,7 @@ class HtmlDiffWriter(BaseDiffWriter):
         fo.write(
             template.substitute(
                 {
-                    "title": title,
+                    "title": html.escape(title),
                     "geojson_data": json.dumps(
                         all_datasets_geojson, cls=ExtendedJsonEncoder
                     ),
