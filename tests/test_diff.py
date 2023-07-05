@@ -2,6 +2,7 @@ import functools
 import json
 import re
 import time
+from pathlib import Path
 
 import html5lib
 import pytest
@@ -2096,3 +2097,15 @@ def test_attached_files_patch(data_archive, cli_runner):
                 "+": 'text:<gmd:MD_Metadata xmlns:gco="http://www.isotc211.org/2005/gco" xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:gml="http://www.opengis.net/gml" xmlns:gts="http://www.isotc211.org/2005/gts" xmlns:topo="http://www.linz.govt.nz/schemas/topo/data-dictionary" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.isotc211.org/2005/gmd">'
             },
         }
+
+def test_load_user_provided_html_template(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        r = cli_runner.invoke(
+            [
+                "diff",
+                f"--output-format=html",
+                f"--html-template=" + str(Path(__file__).absolute().parent.parent / "kart" / "diff-view.html"),
+                "HEAD^...",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr

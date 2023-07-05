@@ -129,6 +129,12 @@ def feature_count_diff(
     is_flag=True,
     help="Show changes to file contents (instead of just showing the object IDs of changed files)",
 )
+@click.option(
+    "--html-template",
+    default=None,
+    help="Provide a user defined/specific html template for diff representation",
+    type=click.Path(exists=True),
+)
 @click.argument(
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
@@ -147,6 +153,7 @@ def diff(
     add_feature_count_estimate,
     convert_to_dataset_format,
     diff_files,
+    html_template,
     args,
 ):
     """
@@ -205,6 +212,7 @@ def diff(
         json_style=fmt,
         target_crs=crs,
         diff_estimate_accuracy=add_feature_count_estimate,
+        html_template=html_template,
     )
     diff_writer.convert_to_dataset_format(convert_to_dataset_format)
     diff_writer.full_file_diffs(diff_files)

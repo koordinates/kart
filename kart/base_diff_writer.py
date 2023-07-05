@@ -82,6 +82,8 @@ class BaseDiffWriter:
         target_crs=None,
         # used by json-lines diffs only
         diff_estimate_accuracy=None,
+        # used by html diff only
+        html_template=None
     ):
         self.repo = repo
         self.commit_spec = commit_spec
@@ -93,6 +95,7 @@ class BaseDiffWriter:
 
         self.user_key_filters = user_key_filters
         self.repo_key_filter = RepoKeyFilter.build_from_user_patterns(user_key_filters)
+        self.html_template = html_template
 
         self.spatial_filter = repo.spatial_filter
 
