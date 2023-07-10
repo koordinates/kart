@@ -57,22 +57,27 @@ class HtmlDiffWriter(BaseDiffWriter):
         }
 
         fo = resolve_output_path(self.output_path)
-        fo.write(
-            template.substitute(
-                {
-                    "title": html.escape(title),
-                    "geojson_data": json.dumps(
-                        all_datasets_geojson, cls=ExtendedJsonEncoder
-                    ),
-                }
-            )
-        )
+        fo.write(self.substitute_into_template(template, title, all_datasets_geojson))
 
         if fo != sys.stdout:
             fo.close()
             webbrowser.open_new(f"file://{self.output_path.resolve()}")
 
         self.write_warnings_footer()
+
+    @classmethod
+    def substitute_into_template(cls, template, title, all_datasets_geojson):
+        return template.substitute(
+            {
+                "title": html.escape(title),
+                "geojson_data": json.dumps(
+                    all_datasets_geojson, cls=ExtendedJsonEncoder
+                )
+                .replace("/", r"\x2f")
+                .replace("<", r"\x3c")
+                .replace(">", r"\x3e"),
+            }
+        )
 
 
 HtmlDiffWriter.filtered_dataset_deltas_as_geojson = (
