@@ -1,5 +1,5 @@
 certifi
-Click~=8.1
+click~=8.1.4
 msgpack~=0.6.1
 pymysql
 Pygments
