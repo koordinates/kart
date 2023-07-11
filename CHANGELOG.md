@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.14.1 (UNRELEASED)
 
 - Fixes a bug where Git subprocesses (such as git clone) don't prompt the user for credentials or to resolve SSH issues on Windows. [#852](https://github.com/koordinates/kart/issues/852)
+- Better protection against XSS in the HTML diff viewer. [#884](https://github.com/koordinates/kart/pull/884)
 
 ## 0.14.0
 

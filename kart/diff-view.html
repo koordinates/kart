@@ -103,8 +103,9 @@
             top: 2px;
         }
     </style>
-    <script id="kart-data">const DATA=${geojson_data};</script>
+    <script id="kart-data" type="application/json">${geojson_data}</script>
     <script type="module">
+        const DATA = JSON.parse(document.getElementById('kart-data').textContent);
         const GEOM = '⭔'
 
         function buildMap() {

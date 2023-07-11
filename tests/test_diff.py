@@ -1,6 +1,7 @@
 import functools
 import json
 import re
+import string
 import time
 from pathlib import Path
 
@@ -8,10 +9,9 @@ import html5lib
 import pytest
 
 import kart
-from kart.base_diff_writer import BaseDiffWriter
 from kart.diff_format import DiffFormat
 from kart.diff_structs import Delta, DeltaDiff
-from kart.diff_util import get_file_diff
+from kart.html_diff_writer import HtmlDiffWriter
 from kart.json_diff_writers import JsonLinesDiffWriter
 from kart.geometry import hex_wkb_to_ogr
 from kart.repo import KartRepo
@@ -30,10 +30,10 @@ def _check_html_output(s):
     document = parser.parse(s)
     # find the <script> element containing data
     el = document.find("./head/script[@id='kart-data']")
-    # find the JSON
-    m = re.match(r"\s*const DATA=(.*);\s*$", el.text, flags=re.DOTALL)
+    # Make sure we're parsing it as JSON.
+    assert el.attrib == {"id": "kart-data", "type": "application/json"}
     # validate it
-    return json.loads(m.group(1))
+    return json.loads(el.text)
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
@@ -2098,14 +2098,47 @@ def test_attached_files_patch(data_archive, cli_runner):
             },
         }
 
+
 def test_load_user_provided_html_template(data_archive, cli_runner):
     with data_archive("points") as repo_path:
         r = cli_runner.invoke(
             [
                 "diff",
                 f"--output-format=html",
-                f"--html-template=" + str(Path(__file__).absolute().parent.parent / "kart" / "diff-view.html"),
+                f"--html-template="
+                + str(
+                    Path(__file__).absolute().parent.parent / "kart" / "diff-view.html"
+                ),
                 "HEAD^...",
             ]
         )
         assert r.exit_code == 0, r.stderr
+
+
+def test_xss_protection():
+    TEMPLATE = """
+<html>
+  <head>
+    <title>Kart Diff: ${title}</title>
+    <script type="application/json">${geojson_data}</script>
+  </head>
+  <body>...</body>
+</html>
+""".lstrip()
+    html_xss = "<script>alert(1);</script>"
+    json_xss = {"key": "</script><script>alert(1);</script>"}
+    result = HtmlDiffWriter.substitute_into_template(
+        string.Template(TEMPLATE), html_xss, json_xss
+    )
+
+    EXPECTED_RESULT = """
+<html>
+  <head>
+    <title>Kart Diff: &lt;script&gt;alert(1);&lt;/script&gt;</title>
+    <script type="application/json">{"key": "\\x3c\\x2fscript\\x3e\\x3cscript\\x3ealert(1);\\x3c\\x2fscript\\x3e"}</script>
+  </head>
+  <body>...</body>
+</html>
+""".lstrip()
+
+    assert result == EXPECTED_RESULT
