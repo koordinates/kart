@@ -27,6 +27,8 @@ idna==3.4
     # via requests
 imagesize==1.4.1
     # via sphinx
+importlib-metadata==6.7.0
+    # via sphinx
 jinja2==3.1.2
     # via sphinx
 livereload==2.6.3
@@ -43,7 +45,7 @@ pygments==2.13.0
     #   sphinx
 pytz==2022.6
     # via babel
-requests==2.28.1
+requests==2.31.0
     # via sphinx
 six==1.16.0
     # via
@@ -73,5 +75,9 @@ sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
 tornado==6.2
     # via livereload
+typing-extensions==4.7.1
+    # via importlib-metadata
 urllib3==1.26.13
     # via requests
+zipp==3.15.0
+    # via importlib-metadata
