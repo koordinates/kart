@@ -1,8 +1,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO koordinates/libgit2
-    REF kart-libgit-v1.6.4
-    SHA512 0de7c2e0efe04d94f8116133bd167f641c51499c94e9b5a601309ab8045b276832347b7cdc75152b4f5c110c0c0c29224134e5aff32267d7a78595b4d2b5dd90
+    REF kart-v0.14.1
+    SHA512 ef2a5a1238909a3a7f78bd71b98f72a60bd69c6c3fc7707ba785d88e4910f37eef98664774cb99fe440bf384463469458c45caa6ee3dac7bbafe5f3a73cbb08b
     HEAD_REF kx-latest
     PATCHES
         fix-configcmake.patch
