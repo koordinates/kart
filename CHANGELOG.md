@@ -8,6 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 - Fixes a bug where Git subprocesses (such as git clone) don't prompt the user for credentials or to resolve SSH issues on Windows. [#852](https://github.com/koordinates/kart/issues/852)
 - Better protection against XSS in the HTML diff viewer. [#884](https://github.com/koordinates/kart/pull/884)
+- Speed-up: greatly reduces the time taken to update the index file after checking out LFS tiles to the working copy. [#880](https://github.com/koordinates/kart/pull/880)
 
 ## 0.14.0
 

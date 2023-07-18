@@ -11,7 +11,6 @@ from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
 from kart.lfs_util import (
     get_hash_from_pointer_file,
-    get_local_path_from_lfs_hash,
     pointer_file_bytes_to_dict,
     copy_file_to_local_lfs_cache,
     merge_pointer_file_dicts,
@@ -73,7 +72,7 @@ class TileDataset(BaseDataset):
     def tile_tree(self):
         return self.get_subtree(self.TILE_PATH)
 
-    def _tile_pointer_blobs_and_dicts(
+    def tile_pointer_blobs_and_dicts(
         self,
         spatial_filter=SpatialFilter.MATCH_ALL,
         show_progress=False,
@@ -137,7 +136,7 @@ class TileDataset(BaseDataset):
         """
         Returns a generator that yields every tile pointer blob in turn.
         """
-        for blob, _ in self._tile_pointer_blobs_and_dicts(
+        for blob, _ in self.tile_pointer_blobs_and_dicts(
             spatial_filter=spatial_filter,
             show_progress=show_progress,
             parse_pointer_dicts=False,
@@ -157,41 +156,6 @@ class TileDataset(BaseDataset):
             spatial_filter=spatial_filter, show_progress=show_progress
         ):
             yield get_hash_from_pointer_file(blob)
-
-    def tilenames_with_lfs_hashes(
-        self,
-        spatial_filter=SpatialFilter.MATCH_ALL,
-        fix_extensions=True,
-        show_progress=False,
-    ):
-        """
-        Returns a generator that yields every tilename along with its LFS hash.
-        If fix_extensions is True, then the returned name will be modified to have the correct extension for the
-        type of tile the blob is pointing to.
-        """
-        for blob, pointer_dict in self._tile_pointer_blobs_and_dicts(
-            spatial_filter=spatial_filter, show_progress=show_progress
-        ):
-            if fix_extensions:
-                tile_format = pointer_dict.get("format")
-                oid = pointer_dict["oid"].split(":", maxsplit=1)[1]
-                yield self.set_tile_extension(blob.name, tile_format=tile_format), oid
-            else:
-                yield blob.name, get_hash_from_pointer_file(blob)
-
-    def tilenames_with_lfs_paths(
-        self,
-        spatial_filter=SpatialFilter.MATCH_ALL,
-        fix_extensions=True,
-        show_progress=False,
-    ):
-        """Returns a generator that yields every tilename along with the path where the tile content is stored locally."""
-        for blob_name, lfs_hash in self.tilenames_with_lfs_hashes(
-            spatial_filter=spatial_filter,
-            fix_extensions=fix_extensions,
-            show_progress=show_progress,
-        ):
-            yield blob_name, get_local_path_from_lfs_hash(self.repo, lfs_hash)
 
     def decode_path(self, path):
         rel_path = self.ensure_rel_path(path)
