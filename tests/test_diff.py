@@ -4,6 +4,7 @@ import re
 import string
 import time
 from pathlib import Path
+import webbrowser
 
 import html5lib
 import pytest
@@ -2099,7 +2100,11 @@ def test_attached_files_patch(data_archive, cli_runner):
         }
 
 
-def test_load_user_provided_html_template(data_archive, cli_runner):
+def test_load_user_provided_html_template(data_archive, cli_runner, monkeypatch):
+    def noop(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr(webbrowser, "open_new", noop)
     with data_archive("points") as repo_path:
         r = cli_runner.invoke(
             [
