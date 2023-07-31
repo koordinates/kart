@@ -47,7 +47,7 @@ def data_ls(ctx, output_format, with_dataset_types, refish):
         repo_desc = (
             "Empty repository."
             if repo.head_is_unborn
-            else "The commit at HEAD has no datasets."
+            else f"The commit at {refish} has no datasets."
         )
         click.echo(f'{repo_desc}\n  (use "kart import" to add some data)')
         return
@@ -55,7 +55,7 @@ def data_ls(ctx, output_format, with_dataset_types, refish):
     if output_format == "text":
         if with_dataset_types:
             for ds_obj in json_list:
-                click.echo(f"{ds_obj['path']}\t({ds_obj['type']}.v{ds_obj['version']})")
+                click.echo("{path}\t({type}.v{version})".format(**ds_obj))
 
         else:
             for ds_obj in json_list:
