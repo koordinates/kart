@@ -24,7 +24,7 @@ from kart.exceptions import (
     NO_WORKING_COPY,
     translate_subprocess_exit_code,
 )
-from kart.lfs_util import get_local_path_from_lfs_hash
+from kart.lfs_util import get_local_path_from_lfs_hash, dict_to_pointer_file_bytes
 from kart.lfs_commands import fetch_lfs_blobs_for_pointer_files
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import InputMode, get_input_mode
@@ -195,7 +195,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         datasets = self.repo.datasets(
             self.get_tree_id(), filter_dataset_type=ALL_TILE_DATASET_TYPES
         )
-        self.delete_datasets_from_workdir(datasets, track_changes_as_dirty=True)
+        self.delete_datasets_from_workdir(
+            datasets, workdir_index=None, track_changes_as_dirty=True
+        )
 
         if self.index_path.is_file():
             self.index_path.unlink()
@@ -233,6 +235,33 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             self._session.close()
             del self._session
             L.debug("session: new/done")
+
+    @contextlib.contextmanager
+    def workdir_index_session(self):
+        """
+        Context manager for opening and updating the workdir-index file.
+        Automatically writes it on close, as long as no exception is thrown.
+
+        Calling again yields the _same_ session, writing only happens when the outer one is closed.
+        """
+        L = logging.getLogger(f"{self.__class__.__qualname__}.workdir_index_session")
+
+        if hasattr(self, "_workdir_index"):
+            # Inner call - reuse existing session.
+            L.debug("workdir_index_session: existing...")
+            yield self._workdir_index
+            L.debug("workdir_index_session: existing/done")
+            return
+
+        L.debug("workdir_index_session: new...")
+        self._workdir_index = pygit2.Index(self.index_path)
+
+        try:
+            yield self._workdir_index
+            self._workdir_index.write()
+        finally:
+            del self._workdir_index
+            L.debug("workdir_index_session: new/done")
 
     def is_dirty(self):
         """
@@ -380,25 +409,30 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         )
 
         # Second pass - actually update the working copy:
-        if ds_deletes:
-            self.delete_datasets_from_workdir([base_datasets[d] for d in ds_deletes])
-        if ds_inserts:
-            self.write_full_datasets_to_workdir(
-                [target_datasets[d] for d in ds_inserts]
-            )
-        # Update the working copy with files that have changed:
-        kart_attachments = os.environ.get("X_KART_ATTACHMENTS")
-        if kart_attachments:
-            if base_tree and target_tree:
-                self.update_file_diffs(base_tree, target_tree)
 
-        for ds_path in ds_updates:
-            self._update_dataset_in_workdir(
-                target_datasets[ds_path],
-                update_diffs[ds_path],
-                ds_filter=repo_key_filter[ds_path],
-                track_changes_as_dirty=track_changes_as_dirty,
-            )
+        with self.workdir_index_session() as workdir_index:
+            if ds_deletes:
+                self.delete_datasets_from_workdir(
+                    [base_datasets[d] for d in ds_deletes], workdir_index
+                )
+            if ds_inserts:
+                self.write_full_datasets_to_workdir(
+                    [target_datasets[d] for d in ds_inserts], workdir_index
+                )
+            # Update the working copy with files that have changed:
+            kart_attachments = os.environ.get("X_KART_ATTACHMENTS")
+            if kart_attachments:
+                if base_tree and target_tree:
+                    self.update_file_diffs(base_tree, target_tree, workdir_index)
+
+            for ds_path in ds_updates:
+                self._update_dataset_in_workdir(
+                    target_datasets[ds_path],
+                    update_diffs[ds_path],
+                    workdir_index,
+                    ds_filter=repo_key_filter[ds_path],
+                    track_changes_as_dirty=track_changes_as_dirty,
+                )
 
         with self.state_session() as sess:
             if not track_changes_as_dirty:
@@ -407,7 +441,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 sess, self.repo.spatial_filter.hexhash
             )
 
-    def update_file_diffs(self, base_tree, target_tree):
+    def update_file_diffs(self, base_tree, target_tree, workdir_index):
         """Get the deltas for attachment files and write them to the working copy."""
         repo = self.repo
         base_rs = RepoStructure(repo, base_tree)
@@ -425,6 +459,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if file_delta.new:
                 blob_data = repo[file_delta.new.value].data
                 new_path.write_bytes(blob_data)
+
+            # TODO: update workdir_index.
 
     def _diff_to_reset(
         self, ds_path, base_datasets, target_datasets, workdir_diff_cache, ds_filter
@@ -483,7 +519,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if pam_pointer_blob:
                 yield pam_pointer_blob
 
-    def write_full_datasets_to_workdir(self, datasets, track_changes_as_dirty=False):
+    def write_full_datasets_to_workdir(
+        self, datasets, workdir_index, track_changes_as_dirty=False
+    ):
+        write_to_index = not track_changes_as_dirty
+
         dataset_count = len(datasets)
         for i, dataset in enumerate(datasets):
             assert isinstance(dataset, TileDataset)
@@ -493,26 +533,32 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 err=True,
             )
 
+            if write_to_index:
+                workdir_index.remove_all([f"{dataset.path}/**"])
+
             wc_tiles_dir = self.path / dataset.path
             (wc_tiles_dir).mkdir(parents=True, exist_ok=True)
 
-            for tilename, lfs_path in dataset.tilenames_with_lfs_paths(
+            for pointer_blob, pointer_dict in dataset.tile_pointer_blobs_and_dicts(
                 self.repo.spatial_filter,
                 show_progress=True,
             ):
-                if not lfs_path.is_file():
-                    click.echo(
-                        f"Couldn't find tile {tilename} locally - skipping...", err=True
-                    )
-                    continue
-                try_reflink(lfs_path, wc_tiles_dir / tilename)
+                pointer_dict["name"] = dataset.set_tile_extension(
+                    pointer_blob.name, tile_format=pointer_dict.get("format")
+                )
+                self._write_tile_or_pam_file_to_workdir(
+                    dataset,
+                    pointer_dict,
+                    workdir_index,
+                    write_to_index=write_to_index,
+                )
 
         self.write_mosaic_for_dataset(dataset)
 
-        if not track_changes_as_dirty:
-            self._reset_workdir_index_for_datasets(datasets)
-
-    def delete_datasets_from_workdir(self, datasets, track_changes_as_dirty=False):
+    def delete_datasets_from_workdir(
+        self, datasets, workdir_index, track_changes_as_dirty=False
+    ):
+        write_to_index = not track_changes_as_dirty
         for dataset in datasets:
             assert isinstance(dataset, TileDataset)
 
@@ -522,9 +568,8 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             assert self.repo.workdir_path in ds_tiles_dir.parents
             if ds_tiles_dir.is_dir():
                 shutil.rmtree(ds_tiles_dir)
-
-        if not track_changes_as_dirty:
-            self._reset_workdir_index_for_datasets(datasets)
+            if write_to_index:
+                workdir_index.remove_all([f"{dataset.path}/**"])
 
     def delete_tiles(
         self,
@@ -547,14 +592,16 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 "delete_tiles currently only supports deleting specific tiles, not match_all"
             )
 
-        for ds_path, ds_filter in repo_key_filter.items():
-            dataset = datasets[ds_path]
-            self.delete_tiles_for_dataset(
-                dataset,
-                ds_filter,
-                track_changes_as_dirty=track_changes_as_dirty,
-                including_conflict_versions=including_conflict_versions,
-            )
+        with self.workdir_index_session() as workdir_index:
+            for ds_path, ds_filter in repo_key_filter.items():
+                dataset = datasets[ds_path]
+                self.delete_tiles_for_dataset(
+                    dataset,
+                    ds_filter,
+                    workdir_index,
+                    track_changes_as_dirty=track_changes_as_dirty,
+                    including_conflict_versions=including_conflict_versions,
+                )
 
     def delete_tiles_for_dataset(
         self,
@@ -579,22 +626,26 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 "delete_tiles currently only supports deleting specific tiles, not match_all"
             )
 
-        reset_index_files = []
-        for tilename in tile_filter:
-            name_pattern = dataset.get_tile_path_pattern(
-                tilename, include_conflict_versions=including_conflict_versions
-            )
-            for child in ds_tiles_dir.glob(tilename + ".*"):
-                if name_pattern.fullmatch(child.name) and child.is_file():
-                    child.unlink()
-                    if not track_changes_as_dirty:
-                        reset_index_files.append(f"{dataset.path}/{child.name}")
-
-        if not track_changes_as_dirty:
-            self._reset_workdir_index_for_files(reset_index_files)
+        write_to_index = not track_changes_as_dirty
+        with self.workdir_index_session() as workdir_index:
+            for tilename in tile_filter:
+                name_pattern = dataset.get_tile_path_pattern(
+                    tilename, include_conflict_versions=including_conflict_versions
+                )
+                for child in ds_tiles_dir.glob(tilename + ".*"):
+                    if name_pattern.fullmatch(child.name) and child.is_file():
+                        child.unlink()
+                    if write_to_index:
+                        workdir_index.remove_all([f"{dataset.path}/{child.name}"])
 
     def _update_dataset_in_workdir(
-        self, dataset, diff_to_apply, ds_filter, track_changes_as_dirty
+        self,
+        dataset,
+        diff_to_apply,
+        workdir_index,
+        *,
+        ds_filter,
+        track_changes_as_dirty,
     ):
         ds_path = dataset.path
         ds_tiles_dir = (self.path / ds_path).resolve()
@@ -603,153 +654,144 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         assert self.repo.workdir_path in ds_tiles_dir.parents
         assert ds_tiles_dir.is_dir()
 
-        do_update_all = ds_filter.match_all
-        reset_index_files = []
-
         tile_diff = diff_to_apply.get("tile")
         if not tile_diff:
             return
 
+        write_to_index = not track_changes_as_dirty
+
+        def _all_names_in_tile_delta(tile_delta):
+            for tile_summary in tile_delta.old_value, tile_delta.new_value:
+                if tile_summary is None:
+                    continue
+                for key in ("name", "sourceName", "pamName", "sourcePamName"):
+                    if key in tile_summary:
+                        yield tile_summary[key]
+
         for tile_delta in tile_diff.values():
-            if tile_delta.type in ("update", "delete"):
-                old_val = tile_delta.old_value
-                tile_name = old_val.get("sourceName") or old_val.get("name")
+            for tile_name in set(_all_names_in_tile_delta(tile_delta)):
                 tile_path = ds_tiles_dir / tile_name
                 if tile_path.is_file():
                     tile_path.unlink()
-                if not do_update_all:
-                    reset_index_files.append(f"{ds_path}/{tile_name}")
-                pam_name = tile_delta.old_value.get("pamName")
-                if pam_name:
-                    pam_path = ds_tiles_dir / pam_name
-                    if pam_path.is_file():
-                        pam_path.unlink()
+                if write_to_index:
+                    workdir_index.remove_all([f"{ds_path}/{tile_name}"])
 
             if tile_delta.type in ("update", "insert"):
                 new_val = tile_delta.new_value
-                tile_name = new_val.get("sourceName") or new_val.get("name")
-                lfs_path = get_local_path_from_lfs_hash(
-                    self.repo, tile_delta.new_value["oid"]
+                self._write_tile_or_pam_file_to_workdir(
+                    dataset,
+                    new_val,
+                    workdir_index,
+                    write_to_index=write_to_index,
                 )
-                if not lfs_path.is_file():
-                    click.echo(
-                        f"Couldn't find tile {tile_name} locally - skipping...",
-                        err=True,
-                    )
-                    continue
-                try_reflink(lfs_path, ds_tiles_dir / tile_name)
-                if not do_update_all:
-                    reset_index_files.append(f"{ds_path}/{tile_name}")
 
-                pam_name = tile_delta.new_value.get("pamName")
-                if pam_name:
-                    pam_path = ds_tiles_dir / pam_name
-                    lfs_path = get_local_path_from_lfs_hash(
-                        self.repo, tile_delta.new_value["pamOid"]
+                if new_val.get("pamOid"):
+                    self._write_tile_or_pam_file_to_workdir(
+                        dataset,
+                        new_val,
+                        workdir_index,
+                        use_pam_prefix=True,
+                        write_to_index=write_to_index,
                     )
-                    if not lfs_path.is_file():
-                        click.echo(
-                            f"Couldn't find PAM file {pam_name} locally - skipping...",
-                            err=True,
-                        )
-                        continue
-                    try_reflink(lfs_path, ds_tiles_dir / pam_name)
-                    if not do_update_all:
-                        reset_index_files.append(f"{ds_path}/{pam_name}")
 
         self.write_mosaic_for_dataset(dataset)
 
-        if not track_changes_as_dirty:
-            if do_update_all:
-                self._reset_workdir_index_for_datasets([ds_path])
-            else:
-                self._reset_workdir_index_for_files(reset_index_files)
-
-    def _reset_workdir_index_for_datasets(
-        self, datasets, repo_key_filter=RepoKeyFilter.MATCH_ALL
+    def _write_tile_or_pam_file_to_workdir(
+        self,
+        dataset,
+        tile_summary,
+        workdir_index,
+        *,
+        use_pam_prefix=False,
+        write_to_index=True,
+        skip_write_tile=False,
     ):
-        def path(ds_or_path):
-            return ds_or_path.path if hasattr(ds_or_path, "path") else ds_or_path
+        """
+        Given a tile summary eg {"name": "foo.laz", "oid": "sha256:...", "size": 1234},
+        copies the tile from the LFS cache to the workdir, using reflink where possible.
 
-        paths = [path(d) for d in datasets]
+        dataset - the dataset the tile belongs to, controls the path where the tile is written.
+        tile_summary - the dict to read the tile's name, OID, and size from.
+        workdir_index - index file for the workdir.
+        use_pam_prefix - if True, "pamName", "pamOid" and "pamSize" will be read instead.
+        write_to_index - if True, the workdir_index will be updated to record that this file is in the workdir.
+        skip_write_tile - if True, don't actually write the tile - only update the index.
+            This is useful if we know the file is already there (eg, the user put it there themselves).
+        """
 
-        env_overrides = {"GIT_INDEX_FILE": str(self.index_path)}
-
-        try:
-            # Use Git to figure out which files in the in the index need to be updated.
-            cmd = [
-                "git",
-                "add",
-                "--all",
-                "--intent-to-add",
-                "--dry-run",
-                "--ignore-missing",
-                "--",
-                *paths,
-            ]
-            output_lines = (
-                subprocess.check_output(
-                    cmd, env_overrides=env_overrides, encoding="utf-8", cwd=self.path
-                )
-                .strip()
-                .splitlines()
-            )
-        except subprocess.CalledProcessError as e:
-            raise SubprocessError(
-                f"There was a problem with git add --intent-to-add --dry-run: {e}",
-                called_process_error=e,
-            )
-
-        if not output_lines:
-            # Nothing to be done.
+        tilename = tile_summary["pamName" if use_pam_prefix else "name"]
+        oid = tile_summary["pamOid" if use_pam_prefix else "oid"]
+        size = tile_summary["pamSize" if use_pam_prefix else "size"]
+        lfs_path = get_local_path_from_lfs_hash(self.repo, oid)
+        if not lfs_path.is_file():
+            click.echo(f"Couldn't find {tilename} locally - skipping...", err=True)
             return
 
-        def parse_path(line):
-            path = line.strip().split(maxsplit=1)[1]
-            if path.startswith("'") or path.startswith('"'):
-                path = path[1:-1]
-            return path
+        workdir_path = (self.path / dataset.path / tilename).resolve()
+        # Sanity check to make sure we're not messing with files we shouldn't:
+        assert self.path in workdir_path.parents
+        assert self.repo.workdir_path in workdir_path.parents
+        assert workdir_path.parents[0].is_dir()
 
-        def matches_repo_key_filter(path):
-            path = Path(path.replace("\\", "/"))
-            ds_path = str(path.parents[0])
-            tile_name = remove_any_tile_extension(path.name)
-            return repo_key_filter.recursive_get([ds_path, "tile", tile_name])
+        if not skip_write_tile:
+            try_reflink(lfs_path, workdir_path)
 
-        # Use git update-index to reset these paths - we can't use git add directly since
-        # that is for staging files which involves also writing them to the ODB, which we don't want.
-        file_paths = [parse_path(line) for line in output_lines]
-        if not repo_key_filter.match_all:
-            file_paths = [p for p in file_paths if matches_repo_key_filter(p)]
-        self._reset_workdir_index_for_files(file_paths)
+        if write_to_index:
+            # In general, after writing a dataset, we ask Git to build an index of the workdir,
+            # which we can then use (via some Git commands) to detect changes to the workdir.
+            # Git builds an index by getting the hash and the stat info for each file it finds.
+            # However, the LFS tiles are potentially large and numerous, costly to hash - and
+            # we already know their hashes. So, in this step, we pre-emptively update the index
+            # just for the LFS tiles. When Git builds the index, it will find the entries for
+            # those tiles already written, and detect they are unchanged by checking the stat info,
+            # so it won't need to update those entries.
 
-    def _reset_workdir_index_for_files(self, file_paths):
-        """
-        Creates a file <GIT-DIR>/workdir-index that is an index of that part of the contents of the workdir
-        that is contained within the given update_index_paths (which can be files or folders).
-        """
-        # NOTE - we could also try to use a pygit2.Index to do this - but however we do this, it is
-        # important that we don't store just (path, OID, mode) for each entry, but that we also store
-        # the file's `stat` information - this allows for an optimisation where diffs can be generated
-        # without hashing the working copy files. pygit2.Index doesn't give easy access to this info.
+            # Git would do something similarly efficient if we used Git to do the checkout
+            # operation in the first place. However, Git would need some changes to be
+            # able to do this well - understanding Kart datasets, rewriting paths, and
+            # using reflink where available.
 
-        env_overrides = {"GIT_INDEX_FILE": str(self.index_path)}
-
-        try:
-            cmd = ["git", "update-index", "--add", "--remove", "-z", "--stdin"]
-            subprocess.run(
-                cmd,
-                check=True,
-                env_overrides=env_overrides,
-                cwd=self.path,
-                input="\0".join(file_paths),
-                encoding="utf-8",
+            rel_path = f"{dataset.path}/{tilename}"
+            pointer_file = dict_to_pointer_file_bytes({"oid": oid, "size": size})
+            pointer_file_oid = self.repo.write(pygit2.GIT_OBJ_BLOB, pointer_file)
+            workdir_index.add_entry_with_custom_stat(
+                pygit2.IndexEntry(rel_path, pointer_file_oid, pygit2.GIT_FILEMODE_BLOB),
+                workdir_path,
             )
-        except subprocess.CalledProcessError as e:
-            sys.exit(translate_subprocess_exit_code(e.returncode))
+
+    def soft_reset_after_commit(
+        self,
+        commit_or_tree,
+        *,
+        mark_as_clean=None,
+        now_outside_spatial_filter=None,
+        committed_diff=None,
+    ):
+        datasets = self.repo.datasets(
+            commit_or_tree,
+            repo_key_filter=mark_as_clean,
+            filter_dataset_type=ALL_TILE_DATASET_TYPES,
+        )
+
+        # Handle tiles that were, eg, converted to COPC during the commit - the non-COPC
+        # tiles in the workdir now need to be replaced with the COPC ones:
+        with self.workdir_index_session() as workdir_index:
+            self._hard_reset_after_commit_for_converted_and_renamed_tiles(
+                datasets, committed_diff, workdir_index
+            )
+            self._reset_workdir_index_after_commit(
+                datasets, committed_diff, workdir_index
+            )
+            self.delete_tiles(
+                now_outside_spatial_filter,
+                datasets,
+                track_changes_as_dirty=False,
+            )
+
+        self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
 
     def _hard_reset_after_commit_for_converted_and_renamed_tiles(
-        self, datasets, committed_diff
+        self, datasets, committed_diff, workdir_index
     ):
         """
         Look for tiles that were automatically modified as part of the commit operation
@@ -767,13 +809,15 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 if new_value is None:
                     continue
                 if "sourceName" in new_value or "sourceFormat" in new_value:
-                    self._hard_reset_converted_tile(dataset, tile_delta)
+                    self._hard_reset_converted_tile(dataset, tile_delta, workdir_index)
                 if "pamSourceName" in new_value:
-                    self._hard_reset_renamed_pam_file(dataset, tile_delta)
+                    self._hard_reset_renamed_pam_file(
+                        dataset, tile_delta, workdir_index
+                    )
 
             self.write_mosaic_for_dataset(dataset)
 
-    def _hard_reset_converted_tile(self, dataset, tile_delta):
+    def _hard_reset_converted_tile(self, dataset, tile_delta, workdir_index):
         """
         Update an individual tile in the workdir so that it reflects what was actually committed.
         """
@@ -790,14 +834,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if name_pattern.fullmatch(child.name) and child.is_file():
                 child.unlink()
 
-        tilename = tile_delta.new_value["name"]
-        lfs_path = get_local_path_from_lfs_hash(self.repo, tile_delta.new_value["oid"])
-        if not lfs_path.is_file():
-            click.echo(f"Couldn't find tile {tilename} locally - skipping...", err=True)
-        else:
-            try_reflink(lfs_path, ds_tiles_dir / tilename)
+        self._write_tile_or_pam_file_to_workdir(
+            dataset, tile_delta.new_value, workdir_index, write_to_index=True
+        )
 
-    def _hard_reset_renamed_pam_file(self, dataset, tile_delta):
+    def _hard_reset_renamed_pam_file(self, dataset, tile_delta, workdir_index):
         """
         Update an individual PAM file in the workdir so that it reflects what was actually committed.
         """
@@ -817,43 +858,47 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if pam_name_pattern.fullmatch(child.name) and child.is_file():
                 child.unlink()
 
-        pam_name = tile_delta.new_value["pamName"]
-        lfs_path = get_local_path_from_lfs_hash(
-            self.repo, tile_delta.new_value["pamOid"]
+        self._write_tile_or_pam_file_to_workdir(
+            dataset,
+            tile_delta.new_value,
+            workdir_index,
+            use_pam_prefix=True,
+            write_to_index=True,
         )
-        if not lfs_path.is_file():
-            click.echo(
-                f"Couldn't find PAM file {pam_name} locally - skipping...", err=True
-            )
-        else:
-            try_reflink(lfs_path, ds_tiles_dir / pam_name)
 
-    def soft_reset_after_commit(
-        self,
-        commit_or_tree,
-        *,
-        mark_as_clean=None,
-        now_outside_spatial_filter=None,
-        committed_diff=None,
+    def _reset_workdir_index_after_commit(
+        self, datasets, committed_diff, workdir_index
     ):
-        datasets = self.repo.datasets(
-            commit_or_tree,
-            repo_key_filter=mark_as_clean,
-            filter_dataset_type=ALL_TILE_DATASET_TYPES,
-        )
+        for dataset in datasets:
+            tile_diff = committed_diff.recursive_get([dataset.path, "tile"])
+            if not tile_diff:
+                continue
+            for tile_delta in tile_diff.values():
+                if tile_delta.type in ("update", "delete"):
+                    old_val = tile_delta.old_value
+                    for key in ("name", "sourceName", "pamName", "sourcePamName"):
+                        if key in old_val:
+                            workdir_index.remove_all([f"{dataset.path}/{old_val[key]}"])
 
-        # Handle tiles that were, eg, converted to COPC during the commit - the non-COPC
-        # tiles in the workdir now need to be replaced with the COPC ones:
-        self._hard_reset_after_commit_for_converted_and_renamed_tiles(
-            datasets, committed_diff
-        )
+                if tile_delta.type in ("update", "insert"):
+                    new_val = tile_delta.new_value
+                    self._write_tile_or_pam_file_to_workdir(
+                        dataset,
+                        new_val,
+                        workdir_index,
+                        skip_write_tile=True,
+                        write_to_index=True,
+                    )
 
-        self._reset_workdir_index_for_datasets(datasets, repo_key_filter=mark_as_clean)
-        self.delete_tiles(
-            now_outside_spatial_filter, datasets, track_changes_as_dirty=False
-        )
-
-        self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
+                    if new_val.get("pamOid"):
+                        self._write_tile_or_pam_file_to_workdir(
+                            dataset,
+                            new_val,
+                            workdir_index,
+                            use_pam_prefix=True,
+                            skip_write_tile=True,
+                            write_to_index=True,
+                        )
 
     def write_mosaic_for_dataset(self, dataset):
         assert isinstance(dataset, TileDataset)
