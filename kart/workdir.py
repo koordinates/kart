@@ -4,7 +4,6 @@ import click
 import logging
 from enum import Enum, auto
 import functools
-from pathlib import Path
 import shutil
 import sys
 from kart.structure import RepoStructure
@@ -20,7 +19,6 @@ from kart.diff_util import get_file_diff
 from kart.diff_structs import Delta, DatasetDiff
 from kart.exceptions import (
     NotFound,
-    SubprocessError,
     NO_WORKING_COPY,
     translate_subprocess_exit_code,
 )
@@ -35,7 +33,6 @@ from kart import subprocess_util as subprocess
 from kart.tile import ALL_TILE_DATASET_TYPES
 from kart.tile.tile_dataset import TileDataset
 from kart.tile.tilename_util import (
-    remove_any_tile_extension,
     case_insensitive,
     PAM_SUFFIX,
 )
@@ -423,7 +420,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             kart_attachments = os.environ.get("X_KART_ATTACHMENTS")
             if kart_attachments:
                 if base_tree and target_tree:
-                    self.update_file_diffs(base_tree, target_tree, workdir_index)
+                    self.write_attached_files_to_workdir(
+                        base_tree, target_tree, workdir_index, track_changes_as_dirty
+                    )
 
             for ds_path in ds_updates:
                 self._update_dataset_in_workdir(
@@ -441,26 +440,36 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 sess, self.repo.spatial_filter.hexhash
             )
 
-    def update_file_diffs(self, base_tree, target_tree, workdir_index):
+    def write_attached_files_to_workdir(
+        self, base_tree, target_tree, workdir_index, track_changes_as_dirty=False
+    ):
         """Get the deltas for attachment files and write them to the working copy."""
+        write_to_index = not track_changes_as_dirty
+
         repo = self.repo
         base_rs = RepoStructure(repo, base_tree)
         target_rs = RepoStructure(repo, target_tree)
         attachment_deltas = get_file_diff(base_rs, target_rs)
 
-        for filename, file_delta in attachment_deltas.items():
-            new_path = self.path / filename
+        for file_delta in attachment_deltas.values():
+            for filename in set(filter(None, (file_delta.old_key, file_delta.new_key))):
+                workdir_path = self.path / filename
+                if workdir_path.is_file():
+                    workdir_path.unlink()
+                if write_to_index:
+                    workdir_index.remove_all([filename])
 
-            # Delete the old file
-            if file_delta.old and new_path.is_file():
-                new_path.unlink()
-
-            # Create a new file
             if file_delta.new:
-                blob_data = repo[file_delta.new.value].data
-                new_path.write_bytes(blob_data)
-
-            # TODO: update workdir_index.
+                workdir_path = self.path / file_delta.new_key
+                blob_data = repo[file_delta.new_value].data
+                workdir_path.write_bytes(blob_data)
+                if write_to_index:
+                    workdir_index.add_entry_with_custom_stat(
+                        pygit2.IndexEntry(
+                            filename, pygit2.hash(blob_data), pygit2.GIT_FILEMODE_BLOB
+                        ),
+                        workdir_path,
+                    )
 
     def _diff_to_reset(
         self, ds_path, base_datasets, target_datasets, workdir_diff_cache, ds_filter
