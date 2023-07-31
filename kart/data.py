@@ -28,27 +28,44 @@ def data(ctx, **kwargs):
     type=click.Choice(["text", "json"]),
     default="text",
 )
+@click.option(
+    "--with-dataset-types/--without-dataset-types",
+    is_flag=True,
+    help="When set, outputs the dataset type and version. (This may become the default in a later version of Kart)",
+)
 @click.argument("refish", required=False, default="HEAD", shell_complete=ref_completer)
 @click.pass_context
-def data_ls(ctx, output_format, refish):
+def data_ls(ctx, output_format, with_dataset_types, refish):
     """List all of the datasets in the Kart repository"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    ds_paths = list(repo.datasets(refish).paths())
+    json_list = [
+        {"path": ds.path, "type": ds.DATASET_TYPE, "version": ds.VERSION}
+        for ds in repo.datasets(refish)
+    ]
+
+    if output_format == "text" and not json_list:
+        repo_desc = (
+            "Empty repository."
+            if repo.head_is_unborn
+            else "The commit at HEAD has no datasets."
+        )
+        click.echo(f'{repo_desc}\n  (use "kart import" to add some data)')
+        return
 
     if output_format == "text":
-        if ds_paths:
-            for ds_path in ds_paths:
-                click.echo(ds_path)
+        if with_dataset_types:
+            for ds_obj in json_list:
+                click.echo(f"{ds_obj['path']}\t({ds_obj['type']}.v{ds_obj['version']})")
+
         else:
-            repo_desc = (
-                "Empty repository."
-                if repo.head_is_unborn
-                else "The commit at HEAD has no datasets."
-            )
-            click.echo(f'{repo_desc}\n  (use "kart import" to add some data)')
+            for ds_obj in json_list:
+                click.echo(ds_obj["path"])
 
     elif output_format == "json":
-        dump_json_output({"kart.data.ls/v1": ds_paths}, sys.stdout)
+        if not with_dataset_types:
+            json_list = [ds_obj["path"] for ds_obj in json_list]
+        version_marker = "v2" if with_dataset_types else "v1"
+        dump_json_output({f"kart.data.ls/{version_marker}": json_list}, sys.stdout)
 
 
 @data.command(name="rm")
@@ -117,7 +134,7 @@ def data_rm(ctx, message, output_format, datasets):
     repo.gc("--auto")
 
 
-@data.command(name="version")
+@data.command(name="version", hidden=True)
 @click.option(
     "--output-format",
     "-o",
@@ -126,7 +143,18 @@ def data_rm(ctx, message, output_format, datasets):
 )
 @click.pass_context
 def data_version(ctx, output_format):
-    """Show the repository structure version"""
+    """
+    Show the repository structure version.
+
+    This was more useful when each Kart repositories contained a single type of table dataset at a single version -
+    eg table.v1 in one repository, vs table.v2 in another repository.
+    Now that Kart repositories can contain more than one dataset type eg table.v3, point-cloud.v1, raster.v1,
+    it no longer really conveys anything useful about the Kart repository's "version".
+    """
+    click.echo(
+        "The command `kart data version` is deprecated - use `kart data ls --with-dataset-types` instead.",
+        err=True,
+    )
     repo = ctx.obj.get_repo(
         allowed_states=KartRepoState.ALL_STATES, allow_unsupported_versions=True
     )

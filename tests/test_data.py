@@ -4,18 +4,36 @@ import pytest
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
-def test_data_ls(output_format, data_archive_readonly, cli_runner):
+@pytest.mark.parametrize(
+    "extra_flag", ("--with-dataset-types", "--without-dataset-types")
+)
+def test_data_ls(output_format, extra_flag, data_archive_readonly, cli_runner):
     # All datasets now support getting metadata in either V1 or V2 format,
     # but if you don't specify a particular item, they will show all V2 items -
     # these are more self-explanatory to an end-user.
     with data_archive_readonly("points"):
-        r = cli_runner.invoke(["data", "ls", "-o", output_format])
+        r = cli_runner.invoke(["data", "ls", "-o", output_format, extra_flag])
         assert r.exit_code == 0, r
-        if output_format == "text":
-            assert r.stdout.splitlines() == ["nz_pa_points_topo_150k"]
+        if extra_flag == "--with-dataset-types":
+            if output_format == "text":
+                assert r.stdout.splitlines() == ["nz_pa_points_topo_150k\t(table.v3)"]
+            else:
+                output = json.loads(r.stdout)
+                assert output == {
+                    "kart.data.ls/v2": [
+                        {
+                            "path": "nz_pa_points_topo_150k",
+                            "type": "table",
+                            "version": 3,
+                        }
+                    ]
+                }
         else:
-            output = json.loads(r.stdout)
-            assert output == {"kart.data.ls/v1": ["nz_pa_points_topo_150k"]}
+            if output_format == "text":
+                assert r.stdout.splitlines() == ["nz_pa_points_topo_150k"]
+            else:
+                output = json.loads(r.stdout)
+                assert output == {"kart.data.ls/v1": ["nz_pa_points_topo_150k"]}
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
@@ -59,7 +77,7 @@ def test_data_rm(data_archive, cli_runner):
         r = cli_runner.invoke(["data", "ls"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            'The commit at HEAD has no datasets.',
+            "The commit at HEAD has no datasets.",
             '  (use "kart import" to add some data)',
         ]
 
