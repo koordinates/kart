@@ -3,6 +3,8 @@ import json
 import logging
 import threading
 
+import sqlalchemy
+
 from kart.sqlalchemy.sqlite import sqlite_engine
 from sqlalchemy import Column, Integer, Text, UniqueConstraint
 from sqlalchemy.exc import OperationalError
@@ -57,19 +59,25 @@ def ignore_readonly_db(session):
 def _annotations_session(db_path):
     engine = sqlite_engine(db_path)
     sm = sessionmaker(bind=engine)
-    with sm() as s:
-        s.is_readonly = None
-        try:
-            s.execute(CreateTable(KartAnnotation.__table__, if_not_exists=True))
-        except OperationalError as e:
-            # ignore errors from readonly databases.
-            if "readonly database" in str(e):
-                L.info("Can't create tables; annotations.db is read-only")
-                s.rollback()
-                s.is_readonly = True
-            else:
-                raise
+    inspector = sqlalchemy.inspect(engine)
+    is_readonly = None
+    if not inspector.has_table("kart_annotations"):
+        with sm() as s:
+            try:
+                # note: this puts the db in exclusive lock state, which is why we
+                # do this in a separate session.
+                s.execute(CreateTable(KartAnnotation.__table__, if_not_exists=True))
+            except OperationalError as e:
+                # ignore errors from readonly databases.
+                if "readonly database" in str(e):
+                    L.info("Can't create tables; annotations.db is read-only")
+                    s.rollback()
+                    is_readonly = True
+                else:
+                    raise
 
+    with sm() as s:
+        s.is_readonly = is_readonly
         _local.session = s
         try:
             yield s
