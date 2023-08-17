@@ -533,8 +533,8 @@ class WorkingCopy_GPKG(TableWorkingCopy):
                 CREATE TRIGGER IF NOT EXISTS {self._quoted_tracking_name('upd', dataset)}
                    AFTER UPDATE ON {table_identifier}
                 BEGIN
-                    INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
-                    VALUES (:table_name1, NEW.{pk_column}), (:table_name2, OLD.{pk_column});
+                    INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk) VALUES (:table_name1, NEW.{pk_column});
+                    INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk) VALUES (:table_name2, OLD.{pk_column});
                 END;
                 """,
                 {"table_name1": dataset.table_name, "table_name2": dataset.table_name},
