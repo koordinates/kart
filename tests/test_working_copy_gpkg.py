@@ -1204,7 +1204,7 @@ def test_checkout_with_no_crs(
 
 
 def test_working_copy_progress_bar(cli_runner, data_working_copy, monkeypatch):
-    with data_working_copy("points") as repo_path:
+    with data_working_copy("points") as (repo_path, wc_path):
         r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
         assert r.exit_code == 0, r.stderr
         progress_output = r.stderr.splitlines()
@@ -1225,3 +1225,18 @@ def test_working_copy_progress_bar(cli_runner, data_working_copy, monkeypatch):
             r"nz_pa_points_topo_150k: 100%\|█+\| 2143/2143 \[[0-9:<]+, [0-9\.]+F/s\]",
             progress_output[-1],
         )
+
+
+def test_global_mapper_compatibility(data_working_copy):
+    # See https://github.com/koordinates/kart/issues/899
+    with data_working_copy("points") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+        table_wc = repo.working_copy.tabular
+        with table_wc.session() as sess:
+            r = sess.execute("SELECT sql FROM sqlite_schema;")
+            schemas = [row[0] for row in r if row[0]]
+            # Global Mapper does understand this SQL snippet: VALUES (...) and we expect some in the triggers
+            assert any(re.search(r"VALUES\s*\([^();]*\)", s) for s in schemas)
+            # But it does not understand this SQL snippet: VALUES (...), (...)
+            # Make sure that doesn't occur in our GPKG working copy.
+            assert all(not re.search(r"VALUES\s*\([^();]*\)\s*,", s) for s in schemas)
