@@ -584,10 +584,14 @@ endif()
 set(LIB_DIR "lib/")
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   set(EXE_DIR scripts)
-  set(LIB_SEARCH_DIR "${CURRENT_PACKAGES_DIR}/bin")
-else()
+  set(LIB_SEARCH_DIRS --search-path "${CURRENT_PACKAGES_DIR}/bin")
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(EXE_DIR bin)
-  set(LIB_SEARCH_DIR "${CURRENT_PACKAGES_DIR}/lib")
+  set(LIB_SEARCH_DIRS --search-path "${CURRENT_PACKAGES_DIR}/lib" --search-path
+                      /usr/local/opt/libtool/lib/)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  set(EXE_DIR bin)
+  set(LIB_SEARCH_DIRS --search-path "${CURRENT_PACKAGES_DIR}/lib")
 endif()
 
 #
@@ -653,7 +657,7 @@ add_custom_command(
     ${CMAKE_COMMAND} -E env CMAKE_COMMAND=${CMAKE_COMMAND} --modify
     PATH=path_list_prepend:${TOOLS_PATH} -- ${wheelBuildEnv_PYTHON}
     "${CMAKE_CURRENT_SOURCE_DIR}/fix_vendor_libs.py" $<IF:$<BOOL:$ENV{VERBOSE}>,-v2,-v0> .
-    ${VENDOR_ARCHIVE} -s "${LIB_SEARCH_DIR}"
+    ${VENDOR_ARCHIVE} ${LIB_SEARCH_DIRS}
   VERBATIM
   COMMENT "Vendor dependency archive assembly")
 
