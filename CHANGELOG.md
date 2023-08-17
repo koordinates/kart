@@ -10,6 +10,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Better protection against XSS in the HTML diff viewer. [#884](https://github.com/koordinates/kart/pull/884)
 - Speed-up: greatly reduces the time taken to update the index file after checking out LFS tiles to the working copy. [#880](https://github.com/koordinates/kart/pull/880)
 - Adds `--with-dataset-types` option to `kart data ls` command (and deprecates `kart data version`). [#892](https://github.com/koordinates/kart/issues/892)
+- Use `journal_mode = WAL` in annotations.db sqlite database. [#898](https://github.com/koordinates/kart/pull/898)
 
 ## 0.14.0
 
