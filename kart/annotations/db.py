@@ -57,7 +57,7 @@ def ignore_readonly_db(session):
 
 @contextlib.contextmanager
 def _annotations_session(db_path):
-    engine = sqlite_engine(db_path)
+    engine = sqlite_engine(db_path, journal_mode="WAL")
     sm = sessionmaker(bind=engine)
     inspector = sqlalchemy.inspect(engine)
     is_readonly = None

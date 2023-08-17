@@ -17,13 +17,15 @@ class Db_GPKG(BaseDb):
     preparer = SQLiteIdentifierPreparer(SQLiteDialect())
 
     @classmethod
-    def create_engine(cls, path, **kwargs):
+    def create_engine(cls, path, *, journal_mode=None, **kwargs):
         def _on_connect(pysqlite_conn, connection_record):
             pysqlite_conn.isolation_level = None
             pysqlite_conn.enable_load_extension(True)
             pysqlite_conn.load_extension(spatialite_path)
             pysqlite_conn.enable_load_extension(False)
             dbcur = pysqlite_conn.cursor()
+            if journal_mode:
+                dbcur.execute(f"PRAGMA journal_mode = {journal_mode};")
             dbcur.execute("SELECT EnableGpkgMode();")
             dbcur.execute("PRAGMA foreign_keys = ON;")
             dbcur.execute(f"PRAGMA cache_size = -{cls.GPKG_CACHE_SIZE_MiB * 1024};")
@@ -64,7 +66,7 @@ class Db_GPKG(BaseDb):
 
     @classmethod
     def pk_name(cls, sess, db_schema=None, table=None):
-        """ Find the primary key for a GeoPackage table """
+        """Find the primary key for a GeoPackage table"""
 
         # Requirement 150:
         # A feature table or view SHALL have a column that uniquely identifies the
