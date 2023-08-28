@@ -191,6 +191,8 @@ class WorkingCopy_GPKG(TableWorkingCopy):
 
     def create_and_initialise(self):
         with self.session() as sess:
+            sess.execute("PRAGMA application_id = 0x47504B47")  # "GPKG"
+            sess.execute("PRAGMA user_version = 10300")  # GPKG 1.3
             # Create standard GPKG tables:
             GpkgTables.create_all(sess)
             GpkgTables.init_table_contents(sess)
