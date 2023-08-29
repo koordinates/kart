@@ -1240,3 +1240,21 @@ def test_global_mapper_compatibility(data_working_copy):
             # But it does not understand this SQL snippet: VALUES (...), (...)
             # Make sure that doesn't occur in our GPKG working copy.
             assert all(not re.search(r"VALUES\s*\([^();]*\)\s*,", s) for s in schemas)
+
+
+def test_gpkg_application_id(data_working_copy):
+    # See https://github.com/koordinates/kart/issues/902
+
+    try:
+        subprocess.check_output(["ogrinfo", "--version"])
+    except FileNotFoundError:
+        raise pytest.skip("This test only runs if ogrinfo is installed")
+
+    with data_working_copy("points") as (repo_path, wc_path):
+        r = subprocess.run(
+            ["ogrinfo", "-ro", "-so", "-al", wc_path],
+            encoding="utf8",
+            capture_output=True,
+        )
+        # No warnings shown:
+        assert r.stderr == ""
