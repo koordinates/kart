@@ -35,7 +35,7 @@ jobs:
     services:
       postgis:
         # https://github.com/postgis/docker-postgis/issues/216
-        image: ghcr.io/baosystems/postgis
+        image: ghcr.io/baosystems/postgis:15
         options: >-
           --health-cmd pg_isready
           --health-interval 2s
@@ -241,7 +241,7 @@ jobs:
     services:
       postgis:
         # https://github.com/postgis/docker-postgis/issues/216
-        image: ghcr.io/baosystems/postgis
+        image: ghcr.io/baosystems/postgis:15
         options: >-
           --health-cmd pg_isready
           --health-interval 2s
