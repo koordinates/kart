@@ -4,6 +4,7 @@ import logging
 import math
 import os
 from pathlib import Path
+import re
 import sys
 import uuid
 
@@ -65,6 +66,8 @@ class TileImporter:
         # When doing any kind of initial import we still have to write the table_dataset_version,
         # even though it's not really relevant to tile imports.
         assert self.repo.table_dataset_version in SUPPORTED_VERSIONS
+
+    EXTRACT_TILE_METADATA_STEP = "Checking tiles"
 
     def import_tiles(
         self,
@@ -149,9 +152,7 @@ class TileImporter:
             # we're importing (or even a subset of that dataset). But this'll do for now
             self.repo.working_copy.workdir.check_not_dirty()
 
-        for source in sources:
-            if not (Path() / source).is_file():
-                raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
+        self.sanity_check_sources(sources)
 
         self.existing_dataset = self.get_existing_dataset()
         self.existing_metadata = (
@@ -180,7 +181,7 @@ class TileImporter:
                 )
 
             progress = progress_bar(
-                total=len(sources), unit="tile", desc="Checking tiles"
+                total=len(sources), unit="tile", desc=self.EXTRACT_TILE_METADATA_STEP
             )
             with progress as p:
                 for source, tile_metadata in self.extract_multiple_tiles_metadata(
@@ -201,7 +202,7 @@ class TileImporter:
             all_metadata = list(self.source_to_metadata.values())
             merged_source_metadata = self.get_merged_source_metadata(all_metadata)
             self.check_for_non_homogenous_metadata(
-                merged_source_metadata, future_tense=0
+                merged_source_metadata, future_tense=False
             )
             if self.include_existing_metadata:
                 all_metadata.append(self.existing_metadata)
@@ -323,8 +324,6 @@ class TileImporter:
 
     def infer_dataset_path(self, sources):
         """Given a list of sources to import, choose a reasonable name for the dataset."""
-        if len(sources) == 1:
-            return self.DATASET_CLASS.remove_tile_extension(Path(sources[0]).name)
         names = set()
         parent_names = set()
         for source in sources:
@@ -343,6 +342,20 @@ class TileImporter:
         if len(prefix) < min_length:
             return None
         return prefix
+
+    URI_PATTERN = re.compile(r"([A-Za-z0-9-]{,20})://")
+
+    def sanity_check_sources(self, sources):
+        for source in sources:
+            m = self.URI_PATTERN.match(source)
+            if m:
+                raise click.UsageError(
+                    f"SOURCE {source} should be a path to a file, not a {m.group(1)} URI"
+                )
+
+        for source in sources:
+            if not (Path() / source).is_file():
+                raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
 
     def get_default_message(self):
         """Return a default commit message to describe this import."""

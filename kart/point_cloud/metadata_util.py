@@ -141,7 +141,7 @@ def get_native_extent(info):
     )
 
 
-def extract_pc_tile_metadata(pc_tile_path):
+def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
     """
     Use pdal to get any and all point-cloud metadata we can make use of in Kart.
     This includes metadata that must be dataset-homogenous and would be stored in the dataset's /meta/ folder,
@@ -192,7 +192,10 @@ def extract_pc_tile_metadata(pc_tile_path):
     }
 
     schema_json = pdal_schema_to_kart_schema(metadata["filters.info"]["schema"])
-    oid, size = get_hash_and_size_of_file(pc_tile_path)
+    if oid_and_size:
+        oid, size = oid_and_size
+    else:
+        oid, size = get_hash_and_size_of_file(pc_tile_path)
 
     # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {

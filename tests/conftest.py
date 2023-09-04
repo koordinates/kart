@@ -1167,6 +1167,31 @@ def new_mysql_db_schema(request, mysql_db):
 
 
 @pytest.fixture()
+def s3_test_data_point_clouds(monkeypatch_session):
+    """
+    You can run tests that fetch a copy of the auckland test data from S3 (and so test Kart's S3 behaviour)
+    by setting KART_S3_TEST_DATA_POINT_CLOUDS=s3://some-bucket/path-to-auckland-tiles/*.laz
+    The tiles hosted there should be the ones found in tests/data/point-cloud/laz-auckland.tgz
+    """
+    if "KART_S3_TEST_DATA_POINT_CLOUDS" not in os.environ:
+        raise pytest.skip(
+            "S3 tests require configuration - read docstring at conftest.s3_test_data_point_clouds"
+        )
+
+    # $HOME isn't the user's real homedir during tests - look for AWS_CONFIG_FILE in the real homedir,
+    # unless AWS_CONFIG_FILE is already set to look somewhere else. Same for AWS_SHARED_CREDENTIALS_FILE.
+    for var in ("AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE"):
+        if var not in os.environ:
+            orig_home = os.path.expanduser("~" + os.getenv("USER", ""))
+            filename = var.split("_")[-2].lower()
+            config_path = os.path.join(orig_home, ".aws", filename)
+            if os.path.exists(config_path):
+                monkeypatch_session.setenv(var, config_path)
+
+    return os.environ["KART_S3_TEST_DATA_POINT_CLOUDS"]
+
+
+@pytest.fixture()
 def dodgy_restore(cli_runner):
     """
     Basically performs a `kart restore --source RESTORE_COMMIT`.
