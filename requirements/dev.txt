@@ -55,6 +55,7 @@ pygments==2.13.0
 six==1.16.0
     # via
     #   -c docs.txt
+    #   -c requirements.txt
     #   -c test.txt
     #   asttokens
 stack-data==0.6.2

@@ -65,6 +65,7 @@ pytest-xdist==3.1.0
     # via -r test.in
 six==1.16.0
     # via
+    #   -c requirements.txt
     #   html5lib
     #   pytest-profiling
 termcolor==2.1.1
