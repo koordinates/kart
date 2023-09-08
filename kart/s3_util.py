@@ -6,6 +6,9 @@ import tempfile
 from urllib.parse import urlparse
 
 import boto3
+import click
+
+from kart.exceptions import NotFound, NO_IMPORT_SOURCE
 
 # Utility functions for dealing with S3 - not yet launched.
 
@@ -50,21 +53,37 @@ def fetch_from_s3(s3_url, output_path=None):
 
 def expand_s3_glob(source_spec):
     """
-    Given an s3_path with wildcard in, uses prefix and suffix matching to find all S3 objects that match.
+    Given an s3_path with '*' wildcard in, uses prefix and suffix matching to find all S3 objects that match.
+    Subdirectories (or the S3 equivalent - S3 is not exactly a directory hierarchy) are not matched -
+    that is, s3://bucket/path/*.txt matches s3://bucket/path/example.txt but not s3://bucket/path/subpath/example.txt
     """
     # TODO: handle any kind of failure, sanity check to make sure we don't match a million objects.
     if "*" not in source_spec:
-        yield source_spec
-        return
-    else:
-        parsed = urlparse(source_spec)
-        bucket = get_bucket(parsed.netloc)
-        prefix, suffix = parsed.path.split("*", maxsplit=1)
-        prefix = prefix.lstrip("/")
-        matches = bucket.objects.filter(Prefix=prefix)
-        for match in matches:
-            if match.key.endswith(suffix):
-                yield f"s3://{match.bucket_name}/{match.key}"
+        return [source_spec]
+
+    parsed = urlparse(source_spec)
+    prefix, suffix = parsed.path.split("*", maxsplit=1)
+    if "*" in suffix:
+        raise click.UsageError(
+            f"Two wildcards '*' found in {source_spec} - only one wildcard is supported"
+        )
+    prefix = prefix.lstrip("/")
+    prefix_len = len(prefix)
+
+    bucket = get_bucket(parsed.netloc)
+    matches = bucket.objects.filter(Prefix=prefix)
+    result = []
+    for match in matches:
+        assert match.key.startswith(prefix)
+        match_suffix = match.key[prefix_len:]
+        if match_suffix.endswith(suffix) and "/" not in match_suffix:
+            result.append(f"s3://{match.bucket_name}/{match.key}")
+
+    if not result:
+        raise NotFound(
+            f"No S3 objects found at {source_spec}", exit_code=NO_IMPORT_SOURCE
+        )
+    return result
 
 
 def get_hash_and_size_of_s3_object(s3_url):

@@ -31,6 +31,7 @@ jobs:
       KART_POSTGIS_URL: "postgresql://postgres:@localhost:5432/postgres"
       KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
       KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
+      KART_S3_TEST_DATA_POINT_CLOUDS: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
 
     services:
       postgis:
@@ -268,6 +269,7 @@ jobs:
       KART_POSTGIS_URL: "postgresql://postgres:@postgis:5432/postgres"
       SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
       KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
+      KART_S3_TEST_DATA_POINT_CLOUDS: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
       ARCH: "${{ matrix.os.arch }}"
       ARCH_TRIPLET: "${{ matrix.os.arch_triplet }}"
       GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
@@ -739,6 +741,7 @@ jobs:
       MACOS_NOTARIZE_KEYCHAIN_PROFILE: "NOTARIZE_AUTH"
       # X.Y version needs to match PY_VER:
       PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.10.9/python-3.10.9-macos11.pkg"
+      KART_S3_TEST_DATA_POINT_CLOUDS: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
 
     steps:
       - uses: actions/checkout@v3
@@ -983,6 +986,7 @@ jobs:
     env:
       NINJA_VERSION: "~1.10.2"  # workaround for python logging output buffering noise
       SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
+      KART_S3_TEST_DATA_POINT_CLOUDS: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
