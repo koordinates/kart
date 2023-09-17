@@ -122,11 +122,7 @@ class ByodPointCloudImporter(ByodTileImporter, PointCloudImporter):
     def extract_tile_metadata(self, tile_location):
         oid_and_size = get_hash_and_size_of_s3_object(tile_location)
         # TODO - download only certain ranges of the file, and extract metadata from those.
-        tmp_downloaded_tile = fetch_from_s3(tile_location)
-        result = extract_pc_tile_metadata(
-            tmp_downloaded_tile, oid_and_size=oid_and_size
-        )
-        tmp_downloaded_tile.unlink()
+        result = extract_pc_tile_metadata(tile_location, oid_and_size=oid_and_size)
         # TODO - format still not definite, we might not put the whole URL in here.
         result["tile"]["url"] = tile_location
         return result
