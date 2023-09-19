@@ -21,12 +21,18 @@ def get_s3_config():
 
 @functools.lru_cache(maxsize=1)
 def get_s3_client():
-    return boto3.client("s3", config=get_s3_config())
+    client = boto3.client("s3", config=get_s3_config())
+    if "AWS_NO_SIGN_REQUEST" in os.environ:
+        client._request_signer.sign = lambda *args, **kwargs: None
+    return client
 
 
 @functools.lru_cache(maxsize=1)
 def get_s3_resource():
-    return boto3.resource("s3", config=get_s3_config())
+    resource = boto3.resource("s3", config=get_s3_config())
+    if "AWS_NO_SIGN_REQUEST" in os.environ:
+        resource.meta.client._request_signer.sign = lambda *args, **kwargs: None
+    return resource
 
 
 @functools.lru_cache()
@@ -91,13 +97,10 @@ def get_hash_and_size_of_s3_object(s3_url):
     parsed = urlparse(s3_url)
     bucket = parsed.netloc
     key = parsed.path.lstrip("/")
-    response = get_s3_client().get_object_attributes(
-        Bucket=bucket,
-        Key=key,
-        ObjectAttributes=["Checksum", "ObjectSize"],
+    response = get_s3_client().head_object(
+        Bucket=bucket, Key=key, ChecksumMode="ENABLED"
     )
     # TODO - handle failure (eg missing SHA256 checksum), which is extremely likely.
-    sha256 = standard_b64decode(response["Checksum"]["ChecksumSHA256"]).hex()
-    size = response["ObjectSize"]
-
+    sha256 = standard_b64decode(response["ChecksumSHA256"]).hex()
+    size = response["ContentLength"]
     return sha256, size
