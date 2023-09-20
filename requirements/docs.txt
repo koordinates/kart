@@ -47,6 +47,7 @@ requests==2.31.0
     # via sphinx
 six==1.16.0
     # via
+    #   -c requirements.txt
     #   -c test.txt
     #   livereload
 snowballstemmer==2.2.0
@@ -73,5 +74,7 @@ sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
 tornado==6.2
     # via livereload
-urllib3==1.26.13
-    # via requests
+urllib3==1.26.16
+    # via
+    #   -c requirements.txt
+    #   requests

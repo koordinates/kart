@@ -7,6 +7,8 @@ env:
   PY_VER: "3.10"
   CMAKE_VERSION: "~3.25.0"
   FORCE_COLOR: "YES"
+  KART_S3_TEST_DATA_POINT_CLOUDS: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
+  AWS_NO_SIGN_REQUEST: "1"
 
 jobs:
   #

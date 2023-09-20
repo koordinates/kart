@@ -1166,6 +1166,47 @@ def new_mysql_db_schema(request, mysql_db):
     return ctx
 
 
+USER = os.getenv("USER", "")
+
+DOT_AWS_FILES = {
+    os.path.join(f"~{USER}", ".aws", "config"): ["AWS_CONFIG_FILE"],
+    os.path.join(f"~{USER}", ".aws", "credentials"): [
+        # Either one of these can inform boto3 where to look, but Arbiter only respects the first.
+        "AWS_CREDENTIAL_FILE",
+        "AWS_SHARED_CREDENTIALS_FILE",
+    ],
+}
+
+
+@pytest.fixture()
+def s3_test_data_point_clouds(monkeypatch_session):
+    """
+    You can run tests that fetch a copy of the auckland test data from S3 (and so test Kart's S3 behaviour)
+    by setting KART_S3_TEST_DATA_POINT_CLOUDS=s3://some-bucket/path-to-auckland-tiles/*.laz
+    The tiles hosted there should be the ones found in tests/data/point-cloud/laz-auckland.tgz
+    """
+    if "KART_S3_TEST_DATA_POINT_CLOUDS" not in os.environ:
+        raise pytest.skip(
+            "S3 tests require configuration - read docstring at conftest.s3_test_data_point_clouds"
+        )
+
+    # $HOME isn't the user's real homedir during tests - look for AWS_CONFIG_FILE in the real homedir,
+    # unless AWS_CONFIG_FILE is already set to look somewhere else. Same for AWS_CREDENTIAL_FILE.
+    for path, env_vars in DOT_AWS_FILES.items():
+        val = any(os.environ.get(k) for k in env_vars)
+        if not val:
+            path = os.path.expanduser(path)
+            if os.path.exists(path):
+                val = path
+        if not val:
+            continue
+        for k in env_vars:
+            if k not in os.environ:
+                os.environ[k] = val
+
+    return os.environ["KART_S3_TEST_DATA_POINT_CLOUDS"]
+
+
 @pytest.fixture()
 def dodgy_restore(cli_runner):
     """

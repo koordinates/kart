@@ -6,6 +6,12 @@
 #
 attrs==22.1.0
     # via jsonschema
+boto3==1.28.42
+    # via -r requirements.in
+botocore==1.31.42
+    # via
+    #   boto3
+    #   s3transfer
 certifi==2022.12.7
     # via -r requirements.in
 #cffi==1.15.1
@@ -16,7 +22,7 @@ certifi==2022.12.7
     #   reflink
 click==8.1.4
     # via -r requirements.in
-#cryptography==41.0.0
+#cryptography==41.0.3
     # via -r vendor-wheels.txt
 docutils==0.17.1
     # via
@@ -26,6 +32,10 @@ docutils==0.17.1
     # via -r vendor-wheels.txt
 greenlet==2.0.1
     # via sqlalchemy
+jmespath==1.0.1
+    # via
+    #   boto3
+    #   botocore
 jsonschema==4.17.3
     # via -r requirements.in
 msgpack==0.6.2
@@ -48,13 +58,21 @@ pyrsistent==0.19.2
     # via jsonschema
 #pysqlite3==0.4.5
     # via -r vendor-wheels.txt
+python-dateutil==2.8.2
+    # via botocore
 #reflink==0.2.1
     # via -r vendor-wheels.txt
 rst2txt==1.1.0
     # via -r requirements.in
+s3transfer==0.6.2
+    # via boto3
 shellingham==1.5.0
     # via -r requirements.in
+six==1.16.0
+    # via python-dateutil
 sqlalchemy==1.4.45
     # via -r requirements.in
 tqdm==4.64.1
     # via -r requirements.in
+urllib3==1.26.16
+    # via botocore
