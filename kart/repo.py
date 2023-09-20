@@ -1,10 +1,9 @@
 import logging
-import os
 import re
 import struct
 import sys
 from enum import Enum
-from functools import lru_cache
+from functools import cached_property
 from pathlib import Path
 
 import click
@@ -411,8 +410,7 @@ class KartRepo(pygit2.Repository):
             else:
                 raise
 
-    @property
-    @lru_cache(maxsize=1)
+    @cached_property
     def diff_annotations(self):
         # DiffAnnotations is slow to import - don't move this to the top of this file.
         from .annotations import DiffAnnotations
@@ -563,8 +561,7 @@ class KartRepo(pygit2.Repository):
     def WORKINGCOPY_LOCATION_KEY(self):
         return KartConfigKeys.BRANDED_WORKINGCOPY_LOCATION_KEYS[self.branding]
 
-    @property
-    @lru_cache(maxsize=1)
+    @cached_property
     def table_dataset_version(self):
         """Returns the Kart repository version - eg 2 for 'Datasets V2' See DATASETS_v2.md"""
         return get_repo_wide_version(self)
@@ -665,8 +662,7 @@ class KartRepo(pygit2.Repository):
         """
         return None if self.head_is_unborn else self.head.peel(pygit2.Tree)
 
-    @property
-    @lru_cache(maxsize=1)
+    @cached_property
     def empty_tree(self):
         f"""Returns the empty tree, with SHA {EMPTY_TREE_SHA}."""
         return self[EMPTY_TREE_SHA]
