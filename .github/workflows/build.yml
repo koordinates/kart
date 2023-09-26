@@ -8,6 +8,7 @@ env:
   CMAKE_VERSION: "~3.25.0"
   FORCE_COLOR: "YES"
   KART_S3_TEST_DATA_POINT_CLOUD: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
+  KART_S3_TEST_DATA_RASTER: "s3://kart-bring-your-own-data-poc/erorisk_si/*.tif"
   AWS_NO_SIGN_REQUEST: "1"
 
 jobs:

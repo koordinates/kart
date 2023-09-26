@@ -1210,6 +1210,21 @@ def s3_test_data_point_cloud(monkeypatch_session):
 
 
 @pytest.fixture()
+def s3_test_data_raster(monkeypatch_session):
+    """
+    You can run tests that fetch a copy of the erosion test data from S3 (and so test Kart's S3 behaviour)
+    by setting KART_S3_TEST_DATA_RASTER=s3://some-bucket/path-to-erosion-tiles/*.tif
+    The data hosted there should be the data found at tests/data/raster/cog-erosion.tgz
+    """
+    if "KART_S3_TEST_DATA_RASTER" not in os.environ:
+        raise pytest.skip(
+            "S3 tests require configuration - read docstring at conftest.s3_test_data_raster"
+        )
+    _restore_aws_config_during_testing()
+    return os.environ["KART_S3_TEST_DATA_RASTER"]
+
+
+@pytest.fixture()
 def dodgy_restore(cli_runner):
     """
     Basically performs a `kart restore --source RESTORE_COMMIT`.

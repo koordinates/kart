@@ -55,6 +55,7 @@ MODULE_COMMANDS = {
     "install": {"install"},
     "add_dataset": {"add-dataset"},
     "byod.point_cloud_import": {"byod-point-cloud-import"},
+    "byod.raster_import": {"byod-raster-import"},
 }
 
 # These commands aren't valid Python symbols, even when we change dash to underscore.

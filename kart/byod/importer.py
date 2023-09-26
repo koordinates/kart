@@ -8,6 +8,7 @@ from kart.fast_import import (
 from kart.lfs_util import dict_to_pointer_file_bytes
 from kart.progress_util import progress_bar
 from kart.s3_util import expand_s3_glob
+from kart.tile.tilename_util import PAM_SUFFIX
 
 L = logging.getLogger(__name__)
 
@@ -71,11 +72,14 @@ class ByodTileImporter:
                             continue
 
                 # Tile hasn't been imported previously.
-                pointer_data = dict_to_pointer_file_bytes(
-                    self.source_to_metadata[source]["tile"]
-                )
+                tile_info = self.source_to_metadata[source]["tile"]
+                pointer_data = dict_to_pointer_file_bytes(tile_info)
                 write_blob_to_stream(stream, blob_path, pointer_data)
-
+                if "pamOid" in tile_info:
+                    pam_data = dict_to_pointer_file_bytes(
+                        {"oid": tile_info["pamOid"], "size": tile_info["pamSize"]}
+                    )
+                    write_blob_to_stream(stream, blob_path + PAM_SUFFIX, pam_data)
                 p.update(1)
 
         self.source_to_imported_metadata = self.source_to_metadata

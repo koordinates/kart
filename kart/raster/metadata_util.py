@@ -5,11 +5,14 @@ import re
 from xml.dom import minidom
 from xml.dom.minidom import Node
 
+from botocore.exceptions import ClientError
+
 from kart.crs_util import normalise_wkt
 from kart.geometry import ring_as_wkt
 from kart.list_of_conflicts import ListOfConflicts
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.raster.validate_cloud_optimized_geotiff import validate as validate_cogtiff
+from kart.s3_util import fetch_from_s3, get_error_code
 from kart.schema import Schema, ColumnSchema
 from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUFFIX
 
@@ -110,7 +113,7 @@ def _rewrite_format(format_json, rewrite_metadata):
     return format_json
 
 
-def extract_raster_tile_metadata(raster_tile_path):
+def extract_raster_tile_metadata(raster_tile_path, oid_and_size=None):
     """
     Use gdalinfo to get any and all raster metadata we can make use of in Kart.
     This includes metadata that must be dataset-homogenous and would be stored in the dataset's /meta/ folder,
@@ -131,11 +134,13 @@ def extract_raster_tile_metadata(raster_tile_path):
     """
     from osgeo import gdal
 
-    metadata = gdal.Info(str(raster_tile_path), options=["-json", "-norat", "-noct"])
+    gdal_path_str = str(raster_tile_path)
+    if gdal_path_str.startswith("s3://"):
+        gdal_path_str = gdal_path_str.replace("s3://", "/vsis3/")
+    metadata = gdal.Info(gdal_path_str, options=["-json", "-norat", "-noct"])
 
-    # NOTE: this format is still in early stages of design, is subject to change.
-
-    warnings, errors, details = validate_cogtiff(str(raster_tile_path), full_check=True)
+    full_check = not gdal_path_str.startswith("/vsi")
+    warnings, errors, details = validate_cogtiff(gdal_path_str, full_check=full_check)
     is_cog = not errors
 
     format_json = {
@@ -149,7 +154,10 @@ def extract_raster_tile_metadata(raster_tile_path):
 
     cc = metadata["cornerCoordinates"]
     size_in_pixels = metadata["size"]
-    oid, size = get_hash_and_size_of_file(raster_tile_path)
+    if oid_and_size:
+        oid, size = oid_and_size
+    else:
+        oid, size = get_hash_and_size_of_file(raster_tile_path)
 
     # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {
@@ -171,34 +179,7 @@ def extract_raster_tile_metadata(raster_tile_path):
         "tile": tile_info,
     }
 
-    try:
-        raster_tile_path = Path(raster_tile_path)
-        expected_pam_path = raster_tile_path.with_name(
-            raster_tile_path.name + PAM_SUFFIX
-        )
-        pams = find_similar_files_case_insensitive(expected_pam_path)
-        if len(pams) == 1:
-            pam_path = pams[0]
-            result.update(extract_aux_xml_metadata(pam_path))
-
-            if pam_path.name == expected_pam_path.name:
-                tile_info.update({"pamName": pam_path.name})
-            else:
-                tile_info.update(
-                    {"pamSourceName": pam_path.name, "pamName": expected_pam_path.name}
-                )
-
-            pam_oid, pam_size = get_hash_and_size_of_file(pam_path)
-            tile_info.update(
-                {
-                    "pamOid": f"sha256:{pam_oid}",
-                    "pamSize": pam_size,
-                }
-            )
-    except Exception as e:
-        # TODO - how to handle corrupted PAM file.
-        L.warning("Error extracting aux-xml metadata %s", e)
-
+    _find_and_add_pam_info(raster_tile_path, result)
     return result
 
 
@@ -251,6 +232,56 @@ def gdalinfo_band_to_kart_columnschema(gdalinfo_band):
             result["noData"] = int(result["noData"])
 
     return ColumnSchema(result)
+
+
+def _find_and_add_pam_info(raster_tile_path, raster_tile_metadata):
+    tile_info = raster_tile_metadata["tile"]
+
+    if str(raster_tile_path).startswith("s3://"):
+        try:
+            pam_path = fetch_from_s3(str(raster_tile_path) + PAM_SUFFIX)
+            raster_tile_metadata.update(extract_aux_xml_metadata(pam_path))
+            pam_oid, pam_size = get_hash_and_size_of_file(pam_path)
+            tile_info.update(
+                {
+                    "pamOid": f"sha256:{pam_oid}",
+                    "pamSize": pam_size,
+                }
+            )
+            pam_path.unlink()
+            return
+        except ClientError as e:
+            if get_error_code(e) != 404:
+                L.warning("Error extracting aux-xml metadata: %s", e)
+            return
+
+    try:
+        raster_tile_path = Path(raster_tile_path)
+        expected_pam_path = raster_tile_path.with_name(
+            raster_tile_path.name + PAM_SUFFIX
+        )
+        pams = find_similar_files_case_insensitive(expected_pam_path)
+        if len(pams) == 1:
+            pam_path = pams[0]
+            raster_tile_metadata.update(extract_aux_xml_metadata(pam_path))
+
+            if pam_path.name == expected_pam_path.name:
+                tile_info.update({"pamName": pam_path.name})
+            else:
+                tile_info.update(
+                    {"pamSourceName": pam_path.name, "pamName": expected_pam_path.name}
+                )
+
+            pam_oid, pam_size = get_hash_and_size_of_file(pam_path)
+            tile_info.update(
+                {
+                    "pamOid": f"sha256:{pam_oid}",
+                    "pamSize": pam_size,
+                }
+            )
+    except Exception as e:
+        # TODO - how to handle corrupted PAM file.
+        L.warning("Error extracting aux-xml metadata: %s", e)
 
 
 def extract_aux_xml_metadata(aux_xml_path):
