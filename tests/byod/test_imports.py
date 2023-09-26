@@ -9,7 +9,7 @@ def test_byod_point_cloud_import(
     tmp_path,
     chdir,
     cli_runner,
-    s3_test_data_point_clouds,
+    s3_test_data_point_cloud,
 ):
     # Using postgres here because it has the best type preservation
     repo_path = tmp_path / "point-cloud-repo"
@@ -20,7 +20,7 @@ def test_byod_point_cloud_import(
         r = cli_runner.invoke(
             [
                 "byod-point-cloud-import",
-                s3_test_data_point_clouds,
+                s3_test_data_point_cloud,
                 "--dataset-path=auckland",
             ]
         )
@@ -54,7 +54,7 @@ def test_byod_point_cloud_import(
         ]
 
         tile_0_url = os.path.join(
-            s3_test_data_point_clouds.split("*")[0], "auckland_0_0.laz"
+            s3_test_data_point_cloud.split("*")[0], "auckland_0_0.laz"
         )
 
         assert auckland["tile"][0]["+"] == {

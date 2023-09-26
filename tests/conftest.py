@@ -1178,18 +1178,7 @@ DOT_AWS_FILES = {
 }
 
 
-@pytest.fixture()
-def s3_test_data_point_clouds(monkeypatch_session):
-    """
-    You can run tests that fetch a copy of the auckland test data from S3 (and so test Kart's S3 behaviour)
-    by setting KART_S3_TEST_DATA_POINT_CLOUDS=s3://some-bucket/path-to-auckland-tiles/*.laz
-    The tiles hosted there should be the ones found in tests/data/point-cloud/laz-auckland.tgz
-    """
-    if "KART_S3_TEST_DATA_POINT_CLOUDS" not in os.environ:
-        raise pytest.skip(
-            "S3 tests require configuration - read docstring at conftest.s3_test_data_point_clouds"
-        )
-
+def _restore_aws_config_during_testing():
     # $HOME isn't the user's real homedir during tests - look for AWS_CONFIG_FILE in the real homedir,
     # unless AWS_CONFIG_FILE is already set to look somewhere else. Same for AWS_CREDENTIAL_FILE.
     for path, env_vars in DOT_AWS_FILES.items():
@@ -1204,7 +1193,20 @@ def s3_test_data_point_clouds(monkeypatch_session):
             if k not in os.environ:
                 os.environ[k] = val
 
-    return os.environ["KART_S3_TEST_DATA_POINT_CLOUDS"]
+
+@pytest.fixture()
+def s3_test_data_point_cloud(monkeypatch_session):
+    """
+    You can run tests that fetch a copy of the auckland test data from S3 (and so test Kart's S3 behaviour)
+    by setting KART_S3_TEST_DATA_POINT_CLOUD=s3://some-bucket/path-to-auckland-tiles/*.laz
+    The tiles hosted there should be the ones found in tests/data/point-cloud/laz-auckland.tgz
+    """
+    if "KART_S3_TEST_DATA_POINT_CLOUD" not in os.environ:
+        raise pytest.skip(
+            "S3 tests require configuration - read docstring at conftest.s3_test_data_point_cloud"
+        )
+    _restore_aws_config_during_testing()
+    return os.environ["KART_S3_TEST_DATA_POINT_CLOUD"]
 
 
 @pytest.fixture()
