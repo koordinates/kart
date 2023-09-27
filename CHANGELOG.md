@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.14.2 (UNRELEASED)
+## 0.14.2
 
 - Fixes a bug where the GPKG application ID is not being written in GPKG working copies - other software reading the GPKG may be confused by this. [#902](https://github.com/koordinates/kart/issues/902)
 - Fixes a bug where points could shift by small amounts while importing point-clouds if the tiles were converted to COPC. [PDAL#4180](https://github.com/PDAL/PDAL/pull/4180)
