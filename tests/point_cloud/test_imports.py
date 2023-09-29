@@ -147,7 +147,6 @@ def test_import_several_laz__convert(
     requires_git_lfs,
     check_tile_is_reflinked,
 ):
-    # Using postgres here because it has the best type preservation
     with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
         repo_path = tmp_path / "point-cloud-repo"
         r = cli_runner.invoke(["init", repo_path])

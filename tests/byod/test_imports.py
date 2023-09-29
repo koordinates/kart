@@ -11,7 +11,6 @@ def test_byod_point_cloud_import(
     cli_runner,
     s3_test_data_point_cloud,
 ):
-    # Using postgres here because it has the best type preservation
     repo_path = tmp_path / "point-cloud-repo"
     r = cli_runner.invoke(["init", repo_path])
     assert r.exit_code == 0
@@ -76,7 +75,6 @@ def test_byod_raster_import(
     cli_runner,
     s3_test_data_raster,
 ):
-    # Using postgres here because it has the best type preservation
     repo_path = tmp_path / "point-cloud-repo"
     r = cli_runner.invoke(["init", repo_path])
     assert r.exit_code == 0
