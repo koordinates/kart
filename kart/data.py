@@ -163,7 +163,7 @@ def data_version(ctx, output_format):
         click.echo(f"This Kart repo uses Datasets v{version}")
         if version >= 1:
             click.echo(
-                f"(See https://docs.kartproject.org/en/latest/pages/development/datasets_v{version}.html#datasets-v{version})"
+                f"(See https://docs.kartproject.org/en/latest/pages/development/table_v{version}.html"
             )
     elif output_format == "json":
         from .repo import KartConfigKeys
