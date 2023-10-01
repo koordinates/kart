@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import boto3
 import click
 
-from kart.exceptions import NotFound, NO_IMPORT_SOURCE
+from kart.exceptions import NotFound, NO_IMPORT_SOURCE, NO_CHECKSUM
 
 # Utility functions for dealing with S3 - not yet launched.
 
@@ -100,7 +100,13 @@ def get_hash_and_size_of_s3_object(s3_url):
     response = get_s3_client().head_object(
         Bucket=bucket, Key=key, ChecksumMode="ENABLED"
     )
-    # TODO - handle failure (eg missing SHA256 checksum), which is extremely likely.
+    # TODO: fall back to other ways of learning the checksum.
+    if "ChecksumSHA256" not in response:
+        raise NotFound(
+            f"Object at {s3_url} has no SHA256 checksum attached. "
+            "See https://docs.kartproject.org/en/latest/pages/s3.html#sha256-hashes",
+            exit_code=NO_CHECKSUM,
+        )
     sha256 = standard_b64decode(response["ChecksumSHA256"]).hex()
     size = response["ContentLength"]
     return sha256, size

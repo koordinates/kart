@@ -73,6 +73,7 @@
 .. _git_lfs: https://git-lfs.com/
 .. _copy_on_write: https://en.wikipedia.org/wiki/Copy-on-write
 .. _kart_github_issue_772: https://github.com/koordinates/kart/issues/772
+.. _boto3: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
 
 .. _sqlite3_tool: https://sqlite.org/cli.html
 .. _psql_tool: https://www.postgresql.org/docs/current/app-psql.html

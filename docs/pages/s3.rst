@@ -1,0 +1,29 @@
+Using Kart with S3
+==================
+
+This page is a placeholder - eventually there will be more documentation on using Kart with S3, which is still in development.
+
+SHA256 hashes
+=============
+
+Kart uses `Git LFS <git_lfs_>`_ pointer files to point to point-cloud or raster tiles - even when those tiles
+are found in S3, rather than on a Git LFS server. For more details, see the section on :doc:`Git LFS </pages/git_lfs>`
+In order to create a dataset where every tile is backed by an object on S3, Kart needs to learn the SHA256
+hash of each object in order to populate the pointer file. Currently, it does this by querying S3 directly,
+which works as long as the S3 objects already have SHA256 checksums attached (which is not guaranteed).
+
+If you need to add SHA256 hashes to existing S3 objects, this Python snippet using `boto3 <boto3_>`_ could be a
+good starting point. It copies an object from `key` to the same `key`, overwriting itself, but adds a SHA256 hash
+as it does so. It **does not** preserve the object's ACL - if you have set an ACL on the object, you will need to set
+it again.
+
+.. code:: python
+
+   import boto3
+
+   boto3.client("s3").copy_object(
+     Bucket=bucket,
+     Key=key,
+     CopySource=dict(Bucket=bucket, Key=key),
+     ChecksumAlgorithm="SHA256",
+   )
