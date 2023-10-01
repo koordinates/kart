@@ -104,3 +104,12 @@ def get_hash_and_size_of_s3_object(s3_url):
     sha256 = standard_b64decode(response["ChecksumSHA256"]).hex()
     size = response["ContentLength"]
     return sha256, size
+
+
+def get_error_code(client_error):
+    response = getattr(client_error, "response")
+    error = response.get("Error") if response else None
+    code = error.get("Code") if error else None
+    if code and code.isdigit():
+        code = int(code)
+    return code
