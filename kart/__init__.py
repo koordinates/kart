@@ -17,6 +17,28 @@ import sys
 
 L = logging.getLogger("kart.__init__")
 
+# These env vars are retained in the helper process, rather than being clobbered
+# by the environment of the Kart client process.
+# This allows the helper to do initial setup (mostly below, in this file)
+# without it being later undone by the client process.
+HELPER_PRESERVE_ENV_VARS = (
+    "CURL_CA_INFO",
+    "GDAL_DATA",
+    "GIT_CONFIG_NOSYSTEM",
+    "GIT_EXEC_PATH",
+    "GIT_INDEX_FILE",
+    "GIT_TEMPLATE_DIR",
+    "KART_HELPER_LOG",
+    "LD_LIBRARY_PATH_ORIG",
+    "LD_LIBRARY_PATH",
+    "OGR_SQLITE_PRAGMA",
+    "PATH",
+    "PROJ_LIB",
+    "PROJ_NETWORK",
+    "SSL_CERT_FILE",
+    "XDG_CONFIG_HOME",
+)
+
 try:
     import _kart_env
 
