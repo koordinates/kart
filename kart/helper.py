@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 
+from . import HELPER_PRESERVE_ENV_VARS
 from .socket_utils import recv_json_and_fds
 from .cli import load_commands_from_args, cli, is_windows, is_darwin, is_linux
 
@@ -70,29 +71,7 @@ def helper(ctx, socket_filename, timeout, args):
     # TODO - this should be checked to ensure it is all that is needed
     #  is there anything beyond these which is needed, eg. PWD, USER, etc.
     required_environment = {
-        k: v
-        for k, v in os.environ.items()
-        if k
-        in [
-            "CURL_CA_INFO",
-            "GDAL_DATA",
-            "GIT_CONFIG_NOSYSTEM",
-            "GIT_EXEC_PATH",
-            "GIT_EXEC_PATH",
-            "GIT_INDEX_FILE",
-            "GIT_INDEX_FILE",
-            "GIT_TEMPLATE_DIR",
-            "GIT_TEMPLATE_DIR",
-            "KART_HELPER_LOG",
-            "LD_LIBRARY_PATH_ORIG",
-            "LD_LIBRARY_PATH",
-            "OGR_SQLITE_PRAGMA",
-            "PATH",
-            "PROJ_LIB",
-            "PROJ_NETWORK",
-            "SSL_CERT_FILE",
-            "XDG_CONFIG_HOME",
-        ]
+        k: v for k, v in os.environ.items() if k in HELPER_PRESERVE_ENV_VARS
     }
 
     sock = socket.socket(family=socket.AF_UNIX)
