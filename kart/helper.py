@@ -74,23 +74,24 @@ def helper(ctx, socket_filename, timeout, args):
         for k, v in os.environ.items()
         if k
         in [
-            "PATH",
-            "LD_LIBRARY_PATH",
-            "LD_LIBRARY_PATH_ORIG",
+            "CURL_CA_INFO",
+            "GDAL_DATA",
             "GIT_CONFIG_NOSYSTEM",
             "GIT_EXEC_PATH",
-            "GIT_TEMPLATE_DIR",
+            "GIT_EXEC_PATH",
             "GIT_INDEX_FILE",
-            "GDAL_DATA",
+            "GIT_INDEX_FILE",
+            "GIT_TEMPLATE_DIR",
+            "GIT_TEMPLATE_DIR",
+            "KART_HELPER_LOG",
+            "LD_LIBRARY_PATH_ORIG",
+            "LD_LIBRARY_PATH",
+            "OGR_SQLITE_PRAGMA",
+            "PATH",
             "PROJ_LIB",
             "PROJ_NETWORK",
-            "OGR_SQLITE_PRAGMA",
-            "XDG_CONFIG_HOME",
-            "GIT_EXEC_PATH",
-            "GIT_TEMPLATE_DIR",
-            "GIT_INDEX_FILE",
             "SSL_CERT_FILE",
-            "KART_HELPER_LOG",
+            "XDG_CONFIG_HOME",
         ]
     }
 
