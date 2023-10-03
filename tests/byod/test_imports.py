@@ -52,6 +52,7 @@ def test_byod_point_cloud_import(
             {"name": "Blue", "dataType": "integer", "size": 16},
         ]
 
+        tile_region = auckland["tile"][0]["+"]["region"]
         tile_0_url = os.path.join(
             s3_test_data_point_cloud.split("*")[0], "auckland_0_0.laz"
         )
@@ -62,6 +63,7 @@ def test_byod_point_cloud_import(
             "format": "laz-1.2",
             "nativeExtent": "1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
             "pointCount": 4231,
+            "region": tile_region,
             "url": tile_0_url,
             "oid": "sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
             "size": 51489,
@@ -114,6 +116,7 @@ def test_byod_raster_import(
             "5": "Gully risk",
         }
 
+        tile_region = erorisk_si["tile"][0]["+"]["region"]
         tile_url = os.path.join(
             s3_test_data_raster.split("*")[0], "erorisk_silcdb4.tif"
         )
@@ -124,6 +127,7 @@ def test_byod_raster_import(
             "dimensions": "762x790",
             "format": "geotiff/cog",
             "nativeExtent": "POLYGON((1573869.73 5155224.347,1573869.73 5143379.674,1585294.591 5143379.674,1585294.591 5155224.347,1573869.73 5155224.347))",
+            "region": tile_region,
             "url": tile_url,
             "oid": "sha256:c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
             "size": 604652,

@@ -6,7 +6,7 @@ from kart.byod.importer import ByodTileImporter
 from kart.cli_util import StringFromFile, MutexOption, KartCommand
 from kart.raster.import_ import RasterImporter
 from kart.raster.metadata_util import extract_raster_tile_metadata
-from kart.s3_util import get_hash_and_size_of_s3_object, fetch_from_s3
+from kart.s3_util import get_hash_and_size_of_s3_object, get_region_name
 
 
 L = logging.getLogger(__name__)
@@ -123,5 +123,6 @@ class ByodRasterImporter(ByodTileImporter, RasterImporter):
         oid_and_size = get_hash_and_size_of_s3_object(tile_location)
         result = extract_raster_tile_metadata(tile_location, oid_and_size=oid_and_size)
         # TODO - format still not definite, we might not put the whole URL in here.
+        result["tile"]["region"] = get_region_name()
         result["tile"]["url"] = tile_location
         return result
