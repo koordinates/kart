@@ -103,7 +103,9 @@ def byod_point_cloud_import(
     """
     repo = ctx.obj.repo
 
-    ByodPointCloudImporter(repo, ctx).import_tiles(
+    ByodPointCloudImporter(
+        repo=repo,
+        ctx=ctx,
         convert_to_cloud_optimized=False,
         dataset_path=dataset_path,
         message=message,
@@ -113,9 +115,9 @@ def byod_point_cloud_import(
         delete=delete,
         amend=amend,
         allow_empty=allow_empty,
-        sources=list(sources),
         num_workers=num_workers,
-    )
+        sources=list(sources),
+    ).import_tiles()
 
 
 class ByodPointCloudImporter(ByodTileImporter, PointCloudImporter):

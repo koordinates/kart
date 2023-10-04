@@ -128,7 +128,9 @@ def raster_import(
             f"For raster import, every argument should be a GeoTIFF file:\n    {problem}"
         )
 
-    RasterImporter(repo, ctx).import_tiles(
+    RasterImporter(
+        repo=repo,
+        ctx=ctx,
         dataset_path=dataset_path,
         convert_to_cloud_optimized=convert_to_cog,
         message=message,
@@ -138,13 +140,12 @@ def raster_import(
         delete=delete,
         amend=amend,
         allow_empty=allow_empty,
-        sources=sources,
         num_workers=num_workers,
-    )
+        sources=sources,
+    ).import_tiles()
 
 
 class RasterImporter(TileImporter):
-
     DATASET_CLASS = RasterV1
 
     CLOUD_OPTIMIZED_VARIANT = "Cloud-Optimized GeoTIFF"

@@ -128,7 +128,9 @@ def point_cloud_import(
             f"For point-cloud import, every argument should be a LAS/LAZ file:\n    {problem}"
         )
 
-    PointCloudImporter(repo, ctx).import_tiles(
+    PointCloudImporter(
+        repo=repo,
+        ctx=ctx,
         dataset_path=dataset_path,
         convert_to_cloud_optimized=convert_to_copc,
         message=message,
@@ -138,20 +140,16 @@ def point_cloud_import(
         delete=delete,
         amend=amend,
         allow_empty=allow_empty,
-        sources=sources,
         num_workers=num_workers,
-    )
+        sources=sources,
+    ).import_tiles()
 
 
 class PointCloudImporter(TileImporter):
-
     DATASET_CLASS = PointCloudV1
 
     CLOUD_OPTIMIZED_VARIANT = "Cloud-Optimized Point Cloud"
     CLOUD_OPTIMIZED_VARIANT_ACRONYM = "COPC"
-
-    def __init__(self, repo, ctx):
-        super().__init__(repo, ctx)
 
     def get_default_message(self):
         return f"Importing {len(self.sources)} LAZ tiles as {self.dataset_path}"

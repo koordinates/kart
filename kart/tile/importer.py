@@ -59,19 +59,11 @@ L = logging.getLogger(__name__)
 class TileImporter:
     """Subclassable logic for importing tile-based datasets - see tile_dataset.py"""
 
-    def __init__(self, repo, ctx):
-        self.repo = repo
-        self.ctx = ctx
-
-        # When doing any kind of initial import we still have to write the table_dataset_version,
-        # even though it's not really relevant to tile imports.
-        assert self.repo.table_dataset_version in SUPPORTED_VERSIONS
-
-    EXTRACT_TILE_METADATA_STEP = "Checking tiles"
-
-    def import_tiles(
+    def __init__(
         self,
         *,
+        repo,
+        ctx,
         dataset_path,
         convert_to_cloud_optimized,
         message,
@@ -85,48 +77,72 @@ class TileImporter:
         sources,
     ):
         """
-        Import the tiles at sources as a new dataset / use them to update an existing dataset.
-
-        dataset_path - path to the dataset where the tiles will be imported
+        repo - the Kart repo from the context.
+        ctx - the current Click context.
+        dataset_path - path to the dataset where the tiles will be imported.
         convert_to_cloud_optimized - whether to automatically convert tiles to cloud-optimized (COPC or COG) while importing.
             If True, the resulting dataset will also be constrained to only contain cloud-optimized tiles.
             If False, the user has explicitly opted out of this constraint.
             If None, we still need to check if the user is aware of this possibility and prompt them to see what they would prefer.
-        message - commit message for the import commit
-        do_checkout - Whether to create a working copy once the import is finished, if no working copy exists yet
-        replace_existing - if True, replace any existing dataset at dataset_path with a new one containing only these tiles
-        update_existing - if True, update any existing dataset at the same path. Existing tiles will be replaced by source
+        message - commit message for the import commit.
+        do_checkout - Whether to create a working copy once the import is finished, if no working copy exists yet.
+        replace_existing - if True, replace any existing dataset at dataset_path with a new one containing only these tiles.
+        update_existing - if True, update any existing dataset at the same path. Existing tiles will be replaced by source.
             tiles with the same name, other existing tiles remain unchanged.
-        delete - list of existing tiles to delete, relevant when updating an existing dataset
-        amend - if True, amends the previous commit rather than creating a new import commit
-        allow_empty - if True, the import commit will be created even if the dataset is not changed
+        delete - list of existing tiles to delete, relevant when updating an existing dataset.
+        amend - if True, amends the previous commit rather than creating a new import commit.
+        allow_empty - if True, the import commit will be created even if the dataset is not changed.
         num_workers - specify the number of workers to use, or set to None to use the number of detected cores.
-        sources - paths to tiles to import
+        sources - paths to tiles to import.
+        """
+        self.repo = repo
+        self.ctx = ctx
+
+        self.dataset_path = dataset_path
+        self.convert_to_cloud_optimized = convert_to_cloud_optimized
+        self.message = message
+        self.do_checkout = do_checkout
+        self.replace_existing = replace_existing
+        self.update_existing = update_existing
+        self.delete = delete
+        self.amend = amend
+        self.allow_empty = allow_empty
+        self.num_workers = num_workers
+        self.sources = sources
+
+        # When doing any kind of initial import we still have to write the table_dataset_version,
+        # even though it's not really relevant to tile imports.
+        assert self.repo.table_dataset_version in SUPPORTED_VERSIONS
+
+    EXTRACT_TILE_METADATA_STEP = "Checking tiles"
+
+    def import_tiles(self):
+        """
+        Import the tiles at sources as a new dataset / use them to update an existing dataset.
         """
 
-        self.sources = sources
-        self.num_workers = self.check_num_workers(num_workers)
+        self.num_workers = self.check_num_workers(self.num_workers)
 
-        if not sources and not delete:
+        if not self.sources and not self.delete:
             # sources aren't required if you use --delete;
             # this allows you to use this command to solely delete tiles.
             # otherwise, sources are required.
             raise self.missing_parameter("args")
 
-        if delete and not dataset_path:
+        if self.delete and not self.dataset_path:
             # Dataset-path is required if you use --delete.
             raise self.missing_parameter("dataset_path")
 
-        if not dataset_path:
-            dataset_path = self.infer_dataset_path(sources)
-            if dataset_path:
-                click.echo(f"Defaulting to '{dataset_path}' as the dataset path...")
+        if not self.dataset_path:
+            self.dataset_path = self.infer_dataset_path(self.sources)
+            if self.dataset_path:
+                click.echo(
+                    f"Defaulting to '{self.dataset_path}' as the dataset path..."
+                )
             else:
                 raise self.missing_parameter("dataset_path")
 
-        self.dataset_path = dataset_path
-
-        if delete:
+        if self.delete:
             # --delete kind of implies --update-existing (we're modifying an existing dataset)
             # But a common way for this to do the wrong thing might be this:
             #   kart ... --delete auckland/auckland_3_*.laz
@@ -135,57 +151,58 @@ class TileImporter:
             # to cause an error below:
             #  * either the dataset exists, and we fail with a dataset conflict
             #  * or the dataset doesn't exist, and the --delete fails
-            if not sources:
-                update_existing = True
+            if not self.sources:
+                self.update_existing = True
 
-        if replace_existing or update_existing:
-            validate_dataset_paths([dataset_path])
+        if self.replace_existing or self.update_existing:
+            validate_dataset_paths([self.dataset_path])
         else:
             old_dataset_paths = [ds.path for ds in self.repo.datasets()]
-            validate_dataset_paths([*old_dataset_paths, dataset_path])
+            validate_dataset_paths([*old_dataset_paths, self.dataset_path])
 
         if (
-            replace_existing or update_existing or delete
+            self.replace_existing or self.update_existing or self.delete
         ) and self.repo.working_copy.workdir:
             # Avoid conflicts by ensuring the WC is clean.
             # NOTE: Technically we could allow anything to be dirty except the single dataset
             # we're importing (or even a subset of that dataset). But this'll do for now
             self.repo.working_copy.workdir.check_not_dirty()
 
-        self.sanity_check_sources(sources)
+        self.sanity_check_sources(self.sources)
 
         self.existing_dataset = self.get_existing_dataset()
         self.existing_metadata = (
             self.existing_dataset.tile_metadata if self.existing_dataset else None
         )
         self.include_existing_metadata = (
-            update_existing and self.existing_dataset is not None
+            self.update_existing and self.existing_dataset is not None
         )
 
-        if delete and self.existing_dataset is None:
+        if self.delete and self.existing_dataset is None:
             # Trying to delete specific paths from a nonexistent dataset?
             # This suggests the caller is confused.
             raise InvalidOperation(
-                f"Dataset {dataset_path} does not exist. Cannot delete paths from it."
+                f"Dataset {self.dataset_path} does not exist. Cannot delete paths from it."
             )
 
         # These two dicts contain information about the sources, pre-conversion.
         self.source_to_metadata = {}
         self.source_to_hash_and_size = {}
 
-        if sources:
-            self.convert_to_cloud_optimized = convert_to_cloud_optimized
+        if self.sources:
             if self.convert_to_cloud_optimized is None:
                 self.convert_to_cloud_optimized = (
                     self.prompt_for_convert_to_cloud_optimized()
                 )
 
             progress = progress_bar(
-                total=len(sources), unit="tile", desc=self.EXTRACT_TILE_METADATA_STEP
+                total=len(self.sources),
+                unit="tile",
+                desc=self.EXTRACT_TILE_METADATA_STEP,
             )
             with progress as p:
                 for source, tile_metadata in self.extract_multiple_tiles_metadata(
-                    sources
+                    self.sources
                 ):
                     self.source_to_metadata[source] = tile_metadata
                     self.source_to_hash_and_size[source] = (
@@ -226,19 +243,19 @@ class TileImporter:
         # and move the HEAD branch to the new commit.
         # This also comes in useful for checking tree equivalence when --allow-empty is not used.
         fast_import_on_branch = f"refs/kart-import/{uuid.uuid4()}"
-        if amend:
+        if self.amend:
             if not self.repo.head_commit:
                 raise InvalidOperation(
                     "Cannot amend in an empty repository", exit_code=NO_DATA
                 )
-            if not message:
-                message = self.repo.head_commit.message
+            if not self.message:
+                self.message = self.repo.head_commit.message
         else:
-            if message is None:
-                message = self.get_default_message()
+            if self.message is None:
+                self.message = self.get_default_message()
 
         header = generate_header(
-            self.repo, None, message, fast_import_on_branch, self.repo.head_commit
+            self.repo, None, self.message, fast_import_on_branch, self.repo.head_commit
         )
 
         self.dataset_inner_path = (
@@ -251,13 +268,13 @@ class TileImporter:
             proc.stdin.write(header.encode("utf8"))
             self.write_extra_blobs(proc.stdin)
 
-            if not update_existing:
+            if not self.update_existing:
                 # Delete the entire existing dataset, before we re-import it.
-                proc.stdin.write(f"D {dataset_path}\n".encode("utf8"))
+                proc.stdin.write(f"D {self.dataset_path}\n".encode("utf8"))
 
-            if delete:
+            if self.delete:
                 root_tree = self.repo.head_tree
-                for tile_name in delete:
+                for tile_name in self.delete:
                     # Check that the blob exists; if not, error out
                     blob_path = self.existing_dataset.tilename_to_blob_path(tile_name)
                     try:
@@ -267,8 +284,8 @@ class TileImporter:
 
                     proc.stdin.write(f"D {blob_path}\n".encode("utf8"))
 
-            if sources:
-                self.import_tiles_to_stream(proc.stdin, sources)
+            if self.sources:
+                self.import_tiles_to_stream(proc.stdin, self.sources)
 
                 all_metadata = (
                     [self.existing_metadata] if self.include_existing_metadata else []
@@ -283,7 +300,7 @@ class TileImporter:
                 self.write_meta_blobs_to_stream(proc.stdin, self.actual_merged_metadata)
 
         try:
-            if amend:
+            if self.amend:
                 # Squash the commit we just created into its parent, replacing both commits on the head branch.
                 new_tree = self.repo.references[fast_import_on_branch].peel(pygit2.Tree)
                 new_commit_oid = self.repo.create_commit(
@@ -293,7 +310,7 @@ class TileImporter:
                     None,
                     self.repo.head_commit.author,
                     self.repo.committer_signature(),
-                    message,
+                    self.message,
                     new_tree.oid,
                     self.repo.head_commit.parent_ids,
                 )
@@ -303,7 +320,7 @@ class TileImporter:
                     pygit2.Commit
                 )
                 new_commit_oid = new_commit.oid
-                if (not allow_empty) and self.repo.head_tree:
+                if (not self.allow_empty) and self.repo.head_tree:
                     if new_commit.peel(pygit2.Tree).oid == self.repo.head_tree.oid:
                         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
             if self.repo.head_branch not in self.repo.references:
@@ -315,10 +332,10 @@ class TileImporter:
             # Clean up the temp branch
             self.repo.references[fast_import_on_branch].delete()
 
-        parts_to_create = [PartType.WORKDIR] if do_checkout else []
+        parts_to_create = [PartType.WORKDIR] if self.do_checkout else []
         # During imports we can keep old changes since they won't conflict with newly imported datasets.
         self.repo.working_copy.reset_to_head(
-            repo_key_filter=RepoKeyFilter.datasets([dataset_path]),
+            repo_key_filter=RepoKeyFilter.datasets([self.dataset_path]),
             create_parts_if_missing=parts_to_create,
         )
 
