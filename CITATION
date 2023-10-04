@@ -1,0 +1,13 @@
+To cite Kart in publications use:
+
+  Kart contributors (2023). Kart geospatial data version-control software.
+  URL https://kartproject.org
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {{Kart} geospatial data version-control software},
+    author = {{Kart contributors}},
+    year = {2023},
+    url = {https://kartproject.org},
+  }
