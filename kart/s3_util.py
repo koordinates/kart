@@ -35,11 +35,6 @@ def get_s3_resource():
     return resource
 
 
-@functools.lru_cache(maxsize=1)
-def get_region_name():
-    return get_s3_client().meta.config.region_name
-
-
 @functools.lru_cache()
 def get_bucket(name):
     return get_s3_resource().Bucket(name)
