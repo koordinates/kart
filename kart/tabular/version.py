@@ -2,7 +2,12 @@ import itertools
 import json
 
 from kart.core import walk_tree
-from kart.exceptions import UNSUPPORTED_VERSION, InvalidOperation
+from kart.exceptions import (
+    UNSUPPORTED_VERSION,
+    NO_REPOSITORY,
+    InvalidOperation,
+    NotFound,
+)
 
 # Kart repos have a repo-wide marker - either in the .kart/config file or in a blob in the ODB -
 # that stores which version all of the table-datasets are, if they are V2 or V3.
@@ -132,5 +137,9 @@ def _distinguish_v0_v1(tree):
             return 0
         elif dir_name == ".sno-table":
             return 1
-    # Maybe this isn't even a Kart repo?
-    return 1
+    # No evidence that this is a Kart repo, but, it's possible if you mess with Kart repo internals that you could
+    # get here by corrupting your HEAD commit - so the message provide a tiny bit of context to help diagnose:
+    raise NotFound(
+        "Current directory is not a Kart repository (no Kart datasets found at HEAD commit)",
+        exit_code=NO_REPOSITORY,
+    )
