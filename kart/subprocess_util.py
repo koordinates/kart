@@ -335,7 +335,7 @@ def tool_environment(*, base_env=None, env_overrides=None):
         # Handle {key: None} to unset env variables:
         for key, value in env_overrides.items():
             if value is None:
-                env.pop(key)
+                env.pop(key, None)
     return env
 
 
