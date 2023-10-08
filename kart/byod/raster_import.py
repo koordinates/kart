@@ -123,7 +123,4 @@ def byod_raster_import(
 class ByodRasterImporter(ByodTileImporter, RasterImporter):
     def extract_tile_metadata(self, tile_location):
         oid_and_size = get_hash_and_size_of_s3_object(tile_location)
-        result = extract_raster_tile_metadata(tile_location, oid_and_size=oid_and_size)
-        # TODO - format still not definite, we might not put the whole URL in here.
-        result["tile"]["url"] = tile_location
-        return result
+        return extract_raster_tile_metadata(tile_location, oid_and_size=oid_and_size)

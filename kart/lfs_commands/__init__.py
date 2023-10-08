@@ -18,6 +18,7 @@ from kart.lfs_util import (
 from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
+from kart.s3_util import fetch_multiple_from_s3
 from kart.spatial_filter import SpatialFilter
 from kart.structs import CommitWithReference
 from kart import subprocess_util as subprocess
@@ -69,10 +70,9 @@ def ls_files(ctx, show_size, all, ref1, ref2):
     def is_present(lfs_hash):
         return get_local_path_from_lfs_hash(repo, lfs_hash).is_file()
 
-    for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
+    for commit_id, path_match_result, pointer_blob in rev_list_tile_pointer_files(
         repo, start_commits, stop_commits
     ):
-
         if show_size:
             pointer_dict = pointer_file_bytes_to_dict(
                 pointer_blob, decode_extra_values=False
@@ -121,7 +121,7 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
     start_commits, stop_commits = get_start_and_stop_commits(sys.stdin)
 
     lfs_oids = set()
-    for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
+    for commit_id, path_match_result, pointer_blob in rev_list_tile_pointer_files(
         repo, start_commits, [f"--remotes={remote_name}", *stop_commits]
     ):
         # Because of the way a Kart repo is laid out, we know that:
@@ -262,8 +262,6 @@ def fetch_lfs_blobs_for_commits(
 
     if not remote_name:
         remote_name = repo.head_remote_name_or_default
-    if not remote_name:
-        return
 
     spatial_filter = (
         repo.spatial_filter if do_spatial_filter else SpatialFilter.MATCH_ALL
@@ -284,6 +282,10 @@ def fetch_lfs_blobs_for_commits(
     )
 
 
+def _blobs(count):
+    return "1 blob" if count == 1 else f"{count} blobs"
+
+
 def fetch_lfs_blobs_for_pointer_files(
     repo, pointer_files, *, remote_name=None, dry_run=False, quiet=False
 ):
@@ -296,15 +298,10 @@ def fetch_lfs_blobs_for_pointer_files(
 
     if not remote_name:
         remote_name = repo.head_remote_name_or_default
-    if not remote_name:
-        return
 
-    next_blob_name = (str(i) for i in itertools.count(start=0, step=1))
-
-    # TODO - directly instruct Git-LFS to fetch blobs instead of creating a tree to point Git-LFS to,
-    # as and when Git-LFS supports this.
-    object_builder = ObjectBuilder(repo, None)
     dry_run_output = []
+    urls = []
+    non_urls = []
 
     for pointer_file in pointer_files:
         if isinstance(pointer_file, str):
@@ -313,20 +310,39 @@ def fetch_lfs_blobs_for_pointer_files(
             pointer_blob = pointer_file
         else:
             raise TypeError("pointer_file should be an OID or a blob object")
-        lfs_oid = get_hash_from_pointer_file(pointer_blob)
+
+        pointer_dict = pointer_file_bytes_to_dict(pointer_blob)
+        url = pointer_dict.get("url")
+        lfs_oid = get_hash_from_pointer_file(pointer_dict)
+        pointer_file_oid = pointer_blob.hex
         lfs_path = get_local_path_from_lfs_hash(repo, lfs_oid)
         if lfs_path.is_file():
             continue  # Already fetched.
 
-        object_builder.insert(next(next_blob_name), pointer_blob)
+        if url:
+            urls.append((url, lfs_oid))
+        else:
+            non_urls.append((pointer_file_oid, lfs_oid))
+
         if dry_run:
-            dry_run_output.append(f"{lfs_oid} ({pointer_blob.hex})")
+            if url:
+                dry_run_output.append(f"{lfs_oid} ({pointer_blob.hex})\n⮑  {url}")
+            else:
+                dry_run_output.append(f"{lfs_oid} ({pointer_blob.hex})")
 
     if dry_run:
-        click.echo(
-            f"Running fetch with --dry-run: fetching {len(dry_run_output)} LFS blobs"
-        )
+        click.echo("Running fetch with --dry-run:")
+        if urls:
+            click.echo(f"  Found {_blobs(len(urls))} blobs to fetch from specific URLs")
+        if non_urls:
+            found_non_urls = f"  Found {_blobs(len(non_urls))} to fetch from the remote"
+            found_non_urls += "" if remote_name else " - but no remote is configured"
+            click.echo(found_non_urls)
+        if not urls and not non_urls:
+            click.echo("  Found nothing to fetch")
+
         if dry_run_output:
+            click.echo()
             click.echo(
                 "LFS blob OID:                                                    (Pointer file OID):"
             )
@@ -334,9 +350,40 @@ def fetch_lfs_blobs_for_pointer_files(
                 click.echo(line)
         return
 
+    if urls:
+        _do_fetch_from_urls(repo, urls, quiet=quiet)
+    if non_urls and remote_name:
+        _do_fetch_from_remote(repo, non_urls, remote_name, quiet=quiet)
+
+
+def _do_fetch_from_urls(repo, urls_and_lfs_oids, quiet=False):
+    non_s3_url = next(
+        (url for (url, lfs_oid) in urls_and_lfs_oids if not url.startswith("s3://")),
+        None,
+    )
+    if non_s3_url:
+        raise NotImplementedError(
+            f"Invalid URL - only S3 URLs are currently supported for BYOD repos: {non_s3_url}"
+        )
+
+    urls_and_paths = [
+        (url, get_local_path_from_lfs_hash(repo, lfs_oid))
+        for (url, lfs_oid) in urls_and_lfs_oids
+    ]
+    for url, path in urls_and_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    fetch_multiple_from_s3(urls_and_paths, quiet=quiet)
+
+
+def _do_fetch_from_remote(repo, pointer_file_and_lfs_oids, remote_name, quiet=False):
+    # TODO - directly instruct Git-LFS to fetch blobs instead of creating a tree to point Git-LFS to,
+    # as and when Git-LFS supports this.
+
+    next_blob_name = (str(i) for i in itertools.count(start=0, step=1))
+    object_builder = ObjectBuilder(repo, None)
+    for pointer_file_oid, lfs_oid in pointer_file_and_lfs_oids:
+        object_builder.insert(next(next_blob_name), repo[pointer_file_oid])
     tree = object_builder.flush()
-    if not tree:
-        return
 
     try:
         # TODO - capture progress reporting and do our own.
@@ -383,7 +430,7 @@ def gc(ctx, dry_run):
         )
 
     unpushed_lfs_oids = set()
-    for (commit_id, path_match_result, pointer_blob) in rev_list_tile_pointer_files(
+    for commit_id, path_match_result, pointer_blob in rev_list_tile_pointer_files(
         repo, ["--branches"], ["--remotes"]
     ):
         unpushed_lfs_oids.add(get_hash_from_pointer_file(pointer_blob))
@@ -422,7 +469,7 @@ def gc(ctx, dry_run):
     size_desc = human_readable_bytes(total_size_to_delete)
     if dry_run:
         click.echo(
-            f"Running gc with --dry-run: deleting {len(to_delete)} LFS blobs ({size_desc}) from the cache"
+            f"Running gc with --dry-run: found {len(to_delete)} LFS blobs ({size_desc}) to delete from the cache"
         )
         for file in sorted(to_delete, key=lambda f: f.name):
             click.echo(file.name)

@@ -118,6 +118,7 @@ _TRANSIENT_KEYS = (
     # make sure we don't serialize them in the tile pointer file using the "pam" prefix.
     "pamName",
     "pamSourceName",
+    "pamUrl",
     "pamOid",
     "pamSize",
 )

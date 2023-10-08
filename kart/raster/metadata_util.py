@@ -159,18 +159,23 @@ def extract_raster_tile_metadata(raster_tile_path, oid_and_size=None):
     else:
         oid, size = get_hash_and_size_of_file(raster_tile_path)
 
+    name = Path(raster_tile_path).name
+    url = str(raster_tile_path) if str(raster_tile_path).startswith("s3://") else None
     # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {
-        "name": Path(raster_tile_path).name,
+        "name": name,
         "format": "geotiff/cog" if is_cog else "geotiff",
         "crs84Extent": format_polygon(*metadata["wgs84Extent"]["coordinates"][0]),
         "dimensions": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
         "nativeExtent": format_polygon(
             cc["upperLeft"], cc["lowerLeft"], cc["lowerRight"], cc["upperRight"]
         ),
+        "url": url,
         "oid": f"sha256:{oid}",
         "size": size,
     }
+    if not url:
+        tile_info.pop("url", None)
 
     result = {
         "format.json": format_json,
@@ -239,11 +244,13 @@ def _find_and_add_pam_info(raster_tile_path, raster_tile_metadata):
 
     if str(raster_tile_path).startswith("s3://"):
         try:
-            pam_path = fetch_from_s3(str(raster_tile_path) + PAM_SUFFIX)
+            pam_url = str(raster_tile_path) + PAM_SUFFIX
+            pam_path = fetch_from_s3(pam_url)
             raster_tile_metadata.update(extract_aux_xml_metadata(pam_path))
             pam_oid, pam_size = get_hash_and_size_of_file(pam_path)
             tile_info.update(
                 {
+                    "pamUrl": pam_url,
                     "pamOid": f"sha256:{pam_oid}",
                     "pamSize": pam_size,
                 }

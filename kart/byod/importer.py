@@ -77,7 +77,11 @@ class ByodTileImporter:
                 write_blob_to_stream(stream, blob_path, pointer_data)
                 if "pamOid" in tile_info:
                     pam_data = dict_to_pointer_file_bytes(
-                        {"oid": tile_info["pamOid"], "size": tile_info["pamSize"]}
+                        {
+                            "url": tile_info["pamUrl"],
+                            "oid": tile_info["pamOid"],
+                            "size": tile_info["pamSize"],
+                        }
                     )
                     write_blob_to_stream(stream, blob_path + PAM_SUFFIX, pam_data)
                 p.update(1)
