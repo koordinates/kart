@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.14.3 (UNRELEASED)
 
 - Adds information on referencing and citing Kart to `CITATION`. [#914](https://github.com/koordinates/kart/pull/914)
+- Fixes a bug where Kart would misidentify a non-Kart repo as a Kart V1 repo in some circumstances. [#918](https://github.com/koordinates/kart/issues/918)
 
 ## 0.14.2
 

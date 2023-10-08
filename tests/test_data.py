@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+from kart.exceptions import NO_REPOSITORY
+from kart import subprocess_util as subprocess
 import pytest
 
 
@@ -111,3 +113,46 @@ def test_data_version(version, output_format, data_archive_readonly, cli_runner)
                 "repostructure.version": version,
                 "localconfig.branding": branding,
             }
+
+
+def test_nonkart_git_repo(cli_runner, tmp_path, chdir):
+    repo_path = tmp_path / "nonkart-git"
+    subprocess.check_call(["git", "init", str(repo_path)])
+    with chdir(repo_path):
+        # Kart should recognize that an empty Git repo is not a Kart repo.
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == NO_REPOSITORY, r.stderr
+        assert r.stderr.splitlines() == [
+            "Error: Current directory is not an existing Kart repository"
+        ]
+
+        # Create an empty commit, just so that there's something in the ODB.
+        subprocess.check_call(
+            ["git", "commit", "--allow-empty", "-m", "empty-commit"],
+            env_overrides={"GIT_INDEX_FILE": None},
+        )
+
+        # Kart should recognize that a non-empty Git repo is also not a Kart repo.
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == NO_REPOSITORY, r.stderr
+
+
+def test_nonkart_kart_repo(cli_runner, tmp_path, chdir):
+    repo_path = tmp_path / "nonkart-kart"
+    r = cli_runner.invoke(["init", repo_path])
+    assert r.exit_code == 0
+    with chdir(repo_path):
+        # At this point we have a valid empty Kart repo - it has a .kart folder and nothing in the ODB.
+        # But if we add an empty commit, then the ODB is now populated with "non-Kart" data -
+        # it contains neither Kart datasets nor the ".kart.repostructure.version" marker.
+        # You can get similar repos with a .kart folder but no Kart data by using Kart to clone a git repo
+        # (see https://github.com/koordinates/kart/issues/918)
+
+        r = cli_runner.invoke(["git", "commit", "--allow-empty", "-m", "empty-commit"])
+        assert r.exit_code == 0
+
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == NO_REPOSITORY
+        assert r.stderr.splitlines() == [
+            "Error: Current directory is not a Kart repository (no Kart datasets found at HEAD commit)"
+        ]
