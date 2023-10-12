@@ -215,7 +215,7 @@ def meta_set(ctx, message, amend, dataset, items):
     )
 
 
-@click.command("commit-files", hidden=True, cls=KartCommand)
+@click.command("commit-files", cls=KartCommand)
 @click.option(
     "--message",
     "-m",
