@@ -3,6 +3,8 @@ import os
 
 import pytest
 
+from kart.repo import KartRepo
+
 
 @pytest.mark.slow
 def test_byod_point_cloud_import(
@@ -10,9 +12,13 @@ def test_byod_point_cloud_import(
     chdir,
     cli_runner,
     s3_test_data_point_cloud,
+    check_lfs_hashes,
 ):
     repo_path = tmp_path / "point-cloud-repo"
-    r = cli_runner.invoke(["init", repo_path])
+    # Initing using --bare prevents the tiles from being fetched immediately.
+    # TODO: we need to make it configurable whether tiles for a dataset (particularly a BYOD dataset)
+    # are fetched or not, ie, support a per-dataset no-checkout flag.
+    r = cli_runner.invoke(["init", repo_path, "--bare"])
     assert r.exit_code == 0
 
     with chdir(repo_path):
@@ -67,6 +73,33 @@ def test_byod_point_cloud_import(
             "size": 51489,
         }
 
+        # Fetching LFS files in a bare-repo doesn't make much sense, but it's not (currently) disallowed.
+        # (These tests will change once we support importing with --no-checkout instead of using bare repos).
+        r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[:8] == [
+            "Running fetch with --dry-run:",
+            "  Found 16 blobs blobs to fetch from specific URLs",
+            "",
+            "LFS blob OID:                                                    (Pointer file OID):",
+            "03e3d4dc6fc8e75c65ffdb39b630ffe26e4b95982b9765c919e34fb940e66fc0 (ecb9c281c7e8cc354600d41e88d733faf2e991e1)",
+            "⮑  s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/auckland_3_2.laz",
+            "06bd15fbb6616cf63a4a410c5ba4666dab76177a58cb99c3fa2afb46c9dd6379 (f9ad3012492840d3c51b9b029a81c1cdbb11eef2)",
+            "⮑  s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/auckland_1_3.laz",
+        ]
+
+        r = cli_runner.invoke(["lfs+", "fetch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Running fetch with --dry-run:",
+            "  Found nothing to fetch",
+        ]
+
+        check_lfs_hashes(KartRepo(repo_path), expected_file_count=16)
+
 
 @pytest.mark.slow
 def test_byod_raster_import(
@@ -74,9 +107,11 @@ def test_byod_raster_import(
     chdir,
     cli_runner,
     s3_test_data_raster,
+    check_lfs_hashes,
 ):
     repo_path = tmp_path / "point-cloud-repo"
-    r = cli_runner.invoke(["init", repo_path])
+    # TODO: support a per-dataset no-checkout flag.
+    r = cli_runner.invoke(["init", repo_path, "--bare"])
     assert r.exit_code == 0
 
     with chdir(repo_path):
@@ -131,3 +166,29 @@ def test_byod_raster_import(
             "pamOid": "sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
             "pamSize": 36908,
         }
+
+        # TODO - improve tests once we support per-dataset no-checkout flags.
+        r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Running fetch with --dry-run:",
+            "  Found 2 blobs blobs to fetch from specific URLs",
+            "",
+            "LFS blob OID:                                                    (Pointer file OID):",
+            "c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa (6864fc3291a79b2ce9e4c89004172aa698b84d7c)",
+            "⮑  s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif",
+            "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca (5f50b7e893da8782d5877177fab2e9a3b20fa9dc)",
+            "⮑  s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif.aux.xml",
+        ]
+
+        r = cli_runner.invoke(["lfs+", "fetch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Running fetch with --dry-run:",
+            "  Found nothing to fetch",
+        ]
+
+        check_lfs_hashes(KartRepo(repo_path), expected_file_count=2)

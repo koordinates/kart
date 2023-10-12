@@ -131,16 +131,21 @@ def extract_raster_tile_metadata(raster_tile_path, oid_and_size=None):
     same dataset to be homogenous enough that the meta items format.json, schema.json and crs.wkt
     describe *all* of the tiles in that dataset. The "tile" field is where we keep all information
     that can be different for every tile in the dataset, which is why it must be stored in pointer files.
+
+    pc_tile_path - a pathlib.Path or a string containing the path to a file or an S3 url.
+    oid_and_size - a tuple (sha256_oid, filesize) if already known, to avoid repeated work.
     """
     from osgeo import gdal
 
-    gdal_path_str = str(raster_tile_path)
-    if gdal_path_str.startswith("s3://"):
-        gdal_path_str = gdal_path_str.replace("s3://", "/vsis3/")
-    metadata = gdal.Info(gdal_path_str, options=["-json", "-norat", "-noct"])
+    raster_tile_path = str(raster_tile_path)
 
-    full_check = not gdal_path_str.startswith("/vsi")
-    warnings, errors, details = validate_cogtiff(gdal_path_str, full_check=full_check)
+    gdal_path_spec = raster_tile_path
+    if gdal_path_spec.startswith("s3://"):
+        gdal_path_spec = gdal_path_spec.replace("s3://", "/vsis3/")
+    metadata = gdal.Info(gdal_path_spec, options=["-json", "-norat", "-noct"])
+
+    full_check = not gdal_path_spec.startswith("/vsi")
+    warnings, errors, details = validate_cogtiff(gdal_path_spec, full_check=full_check)
     is_cog = not errors
 
     format_json = {
@@ -159,18 +164,23 @@ def extract_raster_tile_metadata(raster_tile_path, oid_and_size=None):
     else:
         oid, size = get_hash_and_size_of_file(raster_tile_path)
 
+    name = Path(raster_tile_path).name
+    url = raster_tile_path if raster_tile_path.startswith("s3://") else None
     # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {
-        "name": Path(raster_tile_path).name,
+        "name": name,
         "format": "geotiff/cog" if is_cog else "geotiff",
         "crs84Extent": format_polygon(*metadata["wgs84Extent"]["coordinates"][0]),
         "dimensions": f"{size_in_pixels[0]}x{size_in_pixels[1]}",
         "nativeExtent": format_polygon(
             cc["upperLeft"], cc["lowerLeft"], cc["lowerRight"], cc["upperRight"]
         ),
+        "url": url,
         "oid": f"sha256:{oid}",
         "size": size,
     }
+    if not url:
+        tile_info.pop("url", None)
 
     result = {
         "format.json": format_json,
@@ -235,15 +245,18 @@ def gdalinfo_band_to_kart_columnschema(gdalinfo_band):
 
 
 def _find_and_add_pam_info(raster_tile_path, raster_tile_metadata):
+    raster_tile_path = str(raster_tile_path)
     tile_info = raster_tile_metadata["tile"]
 
-    if str(raster_tile_path).startswith("s3://"):
+    if raster_tile_path.startswith("s3://"):
         try:
-            pam_path = fetch_from_s3(str(raster_tile_path) + PAM_SUFFIX)
+            pam_url = raster_tile_path + PAM_SUFFIX
+            pam_path = fetch_from_s3(pam_url)
             raster_tile_metadata.update(extract_aux_xml_metadata(pam_path))
             pam_oid, pam_size = get_hash_and_size_of_file(pam_path)
             tile_info.update(
                 {
+                    "pamUrl": pam_url,
                     "pamOid": f"sha256:{pam_oid}",
                     "pamSize": pam_size,
                 }

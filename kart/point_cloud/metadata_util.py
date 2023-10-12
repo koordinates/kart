@@ -159,11 +159,16 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
     same dataset to be homogenous enough that the meta items format.json, schema.json and crs.wkt
     describe *all* of the tiles in that dataset. The "tile" field is where we keep all information
     that can be different for every tile in the dataset, which is why it must be stored in pointer files.
+
+    pc_tile_path - a pathlib.Path or a string containing the path to a file or an S3 url.
+    oid_and_size - a tuple (sha256_oid, filesize) if already known, to avoid repeated work.
     """
+    pc_tile_path = str(pc_tile_path)
+
     pipeline = [
         {
             "type": "readers.las",
-            "filename": str(pc_tile_path),
+            "filename": pc_tile_path,
             "count": 0,  # Don't read any individual points.
         },
         {"type": "filters.info"},
@@ -197,9 +202,11 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
     else:
         oid, size = get_hash_and_size_of_file(pc_tile_path)
 
+    name = Path(pc_tile_path).name
+    url = pc_tile_path if pc_tile_path.startswith("s3://") else None
     # Keep tile info keys in alphabetical order, except oid and size should be last.
     tile_info = {
-        "name": Path(pc_tile_path).name,
+        "name": name,
         # Reprojection seems to work best if we give it only the horizontal CRS here:
         "crs84Extent": _calc_crs84_extent(
             native_extent, horizontal_crs or compound_crs
@@ -207,9 +214,12 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
         "format": get_format_summary(format_json),
         "nativeExtent": _format_list_as_str(native_extent),
         "pointCount": info["count"],
+        "url": url,
         "oid": f"sha256:{oid}",
         "size": size,
     }
+    if not url:
+        tile_info.pop("url", None)
 
     result = {
         "format.json": format_json,

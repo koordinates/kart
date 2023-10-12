@@ -1,4 +1,5 @@
 from base64 import standard_b64decode
+import concurrent.futures
 import logging
 import functools
 import os
@@ -11,6 +12,8 @@ import boto3
 import click
 
 from kart.exceptions import NotFound, NO_IMPORT_SOURCE, NO_CHECKSUM
+from kart.lfs_util import get_hash_and_size_of_file
+from kart.progress_util import progress_bar
 
 # Utility functions for dealing with S3 - not yet launched.
 
@@ -116,10 +119,12 @@ def parse_s3_url(s3_url):
     return bucket, key
 
 
-def fetch_from_s3(s3_url, output_path=None):
+def fetch_from_s3(s3_url, output_path=None, sha256_hash=None):
     """
     Downloads the object at s3_url to output_path.
     If output-path is not set, creates a temporary file using tempfile.mkstemp()
+    If sha_256 hash is set, verifies that the downloaded file has the expected hash -
+        if it does not, deletes the downloaded file and raises a ValueError.
     """
     # TODO: handle failure.
     bucket, key = parse_s3_url(s3_url)
@@ -129,7 +134,47 @@ def fetch_from_s3(s3_url, output_path=None):
         os.close(fd)
     output_path = Path(output_path).resolve()
     get_s3_bucket(bucket).download_file(key, str(output_path))
+
+    if sha256_hash:
+        actual_hash, size = get_hash_and_size_of_file(output_path)
+        if actual_hash != sha256_hash:
+            output_path.unlink()
+            raise ValueError(
+                f"Checksum verification failed on file downloaded from {s3_url}"
+            )
+
     return output_path
+
+
+# Fetching from S3 and writing to disk is I/O bound, so, we don't have a theoretical way of deciding how many threads to
+# use (if it was compute bound, then $NUM_CORES threads would be a good place to start).
+# But, in practise, 8 threads seems to be fast.
+_FETCH_MULTIPLE_FROM_S3_WORKER_COUNT = 8
+
+
+def fetch_multiple_from_s3(s3_urls_and_paths, quiet=False):
+    """
+    Given a list of tuples [(s3_url, pathlib_Path, sha256_hash), ...] downloads each URL to the given output path,
+    and verifies that the downloaded file has the appropriate hash, using _FETCH_MULTIPLE_FROM_S3_WORKER_COUNT worker threads.
+    The sha_256 is optional, it can be set to None or ommitted from the tuple entirely.
+
+    Displays a progress bar unless disabled using quiet=True.
+    """
+    disable = True if quiet else None
+    progress = progress_bar(
+        total=len(s3_urls_and_paths),
+        unit="object",
+        desc="Fetching S3 objects",
+        disable=disable,
+    )
+
+    with progress as p, concurrent.futures.ThreadPoolExecutor(
+        max_workers=_FETCH_MULTIPLE_FROM_S3_WORKER_COUNT
+    ) as executor:
+        futures = [executor.submit(fetch_from_s3, *args) for args in s3_urls_and_paths]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()  # Raises any exception that occurred in the worker thread.
+            p.update(1)
 
 
 def expand_s3_glob(source_spec):
