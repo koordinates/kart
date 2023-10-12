@@ -577,6 +577,31 @@ class KartRepo(pygit2.Repository):
 
         return SpatialFilter.from_repo_config(self)
 
+    def configure_do_checkout_datasets(self, dataset_paths, do_checkout):
+        for dataset_path in dataset_paths:
+            key = f"dataset.{dataset_path}.checkout"
+            if do_checkout:
+                # Checking out a dataset is the default, we don't clutter the config with it.
+                self.del_config(key)
+            else:
+                # Specifically mark this dataset as do-not-checkout.
+                self.config[key] = False
+
+    @property
+    def non_checkout_datasets(self):
+        result = set()
+        config = self.config
+        for entry in config:
+            parts = entry.name.split(".")
+            if (
+                len(parts) == 3
+                and parts[0] == "dataset"
+                and parts[2] == "checkout"
+                and not config.get_bool(entry.name)
+            ):
+                result.add(parts[1])
+        return result
+
     def get_config_str(self, key, default=None):
         return self.config[key] if key in self.config else default
 

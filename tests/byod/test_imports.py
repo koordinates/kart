@@ -13,12 +13,10 @@ def test_byod_point_cloud_import(
     cli_runner,
     s3_test_data_point_cloud,
     check_lfs_hashes,
+    check_tile_is_reflinked,
 ):
     repo_path = tmp_path / "point-cloud-repo"
-    # Initing using --bare prevents the tiles from being fetched immediately.
-    # TODO: we need to make it configurable whether tiles for a dataset (particularly a BYOD dataset)
-    # are fetched or not, ie, support a per-dataset no-checkout flag.
-    r = cli_runner.invoke(["init", repo_path, "--bare"])
+    r = cli_runner.invoke(["init", repo_path])
     assert r.exit_code == 0
 
     with chdir(repo_path):
@@ -27,6 +25,7 @@ def test_byod_point_cloud_import(
                 "byod-point-cloud-import",
                 s3_test_data_point_cloud,
                 "--dataset-path=auckland",
+                "--no-checkout",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -86,8 +85,17 @@ def test_byod_point_cloud_import(
             "06bd15fbb6616cf63a4a410c5ba4666dab76177a58cb99c3fa2afb46c9dd6379 (f9ad3012492840d3c51b9b029a81c1cdbb11eef2) → s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/auckland_1_3.laz",
         ]
 
-        r = cli_runner.invoke(["lfs+", "fetch"])
+        r = cli_runner.invoke(["checkout", "--dataset=auckland"])
         assert r.exit_code == 0, r.stderr
+
+        repo = KartRepo(repo_path)
+        check_lfs_hashes(repo, expected_file_count=16)
+        for x in range(4):
+            for y in range(4):
+                assert (repo_path / "auckland" / f"auckland_{x}_{y}.laz").is_file()
+                check_tile_is_reflinked(
+                    repo_path / "auckland" / f"auckland_{x}_{y}.laz", repo
+                )
 
         r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
         assert r.exit_code == 0, r.stderr
@@ -95,8 +103,6 @@ def test_byod_point_cloud_import(
             "Running fetch with --dry-run:",
             "  Found nothing to fetch",
         ]
-
-        check_lfs_hashes(KartRepo(repo_path), expected_file_count=16)
 
 
 @pytest.mark.slow
@@ -106,10 +112,10 @@ def test_byod_raster_import(
     cli_runner,
     s3_test_data_raster,
     check_lfs_hashes,
+    check_tile_is_reflinked,
 ):
     repo_path = tmp_path / "point-cloud-repo"
-    # TODO: support a per-dataset no-checkout flag.
-    r = cli_runner.invoke(["init", repo_path, "--bare"])
+    r = cli_runner.invoke(["init", repo_path])
     assert r.exit_code == 0
 
     with chdir(repo_path):
@@ -118,6 +124,7 @@ def test_byod_raster_import(
                 "byod-raster-import",
                 s3_test_data_raster,
                 "--dataset-path=erorisk_si",
+                "--no-checkout",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -177,8 +184,14 @@ def test_byod_raster_import(
             "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca (5f50b7e893da8782d5877177fab2e9a3b20fa9dc) → s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif.aux.xml",
         ]
 
-        r = cli_runner.invoke(["lfs+", "fetch"])
+        r = cli_runner.invoke(["checkout", "--dataset=erorisk_si"])
         assert r.exit_code == 0, r.stderr
+
+        repo = KartRepo(repo_path)
+        check_lfs_hashes(repo, expected_file_count=2)
+        for file in ("erorisk_silcdb4.tif", "erorisk_silcdb4.tif.aux.xml"):
+            assert (repo_path / "erorisk_si" / file).is_file()
+            check_tile_is_reflinked(repo_path / "erorisk_si" / file, repo)
 
         r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
         assert r.exit_code == 0, r.stderr
@@ -186,5 +199,3 @@ def test_byod_raster_import(
             "Running fetch with --dry-run:",
             "  Found nothing to fetch",
         ]
-
-        check_lfs_hashes(KartRepo(repo_path), expected_file_count=2)

@@ -468,6 +468,9 @@ class Datasets:
         self.filter_dataset_type = filter_dataset_type
         self.force_dataset_class = force_dataset_class
 
+    def __contains__(self, ds_path):
+        return self.get(ds_path) is not None
+
     def __getitem__(self, ds_path):
         """Get a specific dataset by path."""
         result = self.get(ds_path)

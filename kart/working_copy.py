@@ -248,20 +248,24 @@ class WorkingCopy:
         self,
         *,
         create_parts_if_missing=(),
-        quiet=False,
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+        non_checkout_datasets=None,
+        only_update_checkout_datasets=False,
+        quiet=False,
     ):
         """Reset all working copy parts to the head commit. See reset() below."""
 
         self.reset(
             self.repo.head_commit,
             create_parts_if_missing=create_parts_if_missing,
-            quiet=quiet,
             repo_key_filter=repo_key_filter,
             track_changes_as_dirty=track_changes_as_dirty,
             rewrite_full=rewrite_full,
+            non_checkout_datasets=non_checkout_datasets,
+            only_update_checkout_datasets=only_update_checkout_datasets,
+            quiet=quiet,
         )
 
     def reset(
@@ -269,10 +273,12 @@ class WorkingCopy:
         commit_or_tree,
         *,
         create_parts_if_missing=(),
-        quiet=False,
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+        non_checkout_datasets=None,
+        only_update_checkout_datasets=False,
+        quiet=False,
     ):
         """
         Resets the working copy to the given target-commit (or target-tree).
@@ -290,6 +296,13 @@ class WorkingCopy:
         present at commit_or_tree will be written from scratch using write_full.
         Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
         filter is up to date.
+
+        non_checkout_datasets is the set of datasets that the user has configured not to be checked out - loaded
+        from repo.non_checkout_datasets. (Supplied as an argument only to avoid reloading it from the config).
+
+        If only_update_checkout_datasets is True, then only those datasets which have recently moved into or out of
+        repo.non_checkout_datasets will be updated (ie, fully-written or deleted). Each dataset part independently tracks
+        what the set of non_checkout_datasets were at last call to reset(), so each part handles this independently.
         """
 
         created_parts = ()
@@ -313,6 +326,8 @@ class WorkingCopy:
                 repo_key_filter=repo_key_filter,
                 track_changes_as_dirty=track_changes_as_dirty,
                 rewrite_full=rewrite_full,
+                non_checkout_datasets=non_checkout_datasets,
+                only_update_checkout_datasets=only_update_checkout_datasets,
                 quiet=quiet,
             )
 
@@ -320,10 +335,10 @@ class WorkingCopy:
         self,
         commit_or_tree,
         *,
-        quiet=False,
         mark_as_clean=None,
         now_outside_spatial_filter=None,
         committed_diff=None,
+        quiet=False,
     ):
         """
         Like a reset, this marks the working copy as now being based on the given target-tree (or the tree in the given
@@ -362,6 +377,12 @@ class WorkingCopy:
         """Returns True iff the spatial-filter-hash stored in every part matches the given hash."""
         for p in self.parts():
             if p.get_spatial_filter_hash() != spatial_filter_hash:
+                return False
+        return True
+
+    def matches_non_checkout_datasets(self, non_checkout_datasets):
+        for p in self.parts():
+            if p.get_non_checkout_datasets() != non_checkout_datasets:
                 return False
         return True
 
@@ -449,6 +470,18 @@ class WorkingCopyPart:
         """Returns the spatial filter hash from the state table."""
         return self.get_kart_state_value("*", "spatial-filter-hash")
 
+    def get_non_checkout_datasets(self):
+        kart_state = self.kart_tables.kart_state
+        with self.state_session() as sess:
+            r = sess.execute(
+                sa.select([kart_state.c.table_name]).where(
+                    sa.and_(
+                        kart_state.c.key == "checkout", kart_state.c.value == "false"
+                    )
+                )
+            )
+            return set(row[0] for row in r)
+
     def get_kart_state_value(self, table_name, key):
         """Looks up a value from the kart-state table."""
         kart_state = self.kart_tables.kart_state
@@ -504,6 +537,30 @@ class WorkingCopyPart:
             )
         return r.rowcount
 
+    def _update_state_table_non_checkout_datasets(self, sess, non_checkout_datasets):
+        kart_state = self.kart_tables.kart_state
+        sess.execute(sa.delete(kart_state).where(kart_state.c.key == "checkout"))
+        if non_checkout_datasets:
+            sess.execute(
+                kart_state.insert(),
+                [
+                    {"table_name": ds_path, "key": "checkout", "value": "false"}
+                    for ds_path in sorted(non_checkout_datasets)
+                ],
+            )
+
+    def _is_noncheckout_dataset(self, sess, dataset):
+        dataset = dataset.path if hasattr(dataset, "path") else str(dataset)
+        kart_state = self.kart_tables.kart_state
+        value = sess.scalar(
+            sa.select([kart_state.c.value]).where(
+                sa.and_(
+                    kart_state.c.table_name == dataset, kart_state.c.key == "checkout"
+                )
+            )
+        )
+        return value == "false"
+
     def reset(
         self,
         commit_or_tree,
@@ -511,6 +568,8 @@ class WorkingCopyPart:
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+        non_checkout_datasets=None,
+        only_update_checkout_datasets=False,
         quiet=False,
     ):
         """
@@ -575,6 +634,14 @@ class WorkingCopyPart:
         ds_deletes = base_datasets.keys() - target_datasets.keys()
         ds_updates = base_datasets.keys() & target_datasets.keys()
 
+        self._handle_non_checkout_dataset_changes(
+            ds_inserts=ds_inserts,
+            ds_deletes=ds_deletes,
+            ds_updates=ds_updates,
+            non_checkout_datasets=non_checkout_datasets,
+            only_update_checkout_datasets=only_update_checkout_datasets,
+        )
+
         if rewrite_full:
             # No updates are "supported" since we are rewriting everything.
             ds_updates_unsupported = set(ds_updates)
@@ -607,11 +674,11 @@ class WorkingCopyPart:
         with session_context():
             if ds_inserts or ds_updates or ds_deletes:
                 self._do_reset_datasets(
-                    base_datasets,
-                    target_datasets,
-                    ds_inserts,
-                    ds_updates,
-                    ds_deletes,
+                    base_datasets=base_datasets,
+                    target_datasets=target_datasets,
+                    ds_inserts=ds_inserts,
+                    ds_deletes=ds_deletes,
+                    ds_updates=ds_updates,
                     base_tree=base_tree,
                     target_tree=target_tree,
                     target_commit=target_commit,
@@ -626,15 +693,18 @@ class WorkingCopyPart:
                 self._update_state_table_spatial_filter_hash(
                     sess, self.repo.spatial_filter.hexhash
                 )
+                self._update_state_table_non_checkout_datasets(
+                    sess, non_checkout_datasets
+                )
 
     def _do_reset_datasets(
         self,
+        *,
         base_datasets,
         target_datasets,
         ds_inserts,
         ds_updates,
         ds_deletes,
-        *,
         base_tree=None,
         target_tree=None,
         target_commit=None,
@@ -716,6 +786,52 @@ class WorkingCopyPart:
                 "Sorry, this type of filter is not yet supported when there are structural changes."
                 f" Unfilterable structural changes are affecting:\n{unsupported_filters}"
             )
+
+    def _handle_non_checkout_dataset_changes(
+        self,
+        *,
+        ds_inserts,
+        ds_deletes,
+        ds_updates,
+        non_checkout_datasets,
+        only_update_checkout_datasets,
+    ):
+        """
+        Modify the planned list of datasets to create, delete, and update in the event that certain datasets
+        have recently been moved into or out of the set of non_checkout_datasets.
+        """
+
+        # Current set of non_checkout_datasets as requested by caller.
+        new_set = non_checkout_datasets or set()
+        # The value of repo.non_checkout_datasets as stored at last reset() is stored in the state table:
+        old_set = self.get_non_checkout_datasets()
+
+        # This might looks a bit backwards - these are sets of things *not* to check out:
+        # we need to insert a dataset if it was in the old-set but not on the new-set.
+        ds_inserts_due_to_config_changes = old_set - new_set
+        ds_deletes_due_to_config_changes = new_set - old_set
+
+        # We don't add anything any of (ds_inserts, ds_deletes, ds_updates) if it is not already present in
+        # at least one of those lists, since this indicates it is not currently relevant to this working copy part
+        # (ie, the wrong type of dataset, or non-existent at the current / previous commit).
+
+        # Insert (rather than update) a dataset if it is newly removed from the no-checkout list.
+        ds_inserts |= ds_inserts_due_to_config_changes & ds_updates
+        ds_inserts -= ds_deletes_due_to_config_changes
+
+        # Delete (rather than update) a dataset if it is newly added to the no-checkout list.
+        ds_deletes |= ds_deletes_due_to_config_changes & ds_updates
+        ds_deletes -= ds_inserts_due_to_config_changes
+
+        # We can only update a dataset if it was already checked out and still will be checked out.
+        # That means if it is or was on the list of non_checkout_datasets, it shouldn't be on our update list.
+        ds_updates -= old_set
+        ds_updates -= new_set
+
+        if only_update_checkout_datasets:
+            ds_inserts &= ds_inserts_due_to_config_changes
+            ds_deletes &= ds_deletes_due_to_config_changes
+            ds_updates.clear()
 
 
 def handle_working_copy_tree_mismatch(wc_type_name, actual_tree_id, expected_tree_id):
