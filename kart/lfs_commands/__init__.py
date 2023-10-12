@@ -366,13 +366,14 @@ def _do_fetch_from_urls(repo, urls_and_lfs_oids, quiet=False):
             f"Invalid URL - only S3 URLs are currently supported for BYOD repos: {non_s3_url}"
         )
 
-    urls_and_paths = [
-        (url, get_local_path_from_lfs_hash(repo, lfs_oid))
+    urls_and_paths_and_oids = [
+        (url, get_local_path_from_lfs_hash(repo, lfs_oid), lfs_oid)
         for (url, lfs_oid) in urls_and_lfs_oids
     ]
-    for url, path in urls_and_paths:
-        path.parent.mkdir(parents=True, exist_ok=True)
-    fetch_multiple_from_s3(urls_and_paths, quiet=quiet)
+    path_parents = {path.parent for url, path, lfs_oid in urls_and_paths_and_oids}
+    for path_parent in path_parents:
+        path_parent.mkdir(parents=True, exist_ok=True)
+    fetch_multiple_from_s3(urls_and_paths_and_oids, quiet=quiet)
 
 
 def _do_fetch_from_remote(repo, pointer_file_and_lfs_oids, remote_name, quiet=False):
