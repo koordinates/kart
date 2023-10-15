@@ -296,7 +296,14 @@ def gc(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def git(ctx, args):
     """
-    Run an arbitrary Git command, using kart's packaged Git
+    Kart-internal. Run an arbitrary Git command, using Kart's packaged Git.
+
+    Since Git does not understand all parts of a Kart repository (summarised, the object database is Git-compatible but
+    the working copy is not) this may not work as intended. The following guidelines apply:
+    - if the Git command is read-only (eg `git log`) and will not modify the repository, it can safely be attempted, but
+      may not have the expected output.
+    - if the Git command could modify the Kart repository, it is not safe to run as it could leave the repository
+      in an invalid state from which Kart may or may not be able to recover.
     """
     repo_params = []
     if ctx.obj.user_repo_path:
