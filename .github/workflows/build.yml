@@ -719,7 +719,13 @@ jobs:
   macOS:
     strategy:
       matrix:
-        os: [{id: macos-12, label: "12/x86_64"}]
+        os:
+          - id: macos-12
+            label: "12/x86_64"
+            arch_triplet: x64-osx
+          - id: macos-13-xlarge
+            label: "13/arm64"
+            arch_triplet: arm64-osx
     runs-on: ${{ matrix.os.id }}
     name: macOS ${{ matrix.os.label }}
 
@@ -735,6 +741,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
+      ARCH_TRIPLET: ${{ matrix.os.arch_triplet }}
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
       MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
@@ -769,6 +776,11 @@ jobs:
           python -V --version
           echo /Library/Frameworks/Python.framework/Versions/${PY_VER}/bin >> $GITHUB_PATH
 
+      - name: "setup: golang"
+        uses: actions/setup-go@v4
+        with:
+          go-version: '^1.21.1'
+
       - name: "setup: homebrew cache"
         id: cache-brew
         uses: actions/cache@v3
@@ -790,17 +802,16 @@ jobs:
 
       - name: "setup: misc"
         run: |
-          brew install -q autoconf automake ccache pandoc pkg-config
+          brew install -q autoconf automake ccache pandoc pkg-config libtool
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
+        uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          doNotCache: false  # do-cache
 
       #
       # App Build
@@ -844,11 +855,6 @@ jobs:
         uses: lukka/run-cmake@v10
         with:
           configurePreset: ci-macos
-
-      - name: "check for vcpkg errors"
-        if: failure() || cancelled()
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
         uses: lukka/run-cmake@v10
@@ -959,7 +965,7 @@ jobs:
           sudo installer -pkg build/dist/Kart-*.pkg -dumplog -target /
           readlink $(which kart)
           # make sure good sqlite is in path
-          export PATH="$(pwd)/build/vcpkg_installed/x64-osx/tools:$PATH"
+          export PATH="$(pwd)/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/tools:$PATH"
           tests/scripts/e2e-1.sh
 
       - name: "release"
