@@ -3,7 +3,6 @@ import logging
 import json
 from pathlib import Path
 import re
-from subprocess import CalledProcessError
 
 from osgeo import osr
 
@@ -15,13 +14,13 @@ from kart.exceptions import (
 from kart.list_of_conflicts import ListOfConflicts
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.geometry import ring_as_wkt
-from kart.point_cloud import pdal_execute_pipeline
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf,
     get_record_length_from_pdrf,
     equivalent_copc_pdrf,
     pdal_schema_to_kart_schema,
 )
+from kart import subprocess_util as subprocess
 
 
 L = logging.getLogger(__name__)
@@ -165,38 +164,40 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
     """
     pc_tile_path = str(pc_tile_path)
 
-    pipeline = [
-        {
-            "type": "readers.las",
-            "filename": pc_tile_path,
-            "count": 0,  # Don't read any individual points.
-        },
-        {"type": "filters.info"},
-    ]
-
     try:
-        metadata = pdal_execute_pipeline(pipeline)
-    except CalledProcessError:
+        output = subprocess.check_output(
+            [
+                "pdal",
+                "info",
+                pc_tile_path,
+                "--metadata",
+                "--schema",
+                "--driver=readers.las",
+            ],
+            encoding="utf-8",
+        )
+        output = json.loads(output)
+    except subprocess.CalledProcessError:
         raise InvalidOperation(
             f"Error reading {pc_tile_path}", exit_code=INVALID_FILE_FORMAT
         )
 
-    info = metadata["readers.las"]
+    metadata = output["metadata"]
 
-    native_extent = get_native_extent(info)
-    compound_crs = info["srs"].get("compoundwkt")
-    horizontal_crs = info["srs"].get("wkt")
-    is_copc = info.get("copc") or False
+    native_extent = get_native_extent(metadata)
+    compound_crs = metadata["srs"].get("compoundwkt")
+    horizontal_crs = metadata["srs"].get("wkt")
+    is_copc = metadata.get("copc") or False
     format_json = {
-        "compression": "laz" if info["compressed"] else "las",
-        "lasVersion": f"{info['major_version']}.{info['minor_version']}",
+        "compression": "laz" if metadata["compressed"] else "las",
+        "lasVersion": f"{metadata['major_version']}.{metadata['minor_version']}",
         "optimization": "copc" if is_copc else None,
-        "optimizationVersion": get_copc_version(info) if is_copc else None,
-        "pointDataRecordFormat": info["dataformat_id"],
-        "pointDataRecordLength": info["point_length"],
+        "optimizationVersion": get_copc_version(metadata) if is_copc else None,
+        "pointDataRecordFormat": metadata["dataformat_id"],
+        "pointDataRecordLength": metadata["point_length"],
     }
 
-    schema_json = pdal_schema_to_kart_schema(metadata["filters.info"]["schema"])
+    schema_json = pdal_schema_to_kart_schema(output["schema"])
     if oid_and_size:
         oid, size = oid_and_size
     else:
@@ -213,7 +214,7 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
         ),
         "format": get_format_summary(format_json),
         "nativeExtent": _format_list_as_str(native_extent),
-        "pointCount": info["count"],
+        "pointCount": metadata["count"],
         "url": url,
         "oid": f"sha256:{oid}",
         "size": size,
