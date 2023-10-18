@@ -185,3 +185,11 @@ In QGIS, press ``f5`` or click the 'refresh' button. The layer will be
 updated to it's previous state before the features were deleted.
 
 .. image:: /_static/basic-tutorial-4.png
+
+Hosting Repositories Remotely
+-----------------------------
+
+Because Kart is a direct extension of Git, hosting a remote repository
+to enable synchronization between multiple local repository copies is as
+simple as just pushing to any host compatible with the git CLI. This 
+includes github.
