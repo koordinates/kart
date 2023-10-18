@@ -189,7 +189,11 @@ updated to it's previous state before the features were deleted.
 Hosting Repositories Remotely
 -----------------------------
 
-Because Kart is a direct extension of Git, hosting a remote repository
-to enable synchronization between multiple local repository copies is as
-simple as just pushing to any host compatible with the git CLI. This 
-includes github.
+Because Kart uses Git for data transfer and storage, you can host a
+Kart repository anywhere you can host a Git repository - for example,
+GitHub, Bitbucket, or by setting up `your own Git server <git_on_the_server_>`_.
+These will all work equally well for Kart or Git, unless you want to
+perform a :doc:`spatially-filtered clone </pages/spatial_filtering>`
+- in this case, you will need to set up your own Git server using
+the Git executable bundled with Kart, since any standard Git build
+doesn't support spatial filtering.

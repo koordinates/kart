@@ -61,6 +61,7 @@
 .. _custom_git_for_win: https://github.com/koordinates/git/releases/tag/kart-0.11.0-windows
 .. _libgit2: https://github.com/koordinates/libgit2/tree/kx-latest
 .. _pygit2: https://github.com/koordinates/pygit2/tree/kx-latest
+.. _git_on_the_server: https://git-scm.com/book/en/v2/Git-on-the-Server-Setting-Up-the-Server
 
 .. _las: https://en.wikipedia.org/wiki/LAS_file_format
 .. _cog: https://www.cogeo.org/
