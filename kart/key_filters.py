@@ -198,6 +198,11 @@ class RepoKeyFilter(KeyFilterDict):
         return result
 
     @classmethod
+    def exclude_datasets(cls, dataset_paths):
+        """Returns a RepoKeyFilter that matches everything that is *not* in any of the given datasets."""
+        return NegateKeyFilter(cls.datasets(dataset_paths))
+
+    @classmethod
     def build_from_user_patterns(cls, user_patterns):
         """
         Given a list of strings like ["datasetA:1", "datasetA:2", "datasetB"],
@@ -277,6 +282,28 @@ class RepoKeyFilter(KeyFilterDict):
                 key = key.replace(char, f"[{char}]")
             self._dataset_glob_filters[key] = value
         super().__setitem__(key, value)
+
+
+class NegateKeyFilter:
+    """
+    A key filter that contains whatever the given delegate does not contain, and vice versa.
+    Not all operations are implemented (currently, just enough that RepoKeyFilter.exclude_datasets works).
+    """
+
+    def __init__(self, delegate):
+        self.delegate = delegate
+
+    def __contains__(self, key):
+        return not self.delegate.__contains__(key)
+
+    def get(self, key, default_value=None):
+        raise NotImplementedError()
+
+    def __getitem__(self, key):
+        raise NotImplementedError()
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError()
 
 
 RepoKeyFilter.MATCH_ALL = RepoKeyFilter(match_all=True)
