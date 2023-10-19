@@ -326,14 +326,14 @@ def fetch_lfs_blobs_for_pointer_files(
 
         if dry_run:
             if url:
-                dry_run_output.append(f"{lfs_oid} ({pointer_blob.hex})\n⮑  {url}")
+                dry_run_output.append(f"{lfs_oid} ({pointer_blob.hex}) → {url}")
             else:
                 dry_run_output.append(f"{lfs_oid} ({pointer_blob.hex})")
 
     if dry_run:
         click.echo("Running fetch with --dry-run:")
         if urls:
-            click.echo(f"  Found {_blobs(len(urls))} blobs to fetch from specific URLs")
+            click.echo(f"  Found {_blobs(len(urls))} to fetch from specific URLs")
         if non_urls:
             found_non_urls = f"  Found {_blobs(len(non_urls))} to fetch from the remote"
             found_non_urls += "" if remote_name else " - but no remote is configured"
