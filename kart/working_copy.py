@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from enum import Enum, auto
 
@@ -5,6 +6,7 @@ import click
 import pygit2
 import sqlalchemy as sa
 
+from kart.core import peel_to_commit_and_tree
 from kart.exceptions import (
     InvalidOperation,
     NotFound,
@@ -382,6 +384,16 @@ class WorkingCopy:
 class WorkingCopyPart:
     """Abstract base class for a particular part of a working copy - eg the tabular part, or the file-based part."""
 
+    @property
+    def WORKING_COPY_TYPE_NAME(self):
+        """Human readable name of this type of working copy, eg "PostGIS"."""
+        raise NotImplementedError()
+
+    @property
+    def SUPPORTED_DATASET_TYPE(self):
+        """The dataset type or types that this working copy supports."""
+        raise NotImplementedError()
+
     def check_not_dirty(self, help_message=None):
         """Raises an InvalidOperation if this working-copy part is dirty."""
         if not self.is_dirty():
@@ -501,7 +513,165 @@ class WorkingCopyPart:
         rewrite_full=False,
         quiet=False,
     ):
+        """
+        Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
+
+        Any existing changes which match the repo_key_filter will be discarded. Existing changes which do not
+        match the repo_key_filter will be kept.
+
+        If track_changes_as_dirty=False (the default) the tree ID in the kart_state table gets set to the
+        new tree ID and the tracking table is left empty. If it is True, the old tree ID is kept and the
+        tracking table is used to record all the changes, so that they can be committed later.
+
+        If rewrite_full is True, then every dataset currently being tracked will be dropped, and all datasets
+        present at commit_or_tree will be written from scratch using write_full.
+        Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
+        filter is up to date.
+        """
+
+        if rewrite_full:
+            # These aren't supported when we're doing a full rewrite.
+            assert repo_key_filter.match_all and not track_changes_as_dirty
+
+        L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
+        if commit_or_tree is not None:
+            target_commit, target_tree = peel_to_commit_and_tree(commit_or_tree)
+            target_tree_id = target_tree.id.hex
+        else:
+            target_commit = None
+            target_tree = None
+            target_tree_id = None
+
+        # base_tree is the tree the working copy is based on.
+        # If the working copy exactly matches base_tree, then it is clean.
+
+        base_tree_id = self.get_tree_id()
+        base_tree = self.repo[base_tree_id] if base_tree_id else None
+        repo_head_tree_id = self.repo.head_tree.hex if self.repo.head_tree else None
+
+        L.debug(
+            "reset(): WorkingCopy base_tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree: %s",
+            base_tree_id,
+            repo_head_tree_id,
+            target_tree_id,
+        )
+        L.debug("reset(): track_changes_as_dirty=%s", track_changes_as_dirty)
+
+        base_datasets = self.repo.datasets(
+            base_tree,
+            repo_key_filter=repo_key_filter,
+            filter_dataset_type=self.SUPPORTED_DATASET_TYPE,
+        ).datasets_by_path()
+        if base_tree == target_tree:
+            target_datasets = base_datasets
+        else:
+            target_datasets = self.repo.datasets(
+                target_tree,
+                repo_key_filter=repo_key_filter,
+                filter_dataset_type=self.SUPPORTED_DATASET_TYPE,
+            ).datasets_by_path()
+
+        ds_inserts = target_datasets.keys() - base_datasets.keys()
+        ds_deletes = base_datasets.keys() - target_datasets.keys()
+        ds_updates = base_datasets.keys() & target_datasets.keys()
+
+        if rewrite_full:
+            # No updates are "supported" since we are rewriting everything.
+            ds_updates_unsupported = set(ds_updates)
+        else:
+            ds_updates_unsupported = self._find_unsupported_updates(
+                ds_updates, base_datasets, target_datasets
+            )
+
+        for ds_path in ds_updates_unsupported:
+            ds_updates.remove(ds_path)
+            ds_inserts.add(ds_path)
+            ds_deletes.add(ds_path)
+
+        structural_changes = ds_inserts | ds_deletes
+        is_new_target_tree = base_tree != target_tree
+        self._check_for_unsupported_structural_changes(
+            structural_changes,
+            is_new_target_tree,
+            track_changes_as_dirty,
+            repo_key_filter,
+        )
+
+        # Start a DB session that surrounds both the working copy modifications and the state table modifications -
+        # if the same DB session can be used for both, otherwise, let _do_reset_datasets handle it.
+        session_context = (
+            self.session
+            if hasattr(self, "session") and self.session == self.state_session
+            else contextlib.nullcontext
+        )
+        with session_context():
+            if ds_inserts or ds_updates or ds_deletes:
+                self._do_reset_datasets(
+                    base_datasets,
+                    target_datasets,
+                    ds_inserts,
+                    ds_updates,
+                    ds_deletes,
+                    base_tree=base_tree,
+                    target_tree=target_tree,
+                    target_commit=target_commit,
+                    repo_key_filter=repo_key_filter,
+                    track_changes_as_dirty=track_changes_as_dirty,
+                    quiet=quiet,
+                )
+
+            with self.state_session() as sess:
+                if not track_changes_as_dirty:
+                    self._update_state_table_tree(sess, target_tree_id)
+                self._update_state_table_spatial_filter_hash(
+                    sess, self.repo.spatial_filter.hexhash
+                )
+
+    def _do_reset_datasets(
+        self,
+        base_datasets,
+        target_datasets,
+        ds_inserts,
+        ds_updates,
+        ds_deletes,
+        *,
+        base_tree=None,
+        target_tree=None,
+        target_commit=None,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        track_changes_as_dirty=False,
+        quiet=False,
+    ):
+        """
+        Actually does the work required by reset(), once we've decided which datasets need which kind of updates.
+
+        base_datasets - the state that this working copy is currently based on - a dict {dataset_path: dataset}
+        target_datasets - the target state for the working copies to be modified - a dict {dataset_path: dataset}
+        ds_inserts - the set of datasets that need to be written from scratch
+        ds_updates - the set of datasets that are to be left in place (but maybe modified to match target_datasets state)
+        ds_deletes - the set of datasets that need to be completely removed.
+        base_tree - the tree that this workingcopy is currently based on
+        target_tree - the target state of this working copy
+        target_commit - the working copy may use target-commit metadata to update timestamps, if available.
+        repo_key_filter - used to only update certain parts of certain datasets.
+        track_changes_as_dirty - changes applied will be recorded as dirty in the tracking table or index.
+        quiet - whether to show progress output.
+
+        ds_inserts and ds_deletes may share some datasets in common, in which case these are to be first removed and
+        then recreated. This is slower than updating, but always works, whereas updating the dataset in place may
+        not support certain types of updates; see eg the limited capabilities of Sqlite ALTER TABLE:
+        https://www.sqlite.org/lang_altertable.html
+        """
         raise NotImplementedError()
+
+    def _find_unsupported_updates(self, ds_updates, base_datasets, target_datasets):
+        """
+        Given a set of datasets we intend to reset from their current state to the target_datasets state using an
+        update operation, return the set of datasets for which this is not possible and they will instead need
+        to be rewritten from scratch (eg, certain schema changes may be unsupported except as full rewrites).
+        """
+        # Subclasses to override where needed.
+        return set()
 
     def soft_reset_after_commit(
         self,

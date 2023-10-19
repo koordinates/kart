@@ -7,7 +7,6 @@ import click
 import pygit2
 
 import sqlalchemy as sa
-from kart.core import peel_to_commit_and_tree
 from kart.diff_structs import WORKING_COPY_EDIT, DatasetDiff, Delta, DeltaDiff, RepoDiff
 from kart.exceptions import (
     NO_WORKING_COPY,
@@ -50,6 +49,10 @@ class TableWorkingCopy(WorkingCopyPart):
         meta_items.CRS_DEFINITIONS
         # Not description, not metadata.xml, except where overridden by a subclass.
     )
+
+    @property
+    def SUPPORTED_DATASET_TYPE(self):
+        return "table"
 
     @property
     def WORKING_COPY_TYPE_NAME(self):
@@ -441,7 +444,7 @@ class TableWorkingCopy(WorkingCopyPart):
             for dataset in self.repo.datasets(
                 self.get_tree_id(),
                 repo_key_filter=repo_filter,
-                filter_dataset_type="table",
+                filter_dataset_type=self.SUPPORTED_DATASET_TYPE,
             ):
                 if not self._is_dataset_supported(dataset):
                     continue
@@ -947,7 +950,7 @@ class TableWorkingCopy(WorkingCopyPart):
         else:
             return contextlib.nullcontext()
 
-    def write_full(self, commit_or_tree, *datasets):
+    def write_full(self, target_commit, *datasets):
         """
         Writes a full layer into a working-copy table.
         Only writes features that match the repo's spatial filter.
@@ -955,7 +958,6 @@ class TableWorkingCopy(WorkingCopyPart):
         Use for new working-copy checkouts.
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
-        target_commit, target_tree = peel_to_commit_and_tree(commit_or_tree)
 
         self.repo.odb.refresh()
         with pause_refreshing(self.repo.odb), self.session() as sess:
@@ -1013,11 +1015,6 @@ class TableWorkingCopy(WorkingCopyPart):
                     t1 - t0,
                     dataset.path,
                 )
-
-            self._update_state_table_tree(sess, target_tree.hex)
-            self._update_state_table_spatial_filter_hash(
-                sess, self.repo.spatial_filter.hexhash
-            )
 
     def _write_meta(self, sess, dataset):
         """
@@ -1102,7 +1099,9 @@ class TableWorkingCopy(WorkingCopyPart):
             return
 
         base_tree_id = self.get_tree_id()
-        base_datasets = self.repo.datasets(base_tree_id, filter_dataset_type="table")
+        base_datasets = self.repo.datasets(
+            base_tree_id, filter_dataset_type=self.SUPPORTED_DATASET_TYPE
+        )
 
         if repo_key_filter.match_all:
             for base_ds in base_datasets:
@@ -1180,132 +1179,32 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         raise NotImplementedError()
 
-    def reset(
+    def _do_reset_datasets(
         self,
-        commit_or_tree,
+        base_datasets,
+        target_datasets,
+        ds_inserts,
+        ds_updates,
+        ds_deletes,
         *,
+        base_tree=None,
+        target_tree=None,
+        target_commit=None,
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
-        rewrite_full=False,
         quiet=False,
     ):
-        """
-        Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
-
-        Any existing changes which match the repo_key_filter will be discarded. Existing changes which do not
-        match the repo_key_filter will be kept.
-
-        If track_changes_as_dirty=False (the default) the tree ID in the kart_state table gets set to the
-        new tree ID and the tracking table is left empty. If it is True, the old tree ID is kept and the
-        tracking table is used to record all the changes, so that they can be committed later.
-
-        If rewrite_full is True, then every dataset currently being tracked will be dropped, and all datasets
-        present at commit_or_tree will be written from scratch using write_full.
-        Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
-        filter is up to date.
-        """
-        if rewrite_full:
-            # These aren't supported when we're doing a full rewrite.
-            assert repo_key_filter.match_all and not track_changes_as_dirty
-
-        L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
-        if commit_or_tree is None:
-            target_commit = target_tree = None
-        else:
-            target_commit, target_tree = peel_to_commit_and_tree(commit_or_tree)
-
-        target_tree_id = target_tree.hex if target_tree is not None else None
-
-        # base_tree is the tree the working copy is based on.
-        # If the working copy exactly matches base_tree, it is clean and has an empty tracking table.
-        base_tree_id = self.get_tree_id()
-        base_tree = self.repo[base_tree_id] if base_tree_id else None
-        repo_tree_id = self.repo.head_tree.hex if self.repo.head_tree else None
-
-        L.debug(
-            "reset(): WorkingCopy base_tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree: %s",
-            base_tree_id,
-            repo_tree_id,
-            target_tree_id,
-        )
-        L.debug("reset(): track_changes_as_dirty=%s", track_changes_as_dirty)
-
-        base_datasets = self.repo.datasets(
-            base_tree,
-            repo_key_filter=repo_key_filter,
-            filter_dataset_type="table",
-        ).datasets_by_path()
-        if base_tree == target_tree:
-            target_datasets = base_datasets
-        else:
-            target_datasets = self.repo.datasets(
-                target_tree,
-                repo_key_filter=repo_key_filter,
-                filter_dataset_type="table",
-            ).datasets_by_path()
-
-        ds_inserts = target_datasets.keys() - base_datasets.keys()
-        ds_deletes = base_datasets.keys() - target_datasets.keys()
-        ds_updates = base_datasets.keys() & target_datasets.keys()
-        ds_updates_unsupported = set()
-
-        if rewrite_full:
-            # No updates are "supported" since we are rewriting everything.
-            ds_updates_unsupported.update(ds_updates)
-        else:
-            for ds_path in ds_updates:
-                base_ds = base_datasets[ds_path]
-
-                # Do we support changing the WC metadata to back to base_ds metadata?
-                rev_wc_meta_diff = self.diff_dataset_to_working_copy_meta(base_ds)
-                update_supported = self._is_meta_update_supported(rev_wc_meta_diff)
-
-                # And, do we support then changing it from base_ds metadata to target_ds metadata?
-                target_ds = target_datasets[ds_path]
-                if target_ds != base_ds:
-                    rev_rev_meta_diff = DeltaDiff(base_ds.diff_meta(target_ds))
-                    update_supported = (
-                        update_supported
-                        and self._is_meta_update_supported(rev_rev_meta_diff)
-                    )
-
-                if not update_supported:
-                    ds_updates_unsupported.add(ds_path)
-
-        for ds_path in ds_updates_unsupported:
-            ds_updates.remove(ds_path)
-            ds_inserts.add(ds_path)
-            ds_deletes.add(ds_path)
-
-        L.debug(
-            "reset(): ds_inserts: %s, ds_deletes: %s, ds_updates %s",
-            ds_inserts,
-            ds_deletes,
-            ds_updates,
-        )
-
-        structural_changes = ds_inserts | ds_deletes
-        is_new_target_tree = base_tree != target_tree
-        self._check_for_unsupported_structural_changes(
-            structural_changes,
-            is_new_target_tree,
-            track_changes_as_dirty,
-            repo_key_filter,
-        )
-
         with self.session() as sess:
             # Check if the dataset is spatial, and if so, if the WC has any necessary spatial extension installed.
             self._check_for_unsupported_ds_types(sess, target_datasets)
 
             # Delete old tables
             if ds_deletes:
-                self.drop_tables(
-                    commit_or_tree, *[base_datasets[d] for d in ds_deletes]
-                )
+                self.drop_tables(target_commit, *[base_datasets[d] for d in ds_deletes])
             # Write new tables
             if ds_inserts:
                 self.write_full(
-                    commit_or_tree, *[target_datasets[d] for d in ds_inserts]
+                    target_commit, *[target_datasets[d] for d in ds_inserts]
                 )
 
             # Update tables that can be updated in place.
@@ -1320,9 +1219,6 @@ class TableWorkingCopy(WorkingCopyPart):
                     ds_filter=repo_key_filter[ds_path],
                     track_changes_as_dirty=track_changes_as_dirty,
                 )
-
-            if not track_changes_as_dirty:
-                self._update_state_table_tree(sess, target_tree_id)
 
     def _update_table(
         self,
@@ -1399,6 +1295,33 @@ class TableWorkingCopy(WorkingCopyPart):
         with self._track_changes_as_dirty(sess, target_ds, track_changes_as_dirty):
             self._delete_features_from_dataset(sess, target_ds, pks)
             self._write_features_from_dataset(sess, target_ds, pks, ignore_missing=True)
+
+    def _find_unsupported_updates(self, ds_updates, base_datasets, target_datasets):
+        """
+        Given a set of datasets we intend to reset from their current state to the target_datasets state using an
+        update operation, return the set of datasets for which this is not possible and they will instead need
+        to be rewritten from scratch (eg, many types of schema changes are unsupported except as full rewrites).
+        """
+        ds_updates_unsupported = set()
+        for ds_path in ds_updates:
+            base_ds = base_datasets[ds_path]
+
+            # Do we support changing the WC metadata to back to base_ds metadata?
+            rev_wc_meta_diff = self.diff_dataset_to_working_copy_meta(base_ds)
+            update_supported = self._is_meta_update_supported(rev_wc_meta_diff)
+
+            # And, do we support then changing it from base_ds metadata to target_ds metadata?
+            target_ds = target_datasets[ds_path]
+            if target_ds != base_ds:
+                rev_rev_meta_diff = DeltaDiff(base_ds.diff_meta(target_ds))
+                update_supported = update_supported and self._is_meta_update_supported(
+                    rev_rev_meta_diff
+                )
+
+            if not update_supported:
+                ds_updates_unsupported.add(ds_path)
+
+        return ds_updates_unsupported
 
     def _is_meta_update_supported(self, meta_diff):
         """

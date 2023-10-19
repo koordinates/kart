@@ -109,6 +109,13 @@ class KeyFilterDict(RichDict):
         if not self.match_all:
             super().__setitem__(key, value)
 
+    def __str__(self):
+        return (
+            f"{self.__class__.__name__}(match_all=True)"
+            if self.match_all
+            else super().__str__()
+        )
+
 
 class DatasetKeyFilter(KeyFilterDict):
     """

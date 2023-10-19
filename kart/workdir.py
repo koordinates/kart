@@ -86,6 +86,10 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         """Human readable name of this part of the working copy, eg "PostGIS"."""
         return "file-system"
 
+    @property
+    def SUPPORTED_DATASET_TYPE(self):
+        return ALL_TILE_DATASET_TYPES
+
     def __str__(self):
         return "file-system working copy"
 
@@ -190,7 +194,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def delete(self):
         """Deletes the index file and state table, and attempts to clean up any datasets in the workdir itself."""
         datasets = self.repo.datasets(
-            self.get_tree_id(), filter_dataset_type=ALL_TILE_DATASET_TYPES
+            self.get_tree_id(), filter_dataset_type=self.SUPPORTED_DATASET_TYPE
         )
         self.delete_datasets_from_workdir(
             datasets, workdir_index=None, track_changes_as_dirty=True
@@ -269,7 +273,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             return False
 
         datasets = self.repo.datasets(
-            self.get_tree_id(), filter_dataset_type=ALL_TILE_DATASET_TYPES
+            self.get_tree_id(), filter_dataset_type=self.SUPPORTED_DATASET_TYPE
         )
         workdir_diff_cache = self.workdir_diff_cache()
         for dataset in datasets:
@@ -284,91 +288,21 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def _is_head(self, commit_or_tree):
         return commit_or_tree.peel(pygit2.Tree) == self.repo.head_tree
 
-    def reset(
+    def _do_reset_datasets(
         self,
-        commit_or_tree,
+        base_datasets,
+        target_datasets,
+        ds_inserts,
+        ds_updates,
+        ds_deletes,
         *,
+        base_tree=None,
+        target_tree=None,
+        target_commit=None,
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
-        rewrite_full=False,
         quiet=False,
     ):
-        """
-        Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
-
-        Any existing changes which match the repo_key_filter will be discarded. Existing changes which do not
-        match the repo_key_filter will be kept.
-
-        If track_changes_as_dirty=False (the default) the tree ID in the kart_state table gets set to the
-        new tree ID and the tracking table is left empty. If it is True, the old tree ID is kept and the
-        tracking table is used to record all the changes, so that they can be committed later.
-
-        If rewrite_full is True, then every dataset currently being tracked will be dropped, and all datasets
-        present at commit_or_tree will be written from scratch using write_full.
-        Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
-        filter is up to date.
-        """
-
-        if rewrite_full:
-            # These aren't supported when we're doing a full rewrite.
-            assert repo_key_filter.match_all and not track_changes_as_dirty
-
-        L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
-        if commit_or_tree is not None:
-            target_tree = commit_or_tree.peel(pygit2.Tree)
-            target_tree_id = target_tree.id.hex
-        else:
-            target_tree_id = target_tree = None
-
-        # base_tree is the tree the working copy is based on.
-        # If the working copy exactly matches base_tree, then it is clean,
-        # and the workdir-index will also exactly match the workdir contents.
-
-        base_tree_id = self.get_tree_id()
-        base_tree = self.repo[base_tree_id] if base_tree_id else None
-        repo_tree_id = self.repo.head_tree.hex if self.repo.head_tree else None
-
-        L.debug(
-            "reset(): WorkingCopy base_tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree: %s",
-            base_tree_id,
-            repo_tree_id,
-            target_tree_id,
-        )
-        L.debug("reset(): track_changes_as_dirty=%s", track_changes_as_dirty)
-
-        base_datasets = self.repo.datasets(
-            base_tree,
-            repo_key_filter=repo_key_filter,
-            filter_dataset_type=ALL_TILE_DATASET_TYPES,
-        ).datasets_by_path()
-        if base_tree == target_tree:
-            target_datasets = base_datasets
-        else:
-            target_datasets = self.repo.datasets(
-                target_tree,
-                repo_key_filter=repo_key_filter,
-                filter_dataset_type=ALL_TILE_DATASET_TYPES,
-            ).datasets_by_path()
-
-        ds_inserts = target_datasets.keys() - base_datasets.keys()
-        ds_deletes = base_datasets.keys() - target_datasets.keys()
-        ds_updates = base_datasets.keys() & target_datasets.keys()
-
-        if rewrite_full:
-            for ds_path in ds_updates:
-                ds_inserts.add(ds_path)
-                ds_deletes.add(ds_path)
-            ds_updates.clear()
-
-        structural_changes = ds_inserts | ds_deletes
-        is_new_target_tree = base_tree != target_tree
-        self._check_for_unsupported_structural_changes(
-            structural_changes,
-            is_new_target_tree,
-            track_changes_as_dirty,
-            repo_key_filter,
-        )
-
         pointer_files_to_fetch = set()
         workdir_diff_cache = self.workdir_diff_cache()
         update_diffs = {}
@@ -432,13 +366,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     ds_filter=repo_key_filter[ds_path],
                     track_changes_as_dirty=track_changes_as_dirty,
                 )
-
-        with self.state_session() as sess:
-            if not track_changes_as_dirty:
-                self._update_state_table_tree(sess, target_tree_id)
-            self._update_state_table_spatial_filter_hash(
-                sess, self.repo.spatial_filter.hexhash
-            )
 
     def write_attached_files_to_workdir(
         self, base_tree, target_tree, workdir_index, track_changes_as_dirty=False
@@ -779,7 +706,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         datasets = self.repo.datasets(
             commit_or_tree,
             repo_key_filter=mark_as_clean,
-            filter_dataset_type=ALL_TILE_DATASET_TYPES,
+            filter_dataset_type=self.SUPPORTED_DATASET_TYPE,
         )
 
         # Handle tiles that were, eg, converted to COPC during the commit - the non-COPC
