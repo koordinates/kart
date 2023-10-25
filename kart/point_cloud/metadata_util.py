@@ -1,3 +1,4 @@
+import base64
 from enum import IntFlag
 import logging
 import json
@@ -15,10 +16,9 @@ from kart.list_of_conflicts import ListOfConflicts
 from kart.lfs_util import get_hash_and_size_of_file
 from kart.geometry import ring_as_wkt
 from kart.point_cloud.schema_util import (
-    get_schema_from_pdrf,
+    get_schema_from_pdrf_and_vlr,
     get_record_length_from_pdrf,
     equivalent_copc_pdrf,
-    pdal_schema_to_kart_schema,
 )
 from kart import subprocess_util as subprocess
 
@@ -84,14 +84,23 @@ def rewrite_format(tile_metadata, rewrite_metadata=RewriteMetadata.NO_REWRITE):
     elif RewriteMetadata.AS_IF_CONVERTED_TO_COPC in rewrite_metadata:
         orig_pdrf = orig_format["pointDataRecordFormat"]
         new_pdrf = equivalent_copc_pdrf(orig_pdrf)
-        return {
-            "compression": "laz",
-            "lasVersion": "1.4",
-            "optimization": "copc",
-            "optimizationVersion": "1.0",
-            "pointDataRecordFormat": new_pdrf,
-            "pointDataRecordLength": get_record_length_from_pdrf(new_pdrf),
-        }
+        orig_length = orig_format["pointDataRecordLength"]
+        new_length = (
+            orig_length
+            - get_record_length_from_pdrf(orig_pdrf)
+            + get_record_length_from_pdrf(new_pdrf)
+        )
+        return _remove_nones(
+            {
+                "compression": "laz",
+                "lasVersion": "1.4",
+                "optimization": "copc",
+                "optimizationVersion": "1.0",
+                "pointDataRecordFormat": new_pdrf,
+                "pointDataRecordLength": new_length,
+                "extraBytesVlr": orig_format.get("extraBytesVlr"),
+            }
+        )
     else:
         return orig_format
 
@@ -103,7 +112,7 @@ def rewrite_schema(tile_metadata, rewrite_metadata=RewriteMetadata.NO_REWRITE):
     orig_schema = tile_metadata["schema.json"]
     if RewriteMetadata.AS_IF_CONVERTED_TO_COPC in rewrite_metadata:
         orig_pdrf = tile_metadata["format.json"]["pointDataRecordFormat"]
-        return get_schema_from_pdrf(equivalent_copc_pdrf(orig_pdrf))
+        return get_schema_from_pdrf_and_vlr(equivalent_copc_pdrf(orig_pdrf), None)
     else:
         return orig_schema
 
@@ -188,16 +197,20 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
     compound_crs = metadata["srs"].get("compoundwkt")
     horizontal_crs = metadata["srs"].get("wkt")
     is_copc = metadata.get("copc") or False
+    pdrf = metadata["dataformat_id"]
     format_json = {
         "compression": "laz" if metadata["compressed"] else "las",
         "lasVersion": f"{metadata['major_version']}.{metadata['minor_version']}",
         "optimization": "copc" if is_copc else None,
         "optimizationVersion": get_copc_version(metadata) if is_copc else None,
-        "pointDataRecordFormat": metadata["dataformat_id"],
+        "pointDataRecordFormat": pdrf,
         "pointDataRecordLength": metadata["point_length"],
     }
+    extra_bytes_vlr = find_extra_bytes_vlr(metadata)
+    if extra_bytes_vlr:
+        format_json["extraBytesVlr"] = True
 
-    schema_json = pdal_schema_to_kart_schema(output["schema"])
+    schema_json = get_schema_from_pdrf_and_vlr(pdrf, extra_bytes_vlr)
     if oid_and_size:
         oid, size = oid_and_size
     else:
@@ -219,14 +232,12 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
         "oid": f"sha256:{oid}",
         "size": size,
     }
-    if not url:
-        tile_info.pop("url", None)
 
     result = {
         "format.json": format_json,
         "schema.json": schema_json,
         "crs.wkt": normalise_wkt(compound_crs or horizontal_crs),
-        "tile": tile_info,
+        "tile": _remove_nones(tile_info),
     }
 
     return result
@@ -260,6 +271,8 @@ def _calc_crs84_extent(src_extent, src_crs):
     """
     Given a 3D extent with a particular CRS, return a CRS84 extent that surrounds that extent.
     """
+    if not src_crs:
+        return None
     src_srs = osr.SpatialReference()
     src_srs.ImportFromWkt(src_crs)
     src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
@@ -307,3 +320,22 @@ def extract_format(tile_format):
         if "format" in tile_format:
             return tile_format["format"]
     return tile_format
+
+
+def find_extra_bytes_vlr(metadata):
+    return find_vlr(metadata, "LASF_Spec", 4)
+
+
+def find_vlr(metadata, user_id, record_id):
+    for key, value in metadata.items():
+        if not key.startswith("vlr"):
+            continue
+        if value["user_id"] == user_id and value["record_id"] == record_id:
+            return base64.b64decode(value["data"])
+
+
+def _remove_nones(dict_to_modify):
+    keys_to_remove = [key for key, value in dict_to_modify.items() if value is None]
+    for key in keys_to_remove:
+        dict_to_modify.pop(key)
+    return dict_to_modify

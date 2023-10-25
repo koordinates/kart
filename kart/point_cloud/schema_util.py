@@ -1,3 +1,5 @@
+import struct
+
 from kart.exceptions import NotYetImplemented
 from kart.schema import Schema
 
@@ -18,31 +20,49 @@ from kart.schema import Schema
 # (kart) ipdb> extract_pc_tile_metadata("0.laz")
 
 PDRF0_SCHEMA = [
-    {"name": "X", "dataType": "float", "size": 64},
-    {"name": "Y", "dataType": "float", "size": 64},
-    {"name": "Z", "dataType": "float", "size": 64},
-    {"name": "Intensity", "dataType": "integer", "size": 16},
-    {"name": "ReturnNumber", "dataType": "integer", "size": 8},
-    {"name": "NumberOfReturns", "dataType": "integer", "size": 8},
-    {"name": "ScanDirectionFlag", "dataType": "integer", "size": 8},
-    {"name": "EdgeOfFlightLine", "dataType": "integer", "size": 8},
-    {"name": "Classification", "dataType": "integer", "size": 8},
-    {"name": "ScanAngleRank", "dataType": "float", "size": 32},
-    {"name": "UserData", "dataType": "integer", "size": 8},
-    {"name": "PointSourceId", "dataType": "integer", "size": 16},
+    {"name": "X", "dataType": "integer", "size": 32},
+    {"name": "Y", "dataType": "integer", "size": 32},
+    {"name": "Z", "dataType": "integer", "size": 32},
+    {"name": "Intensity", "dataType": "integer", "size": 16, "unsigned": True},
+    {"name": "Return Number", "dataType": "integer", "size": 3, "unsigned": True},
+    {"name": "Number of Returns", "dataType": "integer", "size": 3, "unsigned": True},
+    {"name": "Scan Direction Flag", "dataType": "integer", "size": 1},
+    {"name": "Edge of Flight Line", "dataType": "integer", "size": 1},
+    {"name": "Classification", "dataType": "integer", "size": 5, "unsigned": True},
+    {"name": "Synthetic", "dataType": "integer", "size": 1},
+    {"name": "Key-Point", "dataType": "integer", "size": 1},
+    {"name": "Withheld", "dataType": "integer", "size": 1},
+    {"name": "Scan Angle Rank", "dataType": "integer", "size": 8},
+    {"name": "User Data", "dataType": "integer", "size": 8, "unsigned": True},
+    {"name": "Point Source ID", "dataType": "integer", "size": 16, "unsigned": True},
 ]
 
-GPS_TIME = {"name": "GpsTime", "dataType": "float", "size": 64}
+GPS_TIME = {"name": "GPS Time", "dataType": "float", "size": 64}
 RED_GREEN_BLUE = [
-    {"name": "Red", "dataType": "integer", "size": 16},
-    {"name": "Green", "dataType": "integer", "size": 16},
-    {"name": "Blue", "dataType": "integer", "size": 16},
+    {"name": "Red", "dataType": "integer", "size": 16, "unsigned": True},
+    {"name": "Green", "dataType": "integer", "size": 16, "unsigned": True},
+    {"name": "Blue", "dataType": "integer", "size": 16, "unsigned": True},
 ]
 
-PDRF6_SCHEMA = PDRF0_SCHEMA + [
-    GPS_TIME,
-    {"name": "ScanChannel", "dataType": "integer", "size": 8},
-    {"name": "ClassFlags", "dataType": "integer", "size": 8},
+PDRF6_SCHEMA = [
+    {"name": "X", "dataType": "integer", "size": 32},
+    {"name": "Y", "dataType": "integer", "size": 32},
+    {"name": "Z", "dataType": "integer", "size": 32},
+    {"name": "Intensity", "dataType": "integer", "size": 16, "unsigned": True},
+    {"name": "Return Number", "dataType": "integer", "size": 4, "unsigned": True},
+    {"name": "Number of Returns", "dataType": "integer", "size": 4, "unsigned": True},
+    {"name": "Synthetic", "dataType": "integer", "size": 1},
+    {"name": "Key-Point", "dataType": "integer", "size": 1},
+    {"name": "Withheld", "dataType": "integer", "size": 1},
+    {"name": "Overlap", "dataType": "integer", "size": 1},
+    {"name": "Scanner Channel", "dataType": "integer", "size": 2, "unsigned": True},
+    {"name": "Scan Direction Flag", "dataType": "integer", "size": 1},
+    {"name": "Edge of Flight Line", "dataType": "integer", "size": 1},
+    {"name": "Classification", "dataType": "integer", "size": 8, "unsigned": True},
+    {"name": "User Data", "dataType": "integer", "size": 8, "unsigned": True},
+    {"name": "Scan Angle", "dataType": "integer", "size": 16},
+    {"name": "Point Source ID", "dataType": "integer", "size": 16, "unsigned": True},
+    {"name": "GPS Time", "dataType": "float", "size": 64},
 ]
 
 INFRARED = {"name": "Infrared", "dataType": "integer", "size": 16}
@@ -61,6 +81,7 @@ PDRF_TO_SCHEMA = {
     }.items()
 }
 
+# Record length in bytes:
 PDRF_TO_RECORD_LENGTH = {
     0: 20,
     1: 28,
@@ -71,8 +92,13 @@ PDRF_TO_RECORD_LENGTH = {
     8: 38,
 }
 
+# Make sure the schemas actually have the above sizes, otherwise there is a bug in the data above.
+assert PDRF_TO_RECORD_LENGTH == {
+    k: sum([d["size"] for d in v]) // 8 for k, v in PDRF_TO_SCHEMA.items()
+}
 
-def get_schema_from_pdrf(pdrf):
+
+def get_schema_from_pdrf_and_vlr(pdrf, extra_bytes_vlr):
     """
     Given a LAS PDRF (Point Data Record Format), get the file's schema.
     This schema is specified in Kart Dataset schema.json format, but the schema contents is as it
@@ -80,13 +106,24 @@ def get_schema_from_pdrf(pdrf):
     Eg, scan angles are stored in LAS files as either integers or fixed-point numbers,
     but are always loaded by PDAL as floating point numbers, so that's what we put in the schema.
     """
-    result = PDRF_TO_SCHEMA.get(pdrf)
-    if not result:
+    base_result = PDRF_TO_SCHEMA.get(pdrf)
+    if not base_result:
         # PDAL doesn't support these either:
         raise NotYetImplemented(
             "Sorry, Kart does not support point formats with waveform data (4, 5, 9 and 10)"
         )
-    return result
+    if extra_bytes_vlr:
+        return Schema(base_result + get_schema_from_extra_bytes_vlr(extra_bytes_vlr))
+    return Schema(base_result)
+
+
+def get_schema_from_extra_bytes_vlr(extra_bytes_vlr):
+    result = []
+    for dimension in struct.iter_unpack("<xxBB32s124x32s", extra_bytes_vlr):
+        data_type, options, name, description = dimension
+        name = name.strip(b"\x00").decode()
+        result.append({"name": name, **_vlr_type_to_kart_type(data_type, options)})
+    return Schema(result)
 
 
 def get_record_length_from_pdrf(pdrf):
@@ -113,33 +150,26 @@ def equivalent_copc_pdrf(pdrf):
         return 6
 
 
-def pdal_schema_to_kart_schema(pdal_schema):
-    """
-    Given the JSON schema as PDAL loaded it, format it as a Kart compatiblie schema.json item.
-    Eg "type" -> "dataType", size is measured in bits.
-    """
-    return Schema(
-        [_pdal_col_schema_to_kart_col_schema(col) for col in pdal_schema["dimensions"]]
-    )
+def _vlr_type_to_kart_type(vlr_datatype, options):
+    if vlr_datatype == 0:
+        return {"dataType": "blob", "length": options}
+    if vlr_datatype <= 10:
+        return _VLR_TYPE_TO_KART_TYPE[vlr_datatype]
+    array_length = int((vlr_datatype + 9) / 10)
+    vlr_datatype = (vlr_datatype - 1) % 10 + 1
+    return {**_VLR_TYPE_TO_KART_TYPE[vlr_datatype], "arrayLength": array_length}
 
 
-def _pdal_col_schema_to_kart_col_schema(pdal_col_schema):
-    return {
-        "name": pdal_col_schema["name"],
-        "dataType": _pdal_type_to_kart_type(pdal_col_schema["type"]),
-        # Kart measures data-sizes in bits, PDAL in bytes.
-        "size": pdal_col_schema["size"] * 8,
-    }
-
-
-# TODO - investigate what types PDAL can actually return - it's not the same as the LAZ spec.
-# TODO - our dataset types don't have any notion of signed vs unsigned.
-_PDAL_TYPE_TO_KART_TYPE = {
-    "floating": "float",
-    "unsigned": "integer",
-    "string": "text",
+_VLR_TYPE_TO_KART_TYPE = {
+    0: {"dataType": "blob"},
+    1: {"dataType": "integer", "size": 8, "unsigned": True},
+    2: {"dataType": "integer", "size": 8},
+    3: {"dataType": "integer", "size": 16, "unsigned": True},
+    4: {"dataType": "integer", "size": 16},
+    5: {"dataType": "integer", "size": 32, "unsigned": True},
+    6: {"dataType": "integer", "size": 32},
+    7: {"dataType": "integer", "size": 64, "unsigned": True},
+    8: {"dataType": "integer", "size": 64},
+    9: {"dataType": "float", "size": 32},
+    10: {"dataType": "float", "size": 64},
 }
-
-
-def _pdal_type_to_kart_type(pdal_type):
-    return _PDAL_TYPE_TO_KART_TYPE.get(pdal_type) or pdal_type

@@ -8,6 +8,7 @@ from kart.point_cloud.metadata_util import (
     is_copc,
 )
 from kart.point_cloud.pdal_convert import convert_tile_to_format
+from kart.point_cloud.schema_util import get_schema_from_pdrf_and_vlr
 from kart.point_cloud.tilename_util import (
     remove_tile_extension,
     set_tile_extension,
@@ -89,6 +90,15 @@ class PointCloudV1(TileDataset):
                 else RewriteMetadata.DROP_OPTIMIZATION
             )
         return rewrite_and_merge_metadata(metadata_list, rewrite_metadata)
+
+    def get_meta_item(self, meta_item_path, missing_ok=True):
+        if meta_item_path == "schema.json":
+            format_json = self.get_meta_item("format.json", missing_ok=True)
+            if format_json and not format_json.get("extraBytesVlr"):
+                return get_schema_from_pdrf_and_vlr(
+                    format_json.get("pointDataRecordFormat"), None
+                )
+        return super().get_meta_item(meta_item_path, missing_ok=missing_ok)
 
     def check_merged_metadata(
         self, current_metadata, merged_metadata, convert_to_dataset_format=None

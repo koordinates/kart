@@ -87,103 +87,135 @@ For example, this is the schema of a dataset using "PDRF 7":
     [
       {
         "name": "X",
-        "dataType": "float",
-        "size": 64
+        "dataType": "integer",
+        "size": 32
       },
       {
         "name": "Y",
-        "dataType": "float",
-        "size": 64
+        "dataType": "integer",
+        "size": 32
       },
       {
         "name": "Z",
-        "dataType": "float",
-        "size": 64
+        "dataType": "integer",
+        "size": 32
       },
       {
         "name": "Intensity",
         "dataType": "integer",
-        "size": 16
+        "size": 16,
+        "unsigned": true
       },
       {
-        "name": "ReturnNumber",
+        "name": "Return Number",
         "dataType": "integer",
-        "size": 8
+        "size": 4,
+        "unsigned": true
       },
       {
-        "name": "NumberOfReturns",
+        "name": "Number of Returns",
         "dataType": "integer",
-        "size": 8
+        "size": 4,
+        "unsigned": true
       },
       {
-        "name": "ScanDirectionFlag",
+        "name": "Synthetic",
         "dataType": "integer",
-        "size": 8
+        "size": 1
       },
       {
-        "name": "EdgeOfFlightLine",
+        "name": "Key-Point",
         "dataType": "integer",
-        "size": 8
+        "size": 1
+      },
+      {
+        "name": "Withheld",
+        "dataType": "integer",
+        "size": 1
+      },
+      {
+        "name": "Overlap",
+        "dataType": "integer",
+        "size": 1
+      },
+      {
+        "name": "Scanner Channel",
+        "dataType": "integer",
+        "size": 2,
+        "unsigned": true
+      },
+      {
+        "name": "Scan Direction Flag",
+        "dataType": "integer",
+        "size": 1
+      },
+      {
+        "name": "Edge of Flight Line",
+        "dataType": "integer",
+        "size": 1
       },
       {
         "name": "Classification",
         "dataType": "integer",
-        "size": 8
+        "size": 8,
+        "unsigned": true
       },
       {
-        "name": "ScanAngleRank",
-        "dataType": "float",
-        "size": 32
-      },
-      {
-        "name": "UserData",
+        "name": "User Data",
         "dataType": "integer",
-        "size": 8
+        "size": 8,
+        "unsigned": true
       },
       {
-        "name": "PointSourceId",
+        "name": "Scan Angle",
         "dataType": "integer",
         "size": 16
       },
       {
-        "name": "GpsTime",
+        "name": "Point Source ID",
+        "dataType": "integer",
+        "size": 16,
+        "unsigned": true
+      },
+      {
+        "name": "GPS Time",
         "dataType": "float",
         "size": 64
       },
       {
-        "name": "ScanChannel",
-        "dataType": "integer",
-        "size": 8
-      },
-      {
-        "name": "ClassFlags",
-        "dataType": "integer",
-        "size": 8
-      },
-      {
         "name": "Red",
         "dataType": "integer",
-        "size": 16
+        "size": 16,
+        "unsigned": true
       },
       {
         "name": "Green",
         "dataType": "integer",
-        "size": 16
+        "size": 16,
+        "unsigned": true
       },
       {
         "name": "Blue",
         "dataType": "integer",
-        "size": 16
+        "size": 16,
+        "unsigned": true
       }
     ]
 
-Kart uses `PDAL <pdal_>`_ internally to read and write LAS files. For certain fields, PDAL modifies the type of the field as it reads it, for either of the following reasons:
 
-* The native type of the field is "fixed point" - for the sake of simplicity, PDAL converts these to the more widely-used floating point type.
-* The native type of the field has changed over time. In order that the field can be read in a consistent way without worrying about the LAS version, PDAL converts
-  these fields to a type expressive enough that both old and new data can be stored in the same type.
+Note: Kart vs PDAL schema extraction
+####################################
 
-Kart exposes the schema as read by PDAL (not as it is actually stored) - all of the same changes are made.
+Kart uses `PDAL <pdal_>`_ internally to read and write LAS files. PDAL is an abstraction layer that can read data from a variety of different
+types of point cloud files, and as such, it interprets the schema in its own way to make it more interoperable with the rest of PDAL.
+The schema that Kart conveys is schema of the LAS file as it is stored or specified, not as PDAL reads it, although these two concepts are very similar. Here are some differences between stored / specified schema and PDAL's interpretation:
+
+* Where the specification gives a dimension's name as multiple words, ie "Number of Returns", PDAL reports it in CamelCase, ie "NumberOfReturns".
+* PDAL converts some dimensions which are technically stored as integers to floating point values as it applies scaling factors to them - for example, X, Y, and Z.
+* Sometimes PDAL loads newer and older versions of a particular dimension in a version-independent way - ie the older 8-bit field "Scan Angle Rank" and the newer 16-bit field "Scan Angle" are both loaded as "ScanAngleRank", and both converted to floating point.
+
+If you need to see PDAL's interpretation of a schema instead of Kart's, you can run ``pdal info --schema <FILENAME>``.
+A PDAL command-line executable can be found in the directory where Kart is installed.
 
 ``meta/crs.wkt``
 ^^^^^^^^^^^^^^^^
