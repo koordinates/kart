@@ -6,6 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.14.3 (UNRELEASED)
 
+- Native Apple Silicon builds are now available for macOS 12 and newer. [#927](https://github.com/koordinates/kart/pull/927)
 - Adds support for disabling the working-copy checkout of specific datasets using the commands `kart import DATASET --no-checkout` or `kart checkout --not-dataset=DATASET`, and re-enabling it using `kart checkout --dataset=DATASET`. [#926](https://github.com/koordinates/kart/pull/926)
 - Adds information on referencing and citing Kart to `CITATION`. [#914](https://github.com/koordinates/kart/pull/914)
 - Fixes a bug where Kart would misidentify a non-Kart repo as a Kart V1 repo in some circumstances. [#918](https://github.com/koordinates/kart/issues/918)
