@@ -27,7 +27,7 @@ $ apt-get install autoconf build-essential curl git golang libtool patchelf pyth
 ```
 On macOS (with [Homebrew](https://brew.sh)):
 ```console
-brew install automake autoconf cmake git python go ninja rust pandoc
+brew install automake autoconf cmake git python go ninja rust pandoc pkg-config libtool
 ```
 Clone Kart from Github:
 ```console
@@ -49,7 +49,7 @@ When using CI artifacts to build this is not just recommended, but required.
 
 Then configure Kart:
 ```console
-$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python310 -DUSE_VCPKG=ON
+$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python3.10 -DUSE_VCPKG=ON
 ```
 
 Configuration builds all the dependencies using [VCPKG](https://github.com/microsoft/vcpkg)
@@ -83,12 +83,12 @@ To do this, take the following steps:
 1. Select a commit - ideally the commit that you have checked out locally, but if you don't see it, just choosing the top one will generally work.
 1. Click through the commit and scroll down to the bottom to see the artifacts.\
 (Scrolling down is best achieved with your mouse curson on the left side of the page - see this [GitHub ticket](https://github.com/community/community/discussions/18035))
-1. Download the vendor-archive artifact for your platform.
+1. Download the vendor-archive artifact for your platform and CPU architecture.
 
 Then:
 
 ```console
-$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python310 -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-macos-X64-py3.10.zip -DUSE_VCPKG=OFF
+$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python3.10 -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-{os}-{arch}-py3.10.zip -DUSE_VCPKG=OFF
 $ cmake --build build
 $ build/kart --version
 ```
@@ -178,8 +178,6 @@ $ .\build\venv\Scripts\pytest.exe -v
 ## CI
 
 Continuous integration builds apps, tests, and installers for every commit on supported platforms. Artifacts are published to Github Actions, including vendor library bundles, test results, and unsigned installers.
-
-To only run CI for a particular platform (ie. when debugging CI), add `[ci only posix]` (for macOS + Linux) or `[ci only windows]` to commit messages.
 
 ## Code formatting
 
