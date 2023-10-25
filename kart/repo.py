@@ -592,7 +592,11 @@ class KartRepo(pygit2.Repository):
         result = set()
         config = self.config
         for entry in config:
-            parts = entry.name.split(".")
+            parts = entry.name.split(".", maxsplit=3)
+            if len(parts) > 3:
+                # Handle a name-containing-dots ie "dataset.NAME.CONTAINING.DOTS.checkout"
+                prefix, rest = entry.name.split(".", maxsplit=1)
+                parts = [prefix, *rest.rsplit(".", maxsplit=1)]
             if (
                 len(parts) == 3
                 and parts[0] == "dataset"
