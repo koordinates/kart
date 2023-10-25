@@ -154,7 +154,11 @@ def any_at_all(iterable):
     "do_checkout",
     is_flag=True,
     default=True,
-    help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
+    help=(
+        "Whether to check out the dataset once the import is finished. If false, the dataset will be configured as "
+        "not being checked out and will never be written to the working copy, until this decision is reversed by "
+        "running `kart checkout --dataset=DATASET-PATH`."
+    ),
 )
 @click.option(
     "--num-workers",
@@ -346,6 +350,7 @@ def table_import(
 
     # During imports we can keep old changes since they won't conflict with newly imported datasets.
     parts_to_create = [PartType.TABULAR] if do_checkout else []
+    repo.configure_do_checkout_datasets(new_ds_paths, do_checkout)
     repo.working_copy.reset_to_head(
         repo_key_filter=RepoKeyFilter.datasets(new_ds_paths),
         create_parts_if_missing=parts_to_create,

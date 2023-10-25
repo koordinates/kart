@@ -500,7 +500,9 @@ class TableWorkingCopy(WorkingCopyPart):
             return DatasetDiff()
 
         feature_filter = ds_filter.get("feature", ds_filter.child_type())
-        with self.session():
+        with self.session() as sess:
+            if self._is_noncheckout_dataset(sess, dataset):
+                return DatasetDiff()
             meta_diff = self.diff_dataset_to_working_copy_meta(dataset, raise_if_dirty)
             feature_diff = self.diff_dataset_to_working_copy_feature(
                 dataset, feature_filter, meta_diff, raise_if_dirty
@@ -1181,12 +1183,12 @@ class TableWorkingCopy(WorkingCopyPart):
 
     def _do_reset_datasets(
         self,
+        *,
         base_datasets,
         target_datasets,
         ds_inserts,
         ds_updates,
         ds_deletes,
-        *,
         base_tree=None,
         target_tree=None,
         target_commit=None,

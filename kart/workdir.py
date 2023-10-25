@@ -290,12 +290,12 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
     def _do_reset_datasets(
         self,
+        *,
         base_datasets,
         target_datasets,
         ds_inserts,
         ds_updates,
         ds_deletes,
-        *,
         base_tree=None,
         target_tree=None,
         target_commit=None,

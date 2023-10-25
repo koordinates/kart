@@ -50,6 +50,18 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
     type=SpatialFilterString(encoding="utf-8"),
     help=spatial_filter_help_text(),
 )
+@click.option(
+    "--dataset",
+    "do_checkout_spec",
+    multiple=True,
+    help="Request that a particular dataset be checked out (one which is currently configured to not be checked out)",
+)
+@click.option(
+    "--not-dataset",
+    "non_checkout_spec",
+    multiple=True,
+    help="Request that a particular dataset *not* be checked out (one which is currently configured to be checked out)",
+)
 @click.argument("refish", default=None, required=False, shell_complete=ref_completer)
 def checkout(
     ctx,
@@ -58,6 +70,8 @@ def checkout(
     discard_changes,
     do_guess,
     spatial_filter_spec,
+    do_checkout_spec,
+    non_checkout_spec,
     refish,
 ):
     """Switch branches or restore working tree files"""
@@ -126,8 +140,38 @@ def checkout(
                 "The spatial filter has been updated in the config and no longer matches the working copy."
             )
 
+    non_checkout_datasets = repo.non_checkout_datasets
+    if do_checkout_spec or non_checkout_spec:
+        do_checkout_spec = set(do_checkout_spec)
+        non_checkout_spec = set(non_checkout_spec)
+        _verify_checkout_datasets_spec(
+            repo,
+            commit,
+            refish,
+            do_checkout_spec,
+            non_checkout_spec,
+            non_checkout_datasets,
+        )
+        non_checkout_datasets = (
+            non_checkout_datasets | non_checkout_spec
+        ) - do_checkout_spec
+
+    do_switch_checkout_datasets = not repo.working_copy.matches_non_checkout_datasets(
+        non_checkout_datasets
+    )
+
+    # Again, we also allow switching of set of checked out / non-checked out datasets just by
+    # writing it directly to the config and then running `kart checkout`, but using
+    # `kart checkout --dataset=foo --not-dataset=bar` is preferred.
+    if do_switch_checkout_datasets and not (do_checkout_spec or non_checkout_spec):
+        click.echo(
+            "The set of datasets to be checked out has been updated in the config and no longer matches the working copy."
+        )
+
     discard_changes = discard_changes or force
-    if (do_switch_commit or do_switch_spatial_filter) and not discard_changes:
+    if (
+        do_switch_commit or do_switch_spatial_filter or do_switch_checkout_datasets
+    ) and not discard_changes:
         ctx.obj.check_not_dirty(help_message=_DISCARD_CHANGES_HELP_MESSAGE)
 
     if new_branch and new_branch in repo.branches:
@@ -170,16 +214,36 @@ def checkout(
     if spatial_filter_spec is not None:
         spatial_filter_spec.write_config(repo, update_remote=promisor_remote)
 
+    if do_checkout_spec or non_checkout_spec:
+        repo.configure_do_checkout_datasets(do_checkout_spec, True)
+        repo.configure_do_checkout_datasets(non_checkout_spec, False)
+
     TableWorkingCopy.ensure_config_exists(repo)
     repo.set_head(head_ref)
 
+    repo_key_filter = (
+        RepoKeyFilter.exclude_datasets(non_checkout_datasets)
+        if non_checkout_datasets
+        else RepoKeyFilter.MATCH_ALL
+    )
     parts_to_create = (
-        repo.datasets().working_copy_part_types() if not repo.head_is_unborn else ()
+        repo.datasets(repo_key_filter=repo_key_filter).working_copy_part_types()
+        if not repo.head_is_unborn
+        else ()
     )
 
     if do_switch_commit or do_switch_spatial_filter or discard_changes:
+        # Changing commit, changing spatial filter, or discarding changes mean we need to update every dataset:
         repo.working_copy.reset_to_head(
             rewrite_full=do_switch_spatial_filter,
+            create_parts_if_missing=parts_to_create,
+            non_checkout_datasets=non_checkout_datasets,
+        )
+    elif do_switch_checkout_datasets:
+        # Not doing any of the above - just need to change those datasets newly added / removed from the non_checkout_list.
+        repo.working_copy.reset_to_head(
+            non_checkout_datasets=non_checkout_datasets,
+            only_update_checkout_datasets=True,
             create_parts_if_missing=parts_to_create,
         )
     elif parts_to_create:
@@ -187,6 +251,31 @@ def checkout(
         repo.working_copy.create_parts_if_missing(
             parts_to_create, reset_to=repo.head_commit
         )
+
+
+def _verify_checkout_datasets_spec(
+    repo, commit, refish, do_checkout_spec, non_checkout_spec, non_checkout_datasets
+):
+    # Check the set of datasets that the user wants to check out / not check out, to make sure we've heard of them.
+    # (avoid the bad experience where the user disables check out of non-existing dataset "foo-bar" instead of "foo_bar").
+    if do_checkout_spec & non_checkout_spec:
+        bad_ds = next(iter(do_checkout_spec & non_checkout_spec))
+        raise click.BadParameter(
+            f"Dataset {bad_ds} should not be present in both --dataset and --not-dataset",
+            param_hint="dataset",
+        )
+    # Only datasets that are not already in the config are checked - if the user managed to mark it as non-checkout before,
+    # they can mark it as checkout now, even if we can't find it any more.
+    new_spec = (do_checkout_spec | non_checkout_spec) - non_checkout_datasets
+    if not new_spec:
+        return
+    datasets_at_commit = repo.datasets(commit)
+    for ds_path in new_spec:
+        if ds_path not in datasets_at_commit:
+            raise click.BadParameter(
+                f"No dataset {ds_path} at commit {refish or 'HEAD'}",
+                param_hint="dataset" if ds_path in do_checkout_spec else "not-dataset",
+            )
 
 
 @functools.lru_cache()

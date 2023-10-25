@@ -395,6 +395,11 @@ class TileDataset(BaseDataset):
             The resulting diffs are missing almost all of the info about the new tiles,
             but this is faster and more reliable if this information is not needed.
         """
+        workdir = self.repo.working_copy.workdir
+        with workdir.state_session() as sess:
+            if workdir._is_noncheckout_dataset(sess, self.path):
+                return DatasetDiff()
+
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
 
         current_metadata = self.tile_metadata
@@ -684,7 +689,6 @@ class TileDataset(BaseDataset):
         """
         with object_builder.chdir(self.inner_path):
             for delta in tile_diff.values():
-
                 if delta.type in ("insert", "update"):
                     new_val = delta.new_value
                     name = new_val.get("name")

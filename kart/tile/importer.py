@@ -333,6 +333,7 @@ class TileImporter:
             self.repo.references[fast_import_on_branch].delete()
 
         parts_to_create = [PartType.WORKDIR] if self.do_checkout else []
+        self.repo.configure_do_checkout_datasets([self.dataset_path], self.do_checkout)
         # During imports we can keep old changes since they won't conflict with newly imported datasets.
         self.repo.working_copy.reset_to_head(
             repo_key_filter=RepoKeyFilter.datasets([self.dataset_path]),

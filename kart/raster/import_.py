@@ -41,7 +41,11 @@ L = logging.getLogger(__name__)
     "do_checkout",
     is_flag=True,
     default=True,
-    help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
+    help=(
+        "Whether to check out the dataset once the import is finished. If false, the dataset will be configured as "
+        "not being checked out and will never be written to the working copy, until this decision is reversed by "
+        "running `kart checkout --dataset=DATASET-PATH`."
+    ),
 )
 @click.option(
     "--replace-existing",
