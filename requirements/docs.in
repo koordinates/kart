@@ -1,5 +1,2 @@
--c requirements.txt
--c test.txt
-
 sphinx-autobuild
 sphinx-rtd-theme
