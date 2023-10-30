@@ -127,6 +127,21 @@ def test_byod_point_cloud_import(
             "  Found nothing to fetch",
         ]
 
+        r = cli_runner.invoke(["lfs+", "gc", "--dry-run"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Running gc with --dry-run: found 0 LFS blobs (0B) to delete from the cache"
+        ]
+
+        r = cli_runner.invoke(["checkout", "--not-dataset=auckland"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["lfs+", "gc"])
+        assert r.stdout.splitlines() == [
+            "Deleting 16 LFS blobs (373KiB) from the cache..."
+        ]
+        check_lfs_hashes(repo, expected_file_count=0)
+
 
 @pytest.mark.slow
 def test_byod_raster_import(

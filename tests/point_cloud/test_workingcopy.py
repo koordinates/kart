@@ -1142,7 +1142,7 @@ def test_lfs_gc(cli_runner, data_archive, monkeypatch):
         r = cli_runner.invoke(["lfs+", "gc", "--dry-run"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            "Can't delete 4 LFS blobs (82KiB) from the cache since they have not been pushed to the remote",
+            "Can't delete 4 LFS blobs (82KiB) from the cache since they have not been pushed to a remote",
             "Running gc with --dry-run: found 0 LFS blobs (0B) to delete from the cache",
         ]
 
