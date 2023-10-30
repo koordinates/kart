@@ -424,22 +424,21 @@ def gc(ctx, dry_run):
     """
     repo = ctx.obj.repo
 
-    remote_name = repo.head_remote_name_or_default
-    if not remote_name:
-        raise InvalidOperation(
-            "LFS files cannot be garbage collected unless there is a remote to refetch them from."
-        )
-
     unpushed_lfs_oids = set()
     for commit_id, path_match_result, pointer_blob in rev_list_tile_pointer_files(
         repo, ["--branches"], ["--remotes"]
     ):
-        unpushed_lfs_oids.add(get_hash_from_pointer_file(pointer_blob))
+        pointer_dict = pointer_file_bytes_to_dict(pointer_blob)
+        if pointer_dict.get("url"):
+            continue
+        unpushed_lfs_oids.add(get_hash_from_pointer_file(pointer_dict))
 
     spatial_filter = repo.spatial_filter
     checked_out_lfs_oids = set()
+    non_checkout_datasets = repo.non_checkout_datasets
     for dataset in repo.datasets("HEAD", filter_dataset_type=ALL_TILE_DATASET_TYPES):
-        checked_out_lfs_oids.update(dataset.tile_lfs_hashes(spatial_filter))
+        if dataset.path not in non_checkout_datasets:
+            checked_out_lfs_oids.update(dataset.tile_lfs_hashes(spatial_filter))
 
     to_delete = set()
     total_size_to_delete = 0
@@ -464,7 +463,7 @@ def gc(ctx, dry_run):
     if to_delete_once_pushed:
         size_desc = human_readable_bytes(total_size_to_delete_once_pushed)
         click.echo(
-            f"Can't delete {len(to_delete_once_pushed)} LFS blobs ({size_desc}) from the cache since they have not been pushed to the remote"
+            f"Can't delete {len(to_delete_once_pushed)} LFS blobs ({size_desc}) from the cache since they have not been pushed to a remote"
         )
 
     size_desc = human_readable_bytes(total_size_to_delete)
