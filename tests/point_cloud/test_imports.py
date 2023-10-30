@@ -80,21 +80,67 @@ def test_import_single_las__convert(
             assert json.loads(r.stdout) == {
                 "autzen": {
                     "schema.json": [
-                        {"name": "X", "dataType": "float", "size": 64},
-                        {"name": "Y", "dataType": "float", "size": 64},
-                        {"name": "Z", "dataType": "float", "size": 64},
-                        {"name": "Intensity", "dataType": "integer", "size": 16},
-                        {"name": "ReturnNumber", "dataType": "integer", "size": 8},
-                        {"name": "NumberOfReturns", "dataType": "integer", "size": 8},
-                        {"name": "ScanDirectionFlag", "dataType": "integer", "size": 8},
-                        {"name": "EdgeOfFlightLine", "dataType": "integer", "size": 8},
-                        {"name": "Classification", "dataType": "integer", "size": 8},
-                        {"name": "ScanAngleRank", "dataType": "float", "size": 32},
-                        {"name": "UserData", "dataType": "integer", "size": 8},
-                        {"name": "PointSourceId", "dataType": "integer", "size": 16},
-                        {"name": "GpsTime", "dataType": "float", "size": 64},
-                        {"name": "ScanChannel", "dataType": "integer", "size": 8},
-                        {"name": "ClassFlags", "dataType": "integer", "size": 8},
+                        {"name": "X", "dataType": "integer", "size": 32},
+                        {"name": "Y", "dataType": "integer", "size": 32},
+                        {"name": "Z", "dataType": "integer", "size": 32},
+                        {
+                            "name": "Intensity",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Return Number",
+                            "dataType": "integer",
+                            "size": 4,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Number of Returns",
+                            "dataType": "integer",
+                            "size": 4,
+                            "unsigned": True,
+                        },
+                        {"name": "Synthetic", "dataType": "integer", "size": 1},
+                        {"name": "Key-Point", "dataType": "integer", "size": 1},
+                        {"name": "Withheld", "dataType": "integer", "size": 1},
+                        {"name": "Overlap", "dataType": "integer", "size": 1},
+                        {
+                            "name": "Scanner Channel",
+                            "dataType": "integer",
+                            "size": 2,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Scan Direction Flag",
+                            "dataType": "integer",
+                            "size": 1,
+                        },
+                        {
+                            "name": "Edge of Flight Line",
+                            "dataType": "integer",
+                            "size": 1,
+                        },
+                        {
+                            "name": "Classification",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "User Data",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {"name": "Scan Angle", "dataType": "integer", "size": 16},
+                        {
+                            "name": "Point Source ID",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {"name": "GPS Time", "dataType": "float", "size": 64},
                     ]
                 }
             }
@@ -175,24 +221,85 @@ def test_import_several_laz__convert(
             assert json.loads(r.stdout) == {
                 "auckland": {
                     "schema.json": [
-                        {"name": "X", "dataType": "float", "size": 64},
-                        {"name": "Y", "dataType": "float", "size": 64},
-                        {"name": "Z", "dataType": "float", "size": 64},
-                        {"name": "Intensity", "dataType": "integer", "size": 16},
-                        {"name": "ReturnNumber", "dataType": "integer", "size": 8},
-                        {"name": "NumberOfReturns", "dataType": "integer", "size": 8},
-                        {"name": "ScanDirectionFlag", "dataType": "integer", "size": 8},
-                        {"name": "EdgeOfFlightLine", "dataType": "integer", "size": 8},
-                        {"name": "Classification", "dataType": "integer", "size": 8},
-                        {"name": "ScanAngleRank", "dataType": "float", "size": 32},
-                        {"name": "UserData", "dataType": "integer", "size": 8},
-                        {"name": "PointSourceId", "dataType": "integer", "size": 16},
-                        {"name": "GpsTime", "dataType": "float", "size": 64},
-                        {"name": "ScanChannel", "dataType": "integer", "size": 8},
-                        {"name": "ClassFlags", "dataType": "integer", "size": 8},
-                        {"name": "Red", "dataType": "integer", "size": 16},
-                        {"name": "Green", "dataType": "integer", "size": 16},
-                        {"name": "Blue", "dataType": "integer", "size": 16},
+                        {"name": "X", "dataType": "integer", "size": 32},
+                        {"name": "Y", "dataType": "integer", "size": 32},
+                        {"name": "Z", "dataType": "integer", "size": 32},
+                        {
+                            "name": "Intensity",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Return Number",
+                            "dataType": "integer",
+                            "size": 4,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Number of Returns",
+                            "dataType": "integer",
+                            "size": 4,
+                            "unsigned": True,
+                        },
+                        {"name": "Synthetic", "dataType": "integer", "size": 1},
+                        {"name": "Key-Point", "dataType": "integer", "size": 1},
+                        {"name": "Withheld", "dataType": "integer", "size": 1},
+                        {"name": "Overlap", "dataType": "integer", "size": 1},
+                        {
+                            "name": "Scanner Channel",
+                            "dataType": "integer",
+                            "size": 2,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Scan Direction Flag",
+                            "dataType": "integer",
+                            "size": 1,
+                        },
+                        {
+                            "name": "Edge of Flight Line",
+                            "dataType": "integer",
+                            "size": 1,
+                        },
+                        {
+                            "name": "Classification",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "User Data",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {"name": "Scan Angle", "dataType": "integer", "size": 16},
+                        {
+                            "name": "Point Source ID",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {"name": "GPS Time", "dataType": "float", "size": 64},
+                        {
+                            "name": "Red",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Green",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Blue",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
                     ]
                 }
             }
@@ -303,7 +410,7 @@ def test_import_replace_existing(
             )
             assert r.exit_code == 0, r.stderr
 
-            # Originally this dataset was COPC, but now it's changed to LAZ 1.2
+            # Originally this dataset was COPC, but now it"s changed to LAZ 1.2
             # (because we used --preserve-format)
             r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
             assert r.exit_code == 0, r.stderr
@@ -592,3 +699,280 @@ def test_import_convert_to_copc_mismatched_schema(
             # This is disallowed even though we are converting to COPC, since these tiles would have different
             # schemas even once converted to COPC.
             assert "The imported files would have more than one schema:" in r.stderr
+
+
+def test_import_extra_bytes_vlr__no_convert(
+    data_archive_readonly, tmp_path, cli_runner, chdir
+):
+    with data_archive_readonly("point-cloud/laz-extrabytesvlr.tgz") as extrabytes:
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    f"{extrabytes}/extrabytesvlr.laz",
+                    "--dataset-path=extrabytes",
+                    "--preserve-format",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(
+                ["meta", "get", "extrabytes", "format.json", "-ojson"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert json.loads(r.stdout) == {
+                "extrabytes": {
+                    "format.json": {
+                        "compression": "laz",
+                        "lasVersion": "1.4",
+                        "pointDataRecordFormat": 3,
+                        "pointDataRecordLength": 61,
+                        "extraBytesVlr": True,
+                    }
+                }
+            }
+            r = cli_runner.invoke(
+                ["meta", "get", "extrabytes", "schema.json", "-ojson"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert json.loads(r.stdout) == {
+                "extrabytes": {
+                    "schema.json": [
+                        {"name": "X", "dataType": "integer", "size": 32},
+                        {"name": "Y", "dataType": "integer", "size": 32},
+                        {"name": "Z", "dataType": "integer", "size": 32},
+                        {
+                            "name": "Intensity",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Return Number",
+                            "dataType": "integer",
+                            "size": 3,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Number of Returns",
+                            "dataType": "integer",
+                            "size": 3,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Scan Direction Flag",
+                            "dataType": "integer",
+                            "size": 1,
+                        },
+                        {
+                            "name": "Edge of Flight Line",
+                            "dataType": "integer",
+                            "size": 1,
+                        },
+                        {
+                            "name": "Classification",
+                            "dataType": "integer",
+                            "size": 5,
+                            "unsigned": True,
+                        },
+                        {"name": "Synthetic", "dataType": "integer", "size": 1},
+                        {"name": "Key-Point", "dataType": "integer", "size": 1},
+                        {"name": "Withheld", "dataType": "integer", "size": 1},
+                        {"name": "Scan Angle Rank", "dataType": "integer", "size": 8},
+                        {
+                            "name": "User Data",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Point Source ID",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {"name": "GPS Time", "dataType": "float", "size": 64},
+                        {
+                            "name": "Red",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Green",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Blue",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Extra Flags",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {"name": "Temperature", "dataType": "integer", "size": 16},
+                        {"name": "Uptime", "dataType": "integer", "size": 32},
+                        {
+                            "name": "Nanotime",
+                            "dataType": "integer",
+                            "size": 64,
+                            "unsigned": True,
+                        },
+                        {"name": "Gravity", "dataType": "float", "size": 32},
+                        {"name": "Radiosity", "dataType": "float", "size": 64},
+                    ]
+                }
+            }
+
+
+def test_import_extra_bytes_vlr__convert_to_copc(
+    data_archive_readonly, tmp_path, cli_runner, chdir
+):
+    with data_archive_readonly("point-cloud/laz-extrabytesvlr.tgz") as extrabytes:
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    f"{extrabytes}/extrabytesvlr.laz",
+                    "--dataset-path=extrabytes",
+                    "--convert-to-copc",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(
+                ["meta", "get", "extrabytes", "format.json", "-ojson"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert json.loads(r.stdout) == {
+                "extrabytes": {
+                    "format.json": {
+                        "compression": "laz",
+                        "lasVersion": "1.4",
+                        "optimization": "copc",
+                        "optimizationVersion": "1.0",
+                        "pointDataRecordFormat": 7,
+                        "pointDataRecordLength": 63,
+                        "extraBytesVlr": True,
+                    }
+                }
+            }
+            r = cli_runner.invoke(
+                ["meta", "get", "extrabytes", "schema.json", "-ojson"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert json.loads(r.stdout) == {
+                "extrabytes": {
+                    "schema.json": [
+                        {"name": "X", "dataType": "integer", "size": 32},
+                        {"name": "Y", "dataType": "integer", "size": 32},
+                        {"name": "Z", "dataType": "integer", "size": 32},
+                        {
+                            "name": "Intensity",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Return Number",
+                            "dataType": "integer",
+                            "size": 4,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Number of Returns",
+                            "dataType": "integer",
+                            "size": 4,
+                            "unsigned": True,
+                        },
+                        {"name": "Synthetic", "dataType": "integer", "size": 1},
+                        {"name": "Key-Point", "dataType": "integer", "size": 1},
+                        {"name": "Withheld", "dataType": "integer", "size": 1},
+                        {"name": "Overlap", "dataType": "integer", "size": 1},
+                        {
+                            "name": "Scanner Channel",
+                            "dataType": "integer",
+                            "size": 2,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Scan Direction Flag",
+                            "dataType": "integer",
+                            "size": 1,
+                        },
+                        {
+                            "name": "Edge of Flight Line",
+                            "dataType": "integer",
+                            "size": 1,
+                        },
+                        {
+                            "name": "Classification",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "User Data",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {"name": "Scan Angle", "dataType": "integer", "size": 16},
+                        {
+                            "name": "Point Source ID",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {"name": "GPS Time", "dataType": "float", "size": 64},
+                        {
+                            "name": "Red",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Green",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Blue",
+                            "dataType": "integer",
+                            "size": 16,
+                            "unsigned": True,
+                        },
+                        {
+                            "name": "Extra Flags",
+                            "dataType": "integer",
+                            "size": 8,
+                            "unsigned": True,
+                        },
+                        {"name": "Temperature", "dataType": "integer", "size": 16},
+                        {"name": "Uptime", "dataType": "integer", "size": 32},
+                        {
+                            "name": "Nanotime",
+                            "dataType": "integer",
+                            "size": 64,
+                            "unsigned": True,
+                        },
+                        {"name": "Gravity", "dataType": "float", "size": 32},
+                        {"name": "Radiosity", "dataType": "float", "size": 64},
+                    ]
+                }
+            }

@@ -23,11 +23,7 @@ def convert_tile_to_copc(source, dest):
             "type": "readers.las",
             "filename": str(source),
         },
-        {
-            "type": "writers.copc",
-            "filename": str(dest),
-            "forward": "all",
-        },
+        {"type": "writers.copc", "filename": str(dest), "forward": "all"},
     ]
     try:
         pdal_execute_pipeline(pipeline)
@@ -54,6 +50,7 @@ def convert_tile_to_laz(source, dest, target_format):
             "type": "writers.las",
             "filename": str(dest),
             "forward": "all",
+            "extra_dims": "all",
             "compression": True,
             "major_version": major_version,
             "minor_version": minor_version,
