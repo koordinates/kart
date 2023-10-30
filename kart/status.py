@@ -81,7 +81,7 @@ class StatusDiffWriter(BaseDiffWriter):
 @click.option(
     "--list-untracked-tables",
     is_flag=True,
-    help="Shows which tables haven't yet been tracked by Kart"
+    help="Shows which tables haven't yet been tracked by Kart",
 )
 def status(ctx, output_format, list_untracked_tables):
     """Show the working copy status"""
@@ -105,9 +105,10 @@ def status(ctx, output_format, list_untracked_tables):
 
     if output_format == "json":
         dump_json_output({"kart.status/v2": jdict}, sys.stdout)
-    else:       
+    else:
         click.echo(status_to_text(jdict))
-        
+
+
 def get_branch_status_json(repo):
     output = {"commit": None, "abbrevCommit": None, "branch": None, "upstream": None}
 
@@ -138,31 +139,34 @@ def get_working_copy_status_json(repo, list_untracked_tables):
 
     result = {
         "parts": repo.working_copy.parts_status(),
-        "changes": get_diff_status_json(repo)
+        "changes": get_diff_status_json(repo),
+        "nonCheckoutDatasets": sorted(repo.non_checkout_datasets),
     }
     if list_untracked_tables:
         result["untrackedTables"] = get_untracked_tables(repo)
 
-
     return result
+
 
 def get_untracked_tables(repo):
     """Check for any untracked tables in working copy"""
-    wc = repo.working_copy.tabular 
+    wc = repo.working_copy.tabular
     untracked_tables = []
 
-    if wc is not None and wc.session() is not None:     
+    if wc is not None and wc.session() is not None:
         with wc.session() as sess:
             wc_items = wc.adapter.list_tables(sess)
         # Get all tables in working copy
         all_tables = [table_name for table_name, title in wc_items.items()]
         # Get tables shown in kart data ls
-        datasets_paths = [dataset.table_name for dataset in repo.datasets(filter_dataset_type="table")] 
+        datasets_paths = [
+            dataset.table_name for dataset in repo.datasets(filter_dataset_type="table")
+        ]
         # Get untracked tables
         untracked_tables = list(set(all_tables) - set(datasets_paths))
 
-            
     return untracked_tables
+
 
 def get_diff_status_json(repo):
     """
@@ -191,12 +195,18 @@ def status_to_text(jdict):
     if not is_merging and not is_empty:
         status_list.append(working_copy_status_to_text(jdict["workingCopy"]))
 
-        if jdict["workingCopy"] is not None and "untrackedTables" in jdict["workingCopy"]:
+        if (
+            jdict["workingCopy"] is not None
+            and "untrackedTables" in jdict["workingCopy"]
+        ):
             if jdict["workingCopy"]["untrackedTables"]:
-                status_list.append(untracked_tables_status_to_text(jdict["workingCopy"]["untrackedTables"]))
+                status_list.append(
+                    untracked_tables_status_to_text(
+                        jdict["workingCopy"]["untrackedTables"]
+                    )
+                )
             else:
                 status_list.append("No untracked tables found.")
-
 
     return "\n\n".join(status_list)
 
@@ -299,15 +309,27 @@ def working_copy_status_to_text(jdict):
     if jdict is None:
         return 'No working copy\n  (use "kart checkout" to create a working copy)\n'
 
-    if not jdict["changes"]:
-        return "Nothing to commit, working copy clean"
+    result_list = []
 
-    return (
-        "Changes in working copy:\n"
-        '  (use "kart commit" to commit)\n'
-        '  (use "kart restore" to discard changes)\n\n'
-        + diff_status_to_text(jdict["changes"])
-    )
+    if jdict["nonCheckoutDatasets"]:
+        non_checkout_datasets = "\n".join(jdict["nonCheckoutDatasets"])
+        result_list.append(
+            "User configuration prevents the following datasets from being checked out\n"
+            f"  (to overturn, use `kart checkout --dataset=DATASET`):\n{non_checkout_datasets}"
+        )
+
+    if not jdict["changes"]:
+        result_list.append("Nothing to commit, working copy clean")
+
+    else:
+        result_list.append(
+            "Changes in working copy:\n"
+            '  (use "kart commit" to commit)\n'
+            '  (use "kart restore" to discard changes)\n\n'
+            + diff_status_to_text(jdict["changes"])
+        )
+
+    return "\n\n".join(result_list)
 
 
 def diff_status_to_text(jdict):
@@ -333,6 +355,7 @@ def diff_status_to_text(jdict):
                 message.append(f"      {change_type_count} {change_type}")
 
     return "\n".join(message)
+
 
 def untracked_tables_status_to_text(jdict):
     message = []

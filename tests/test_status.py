@@ -58,7 +58,11 @@ def test_status(
                 "branch": "main",
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": {"parts": parts_status, "changes": {}},
+                "workingCopy": {
+                    "parts": parts_status,
+                    "changes": {},
+                    "nonCheckoutDatasets": [],
+                },
             }
         }
 
@@ -77,7 +81,11 @@ def test_status(
                 "branch": None,
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": {"parts": parts_status, "changes": {}},
+                "workingCopy": {
+                    "parts": parts_status,
+                    "changes": {},
+                    "nonCheckoutDatasets": [],
+                },
             }
         }
 
@@ -114,7 +122,11 @@ def test_status(
                     "behind": 0,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"parts": parts_status, "changes": {}},
+                "workingCopy": {
+                    "parts": parts_status,
+                    "changes": {},
+                    "nonCheckoutDatasets": [],
+                },
             }
         }
 
@@ -155,7 +167,11 @@ def test_status(
                     "behind": 1,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"parts": parts_status, "changes": {}},
+                "workingCopy": {
+                    "parts": parts_status,
+                    "changes": {},
+                    "nonCheckoutDatasets": [],
+                },
             }
         }
 
@@ -186,7 +202,11 @@ def test_status(
                     "behind": 1,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"parts": parts_status, "changes": {}},
+                "workingCopy": {
+                    "parts": parts_status,
+                    "changes": {},
+                    "nonCheckoutDatasets": [],
+                },
             }
         }
 
@@ -215,7 +235,11 @@ def test_status(
                     "behind": 0,
                 },
                 "spatialFilter": None,
-                "workingCopy": {"parts": parts_status, "changes": {}},
+                "workingCopy": {
+                    "parts": parts_status,
+                    "changes": {},
+                    "nonCheckoutDatasets": [],
+                },
             }
         }
 
@@ -265,6 +289,7 @@ def test_status(
                             },
                         }
                     },
+                    "nonCheckoutDatasets": [],
                 },
             }
         }
@@ -292,7 +317,11 @@ def test_status_empty(tmp_path, cli_runner, chdir):
                 "branch": "main",
                 "upstream": None,
                 "spatialFilter": None,
-                "workingCopy": {"parts": parts_status, "changes": {}},
+                "workingCopy": {
+                    "parts": parts_status,
+                    "changes": {},
+                    "nonCheckoutDatasets": [],
+                },
             }
         }
 
@@ -381,19 +410,24 @@ def test_status_untracked_tables(data_working_copy, cli_runner):
         parts_status = {
             "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
             "workdir": {"status": "notFound"},
-            }
-        
-        assert json.loads(r.stdout) == {
-        "kart.status/v2": {
-            "commit": H.POINTS.HEAD_SHA,
-            "abbrevCommit": H.POINTS.HEAD_SHA[:7],
-            "branch": "main",
-            "upstream": None,
-            "spatialFilter": None,
-            "workingCopy": {"parts": parts_status, "changes": {}, "untrackedTables": [new_table]}
-            }            
         }
-        
+
+        assert json.loads(r.stdout) == {
+            "kart.status/v2": {
+                "commit": H.POINTS.HEAD_SHA,
+                "abbrevCommit": H.POINTS.HEAD_SHA[:7],
+                "branch": "main",
+                "upstream": None,
+                "spatialFilter": None,
+                "workingCopy": {
+                    "parts": parts_status,
+                    "changes": {},
+                    "nonCheckoutDatasets": [],
+                    "untrackedTables": [new_table],
+                },
+            }
+        }
+
         r = cli_runner.invoke(["status", "--list-untracked-tables"])
         assert r.stdout.splitlines() == [
             "On branch main",
@@ -401,5 +435,5 @@ def test_status_untracked_tables(data_working_copy, cli_runner):
             "Nothing to commit, working copy clean",
             "",
             "Untracked tables:",
-            f"  {new_table}"
+            f"  {new_table}",
         ]
