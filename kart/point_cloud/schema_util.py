@@ -151,13 +151,10 @@ def equivalent_copc_pdrf(pdrf):
 
 
 def _vlr_type_to_kart_type(vlr_datatype, options):
+    assert 0 <= vlr_datatype <= 10
     if vlr_datatype == 0:
         return {"dataType": "blob", "length": options}
-    if vlr_datatype <= 10:
-        return _VLR_TYPE_TO_KART_TYPE[vlr_datatype]
-    array_length = int((vlr_datatype + 9) / 10)
-    vlr_datatype = (vlr_datatype - 1) % 10 + 1
-    return {**_VLR_TYPE_TO_KART_TYPE[vlr_datatype], "arrayLength": array_length}
+    return _VLR_TYPE_TO_KART_TYPE[vlr_datatype]
 
 
 _VLR_TYPE_TO_KART_TYPE = {

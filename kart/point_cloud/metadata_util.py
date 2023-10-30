@@ -334,8 +334,5 @@ def find_vlr(metadata, user_id, record_id):
             return base64.b64decode(value["data"])
 
 
-def _remove_nones(dict_to_modify):
-    keys_to_remove = [key for key, value in dict_to_modify.items() if value is None]
-    for key in keys_to_remove:
-        dict_to_modify.pop(key)
-    return dict_to_modify
+def _remove_nones(input_dict):
+    return {key: value for key, value in input_dict.items() if value is not None}
