@@ -155,13 +155,25 @@ def test_non_checkout_datasets(data_working_copy, cli_runner):
         r = cli_runner.invoke(
             ["checkout", "--not-dataset=census2016_sdhca_ot_sos_short"]
         )
-        assert r.exit_code == 0
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "On branch branch1",
+            "",
+            "User configuration prevents the following datasets from being checked out",
+            "  (to overturn, use `kart checkout --dataset=DATASET`):",
+            "census2016_sdhca_ot_sos_short",
+            "",
+            "Nothing to commit, working copy clean",
+        ]
 
         _check_workingcopy_contains_tables(repo, {"census2016_sdhca_ot_ra_short"})
 
         # No WC changes are returned.
         r = cli_runner.invoke(["diff", "--exit-code"])
-        assert r.exit_code == 0
+        assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(
             ["checkout", "main", "--dataset=census2016_sdhca_ot_sos_short"]
