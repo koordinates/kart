@@ -1,4 +1,4 @@
 [submodule "vcpkg-vendor/vcpkg"]
 	path = vcpkg-vendor/vcpkg
 	url = https://github.com/koordinates/vcpkg.git
-	branch = kx-master
+	branch = kx-20231101
