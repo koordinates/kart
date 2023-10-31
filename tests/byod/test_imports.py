@@ -1,9 +1,13 @@
 import json
 import os
+import subprocess
 
 import pytest
 
 from kart.repo import KartRepo
+
+
+DUMMY_REPO = "git@example.com/example.git"
 
 
 @pytest.mark.slow
@@ -101,7 +105,7 @@ def test_byod_point_cloud_import(
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines()[:6] == [
             "Running fetch with --dry-run:",
-            "  Found 16 blobs to fetch from specific URLs",
+            "  Found 16 LFS blobs (373KiB) to fetch from specific URLs",
             "",
             "LFS blob OID:                                                    (Pointer file OID):",
             "03e3d4dc6fc8e75c65ffdb39b630ffe26e4b95982b9765c919e34fb940e66fc0 (ecb9c281c7e8cc354600d41e88d733faf2e991e1) → s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/auckland_3_2.laz",
@@ -215,7 +219,7 @@ def test_byod_raster_import(
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
             "Running fetch with --dry-run:",
-            "  Found 2 blobs to fetch from specific URLs",
+            "  Found 2 LFS blobs (627KiB) to fetch from specific URLs",
             "",
             "LFS blob OID:                                                    (Pointer file OID):",
             "c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa (6864fc3291a79b2ce9e4c89004172aa698b84d7c) → s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif",
@@ -237,3 +241,19 @@ def test_byod_raster_import(
             "Running fetch with --dry-run:",
             "  Found nothing to fetch",
         ]
+
+        # Make sure LFS blobs with URLs are not pushed to the remote:
+        r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
+        assert r.exit_code == 0, r.stderr
+        repo.config[f"lfs.{DUMMY_REPO}/info/lfs.locksverify"] = False
+
+        head_sha = repo.head_commit.hex
+        stdout = subprocess.check_output(
+            ["kart", "lfs+", "pre-push", "origin", "DUMMY_REPO", "--dry-run"],
+            input=f"main {head_sha} main 0000000000000000000000000000000000000000\n",
+            encoding="utf8",
+        )
+    assert (
+        stdout.splitlines()[0]
+        == "Running pre-push with --dry-run: found 0 LFS blobs (0B) to push"
+    )
