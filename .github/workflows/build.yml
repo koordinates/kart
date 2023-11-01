@@ -84,7 +84,7 @@ jobs:
       - name: "setup: misc"
         run: |
           sudo apt-get update -q -y
-          sudo apt-get install -q -y --no-install-recommends ccache
+          sudo apt-get install -q -y --no-install-recommends autoconf-archive ccache
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "/usr/lib/ccache" >> $GITHUB_PATH
 
@@ -313,7 +313,7 @@ jobs:
 
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
-          yum install -y perl-IPC-Cmd rpm-build unixODBC zip
+          yum install -y autoconf-archive perl-IPC-Cmd rpm-build unixODBC zip
 
           echo "installing golang..."
           curl -qL "https://go.dev/dl/go1.19.2.linux-${ARCH}.tar.gz" | tar xz -C /usr/local/
@@ -646,7 +646,7 @@ jobs:
       - name: "setup: misc"
         run: |
           sudo apt-get update -q -y
-          sudo apt-get install -q -y --no-install-recommends ccache unixodbc file sqlite3
+          sudo apt-get install -q -y --no-install-recommends autoconf-archive ccache unixodbc file sqlite3
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "/usr/lib/ccache" >> $GITHUB_PATH
 
