@@ -40,7 +40,7 @@ jsonschema==4.17.3
     # via -r requirements.in
 msgpack==0.6.2
     # via -r requirements.in
-#psycopg2==2.8.5
+#psycopg2==2.9.9
     # via -r vendor-wheels.txt
 pycparser==2.21
     # via cffi

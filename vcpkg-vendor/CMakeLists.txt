@@ -223,11 +223,11 @@ pg_config=${PG_CONFIG_EXE}
 define=
 ")
 
-set(PYSCOPG2_WHEEL_VER 2.8.5)
+set(PYSCOPG2_WHEEL_VER 2.9.9)
 ExternalProject_Add(
   psycopg2
-  URL https://files.pythonhosted.org/packages/a8/8f/1c5690eebf148d1d1554fc00ccf9101e134636553dbb75bdfef4f85d7647/psycopg2-2.8.5.tar.gz
-  URL_HASH SHA256=f7d46240f7a1ae1dd95aab38bd74f7428d46531f69219954266d669da60c0818
+  URL https://files.pythonhosted.org/packages/c9/5e/dc6acaf46d78979d6b03458b7a1618a68e152a6776fce95daac5e0f0301b/psycopg2-2.9.9.tar.gz
+  URL_HASH SHA256=d1454bde93fb1e224166811694d600e746430c006fbb031ea06ecc2ea41bf156
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
