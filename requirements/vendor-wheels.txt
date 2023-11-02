@@ -4,5 +4,5 @@ gdal==3.6.3
 psycopg2==2.9.9
 pygit2==1.9.0
 pyodbc==5.0.1
-pysqlite3==0.4.5
+pysqlite3==0.5.2
 reflink==0.2.1

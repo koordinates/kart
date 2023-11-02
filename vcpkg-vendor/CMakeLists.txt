@@ -328,7 +328,7 @@ include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
-set(PYSQLITE3_WHEEL_VER 0.4.5)
+set(PYSQLITE3_WHEEL_VER 0.5.2)
 ExternalProject_Add(
   pysqlite3
   GIT_REPOSITORY https://github.com/coleifer/pysqlite3.git
