@@ -52,7 +52,7 @@ pygments==2.13.0
     #   rst2txt
 pymysql==1.0.2
     # via -r requirements.in
-pyodbc==4.0.32
+pyodbc==5.0.1
     # via -r vendor-wheels.txt
 pyrsistent==0.19.2
     # via jsonschema
