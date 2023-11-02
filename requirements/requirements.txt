@@ -30,7 +30,7 @@ docutils==0.17.1
     #   rst2txt
 #gdal==3.6.3
     # via -r vendor-wheels.txt
-greenlet==2.0.1 ; os_name != "posix"
+greenlet==3.0.1
     # via sqlalchemy
 jmespath==1.0.1
     # via
