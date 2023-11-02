@@ -1,7 +1,7 @@
 include(PyCreateVirtualEnvironment)
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/bundleEnv.requirements.txt
-     "pyinstaller~=5.6.2\n" "macholib>=1.8;sys_platform=='darwin'\n")
+     "pyinstaller~=6.1.0\n" "macholib>=1.8;sys_platform=='darwin'\n")
 
 createvirtualenvironment(bundleEnv REQUIREMENTS_TXT "bundleEnv.requirements.txt")
 
