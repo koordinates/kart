@@ -237,19 +237,38 @@ pyi_app = BUNDLE(
     },
 )
 
+if is_win:
+    dist_bin_root = Path(DISTPATH) / 'Kart'
+elif is_darwin:
+    dist_bin_root = Path(DISTPATH) / 'Kart.app' / 'Contents' / 'MacOS'
+elif is_linux:
+    dist_bin_root = Path(DISTPATH) / 'kart'
+
+
+# Pyinstaller now hides most files inside a contents folder, defaults to /_internal/
+# see https://github.com/pyinstaller/pyinstaller/pull/7713
+dist_contents_root = (
+    (dist_bin_root / "_internal")
+    if (dist_bin_root / "_internal").is_dir()
+    else dist_bin_root
+)
+
+# We want not just the python executable but also the helper executable to be in the root folder.
+if USE_CLI_HELPER and dist_contents_root != dist_bin_root:
+    (dist_contents_root / f"kart{exe_suffix}").rename(
+        dist_bin_root / f"kart{exe_suffix}"
+    )
+
+
 # Ideally we'd do this before BUNDLE so it could sign it on macOS, but we
 # can do that ourselves later.
 if symlinks:
-    if is_darwin:
-        dist_bin_root = Path(DISTPATH) / 'Kart.app' / 'Contents' / 'MacOS'
-    elif is_linux:
-        dist_bin_root = Path(DISTPATH) / 'kart'
-    else:
+    if is_win:
         raise RuntimeError("Symlinks don't work well on Windows!")
 
     for sl, td in symlinks:
         sl, td = Path(sl), Path(td)
-        tp = dist_bin_root / td
+        tp = dist_contents_root / td
 
         st = sl.readlink()
 
