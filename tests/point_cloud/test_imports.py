@@ -174,7 +174,7 @@ def test_import_single_las__convert(
             )
             assert (
                 stdout.splitlines()[0]
-                == "Running pre-push with --dry-run: pushing 1 LFS blobs"
+                == "Running pre-push with --dry-run: found 1 LFS blob (3.5KiB) to push"
             )
 
             assert (repo_path / "autzen" / "autzen.copc.laz").is_file()
@@ -316,7 +316,7 @@ def test_import_several_laz__convert(
             )
             assert (
                 stdout.splitlines()[0]
-                == "Running pre-push with --dry-run: pushing 16 LFS blobs"
+                == "Running pre-push with --dry-run: found 16 LFS blobs (410KiB) to push"
             )
 
             for x in range(4):
