@@ -57,7 +57,7 @@ kart log
 kart checkout
 kart switch -c edit-1
 sqlite3 --bail test.gpkg "
-  SELECT load_extension('${KART_PATH}/mod_spatialite');
+  SELECT load_extension('${KART_PATH}/_internal/mod_spatialite');
   SELECT EnableGpkgMode();
   INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
 "
