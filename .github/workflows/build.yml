@@ -71,7 +71,7 @@ jobs:
       #
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@arm64-win-linux
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -297,7 +297,7 @@ jobs:
       # setup
       #
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@arm64-win-linux
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
