@@ -117,7 +117,7 @@ jobs:
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
 
@@ -127,7 +127,7 @@ jobs:
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
           buildPreset: ci-linux
@@ -161,7 +161,7 @@ jobs:
           mv fienode /usr/local/bin/
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
           testPreset: ci-linux
@@ -175,7 +175,7 @@ jobs:
       #
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
           buildPreset: ci-bundle-linux
@@ -186,7 +186,7 @@ jobs:
           ./build/pyinstaller/dist/kart/kart --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
           testPreset: ci-e2e-linux
@@ -359,7 +359,7 @@ jobs:
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         env:
           LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
         with:
@@ -856,12 +856,12 @@ jobs:
           fi
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
 
       - name: "app: build"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
           buildPreset: ci-macos
@@ -890,7 +890,7 @@ jobs:
           sudo mv clone_checker /usr/local/bin/
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
           testPreset: ci-macos
@@ -920,7 +920,7 @@ jobs:
               --password "$MACOS_NOTARIZE_PW"
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
           buildPreset: ci-bundle-macos
@@ -931,7 +931,7 @@ jobs:
           ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
           testPreset: ci-e2e-macos
@@ -1085,7 +1085,7 @@ jobs:
           fi
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
 
@@ -1095,7 +1095,7 @@ jobs:
           echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
           buildPreset: ci-windows
@@ -1117,7 +1117,7 @@ jobs:
           ./build/kart.cmd --version
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
           testPreset: ci-windows
@@ -1127,7 +1127,7 @@ jobs:
       #
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         env:
           SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
           SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
@@ -1143,7 +1143,7 @@ jobs:
           ./build/pyinstaller/dist/kart/kart.exe --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
           testPreset: ci-e2e-windows
