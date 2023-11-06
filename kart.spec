@@ -235,22 +235,26 @@ pyi_app = BUNDLE(
 )
 
 if is_win:
-    dist_bin_root = Path(DISTPATH) / 'Kart'
+    dist_bin_root = Path(DISTPATH) / "Kart"
 elif is_darwin:
-    dist_bin_root = Path(DISTPATH) / 'Kart.app' / 'Contents' / 'MacOS'
+    dist_bin_root = Path(DISTPATH) / "Kart.app" / "Contents" / "MacOS"
 elif is_linux:
-    dist_bin_root = Path(DISTPATH) / 'kart'
+    dist_bin_root = Path(DISTPATH) / "kart"
 
 
-# Pyinstaller now hides most files inside a contents folder, defaults to /_internal/
-# see https://github.com/pyinstaller/pyinstaller/pull/7713
-dist_contents_root = (
-    (dist_bin_root / "_internal")
-    if (dist_bin_root / "_internal").is_dir()
-    else dist_bin_root
-)
+if is_darwin:
+    # On macOS, helper executables and libraries are found in Kart.app/Contents/Frameworks
+    dist_contents_root = Path(DISTPATH) / "Kart.app" / "Contents" / "Frameworks"
+else:
+    # On other platforms Pyinstaller now hides such files inside a contents folder,
+    # defaults to /_internal/ see https://github.com/pyinstaller/pyinstaller/pull/7713
+    dist_contents_root = (
+        (dist_bin_root / "_internal")
+        if (dist_bin_root / "_internal").is_dir()
+        else dist_bin_root
+    )
 
-# We want not just the python executable but also the helper executable to be in the root folder.
+# We want not just the python executable but also the helper executable to be in the binary root folder.
 if USE_CLI_HELPER and dist_contents_root != dist_bin_root:
     (dist_contents_root / f"kart{exe_suffix}").rename(
         dist_bin_root / f"kart{exe_suffix}"
@@ -262,20 +266,30 @@ if USE_CLI_HELPER and dist_contents_root != dist_bin_root:
 if symlinks:
     if is_win:
         raise RuntimeError("Symlinks don't work well on Windows!")
+    elif is_darwin:
+        # On macOS, PyInstaller makes a Frameworks directory for binaries / libraries,
+        # and a Resources directory for data and populates them accordingly.
+        # But then it cross symlinks everything so that you can find it in both regardless.
+        # Now that we're setting up symlinks, that means we just need to set them up in both directories.
+        dist_resources_root = Path(DISTPATH) / "Kart.app" / "Contents" / "Resources"
+        dist_contents_roots = [dist_contents_root, dist_resources_root]
+    else:
+        dist_contents_roots = [dist_contents_root]
 
     for sl, td in symlinks:
         sl, td = Path(sl), Path(td)
-        tp = dist_contents_root / td
+        for root in dist_contents_roots:
+            tp = root / td
 
-        st = sl.readlink()
+            st = sl.readlink()
 
-        if sl.name == "git":  # git itself
-            (tp / sl.name).symlink_to("../../git")
-        elif str(st) == "../../bin/git":  # git-foo -> git
-            (tp / sl.name).symlink_to("../../git")
-        elif str(st) == st.name:  # git-foo -> git-bar
-            (tp / sl.name).symlink_to(st.name)
-        else:
-            raise ValueError(
-                "Found symlink I don't know how to handle: source={sl} -> {st}; dest={td}/{sl.name} -> ???"
-            )
+            if sl.name == "git":  # git itself
+                (tp / sl.name).symlink_to("../../git")
+            elif str(st) == "../../bin/git":  # git-foo -> git
+                (tp / sl.name).symlink_to("../../git")
+            elif str(st) == st.name:  # git-foo -> git-bar
+                (tp / sl.name).symlink_to(st.name)
+            else:
+                raise ValueError(
+                    "Found symlink I don't know how to handle: source={sl} -> {st}; dest={td}/{sl.name} -> ???"
+                )
