@@ -355,8 +355,10 @@ if(MACOS)
           COMMAND ${XCODE_CODESIGN} --display --verbose \"\${CHECK_DIR}/\${CPACK_PACKAGE_FILE_NAME}/Kart.app\"
           COMMAND_ECHO STDERR
           COMMAND_ERROR_IS_FATAL ANY)
+        # codesign --verify --strict=all only works in macOS 15 and later,
+        # a bug in earlier versions means it fails with 'file not found'
         execute_process(
-          COMMAND ${XCODE_CODESIGN} --verify --verbose --deep --strict=all \"\${CHECK_DIR}/\${CPACK_PACKAGE_FILE_NAME}/Kart.app\"
+          COMMAND ${XCODE_CODESIGN} --verify --verbose --deep \"\${CHECK_DIR}/\${CPACK_PACKAGE_FILE_NAME}/Kart.app\"
           COMMAND_ECHO STDERR
           COMMAND_ERROR_IS_FATAL ANY)
 

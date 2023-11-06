@@ -80,7 +80,9 @@ elseif(MACOS AND MACOS_SIGN_BUNDLE)
       --strict --entitlements ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/entitlements.plist -o
       runtime pyinstaller/dist/Kart.app
     COMMAND ${XCODE_CODESIGN} --display --verbose pyinstaller/dist/Kart.app
-    COMMAND ${XCODE_CODESIGN} --verify --verbose --deep --strict=all pyinstaller/dist/Kart.app
+    # codesign --verify --strict=all only works in macOS 15 and later,
+    # a bug in earlier versions means it fails with "file not found"
+    COMMAND ${XCODE_CODESIGN} --verify --verbose --deep pyinstaller/dist/Kart.app
     COMMAND ${CMAKE_COMMAND} -E touch pyinstaller/codesign.stamp
     VERBATIM
     COMMENT "Code-signing macOS bundle")
