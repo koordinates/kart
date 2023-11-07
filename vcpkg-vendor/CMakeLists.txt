@@ -283,6 +283,7 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL
 if(NOT WIN32)
   find_package(unixodbc CONFIG REQUIRED)
   set(PYODBC_BUILD_DEPENDS UNIX::odbc)
+  set(ODBC_CONFIG_DIR ${CURRENT_PACKAGES_DIR}/tools/unixodbc/bin)
 endif()
 
 file(
@@ -308,7 +309,8 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${ODBC_CONFIG_DIR} --
+          ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
