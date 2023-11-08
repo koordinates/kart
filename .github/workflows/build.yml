@@ -89,12 +89,11 @@ jobs:
           echo "/usr/lib/ccache" >> $GITHUB_PATH
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
+        uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a-ubuntu-22.04"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          doNotCache: false  # do-cache
 
       #
       # App Build
@@ -120,11 +119,6 @@ jobs:
         uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
-
-      - name: "check for vcpkg errors"
-        if: "failure() || cancelled()"
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
         uses: lukka/run-cmake@v10.6
@@ -324,12 +318,11 @@ jobs:
           fi
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
+        uses: lukka/run-vcpkg@v11.1
         with:
-          vcpkgDirectory: "vcpkg-vendor/vcpkg"
+          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20230113a-linux-${{ matrix.os.label }}"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          doNotCache: false  # do-cache
 
       - name: "setup: pkgconf"
         working-directory: /__w/_temp
@@ -365,12 +358,6 @@ jobs:
         with:
           configurePreset: ci-linux
           configurePresetAdditionalArgs: ${{ env.OPTIONS_FOR_CMAKE }}
-
-      - name: "check for vcpkg errors"
-        if: "failure() || cancelled()"
-        shell: bash
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
         shell: bash
@@ -1042,12 +1029,11 @@ jobs:
           cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
+        uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221201a"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:N${{ env.NINJA_VERSION }}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          doNotCache: false  # do-cache
 
       - name: "setup: misc"
         shell: pwsh
@@ -1088,11 +1074,6 @@ jobs:
         uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
-
-      - name: "check for vcpkg errors"
-        if: failure() || cancelled()
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
         uses: lukka/run-cmake@v10.6
