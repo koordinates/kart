@@ -55,7 +55,7 @@ jobs:
         ports:
           - 1433:1433
       mysql:
-        image: mysql
+        image: public.ecr.aws/docker/library/mysql:latest
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -255,7 +255,7 @@ jobs:
         ports:
           - 1433:1433
       mysql:
-        image: mysql
+        image: public.ecr.aws/docker/library/mysql:latest
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -473,34 +473,34 @@ jobs:
             runner: buildjet-2vcpu-ubuntu-2204-arm
         os:
           - label: "tgz-ubuntu-22.04"
-            image: "ubuntu:jammy"
+            image: "public.ecr.aws/ubuntu/ubuntu:jammy"
             type: "tgz"
           - label: "ubuntu-22.04"
-            image: "ubuntu:jammy"
+            image: "public.ecr.aws/ubuntu/ubuntu:jammy"
             type: "deb"
           - label: "ubuntu-20.04"
-            image: "ubuntu:focal"
+            image: "public.ecr.aws/ubuntu/ubuntu:focal"
             type: "deb"
           - label: "ubuntu-18.04"
-            image: "ubuntu:bionic"
+            image: "public.ecr.aws/ubuntu/ubuntu:bionic"
             type: "deb"
           - label: "debian-stable"
-            image: "debian:stable-slim"
+            image: "public.ecr.aws/docker/library/debian:stable-slim"
             type: "deb"
           - label: "debian-oldstable"
-            image: "debian:oldstable-slim"
+            image: "public.ecr.aws/docker/library/debian:oldstable-slim"
             type: "deb"
           - label: "amazonlinux-2023"
-            image: "amazonlinux:2023"
+            image: "public.ecr.aws/amazonlinux/amazonlinux:2023"
             type: "rpm"
           - label: "fedora-latest"
-            image: "fedora:latest"
+            image: "public.ecr.aws/docker/library/fedora:latest"
             type: "rpm"
           - label: "almalinux-9"
-            image: "almalinux:9"
+            image: "public.ecr.aws/docker/library/almalinux:9"
             type: "rpm"
           - label: "almalinux-8"
-            image: "almalinux:8"
+            image: "public.ecr.aws/docker/library/almalinux:8"
             type: "rpm"
 
     runs-on: ${{ matrix.arch.runner }}
