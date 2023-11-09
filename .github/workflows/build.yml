@@ -280,7 +280,7 @@ jobs:
       image: ${{ matrix.os.image }}
       env:
         ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
-        PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
+        PATH: "/opt/python/cp311-cp311/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
       - uses: actions/checkout@v3
@@ -601,7 +601,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      PY_VER_ID: "cp310-cp310"
+      PY_VER_ID: "cp311-cp311"
 
     steps:
       - uses: actions/checkout@v3
