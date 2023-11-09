@@ -11,6 +11,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Adds information on referencing and citing Kart to `CITATION`. [#914](https://github.com/koordinates/kart/pull/914)
 - Fixes a bug where Kart would misidentify a non-Kart repo as a Kart V1 repo in some circumstances. [#918](https://github.com/koordinates/kart/issues/918)
 - Improve schema extraction for point cloud datasets. [#924](https://github.com/koordinates/kart/issues/924)
+- Now using Python 3.11 to build Kart, and vendored dependencies have been updated to newer versions. [#933](https://github.com/koordinates/kart/pull/933)
 
 ## 0.14.2
 
