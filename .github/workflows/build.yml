@@ -4,7 +4,7 @@ name: Build
 on: [push, pull_request]
 
 env:
-  PY_VER: "3.10"
+  PY_VER: "3.11"
   CMAKE_VERSION: "~3.25.0"
   FORCE_COLOR: "YES"
   KART_S3_TEST_DATA_POINT_CLOUD: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
@@ -55,7 +55,7 @@ jobs:
         ports:
           - 1433:1433
       mysql:
-        image: mysql
+        image: public.ecr.aws/docker/library/mysql:latest
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -71,7 +71,7 @@ jobs:
       #
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@arm64-win-linux
+        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -84,17 +84,16 @@ jobs:
       - name: "setup: misc"
         run: |
           sudo apt-get update -q -y
-          sudo apt-get install -q -y --no-install-recommends ccache
+          sudo apt-get install -q -y --no-install-recommends autoconf-archive ccache
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "/usr/lib/ccache" >> $GITHUB_PATH
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
+        uses: lukka/run-vcpkg@v11.1
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221110a-ubuntu-22.04"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          doNotCache: false  # do-cache
 
       #
       # App Build
@@ -117,17 +116,12 @@ jobs:
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
 
-      - name: "check for vcpkg errors"
-        if: "failure() || cancelled()"
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
-
       - name: "app: build"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
           buildPreset: ci-linux
@@ -161,7 +155,7 @@ jobs:
           mv fienode /usr/local/bin/
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
           testPreset: ci-linux
@@ -175,7 +169,7 @@ jobs:
       #
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
           buildPreset: ci-bundle-linux
@@ -186,7 +180,7 @@ jobs:
           ./build/pyinstaller/dist/kart/kart --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-linux
           testPreset: ci-e2e-linux
@@ -261,7 +255,7 @@ jobs:
         ports:
           - 1433:1433
       mysql:
-        image: mysql
+        image: public.ecr.aws/docker/library/mysql:latest
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -286,7 +280,7 @@ jobs:
       image: ${{ matrix.os.image }}
       env:
         ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
-        PATH: "/opt/python/cp310-cp310/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
+        PATH: "/opt/python/cp311-cp311/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
       - uses: actions/checkout@v3
@@ -297,7 +291,7 @@ jobs:
       # setup
       #
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@arm64-win-linux
+        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -313,7 +307,7 @@ jobs:
 
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
-          yum install -y perl-IPC-Cmd rpm-build unixODBC zip
+          yum install -y autoconf-archive perl-IPC-Cmd rpm-build unixODBC zip
 
           echo "installing golang..."
           curl -qL "https://go.dev/dl/go1.19.2.linux-${ARCH}.tar.gz" | tar xz -C /usr/local/
@@ -324,12 +318,11 @@ jobs:
           fi
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
+        uses: lukka/run-vcpkg@v11.1
         with:
-          vcpkgDirectory: "vcpkg-vendor/vcpkg"
+          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20230113a-linux-${{ matrix.os.label }}"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          doNotCache: false  # do-cache
 
       - name: "setup: pkgconf"
         working-directory: /__w/_temp
@@ -359,18 +352,12 @@ jobs:
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         env:
           LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
         with:
           configurePreset: ci-linux
           configurePresetAdditionalArgs: ${{ env.OPTIONS_FOR_CMAKE }}
-
-      - name: "check for vcpkg errors"
-        if: "failure() || cancelled()"
-        shell: bash
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
 
       - name: "app: build"
         shell: bash
@@ -486,34 +473,34 @@ jobs:
             runner: buildjet-2vcpu-ubuntu-2204-arm
         os:
           - label: "tgz-ubuntu-22.04"
-            image: "ubuntu:jammy"
+            image: "public.ecr.aws/ubuntu/ubuntu:jammy"
             type: "tgz"
           - label: "ubuntu-22.04"
-            image: "ubuntu:jammy"
+            image: "public.ecr.aws/ubuntu/ubuntu:jammy"
             type: "deb"
           - label: "ubuntu-20.04"
-            image: "ubuntu:focal"
+            image: "public.ecr.aws/ubuntu/ubuntu:focal"
             type: "deb"
           - label: "ubuntu-18.04"
-            image: "ubuntu:bionic"
+            image: "public.ecr.aws/ubuntu/ubuntu:bionic"
             type: "deb"
           - label: "debian-stable"
-            image: "debian:stable-slim"
+            image: "public.ecr.aws/docker/library/debian:stable-slim"
             type: "deb"
           - label: "debian-oldstable"
-            image: "debian:oldstable-slim"
+            image: "public.ecr.aws/docker/library/debian:oldstable-slim"
             type: "deb"
           - label: "amazonlinux-2023"
-            image: "amazonlinux:2023"
+            image: "public.ecr.aws/amazonlinux/amazonlinux:2023"
             type: "rpm"
           - label: "fedora-latest"
-            image: "fedora:latest"
+            image: "public.ecr.aws/docker/library/fedora:latest"
             type: "rpm"
           - label: "almalinux-9"
-            image: "almalinux:9"
+            image: "public.ecr.aws/docker/library/almalinux:9"
             type: "rpm"
           - label: "almalinux-8"
-            image: "almalinux:8"
+            image: "public.ecr.aws/docker/library/almalinux:8"
             type: "rpm"
 
     runs-on: ${{ matrix.arch.runner }}
@@ -614,7 +601,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
-      PY_VER_ID: "cp310-cp310"
+      PY_VER_ID: "cp311-cp311"
 
     steps:
       - uses: actions/checkout@v3
@@ -633,7 +620,7 @@ jobs:
           cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@arm64-win-linux
+        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -646,7 +633,7 @@ jobs:
       - name: "setup: misc"
         run: |
           sudo apt-get update -q -y
-          sudo apt-get install -q -y --no-install-recommends ccache unixodbc file sqlite3
+          sudo apt-get install -q -y --no-install-recommends autoconf-archive ccache unixodbc file sqlite3
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "/usr/lib/ccache" >> $GITHUB_PATH
 
@@ -718,6 +705,7 @@ jobs:
   #
   macOS:
     strategy:
+      fail-fast: false
       matrix:
         os:
           - id: macos-12
@@ -748,7 +736,7 @@ jobs:
       MACOS_PKGSIGN_ID: ${{ secrets.MACOS_PKGSIGN_ID }}
       MACOS_NOTARIZE_KEYCHAIN_PROFILE: "NOTARIZE_AUTH"
       # X.Y version needs to match PY_VER:
-      PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.10.9/python-3.10.9-macos11.pkg"
+      PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.6/python-3.11.6-macos11.pkg"
 
     steps:
       - uses: actions/checkout@v3
@@ -855,12 +843,12 @@ jobs:
           fi
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
 
       - name: "app: build"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
           buildPreset: ci-macos
@@ -889,7 +877,7 @@ jobs:
           sudo mv clone_checker /usr/local/bin/
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
           testPreset: ci-macos
@@ -919,7 +907,7 @@ jobs:
               --password "$MACOS_NOTARIZE_PW"
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
           buildPreset: ci-bundle-macos
@@ -930,7 +918,7 @@ jobs:
           ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-macos
           testPreset: ci-e2e-macos
@@ -1041,12 +1029,11 @@ jobs:
           cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v10
+        uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          prependedCacheKey: "20221201a"
-          appendedCacheKey: "C${{ env.CMAKE_VERSION}}:N${{ env.NINJA_VERSION }}:${{ hashFiles('vcpkg-vendor/vcpkg-overlay-triplets/**', 'vcpkg-vendor/vcpkg-overlay-ports/**', 'vcpkg-vendor/vcpkg-toolchain-setup.cmake') }}"
+          doNotCache: false  # do-cache
 
       - name: "setup: misc"
         shell: pwsh
@@ -1084,17 +1071,12 @@ jobs:
           fi
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
 
-      - name: "check for vcpkg errors"
-        if: failure() || cancelled()
-        run: |
-          echo "RUNVCPKG_NO_CACHE=1" >> $GITHUB_ENV
-
       - name: "app: build"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
           buildPreset: ci-windows
@@ -1116,7 +1098,7 @@ jobs:
           ./build/kart.cmd --version
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
           testPreset: ci-windows
@@ -1126,7 +1108,7 @@ jobs:
       #
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         env:
           SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
           SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
@@ -1142,7 +1124,7 @@ jobs:
           ./build/pyinstaller/dist/kart/kart.exe --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10
+        uses: lukka/run-cmake@v10.6
         with:
           configurePreset: ci-windows
           testPreset: ci-e2e-windows

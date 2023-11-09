@@ -223,11 +223,11 @@ pg_config=${PG_CONFIG_EXE}
 define=
 ")
 
-set(PYSCOPG2_WHEEL_VER 2.8.5)
+set(PYSCOPG2_WHEEL_VER 2.9.9)
 ExternalProject_Add(
   psycopg2
-  URL https://files.pythonhosted.org/packages/a8/8f/1c5690eebf148d1d1554fc00ccf9101e134636553dbb75bdfef4f85d7647/psycopg2-2.8.5.tar.gz
-  URL_HASH SHA256=f7d46240f7a1ae1dd95aab38bd74f7428d46531f69219954266d669da60c0818
+  URL https://files.pythonhosted.org/packages/c9/5e/dc6acaf46d78979d6b03458b7a1618a68e152a6776fce95daac5e0f0301b/psycopg2-2.9.9.tar.gz
+  URL_HASH SHA256=d1454bde93fb1e224166811694d600e746430c006fbb031ea06ecc2ea41bf156
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv PostgreSQL::PostgreSQL
@@ -283,6 +283,7 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL
 if(NOT WIN32)
   find_package(unixodbc CONFIG REQUIRED)
   set(PYODBC_BUILD_DEPENDS UNIX::odbc)
+  set(ODBC_CONFIG_DIR ${CURRENT_PACKAGES_DIR}/tools/unixodbc/bin)
 endif()
 
 file(
@@ -294,12 +295,12 @@ include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
-set(PYODBC_WHEEL_VER 4.0.32)
+set(PYODBC_WHEEL_VER 5.0.1)
 ExternalProject_Add(
   pyodbc
   # if you build from a git repository, pyodbc adds +commit0c0ffee to the wheel version
-  URL https://files.pythonhosted.org/packages/d1/21/755f5fa373d01d1803d992c7611799dc4e9fcbb5db7d0852990d6ab3c9ad/pyodbc-4.0.32.tar.gz
-  URL_HASH SHA256=9be5f0c3590655e1968488410fe3528bb8023d527e7ccec1f663d64245071a6b
+  URL https://files.pythonhosted.org/packages/22/6f/012f32aecf744e439980257be0ba4dd8c70a4e03c9f86f5fcd986fbfb012/pyodbc-5.0.1.tar.gz
+  URL_HASH SHA256=03d7d0b04d5a9156099ce8d03e92f3956783746fa9234eb6f5b5cfc12b645011
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
@@ -308,7 +309,8 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${ODBC_CONFIG_DIR} --
+          ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
@@ -328,7 +330,7 @@ include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
-set(PYSQLITE3_WHEEL_VER 0.4.5)
+set(PYSQLITE3_WHEEL_VER 0.5.2)
 ExternalProject_Add(
   pysqlite3
   GIT_REPOSITORY https://github.com/coleifer/pysqlite3.git

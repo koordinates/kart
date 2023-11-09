@@ -38,6 +38,10 @@ export SHELL=/bin/bash
 
 KART_PATH=$(dirname "$(realpath "$(command -v kart)")")
 echo "Kart is at: ${KART_PATH}"
+
+SPATIALITE_PATH=$(echo 'from kart import spatialite_path; print(spatialite_path)' | kart --post-mortem 2>/dev/null | grep spatialite | awk '{print $2}')
+echo "Spatialite is at: ${SPATIALITE_PATH}"
+
 mkdir "${TMP_PATH}/test"
 cd "${TMP_PATH}/test"
 set -x
@@ -57,7 +61,8 @@ kart log
 kart checkout
 kart switch -c edit-1
 sqlite3 --bail test.gpkg "
-  SELECT load_extension('${KART_PATH}/mod_spatialite');
+  PRAGMA trusted_schema=1;
+  SELECT load_extension('${SPATIALITE_PATH}');
   SELECT EnableGpkgMode();
   INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
 "

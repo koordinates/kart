@@ -12,6 +12,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Fixes a bug where Kart would misidentify a non-Kart repo as a Kart V1 repo in some circumstances. [#918](https://github.com/koordinates/kart/issues/918)
 - Improve schema extraction for point cloud datasets. [#924](https://github.com/koordinates/kart/issues/924)
 - Some tweaks to `--dry-run` output of Kart LFS commands. [#932](https://github.com/koordinates/kart/pull/932)
+- Now using Python 3.11 to build Kart, and vendored dependencies have been updated to newer versions. [#933](https://github.com/koordinates/kart/pull/933)
 
 ## 0.14.2
 

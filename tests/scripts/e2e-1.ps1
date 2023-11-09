@@ -44,7 +44,7 @@ If ((Get-Item $KART_PATH).Directory.Name -eq 'Scripts') {
 Write-Output "Kart is at: ${KART_PATH} (Prefix: ${KART_PREFIX})"
 
 # Spatialite
-$SPATIALITE=("${KART_PREFIX}\mod_spatialite" -replace '\\', '/').ToLower()
+$SPATIALITE=("${KART_PREFIX}\_internal\mod_spatialite" -replace '\\', '/').ToLower()
 
 New-Item -ItemType Directory -Path "${TMP_PATH}\test"
 Push-Location "${TMP_PATH}\test"
