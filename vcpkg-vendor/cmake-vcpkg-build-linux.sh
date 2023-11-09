@@ -11,7 +11,7 @@ set -euo pipefail
 # - quay.io/pypa/manylinux2014_aarch64
 # should also work with most other OS images too (eg: ubuntu:jammy, ubuntu:focal)
 
-PYVER=3.10
+PYVER=3.11
 APT_DEPENDS=(
     autoconf
     build-essential

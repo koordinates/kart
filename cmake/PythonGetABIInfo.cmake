@@ -12,8 +12,8 @@ Output Variables:
     Python3_MACOSX_DEPLOYMENT_TARGET: (macOS only)
         Stores the macOS deployment target Python was built with (eg: 10.9)
     Python3_PURELIB_REL_PATH:
-        Relatuve path from a virtualenv root to the site-packages directory
-        eg: lib/python3.10/site-packages
+        Relative path from a virtualenv root to the site-packages directory
+        eg: lib/python3.11/site-packages
 
 #]=============================================================================]
 
