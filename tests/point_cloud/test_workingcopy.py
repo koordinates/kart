@@ -1102,7 +1102,7 @@ def test_lfs_fetch(cli_runner, data_archive):
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
             "Running fetch with --dry-run:",
-            "  Found 16 blobs to fetch from the remote",
+            "  Found 16 LFS blobs (410KiB) to fetch from the remote",
             "",
             "LFS blob OID:                                                    (Pointer file OID):",
             "0a696f35ab1404bbe9663e52774aaa800b0cf308ad2e5e5a9735d1c8e8b0a8c4 (7e8e0ec75c9c6b6654ebfc3b73f525a53f9db1de)",
@@ -1179,7 +1179,7 @@ def test_lfs_gc(cli_runner, data_archive, monkeypatch):
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
             "Running fetch with --dry-run:",
-            "  Found 4 blobs to fetch from the remote",
+            "  Found 4 LFS blobs (82KiB) to fetch from the remote",
             "",
             "LFS blob OID:                                                    (Pointer file OID):",
             "0a696f35ab1404bbe9663e52774aaa800b0cf308ad2e5e5a9735d1c8e8b0a8c4 (7e8e0ec75c9c6b6654ebfc3b73f525a53f9db1de)",

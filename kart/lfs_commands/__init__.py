@@ -120,25 +120,34 @@ def pre_push(ctx, remote_name, remote_url, dry_run):
 
     start_commits, stop_commits = get_start_and_stop_commits(sys.stdin)
 
-    lfs_oids = set()
+    # This is a dicts {lfs_oid: file_size} - see _lfs_blobs() function:
+    to_push = {}
+
     for commit_id, path_match_result, pointer_blob in rev_list_tile_pointer_files(
         repo, start_commits, [f"--remotes={remote_name}", *stop_commits]
     ):
         # Because of the way a Kart repo is laid out, we know that:
         # All LFS pointer files are blobs inside **/.*-dataset.v?/tile/** and conversely,
         # All blobs inside **/.*-dataset.v?/tile/** are LFS pointer files.
-        lfs_oids.add(get_hash_from_pointer_file(pointer_blob))
+        pointer_dict = pointer_file_bytes_to_dict(pointer_blob)
+        if pointer_dict.get("url"):
+            # Currently, the rule is that we never push pointer files that contain a URL.
+            # If anyone - any clone of this repo - needs the blob, they can fetch it directly from the URL.
+            # We may decide to allow for more complicated flows in a later version of Kart.
+            continue
+        lfs_oid = get_hash_from_pointer_file(pointer_dict)
+        to_push[lfs_oid] = pointer_dict["size"]
 
     if dry_run:
         click.echo(
-            f"Running pre-push with --dry-run: pushing {len(lfs_oids)} LFS blobs"
+            f"Running pre-push with --dry-run: found {_lfs_blobs(to_push)} to push"
         )
-        for lfs_oid in lfs_oids:
+        for lfs_oid in to_push:
             click.echo(lfs_oid)
         return
 
-    if lfs_oids:
-        push_lfs_oids(repo, remote_name, lfs_oids)
+    if to_push:
+        push_lfs_oids(repo, remote_name, to_push)
 
 
 def get_start_and_stop_commits(input_iter):
@@ -282,10 +291,6 @@ def fetch_lfs_blobs_for_commits(
     )
 
 
-def _blobs(count):
-    return "1 blob" if count == 1 else f"{count} blobs"
-
-
 def fetch_lfs_blobs_for_pointer_files(
     repo, pointer_files, *, remote_name=None, dry_run=False, quiet=False
 ):
@@ -302,6 +307,10 @@ def fetch_lfs_blobs_for_pointer_files(
     dry_run_output = []
     urls = []
     non_urls = []
+
+    # These are dicts {lfs_oid: file_size} - see _lfs_blobs() function:
+    urls_sizes = {}
+    non_urls_sizes = {}
 
     for pointer_file in pointer_files:
         if isinstance(pointer_file, str):
@@ -321,8 +330,10 @@ def fetch_lfs_blobs_for_pointer_files(
 
         if url:
             urls.append((url, lfs_oid))
+            urls_sizes[lfs_oid] = pointer_dict["size"]
         else:
             non_urls.append((pointer_file_oid, lfs_oid))
+            non_urls_sizes[lfs_oid] = pointer_dict["size"]
 
         if dry_run:
             if url:
@@ -333,9 +344,11 @@ def fetch_lfs_blobs_for_pointer_files(
     if dry_run:
         click.echo("Running fetch with --dry-run:")
         if urls:
-            click.echo(f"  Found {_blobs(len(urls))} to fetch from specific URLs")
+            click.echo(f"  Found {_lfs_blobs(urls_sizes)} to fetch from specific URLs")
         if non_urls:
-            found_non_urls = f"  Found {_blobs(len(non_urls))} to fetch from the remote"
+            found_non_urls = (
+                f"  Found {_lfs_blobs(non_urls_sizes)} to fetch from the remote"
+            )
             found_non_urls += "" if remote_name else " - but no remote is configured"
             click.echo(found_non_urls)
         if not urls and not non_urls:
@@ -411,7 +424,7 @@ LFS_OID_PATTERN = re.compile("[0-9a-fA-F]{64}")
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Don't fetch anything, just show what would be fetched",
+    help="Don't garbage-collect anything, just show what would be garbage-collected",
 )
 def gc(ctx, dry_run):
     """
@@ -440,11 +453,9 @@ def gc(ctx, dry_run):
         if dataset.path not in non_checkout_datasets:
             checked_out_lfs_oids.update(dataset.tile_lfs_hashes(spatial_filter))
 
-    to_delete = set()
-    total_size_to_delete = 0
-
-    to_delete_once_pushed = set()
-    total_size_to_delete_once_pushed = 0
+    # These are dicts {lfs_oid: file_size} - see _lfs_blobs() function.
+    to_delete = {}
+    to_delete_once_pushed = {}
 
     for file in (repo.gitdir_path / "lfs" / "objects").glob("**/*"):
         if not file.is_file() or not LFS_OID_PATTERN.fullmatch(file.name):
@@ -454,30 +465,43 @@ def gc(ctx, dry_run):
             continue  # Can't garbage-collect anything that's currently checked out.
 
         if file.name in unpushed_lfs_oids:
-            to_delete_once_pushed.add(file)
-            total_size_to_delete_once_pushed += file.stat().st_size
+            to_delete_once_pushed[file] = file.stat().st_size
         else:
-            to_delete.add(file)
-            total_size_to_delete += file.stat().st_size
+            to_delete[file] = file.stat().st_size
 
     if to_delete_once_pushed:
-        size_desc = human_readable_bytes(total_size_to_delete_once_pushed)
         click.echo(
-            f"Can't delete {len(to_delete_once_pushed)} LFS blobs ({size_desc}) from the cache since they have not been pushed to a remote"
+            f"Can't delete {_lfs_blobs(to_delete_once_pushed)} from the cache since they have not been pushed to a remote"
         )
 
-    size_desc = human_readable_bytes(total_size_to_delete)
     if dry_run:
         click.echo(
-            f"Running gc with --dry-run: found {len(to_delete)} LFS blobs ({size_desc}) to delete from the cache"
+            f"Running gc with --dry-run: found {_lfs_blobs(to_delete)} to delete from the cache"
         )
         for file in sorted(to_delete, key=lambda f: f.name):
             click.echo(file.name)
         return
 
-    click.echo(f"Deleting {len(to_delete)} LFS blobs ({size_desc}) from the cache...")
+    click.echo(f"Deleting {_lfs_blobs(to_delete)} from the cache...")
     for file in to_delete:
         file.unlink()
+
+
+def _lfs_blobs(file_size_dict):
+    """
+    Returns a string looking something like "5 LFS blobs (1MiB)".
+    Takes a dict of the form {lfs_oid: file_size_in_bytes}, where the length of the dict is the count of unique blobs.
+    This is because building a dict like this is a straight-forward way of getting a unique set of OIDs along
+    with a way of finding their total size; maintaining two separate variables - a set of OIDS and a total size -
+    makes the code more complicated.
+    """
+
+    count = len(file_size_dict)
+    total_size = sum(file_size_dict.values())
+
+    blobs = "blob" if count == 1 else "blobs"
+    size_desc = human_readable_bytes(total_size)
+    return f"{count} LFS {blobs} ({size_desc})"
 
 
 def human_readable_bytes(num):
