@@ -14,6 +14,7 @@ vcpkg_extract_source_archive(
         gaiaconfig-msvc.patch
         fix-mingw.patch
         fix-utf8-source.patch
+        ok-load-permanently.patch
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS unused
