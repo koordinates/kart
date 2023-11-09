@@ -205,6 +205,7 @@ else()
             ${RTTOPO_OPTION}
             "--disable-examples"
             "--disable-minizip"
+            "--disable-proj"
         OPTIONS_DEBUG
             "LIBS=${PKGCONFIG_LIBS_DEBUG} ${SYSTEM_LIBS}"
         OPTIONS_RELEASE
