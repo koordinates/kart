@@ -8,13 +8,9 @@ vcpkg_from_github(
     HEAD_REF master
     PATCHES
         fix-dependency.patch
-        fix-unix-compiler-options.patch
         fix-find-library-suffix.patch
         no-pkgconfig-requires.patch
         no-rpath.patch
-        fix-gcc-13-build.patch  #upstream PR: https://github.com/PDAL/PDAL/pull/4039
-        gdal-3.7.patch
-        mingw.patch
         install-dimbuilder.patch
 )
 

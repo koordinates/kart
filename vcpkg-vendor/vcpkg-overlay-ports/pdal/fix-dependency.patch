@@ -1,18 +1,18 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d13d417..011608d 100644
+index 5bec0d744..ea519a9db 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -269,7 +269,7 @@ target_link_libraries(${PDAL_BASE_LIB_NAME}
+@@ -246,7 +246,7 @@ target_link_libraries(${PDAL_LIB_NAME}
      PRIVATE
          ${CMAKE_THREAD_LIBS_INIT}
          ${CMAKE_DL_LIBS}
 -        ${GDAL_LIBRARY}
 +        ${GDAL_LIBRARIES}
+         ${PROJ_LIBRARIES}
          ${GEOTIFF_LIBRARY}
          ${LIBXML2_LIBRARIES}
-         ${ZLIB_LIBRARIES}
 diff --git a/cmake/zstd.cmake b/cmake/zstd.cmake
-index dfe3dc0..42a78d6 100644
+index dfe3dc024..42a78d646 100644
 --- a/cmake/zstd.cmake
 +++ b/cmake/zstd.cmake
 @@ -4,7 +4,14 @@
@@ -32,7 +32,7 @@ index dfe3dc0..42a78d6 100644
          PURPOSE "General compression support")
      if (ZSTD_FOUND)
 diff --git a/pdal/private/KDImpl.hpp b/pdal/private/KDImpl.hpp
-index 473ffba..db6a7b0 100644
+index 473ffba36..db6a7b05f 100644
 --- a/pdal/private/KDImpl.hpp
 +++ b/pdal/private/KDImpl.hpp
 @@ -97,7 +97,7 @@ public:
