@@ -124,7 +124,14 @@ def test_postgis_import_various_field_types(
         "techs10": {"dataType": "text", "length": 100},
         "tumeric20_": {"dataType": "numeric", "precision": 20, "scale": 0},
         "tumeric4_0": {"dataType": "numeric", "precision": 4, "scale": 0},
-        "tumeric5_5": {"dataType": "numeric", "precision": 5, "scale": 5},
+        # DBF files store numeric number types with a certain width which is the number of ASCII characters.
+        # See https://gdal.org/development/rfc/rfc94_field_precision_width_metadata.html
+        # SQL / Kart / OGR instead store number types as having a certain number of digits, ie, "123" and "-1.23"
+        # both have the same number of digits but the second has 2 more characters when stored in a DBF file.
+        # Since we are using OGR to convert the type of a column - not any particular value - OGR adds some extra
+        # width that may or may not be needed - a number with 5 digits may have up to 7 chars, a number with 7 chars
+        # may have up to 7 digits. This is why this type doesn't roundtrip properly. Not a lot we can do about it.
+        "tumeric5_5": {"dataType": "numeric", "precision": 7, "scale": 5},
         "tumeric99_": {"dataType": "numeric", "precision": 99, "scale": 0},
         # These two types conversions are regrettable, but unavoidable as we are using OGR.
         "reel": {"dataType": "float", "size": 64},
