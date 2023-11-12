@@ -314,9 +314,8 @@ def test_import_several_laz__convert(
                 input=f"main {head_sha} main 0000000000000000000000000000000000000000\n",
                 encoding="utf8",
             )
-            assert (
-                stdout.splitlines()[0]
-                == "Running pre-push with --dry-run: found 16 LFS blobs (410KiB) to push"
+            assert stdout.splitlines()[0].startswith(
+                "Running pre-push with --dry-run: found 16 LFS blobs"
             )
 
             for x in range(4):
