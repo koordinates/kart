@@ -117,11 +117,11 @@ library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 $<$<NOT:$<PLATFORM_ID:Windows>>:rpath=${CURRENT_PACKAGES_DIR}/lib>
 ")
 
-set(CFFI_WHEEL_VER 1.15.1)
+set(CFFI_WHEEL_VER 1.16.0)
 ExternalProject_Add(
   cffi
-  URL https://files.pythonhosted.org/packages/2b/a8/050ab4f0c3d4c1b8aaa805f70e26e84d0e27004907c5b8ecc1d31815f92a/cffi-1.15.1.tar.gz
-  URL_HASH SHA256=d400bfb9a37b1351253cb402671cea7e89bdecc294e8016a707f6d1d8ac934f9
+  URL https://files.pythonhosted.org/packages/68/ce/95b0bae7968c65473e1298efb042e10cafc7bafc14d9e4f154008241c91d/cffi-1.16.0.tar.gz
+  URL_HASH SHA256=bcb3ef43e58665bbda2fb198698fcae6776483e0c4a631aa5647806c25e02cc0
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv libffi
@@ -398,11 +398,11 @@ list(APPEND WHEEL_LIST
 # reflink wheel
 #
 
-set(REFLINK_WHEEL_VER 0.2.1)
+set(REFLINK_WHEEL_VER 0.2.2)
 ExternalProject_Add(
   reflink
-  URL https://files.pythonhosted.org/packages/6f/f3/9b59f07d3add9e34e97f3e29ab863ab13c0c01aa1f6cccdbabda9fd957f2/reflink-0.2.1.tar.gz
-  URL_HASH SHA256=c9253582db24413bfd703abfc1b2a49de78f31b4907239f286e9a1929a1e6e3a
+  URL https://files.pythonhosted.org/packages/63/47/b503f286378336aa6d2fd3caad10633bb79f3bc6256f1f2f9102dacb3c98/reflink-0.2.2.tar.gz
+  URL_HASH SHA256=882375ee7319275ae5f6a6a1287406365dac1e9643b91ad10e5187d3f84253bd
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv
