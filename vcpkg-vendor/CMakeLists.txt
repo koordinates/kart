@@ -469,16 +469,8 @@ list(APPEND LIB_LIST ${SPATIALITE_EXTENSION})
 find_package(PDAL CONFIG REQUIRED)
 pkg_check_modules(PDAL REQUIRED pdal)
 
-get_target_property(PDALUTIL_LIBRARY pdal_util LOCATION)
-if(WIN32 OR APPLE)
-  get_target_property(PDALCPP_LIBRARY pdalcpp LOCATION)
-  list(APPEND LIB_LIST ${PDALCPP_LIBRARY} ${PDALUTIL_LIBRARY})
-else()
-  get_target_property(PDALBASE_LIBRARY pdal_base LOCATION)
-  # set(PDALCPP_LIBRARY ${PDAL_LINK_LIBRARIES}) # why is this different on macOS vs Linux? And why
-  # isn't it a target?
-  list(APPEND LIB_LIST ${PDALBASE_LIBRARY} ${PDALUTIL_LIBRARY})
-endif()
+get_target_property(PDALCPP_LIBRARY pdalcpp LOCATION)
+list(APPEND LIB_LIST ${PDALCPP_LIBRARY})
 
 set(PDAL_EXECUTABLE "${CURRENT_PACKAGES_DIR}/tools/pdal/pdal${CMAKE_EXECUTABLE_SUFFIX}")
 list(APPEND EXE_LIST "${PDAL_EXECUTABLE}")
