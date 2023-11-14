@@ -84,3 +84,10 @@ class ByodTileImporter:
 
     def prompt_for_convert_to_cloud_optimized(self):
         return False
+
+    def write_meta_blobs_to_stream(self, stream, merged_metadata):
+        merged_metadata = {
+            **merged_metadata,
+            "linked-storage.json": {"urlRedirects": {}},
+        }
+        super().write_meta_blobs_to_stream(stream, merged_metadata)

@@ -58,6 +58,8 @@ class TileDataset(BaseDataset):
     SCHEMA_JSON = meta_items.SCHEMA_JSON
     CRS_WKT = meta_items.CRS_WKT
 
+    LINKED_STORAGE_JSON = meta_items.LINKED_STORAGE_JSON
+
     # Subclasses may override to add extra meta-items.
     META_ITEMS = (
         TITLE,
@@ -66,6 +68,7 @@ class TileDataset(BaseDataset):
         FORMAT_JSON,
         SCHEMA_JSON,
         CRS_WKT,
+        LINKED_STORAGE_JSON,
     )
 
     @property

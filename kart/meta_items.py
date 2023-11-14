@@ -187,6 +187,9 @@ TAGS_JSON = MetaItemDefinition("tags.json", TagsJsonFileType.INSTANCE)
 # JSON representation of the dataset's schema. See kart/tabular/schema.py, datasets_v3.rst
 SCHEMA_JSON = MetaItemDefinition("schema.json", SchemaJsonFileType.INSTANCE)
 
+# Extra metadata for datasets where are linked to some non-Kart-based remote storage (such as S3).
+LINKED_STORAGE_JSON = MetaItemDefinition("linked-storage.json", MetaItemFileType.JSON)
+
 # No more than one unnamed CRS definition in a single file named "crs.wkt":
 CRS_WKT = MetaItemDefinition("crs.wkt", MetaItemFileType.WKT)
 
