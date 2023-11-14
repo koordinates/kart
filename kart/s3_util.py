@@ -126,7 +126,6 @@ def fetch_from_s3(s3_url, output_path=None, sha256_hash=None):
     If sha_256 hash is set, verifies that the downloaded file has the expected hash -
         if it does not, deletes the downloaded file and raises a ValueError.
     """
-    # TODO: handle failure.
     bucket, key = parse_s3_url(s3_url)
     if output_path is None:
         fd, output_path = tempfile.mkstemp()
@@ -183,7 +182,6 @@ def expand_s3_glob(source_spec):
     Subdirectories (or the S3 equivalent - S3 is not exactly a directory hierarchy) are not matched -
     that is, s3://bucket/path/*.txt matches s3://bucket/path/example.txt but not s3://bucket/path/subpath/example.txt
     """
-    # TODO: handle any kind of failure, sanity check to make sure we don't match a million objects.
     if "*" not in source_spec:
         return [source_spec]
 

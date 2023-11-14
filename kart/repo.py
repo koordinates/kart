@@ -802,6 +802,12 @@ class KartRepo(pygit2.Repository):
     def workdir_file(self, rel_path):
         return self.workdir_path / rel_path
 
+    @cached_property
+    def lfs_tmp_path(self):
+        result = self.gitdir_path / "lfs" / "objects" / "tmp"
+        result.mkdir(parents=True, exist_ok=True)
+        return result
+
     def write_gitdir_file(self, rel_path, text):
         assert isinstance(text, str)
         if not text.endswith("\n"):

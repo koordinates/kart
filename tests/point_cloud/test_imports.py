@@ -975,3 +975,132 @@ def test_import_extra_bytes_vlr__convert_to_copc(
                     ]
                 }
             }
+
+
+@pytest.mark.slow
+def test_point_cloud_import_from_s3__no_convert(
+    tmp_path,
+    chdir,
+    cli_runner,
+    s3_test_data_point_cloud,
+    check_lfs_hashes,
+    check_tile_is_reflinked,
+):
+    repo_path = tmp_path / "point-cloud-repo"
+    r = cli_runner.invoke(["init", repo_path])
+    assert r.exit_code == 0
+
+    repo = KartRepo(repo_path)
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            [
+                "point-cloud-import",
+                s3_test_data_point_cloud,
+                "--message=test_import_from_s3_no_convert",
+                "--dataset-path=auckland",
+                "--preserve-format",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        check_lfs_hashes(repo, 16)
+
+        r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "auckland": {
+                "format.json": {
+                    "compression": "laz",
+                    "lasVersion": "1.2",
+                    "pointDataRecordFormat": 3,
+                    "pointDataRecordLength": 34,
+                }
+            }
+        }
+
+        r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[4:] == [
+            "    test_import_from_s3_no_convert",
+            "",
+            "+++ auckland:tile:auckland_0_0",
+            "+                                     name = auckland_0_0.laz",
+            "+                              crs84Extent = POLYGON((174.7384483 -36.8512371,174.7382443 -36.8422277,174.7494540 -36.8420632,174.7496594 -36.8510726,174.7384483 -36.8512371))",
+            "+                                   format = laz-1.2",
+            "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
+            "+                               pointCount = 4231",
+            "+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
+            "+                                     size = 51489",
+        ]
+
+        for x in range(4):
+            for y in range(4):
+                assert (repo_path / "auckland" / f"auckland_{x}_{y}.laz").is_file()
+                check_tile_is_reflinked(
+                    repo_path / "auckland" / f"auckland_{x}_{y}.laz", repo
+                )
+
+
+@pytest.mark.slow
+def test_point_cloud_import_from_s3__convert(
+    tmp_path,
+    chdir,
+    cli_runner,
+    s3_test_data_point_cloud,
+    check_lfs_hashes,
+    check_tile_is_reflinked,
+):
+    repo_path = tmp_path / "point-cloud-repo"
+    r = cli_runner.invoke(["init", repo_path])
+    assert r.exit_code == 0
+
+    repo = KartRepo(repo_path)
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            [
+                "point-cloud-import",
+                s3_test_data_point_cloud,
+                "--message=test_import_from_s3_convert",
+                "--dataset-path=auckland",
+                "--convert-to-copc",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        check_lfs_hashes(repo, 16)
+
+        r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "auckland": {
+                "format.json": {
+                    "compression": "laz",
+                    "lasVersion": "1.4",
+                    "optimization": "copc",
+                    "optimizationVersion": "1.0",
+                    "pointDataRecordFormat": 7,
+                    "pointDataRecordLength": 36,
+                }
+            }
+        }
+
+        r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[4:-2] == [
+            "    test_import_from_s3_convert",
+            "",
+            "+++ auckland:tile:auckland_0_0",
+            "+                                     name = auckland_0_0.copc.laz",
+            "+                              crs84Extent = POLYGON((174.7384483 -36.8512371,174.7382443 -36.8422277,174.7494540 -36.8420632,174.7496594 -36.8510726,174.7384483 -36.8512371))",
+            "+                                   format = laz-1.4/copc-1.0",
+            "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
+            "+                               pointCount = 4231",
+            "+                                sourceOid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
+        ]
+
+        for x in range(4):
+            for y in range(4):
+                assert (repo_path / "auckland" / f"auckland_{x}_{y}.copc.laz").is_file()
+                check_tile_is_reflinked(
+                    repo_path / "auckland" / f"auckland_{x}_{y}.copc.laz", repo
+                )
