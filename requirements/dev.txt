@@ -5,9 +5,7 @@
 #    "cmake --build build --target py-requirements"
 #
 appnope==0.1.3
-    # via
-    #   -r dev.in
-    #   ipython
+    # via -r dev.in
 asttokens==2.2.1
     # via stack-data
 backcall==0.2.0
@@ -25,7 +23,7 @@ executing==1.2.0
     # via stack-data
 ipdb==0.13.11
     # via -r dev.in
-ipython==8.7.0
+ipython==8.10.0
     # via
     #   -r dev.in
     #   ipdb
