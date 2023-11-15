@@ -211,7 +211,9 @@ class RasterImporter(TileImporter):
 
     def sidecar_files(self, source):
         source = str(source)
-        if self.DATASET_CLASS.remove_tile_extension(source) == source:
+        if source.startswith("s3://"):
+            # Can't directly check if this S3 object exists, but here's where it should be:
+            yield source + PAM_SUFFIX, PAM_SUFFIX
             return
 
         pam_path = source + PAM_SUFFIX

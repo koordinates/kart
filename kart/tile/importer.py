@@ -10,6 +10,7 @@ import sys
 import uuid
 
 import click
+import botocore
 import pygit2
 
 from kart.cli_util import find_param
@@ -447,9 +448,19 @@ class TileImporter:
             local_path = self.repo.lfs_tmp_path / str(uuid.uuid4())
             fetch_from_s3(source, local_path)
             tile_path = local_path
+            # Also fetch sidecar files, if present.
+            for sidecar_file, suffix in self.sidecar_files(source):
+                try:
+                    fetch_from_s3(
+                        sidecar_file,
+                        local_path.with_name(local_path.name + suffix),
+                    )
+                except botocore.exceptions.ClientError as e:
+                    pass  # This kind of sidecar file doesn't exist for this tile. That's okay.
         else:
             local_path = None
             tile_path = source
+
         metadata = self.extract_tile_metadata_from_filesystem_path(tile_path)
         return local_path, metadata
 
@@ -711,7 +722,9 @@ class TileImporter:
                 blob_path = f"{self.dataset_inner_path}/{rel_blob_path}"
                 write_blob_to_stream(stream, blob_path, pointer_data)
 
-                for sidecar_file, suffix in self.sidecar_files(source):
+                for sidecar_file, suffix in self.sidecar_files(
+                    self.source_to_local_path.get(source) or source
+                ):
                     pointer_dict = self.copy_file_to_local_lfs_cache(sidecar_file)
                     pointer_data = dict_to_pointer_file_bytes(pointer_dict)
                     write_blob_to_stream(stream, blob_path + suffix, pointer_data)
