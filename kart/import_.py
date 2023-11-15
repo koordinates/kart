@@ -5,6 +5,7 @@ from kart.cli_util import (
     call_and_exit_flag,
     KartCommand,
     find_param,
+    forward_context_to_command,
 )
 from kart.completion_shared import file_path_completer
 from kart.import_sources import from_spec, suggest_specs
@@ -60,13 +61,23 @@ def list_import_formats(ctx):
 @click.option(
     "--dataset-path", "--dataset", "ds_path", help="The dataset's path once imported"
 )
+@click.option(
+    "--link",
+    "do_link",
+    is_flag=True,
+    help=(
+        "Link the created dataset to the original source location, so that the original source location is treated as "
+        "the authoritative source for the given data and data is fetched from there if needed. Only supported for "
+        "tile-based datasets."
+    ),
+)
 @click.argument(
     "args",
     nargs=-1,
     metavar="SOURCE [[SOURCES...] or [DATASETS...]]",
     shell_complete=file_path_completer,
 )
-def import_(ctx, args, **kwargs):
+def import_(ctx, args, do_link, **kwargs):
     """
     Import data into a repository.
     This is a one-size-fits-all command - look up the following commands for more
@@ -134,8 +145,13 @@ def import_(ctx, args, **kwargs):
             f"Try one of the following:\n{suggest_specs()}"
         )
 
-    import_cmd = import_source_type.import_cmd
+    if do_link:
+        import_cmd = import_source_type.linked_import_cmd
+        if import_cmd is None:
+            raise click.UsageError(
+                "--link is not supported for vector or tabular imports"
+            )
+    else:
+        import_cmd = import_source_type.import_cmd
 
-    subctx = import_cmd.make_context(import_cmd.name, ctx.unparsed_args)
-    subctx.obj = ctx.obj
-    subctx.forward(import_cmd)
+    forward_context_to_command(ctx, import_cmd)

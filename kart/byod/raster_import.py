@@ -6,7 +6,7 @@ from kart.byod.importer import ByodTileImporter
 from kart.cli_util import StringFromFile, MutexOption, KartCommand
 from kart.raster.import_ import RasterImporter
 from kart.raster.metadata_util import extract_raster_tile_metadata
-from kart.s3_util import get_hash_and_size_of_s3_object, fetch_from_s3
+from kart.s3_util import get_hash_and_size_of_s3_object
 
 
 L = logging.getLogger(__name__)
@@ -14,6 +14,15 @@ L = logging.getLogger(__name__)
 
 @click.command("byod-raster-import", hidden=True, cls=KartCommand)
 @click.pass_context
+@click.option(
+    "--convert-to-cog/--no-convert-to-cog",
+    "--cloud-optimized/--no-cloud-optimized",
+    "--cloud-optimised/--no-cloud-optimised",
+    " /--preserve-format",
+    is_flag=True,
+    default=None,
+    help="Whether to convert all GeoTIFFs to COGs (Cloud Optimized GeoTIFFs), or to import all files in their native format.",
+)
 @click.option(
     "--message",
     "-m",
@@ -82,6 +91,18 @@ L = logging.getLogger(__name__)
     hidden=True,
 )
 @click.option("--dataset-path", "--dataset", help="The dataset's path once imported")
+@click.option(
+    "--link",
+    "do_link",
+    is_flag=True,
+    default=True,
+    hidden=True,
+    help=(
+        "Link the created dataset to the original source location, so that the original source location is treated as "
+        "the authoritative source for the given data and data is fetched from there if needed. Only supported for "
+        "tile-based datasets."
+    ),
+)
 @click.argument(
     "sources",
     nargs=-1,
@@ -89,6 +110,7 @@ L = logging.getLogger(__name__)
 )
 def byod_raster_import(
     ctx,
+    convert_to_cog,
     message,
     do_checkout,
     replace_existing,
@@ -98,13 +120,24 @@ def byod_raster_import(
     allow_empty,
     num_workers,
     dataset_path,
+    do_link,
     sources,
 ):
     """
-    Experimental. Import a dataset of raster tiles from S3. Doesn't fetch the tiles, does store the tiles original location.
+    Import a dataset of raster tiles from S3. Doesn't fetch the tiles, does store the tiles original location.
 
     SOURCES should be one or more GeoTIFF files (or wildcards that match multiple GeoTIFF files).
     """
+    if not do_link:
+        # This is here for technical reasons - all the options are forwarded from one command to another, including --link.
+        # In practise we don't expect the user to set --link at all if they are also manually calling this (hidden) command.
+        raise click.UsageError("Can't do a linked-import with --link=false")
+    if convert_to_cog:
+        raise click.UsageError(
+            "Sorry, converting a linked dataset to COG is not supported - "
+            "the data must remain in its original location and its original format as the authoritative source."
+        )
+
     repo = ctx.obj.repo
 
     ByodRasterImporter(

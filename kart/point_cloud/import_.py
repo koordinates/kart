@@ -2,7 +2,12 @@ import logging
 
 import click
 
-from kart.cli_util import StringFromFile, MutexOption, KartCommand
+from kart.cli_util import (
+    StringFromFile,
+    MutexOption,
+    KartCommand,
+    forward_context_to_command,
+)
 from kart.completion_shared import file_path_completer
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
 from kart.parse_args import parse_import_sources_and_datasets
@@ -98,6 +103,15 @@ L = logging.getLogger(__name__)
     hidden=True,
 )
 @click.option("--dataset-path", "--dataset", help="The dataset's path once imported")
+@click.option(
+    "--link",
+    "do_link",
+    is_flag=True,
+    help=(
+        "Link the created dataset to the original source location, so that the original source location is treated as "
+        "the authoritative source for the given data and data is fetched from there if needed."
+    ),
+)
 @click.argument(
     "args",
     nargs=-1,
@@ -116,6 +130,7 @@ def point_cloud_import(
     allow_empty,
     num_workers,
     dataset_path,
+    do_link,
     args,
 ):
     """
@@ -123,6 +138,12 @@ def point_cloud_import(
 
     SOURCES should be one or more LAZ or LAS files (or wildcards that match multiple LAZ or LAS files).
     """
+    if do_link:
+        from kart.byod.point_cloud_import import byod_point_cloud_import
+
+        forward_context_to_command(ctx, byod_point_cloud_import)
+        return
+
     repo = ctx.obj.repo
 
     sources, datasets = parse_import_sources_and_datasets(args)
