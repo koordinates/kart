@@ -12,6 +12,7 @@ vcpkg_from_github(
         no-pkgconfig-requires.patch
         no-rpath.patch
         install-dimbuilder.patch
+        arbiter-aws-no-sign-request.patch # Merged upstream: https://github.com/connormanning/arbiter/pull/48
 )
 
 # Prefer pristine CMake find modules + wrappers and config files from vcpkg.
