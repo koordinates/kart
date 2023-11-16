@@ -39,7 +39,7 @@ from kart.lfs_util import (
 )
 from kart.list_of_conflicts import ListOfConflicts
 from kart.meta_items import MetaItemFileType
-from kart.s3_util import expand_s3_glob, fetch_from_s3
+from kart.s3_util import expand_s3_glob, fetch_from_s3, get_error_code
 from kart.progress_util import progress_bar
 from kart.output_util import (
     format_json_for_output,
@@ -456,7 +456,11 @@ class TileImporter:
                         local_path.with_name(local_path.name + suffix),
                     )
                 except botocore.exceptions.ClientError as e:
-                    pass  # This kind of sidecar file doesn't exist for this tile. That's okay.
+                    if get_error_code(e) == 404:
+                        # Not having any particular type of sidecar for any particular tile is allowed.
+                        continue
+                    else:
+                        raise e
         else:
             local_path = None
             tile_path = source
