@@ -1,3 +1,4 @@
+import json
 import pytest
 
 from kart.exceptions import INVALID_ARGUMENT, NO_CHANGES
@@ -397,3 +398,125 @@ def test_import_single_geotiff_with_rat(
                 "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
                 36908,
             )
+
+
+@pytest.mark.slow
+def test_raster_import_from_s3__no_convert(
+    tmp_path,
+    chdir,
+    cli_runner,
+    s3_test_data_raster,
+    check_lfs_hashes,
+    check_tile_is_reflinked,
+):
+    repo_path = tmp_path / "raster-repo"
+    r = cli_runner.invoke(["init", repo_path])
+    assert r.exit_code == 0
+
+    repo = KartRepo(repo_path)
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            [
+                "raster-import",
+                s3_test_data_raster,
+                "--message=test_import_from_s3_no_convert",
+                "--dataset-path=erorisk_si",
+                "--preserve-format",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        check_lfs_hashes(repo, 2)
+
+        r = cli_runner.invoke(["meta", "get", "erorisk_si", "format.json", "-ojson"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "erorisk_si": {"format.json": {"fileType": "geotiff"}}
+        }
+
+        r = cli_runner.invoke(["show", "HEAD", "erorisk_si:tile"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[4:] == [
+            "    test_import_from_s3_no_convert",
+            "",
+            "+++ erorisk_si:tile:erorisk_silcdb4",
+            "+                                     name = erorisk_silcdb4.tif",
+            "+                              crs84Extent = POLYGON((172.6754107 -43.7555641,172.6748326 -43.8622096,172.8170036 -43.8625257,172.8173289 -43.755879,172.6754107 -43.7555641,172.6754107 -43.7555641))",
+            "+                               dimensions = 762x790",
+            "+                                   format = geotiff/cog",
+            "+                             nativeExtent = POLYGON((1573869.73 5155224.347,1573869.73 5143379.674,1585294.591 5143379.674,1585294.591 5155224.347,1573869.73 5155224.347))",
+            "+                                      oid = sha256:c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
+            "+                                     size = 604652",
+            "+                                  pamName = erorisk_silcdb4.tif.aux.xml",
+            "+                                   pamOid = sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
+            "+                                  pamSize = 36908",
+        ]
+
+        assert (repo_path / "erorisk_si" / "erorisk_silcdb4.tif").is_file()
+        check_tile_is_reflinked(repo_path / "erorisk_si" / "erorisk_silcdb4.tif", repo)
+        assert (repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml").is_file()
+        check_tile_is_reflinked(
+            repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml", repo
+        )
+
+
+@pytest.mark.slow
+def test_raster_import_from_s3__convert(
+    tmp_path,
+    chdir,
+    cli_runner,
+    s3_test_data_raster,
+    check_lfs_hashes,
+    check_tile_is_reflinked,
+):
+    repo_path = tmp_path / "raster-repo"
+    r = cli_runner.invoke(["init", repo_path])
+    assert r.exit_code == 0
+
+    repo = KartRepo(repo_path)
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            [
+                "raster-import",
+                s3_test_data_raster,
+                "--message=test_import_from_s3_convert",
+                "--dataset-path=erorisk_si",
+                "--convert-to-cog",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        check_lfs_hashes(repo, 2)
+
+        r = cli_runner.invoke(["meta", "get", "erorisk_si", "format.json", "-ojson"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "erorisk_si": {
+                "format.json": {"fileType": "geotiff", "profile": "cloud-optimized"}
+            }
+        }
+
+        r = cli_runner.invoke(["show", "HEAD", "erorisk_si:tile"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[4:] == [
+            "    test_import_from_s3_convert",
+            "",
+            "+++ erorisk_si:tile:erorisk_silcdb4",
+            "+                                     name = erorisk_silcdb4.tif",
+            "+                              crs84Extent = POLYGON((172.6754107 -43.7555641,172.6748326 -43.8622096,172.8170036 -43.8625257,172.8173289 -43.755879,172.6754107 -43.7555641,172.6754107 -43.7555641))",
+            "+                               dimensions = 762x790",
+            "+                                   format = geotiff/cog",
+            "+                             nativeExtent = POLYGON((1573869.73 5155224.347,1573869.73 5143379.674,1585294.591 5143379.674,1585294.591 5155224.347,1573869.73 5155224.347))",
+            "+                                      oid = sha256:c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
+            "+                                     size = 604652",
+            "+                                  pamName = erorisk_silcdb4.tif.aux.xml",
+            "+                                   pamOid = sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
+            "+                                  pamSize = 36908",
+        ]
+
+        assert (repo_path / "erorisk_si" / "erorisk_silcdb4.tif").is_file()
+        check_tile_is_reflinked(repo_path / "erorisk_si" / "erorisk_silcdb4.tif", repo)
+        assert (repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml").is_file()
+        check_tile_is_reflinked(
+            repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml", repo
+        )
