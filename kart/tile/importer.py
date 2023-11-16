@@ -1,5 +1,6 @@
 import concurrent.futures
 import functools
+import glob
 import logging
 import math
 import os
@@ -29,14 +30,15 @@ from kart.fast_import import (
     write_blobs_to_stream,
 )
 from kart.key_filters import RepoKeyFilter
+from kart import lfs_util
 from kart.lfs_util import (
     install_lfs_hooks,
     merge_dicts_to_pointer_file_bytes,
     dict_to_pointer_file_bytes,
-    copy_file_to_local_lfs_cache,
 )
 from kart.list_of_conflicts import ListOfConflicts
 from kart.meta_items import MetaItemFileType
+from kart.s3_util import expand_s3_glob, fetch_from_s3
 from kart.progress_util import progress_bar
 from kart.output_util import (
     format_json_for_output,
@@ -114,8 +116,6 @@ class TileImporter:
         # even though it's not really relevant to tile imports.
         assert self.repo.table_dataset_version in SUPPORTED_VERSIONS
 
-    EXTRACT_TILE_METADATA_STEP = "Checking tiles"
-
     def import_tiles(self):
         """
         Import the tiles at sources as a new dataset / use them to update an existing dataset.
@@ -168,8 +168,6 @@ class TileImporter:
             # we're importing (or even a subset of that dataset). But this'll do for now
             self.repo.working_copy.workdir.check_not_dirty()
 
-        self.sanity_check_sources(self.sources)
-
         self.existing_dataset = self.get_existing_dataset()
         self.existing_metadata = (
             self.existing_dataset.tile_metadata if self.existing_dataset else None
@@ -178,6 +176,8 @@ class TileImporter:
             self.update_existing and self.existing_dataset is not None
         )
 
+        self.preprocess_sources(self.sources)
+
         if self.delete and self.existing_dataset is None:
             # Trying to delete specific paths from a nonexistent dataset?
             # This suggests the caller is confused.
@@ -185,6 +185,8 @@ class TileImporter:
                 f"Dataset {self.dataset_path} does not exist. Cannot delete paths from it."
             )
 
+        # For keeping track of files that we need to fetch before we can import:
+        self.source_to_local_path = {}
         # These two dicts contain information about the sources, pre-conversion.
         self.source_to_metadata = {}
         self.source_to_hash_and_size = {}
@@ -198,12 +200,15 @@ class TileImporter:
             progress = progress_bar(
                 total=len(self.sources),
                 unit="tile",
-                desc=self.EXTRACT_TILE_METADATA_STEP,
+                desc=self.extracting_tile_metadata_desc,
             )
             with progress as p:
-                for source, tile_metadata in self.extract_multiple_tiles_metadata(
-                    self.sources
-                ):
+                for (
+                    source,
+                    local_path,
+                    tile_metadata,
+                ) in self.extract_multiple_tiles_metadata(self.sources):
+                    self.source_to_local_path[source] = local_path
                     self.source_to_metadata[source] = tile_metadata
                     self.source_to_hash_and_size[source] = (
                         tile_metadata["tile"]["oid"],
@@ -229,6 +234,13 @@ class TileImporter:
             self.check_for_non_homogenous_metadata(
                 self.predicted_merged_metadata, future_tense=True
             )
+
+        # Inverse mapping of self.source_to_local_path:
+        self.local_path_to_source = {
+            path: source
+            for source, path in self.source_to_local_path.items()
+            if path is not None
+        }
 
         # Set up LFS hooks. This is also in `kart init`, but not every existing Kart repo will have these hooks.
         install_lfs_hooks(self.repo)
@@ -331,6 +343,10 @@ class TileImporter:
         finally:
             # Clean up the temp branch
             self.repo.references[fast_import_on_branch].delete()
+            # Clean up the temporary local copies of tiles (the tiles are now stored properly in the LFS cache).
+            for path in self.source_to_local_path.values():
+                if path is not None:
+                    path.unlink(missing_ok=True)
 
         parts_to_create = [PartType.WORKDIR] if self.do_checkout else []
         self.repo.configure_do_checkout_datasets([self.dataset_path], self.do_checkout)
@@ -339,6 +355,19 @@ class TileImporter:
             repo_key_filter=RepoKeyFilter.datasets([self.dataset_path]),
             create_parts_if_missing=parts_to_create,
         )
+
+    @property
+    def extracting_tile_metadata_desc(self):
+        """
+        Return the progress bar description for the pass where metadata is extracted
+        (includes fetching any files that are remote)
+        """
+        if not self.all_source_schemes or self.all_source_schemes == {None}:
+            # The 'None' scheme means local file. All files are local:
+            return "Checking tiles"
+        else:
+            # Some tiles are remote
+            return "Fetching tiles"
 
     def infer_dataset_path(self, sources):
         """Given a list of sources to import, choose a reasonable name for the dataset."""
@@ -362,41 +391,81 @@ class TileImporter:
         return prefix
 
     URI_PATTERN = re.compile(r"([A-Za-z0-9-]{,20})://")
+    ALLOWED_SCHEMES = (None, "s3")
+    ALLOWED_SCHEMES_DESC = "a path to a file or an S3 URL"
 
-    def sanity_check_sources(self, sources):
+    def preprocess_sources(self, sources):
+        # Sanity check - make sure we support this type of file / URL, make sure that the specified files exist.
+        self.all_source_schemes = set()
         for source in sources:
             m = self.URI_PATTERN.match(source)
-            if m:
+            scheme = m.group(1) if m else None
+            if scheme not in self.ALLOWED_SCHEMES:
                 raise click.UsageError(
-                    f"SOURCE {source} should be a path to a file, not a {m.group(1)} URI"
+                    f"SOURCE {source} should be {self.ALLOWED_SCHEMES_DESC}, not a {m.group(1)} URI"
                 )
-
-        for source in sources:
-            if not (Path() / source).is_file():
+            if scheme is None and not (Path() / source).is_file():
                 raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
+            self.all_source_schemes.add(scheme)
+
+        # Now expand any wildcards.
+        for source in list(sources):
+            if "*" in source:
+                sources.remove(source)
+                sources += self.expand_source_wildcard(source)
+
+    def expand_source_wildcard(self, source):
+        """Given a source with a wildcard '*' in it, expand it into the list of sources it represents."""
+        m = self.URI_PATTERN.match(source)
+        scheme = m.group(1) if m else None
+        if scheme == "s3":
+            return expand_s3_glob(source)
+        elif scheme is None:
+            expanded = glob.glob(source)
+            if not expanded:
+                raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
+            return expanded
+        else:
+            raise click.UsageError(
+                f"SOURCE {source} should be {self.ALLOWED_SCHEMES_DESC}, not a {m.group(1)} URI"
+            )
 
     def get_default_message(self):
         """Return a default commit message to describe this import."""
         raise NotImplementedError()
 
-    def extract_tile_metadata(self, tile_path):
+    def extract_tile_metadata(self, source):
         """
-        Read the metadata for the given tile. Includes both "dataset" metadata and "tile" metadata -
+        Read the metadata for the given tile source. Includes both "dataset" metadata and "tile" metadata -
         that is, metadata that we expect to be homogenous for a dataset, such as the CRS,
         and metadata that we expect to vary per tile, such as the extent.
+        Returns the tuple (local_path, metadata) where
+        - local_path is a path to a fetched local copy of the tile in the case where the source is remote, otherwise None
+        - metadata is the tile's metadata.
         """
+        if source.startswith("s3://"):
+            local_path = self.repo.lfs_tmp_path / str(uuid.uuid4())
+            fetch_from_s3(source, local_path)
+            tile_path = local_path
+        else:
+            local_path = None
+            tile_path = source
+        metadata = self.extract_tile_metadata_from_filesystem_path(tile_path)
+        return local_path, metadata
+
+    def extract_tile_metadata_from_filesystem_path(self, tile_path):
         return self.DATASET_CLASS.extract_tile_metadata_from_filesystem_path(tile_path)
 
     def extract_multiple_tiles_metadata(self, sources):
         """
         Like extract_tile_metadata, but works for a list of several tiles. The metadata may
         be extracted serially or with a thread-pool, depending on the value of self.num_workers.
-        Yields a tuple (source, metadata) for each tile in turn, in some unspecified order.
+        Yields a tuple (source, local_path, metadata) for each tile in turn, in some unspecified order.
         """
         # Single-threaded variant - uses the calling thread.
         if self.num_workers == 1:
             for source in sources:
-                yield source, self.extract_tile_metadata(source)
+                yield source, *self.extract_tile_metadata(source)
             return
 
         # Multi-worker variant - uses a thread-pool, calling thread just receives the results.
@@ -409,7 +478,7 @@ class TileImporter:
             }
             for future in concurrent.futures.as_completed(future_to_source):
                 source = future_to_source[future]
-                yield source, future.result()
+                yield source, *future.result()
 
     def check_metadata_pre_convert(self):
         """
@@ -518,6 +587,22 @@ class TileImporter:
             exit_code=WORKING_COPY_OR_IMPORT_CONFLICT,
         )
 
+    def copy_file_to_local_lfs_cache(
+        self, source, conversion_func=None, oid_and_size=None
+    ):
+        is_remote_source = self.source_to_local_path.get(source) is not None
+        path_to_copy_from = (
+            self.source_to_local_path[source] if is_remote_source else source
+        )
+        preserve_original = not is_remote_source
+        return lfs_util.copy_file_to_local_lfs_cache(
+            self.repo,
+            path_to_copy_from,
+            conversion_func=conversion_func,
+            oid_and_size=oid_and_size,
+            preserve_original=preserve_original,
+        )
+
     def get_conversion_func(self, source_metadata):
         """
         Given the metadata for a particular tile, return a function to convert it as required during import
@@ -538,7 +623,14 @@ class TileImporter:
 
         def wrapped_func(source, dest):
             conversion_func(source, dest)
-            self.source_to_imported_metadata[source] = self.extract_tile_metadata(dest)
+
+            # The source provided to the conversion step may actually be just the local path.
+            # Find the original source as specified, which is what we use as keys.
+            if source in self.local_path_to_source:
+                source = self.local_path_to_source[source]
+
+            metadata = self.extract_tile_metadata_from_filesystem_path(dest)
+            self.source_to_imported_metadata[source] = metadata
             source_oid = self.source_to_hash_and_size[source][0]
             if not source_oid.startswith("sha256:"):
                 source_oid = "sha256:" + source_oid
@@ -594,8 +686,7 @@ class TileImporter:
                 oid_and_size = None
 
             copy_and_convert_tasks[source] = functools.partial(
-                copy_file_to_local_lfs_cache,
-                self.repo,
+                self.copy_file_to_local_lfs_cache,
                 source,
                 conversion_func,
                 oid_and_size=oid_and_size,
@@ -621,7 +712,7 @@ class TileImporter:
                 write_blob_to_stream(stream, blob_path, pointer_data)
 
                 for sidecar_file, suffix in self.sidecar_files(source):
-                    pointer_dict = copy_file_to_local_lfs_cache(self.repo, sidecar_file)
+                    pointer_dict = self.copy_file_to_local_lfs_cache(sidecar_file)
                     pointer_data = dict_to_pointer_file_bytes(pointer_dict)
                     write_blob_to_stream(stream, blob_path + suffix, pointer_data)
 

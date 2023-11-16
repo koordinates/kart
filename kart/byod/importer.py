@@ -1,13 +1,11 @@
 import logging
 
-import click
 
 from kart.fast_import import (
     write_blob_to_stream,
 )
 from kart.lfs_util import dict_to_pointer_file_bytes
 from kart.progress_util import progress_bar
-from kart.s3_util import expand_s3_glob
 from kart.tile.tilename_util import PAM_SUFFIX
 
 L = logging.getLogger(__name__)
@@ -19,19 +17,15 @@ class ByodTileImporter:
     while leaving the data in-place on existing hosted storage.
     """
 
-    EXTRACT_TILE_METADATA_STEP = "Fetching tile metadata"
+    ALLOWED_SCHEMES = ("s3",)
+    ALLOWED_SCHEMES_DESC = "an S3 URL"
 
-    def sanity_check_sources(self, sources):
-        for source in sources:
-            if not source.startswith("s3://"):
-                raise click.UsageError(f"SOURCE {source} should be an S3 url")
-
-        for source in list(sources):
-            if "*" in source:
-                sources.remove(source)
-                sources += expand_s3_glob(source)
+    @property
+    def extracting_tile_metadata_desc(self):
+        return "Fetching tile metadata"
 
     def extract_tile_metadata(self, tile_location):
+        # Implemented in subclasses.
         raise NotImplementedError()
 
     def get_conversion_func(self, source_metadata):

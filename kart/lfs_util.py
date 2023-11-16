@@ -305,7 +305,7 @@ def get_local_path_from_lfs_hash(repo, lfs_hash):
 
 
 def copy_file_to_local_lfs_cache(
-    repo, source_path, conversion_func=None, oid_and_size=None
+    repo, source_path, conversion_func=None, oid_and_size=None, preserve_original=True
 ):
     """
     Given the path to a file, copies it to the appropriate location in the local LFS cache based on its sha256 hash.
@@ -313,13 +313,11 @@ def copy_file_to_local_lfs_cache(
     copy after the convert operation, if we just write the converted version to where we would copy it.
     Optionally takes the oid and size of the source, if this is known, to avoid recomputing it.
     """
-
-    lfs_tmp_path = repo.gitdir_path / "lfs" / "objects" / "tmp"
-    lfs_tmp_path.mkdir(parents=True, exist_ok=True)
-
-    tmp_object_path = lfs_tmp_path / str(uuid.uuid4())
+    tmp_object_path = repo.lfs_tmp_path / str(uuid.uuid4())
     if conversion_func is not None:
         conversion_func(source_path, tmp_object_path)
+    elif not preserve_original:
+        Path(source_path).rename(tmp_object_path)
     else:
         try:
             reflink(source_path, tmp_object_path)

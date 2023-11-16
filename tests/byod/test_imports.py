@@ -99,8 +99,6 @@ def test_byod_point_cloud_import(
             "size": 51489,
         }
 
-        # Fetching LFS files in a bare-repo doesn't make much sense, but it's not (currently) disallowed.
-        # (These tests will change once we support importing with --no-checkout instead of using bare repos).
         r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines()[:6] == [
@@ -214,7 +212,6 @@ def test_byod_raster_import(
             "pamSize": 36908,
         }
 
-        # TODO - improve tests once we support per-dataset no-checkout flags.
         r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [

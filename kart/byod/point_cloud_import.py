@@ -134,4 +134,4 @@ class ByodPointCloudImporter(ByodTileImporter, PointCloudImporter):
         )
         tmp_downloaded_tile.unlink()
         result["tile"]["url"] = tile_location
-        return result
+        return None, result
