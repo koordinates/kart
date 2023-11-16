@@ -139,9 +139,9 @@ def point_cloud_import(
     SOURCES should be one or more LAZ or LAS files (or wildcards that match multiple LAZ or LAS files).
     """
     if do_link:
-        from kart.byod.point_cloud_import import byod_point_cloud_import
+        from kart.linked_storage.point_cloud_import import linked_point_cloud_import
 
-        forward_context_to_command(ctx, byod_point_cloud_import)
+        forward_context_to_command(ctx, linked_point_cloud_import)
         return
 
     repo = ctx.obj.repo

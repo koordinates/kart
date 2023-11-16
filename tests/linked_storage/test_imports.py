@@ -11,7 +11,7 @@ DUMMY_REPO = "git@example.com/example.git"
 
 
 @pytest.mark.slow
-def test_byod_point_cloud_import(
+def test_linked_point_cloud_import(
     tmp_path,
     chdir,
     cli_runner,
@@ -26,7 +26,7 @@ def test_byod_point_cloud_import(
     with chdir(repo_path):
         r = cli_runner.invoke(
             [
-                "byod-point-cloud-import",
+                "linked-point-cloud-import",
                 s3_test_data_point_cloud,
                 "--dataset-path=auckland",
                 "--no-checkout",
@@ -146,7 +146,7 @@ def test_byod_point_cloud_import(
 
 
 @pytest.mark.slow
-def test_byod_raster_import(
+def test_linked_raster_import(
     tmp_path,
     chdir,
     cli_runner,
@@ -161,7 +161,7 @@ def test_byod_raster_import(
     with chdir(repo_path):
         r = cli_runner.invoke(
             [
-                "byod-raster-import",
+                "linked-raster-import",
                 s3_test_data_raster,
                 "--dataset-path=erorisk_si",
                 "--no-checkout",

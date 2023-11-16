@@ -2,17 +2,17 @@ import logging
 
 import click
 
-from kart.byod.importer import ByodTileImporter
+from kart.linked_storage.importer import LinkedTileImporter
 from kart.cli_util import StringFromFile, MutexOption, KartCommand
 from kart.point_cloud.import_ import PointCloudImporter
 from kart.point_cloud.metadata_util import extract_pc_tile_metadata
-from kart.s3_util import get_hash_and_size_of_s3_object, fetch_from_s3
+from kart.s3_util import get_hash_and_size_of_s3_object
 
 
 L = logging.getLogger(__name__)
 
 
-@click.command("byod-point-cloud-import", hidden=True, cls=KartCommand)
+@click.command("linked-point-cloud-import", hidden=True, cls=KartCommand)
 @click.pass_context
 @click.option(
     "--convert-to-copc/--no-convert-to-copc",
@@ -108,7 +108,7 @@ L = logging.getLogger(__name__)
     nargs=-1,
     metavar="SOURCE [SOURCES...]",
 )
-def byod_point_cloud_import(
+def linked_point_cloud_import(
     ctx,
     convert_to_copc,
     message,
@@ -140,7 +140,7 @@ def byod_point_cloud_import(
 
     repo = ctx.obj.repo
 
-    ByodPointCloudImporter(
+    LinkedPointCloudImporter(
         repo=repo,
         ctx=ctx,
         convert_to_cloud_optimized=False,
@@ -157,7 +157,7 @@ def byod_point_cloud_import(
     ).import_tiles()
 
 
-class ByodPointCloudImporter(ByodTileImporter, PointCloudImporter):
+class LinkedPointCloudImporter(LinkedTileImporter, PointCloudImporter):
     def extract_tile_metadata(self, tile_location):
         oid_and_size = get_hash_and_size_of_s3_object(tile_location)
         return None, extract_pc_tile_metadata(tile_location, oid_and_size=oid_and_size)

@@ -36,13 +36,13 @@ class ImportType(Enum):
     @property
     def linked_import_cmd(self):
         if self is self.POINT_CLOUD:
-            from kart.byod.point_cloud_import import byod_point_cloud_import
+            from kart.linked_storage.point_cloud_import import linked_point_cloud_import
 
-            return byod_point_cloud_import
+            return linked_point_cloud_import
         elif self is self.RASTER:
-            from kart.byod.raster_import import byod_raster_import
+            from kart.linked_storage.raster_import import linked_raster_import
 
-            return byod_raster_import
+            return linked_raster_import
 
     @property
     def import_source_class(self):

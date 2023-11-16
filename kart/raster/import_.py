@@ -139,9 +139,9 @@ def raster_import(
     SOURCES should be one or more GeoTIFF files (or wildcards that match multiple GeoTIFF files).
     """
     if do_link:
-        from kart.byod.raster_import import byod_raster_import
+        from kart.linked_storage.raster_import import linked_raster_import
 
-        forward_context_to_command(ctx, byod_raster_import)
+        forward_context_to_command(ctx, linked_raster_import)
         return
 
     repo = ctx.obj.repo

@@ -11,7 +11,7 @@ from kart.tile.tilename_util import PAM_SUFFIX
 L = logging.getLogger(__name__)
 
 
-class ByodTileImporter:
+class LinkedTileImporter:
     """
     Subclassable logic for importing the metadata from tile-based datasets,
     while leaving the data in-place on existing hosted storage.

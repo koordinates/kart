@@ -376,7 +376,7 @@ def _do_fetch_from_urls(repo, urls_and_lfs_oids, quiet=False):
     )
     if non_s3_url:
         raise NotImplementedError(
-            f"Invalid URL - only S3 URLs are currently supported for BYOD repos: {non_s3_url}"
+            f"Invalid URL - only S3 URLs are currently supported for linked-storage datasets: {non_s3_url}"
         )
 
     urls_and_paths_and_oids = [

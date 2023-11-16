@@ -2,7 +2,7 @@ import logging
 
 import click
 
-from kart.byod.importer import ByodTileImporter
+from kart.linked_storage.importer import LinkedTileImporter
 from kart.cli_util import StringFromFile, MutexOption, KartCommand
 from kart.raster.import_ import RasterImporter
 from kart.raster.metadata_util import extract_raster_tile_metadata
@@ -12,7 +12,7 @@ from kart.s3_util import get_hash_and_size_of_s3_object
 L = logging.getLogger(__name__)
 
 
-@click.command("byod-raster-import", hidden=True, cls=KartCommand)
+@click.command("linked-raster-import", hidden=True, cls=KartCommand)
 @click.pass_context
 @click.option(
     "--convert-to-cog/--no-convert-to-cog",
@@ -108,7 +108,7 @@ L = logging.getLogger(__name__)
     nargs=-1,
     metavar="SOURCE [SOURCES...]",
 )
-def byod_raster_import(
+def linked_raster_import(
     ctx,
     convert_to_cog,
     message,
@@ -131,7 +131,7 @@ def byod_raster_import(
     if not do_link:
         # This is here for technical reasons - all the options are forwarded from one command to another, including --link.
         # In practise we don't expect the user to set --link at all if they are also manually calling this (hidden) command.
-        raise click.UsageError("Can't do a linked-import with --link=false")
+        raise click.UsageError("Can't do a linked import with --link=false")
     if convert_to_cog:
         raise click.UsageError(
             "Sorry, converting a linked dataset to COG is not supported - "
@@ -140,7 +140,7 @@ def byod_raster_import(
 
     repo = ctx.obj.repo
 
-    ByodRasterImporter(
+    LinkedRasterImporter(
         repo=repo,
         ctx=ctx,
         convert_to_cloud_optimized=False,
@@ -157,7 +157,7 @@ def byod_raster_import(
     ).import_tiles()
 
 
-class ByodRasterImporter(ByodTileImporter, RasterImporter):
+class LinkedRasterImporter(LinkedTileImporter, RasterImporter):
     def extract_tile_metadata(self, tile_location):
         oid_and_size = get_hash_and_size_of_s3_object(tile_location)
         return None, extract_raster_tile_metadata(
