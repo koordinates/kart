@@ -95,7 +95,7 @@ L = logging.getLogger(__name__)
     "--link",
     "do_link",
     is_flag=True,
-    default=True,
+    default=None,
     hidden=True,
     help=(
         "Link the created dataset to the original source location, so that the original source location is treated as "
@@ -128,7 +128,7 @@ def linked_raster_import(
 
     SOURCES should be one or more GeoTIFF files (or wildcards that match multiple GeoTIFF files).
     """
-    if not do_link:
+    if do_link is False:
         # This is here for technical reasons - all the options are forwarded from one command to another, including --link.
         # In practise we don't expect the user to set --link at all if they are also manually calling this (hidden) command.
         raise click.UsageError("Can't do a linked import with --link=false")

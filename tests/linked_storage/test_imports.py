@@ -11,7 +11,9 @@ DUMMY_REPO = "git@example.com/example.git"
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("command", ["linked-point-cloud-import", "import --link"])
 def test_linked_point_cloud_import(
+    command,
     tmp_path,
     chdir,
     cli_runner,
@@ -26,7 +28,7 @@ def test_linked_point_cloud_import(
     with chdir(repo_path):
         r = cli_runner.invoke(
             [
-                "linked-point-cloud-import",
+                *command.split(" "),
                 s3_test_data_point_cloud,
                 "--dataset-path=auckland",
                 "--no-checkout",
@@ -146,7 +148,9 @@ def test_linked_point_cloud_import(
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("command", ["linked-raster-import", "import --link"])
 def test_linked_raster_import(
+    command,
     tmp_path,
     chdir,
     cli_runner,
@@ -161,7 +165,7 @@ def test_linked_raster_import(
     with chdir(repo_path):
         r = cli_runner.invoke(
             [
-                "linked-raster-import",
+                *command.split(" "),
                 s3_test_data_raster,
                 "--dataset-path=erorisk_si",
                 "--no-checkout",

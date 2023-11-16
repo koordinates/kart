@@ -402,8 +402,9 @@ class TileImporter:
             m = self.URI_PATTERN.match(source)
             scheme = m.group(1) if m else None
             if scheme not in self.ALLOWED_SCHEMES:
+                suffix = f", not a {scheme} URI" if scheme else ""
                 raise click.UsageError(
-                    f"SOURCE {source} should be {self.ALLOWED_SCHEMES_DESC}, not a {m.group(1)} URI"
+                    f"SOURCE {source} should be {self.ALLOWED_SCHEMES_DESC}{suffix}"
                 )
             if scheme is None and not (Path() / source).is_file():
                 raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)

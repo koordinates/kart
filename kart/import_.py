@@ -77,7 +77,7 @@ def list_import_formats(ctx):
     metavar="SOURCE [[SOURCES...] or [DATASETS...]]",
     shell_complete=file_path_completer,
 )
-def import_(ctx, args, do_link, **kwargs):
+def import_(ctx, args, **kwargs):
     """
     Import data into a repository.
     This is a one-size-fits-all command - look up the following commands for more
@@ -145,7 +145,7 @@ def import_(ctx, args, do_link, **kwargs):
             f"Try one of the following:\n{suggest_specs()}"
         )
 
-    if do_link:
+    if kwargs.get("do_link"):
         import_cmd = import_source_type.linked_import_cmd
         if import_cmd is None:
             raise click.UsageError(
