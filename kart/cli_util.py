@@ -170,7 +170,6 @@ class MutexOption(click.Option):
     def handle_parse_result(self, ctx, opts, args):
         current_opt: bool = self.name in opts
         for other_name in self.exclusive_with:
-
             if other_name in opts:
                 if current_opt:
                     other = [x for x in ctx.command.params if x.name == other_name][0]
@@ -412,3 +411,16 @@ def find_param(ctx_or_params, name):
         if param.name == name:
             return param
     raise RuntimeError(f"Couldn't find param: {name}")
+
+
+def forward_context_to_command(ctx, command):
+    """
+    Given the current context and a new command (not the current command), run the new command but
+    reusing the same overall context including command line arguments.
+    The new command should accept arguments in much the same form as the current command.
+    If any arguments cannot be parsed by the new command, it will fail with a UsageError as per usual.
+    This could be acceptable so long as it is clear to the user what is unsupported and why.
+    """
+    subctx = command.make_context(command.name, ctx.unparsed_args)
+    subctx.obj = ctx.obj
+    subctx.forward(command)

@@ -34,6 +34,17 @@ class ImportType(Enum):
             return raster_import
 
     @property
+    def linked_import_cmd(self):
+        if self is self.POINT_CLOUD:
+            from kart.linked_storage.point_cloud_import import linked_point_cloud_import
+
+            return linked_point_cloud_import
+        elif self is self.RASTER:
+            from kart.linked_storage.raster_import import linked_raster_import
+
+            return linked_raster_import
+
+    @property
     def import_source_class(self):
         if self is self.SQLALCHEMY_TABLE:
             from kart.tabular import SqlAlchemyTableImportSource
@@ -79,6 +90,10 @@ class ImportSourceType:
     @property
     def import_cmd(self):
         return self.import_type.import_cmd
+
+    @property
+    def linked_import_cmd(self):
+        return self.import_type.linked_import_cmd
 
     @property
     def import_source_class(self):

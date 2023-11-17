@@ -156,7 +156,7 @@ pyi_analysis = Analysis(
         # TODO: improve this somehow
         *collect_submodules('kart'),
         *collect_submodules('kart.annotations'),
-        *collect_submodules('kart.byod'),
+        *collect_submodules('kart.linked_storage'),
         *collect_submodules('kart.lfs_commands'),
         *collect_submodules('kart.point_cloud'),
         *collect_submodules('kart.sqlalchemy'),
