@@ -989,8 +989,7 @@ class TableWorkingCopy(WorkingCopyPart):
                 sql = self.insert_into_dataset_cmd(dataset)
                 t0 = time.monotonic()
 
-                CHUNK_SIZE = 10000
-
+                CHUNK_SIZE = 2000
                 for row_dicts in chunk(
                     dataset.features_with_crs_ids(
                         self.repo.spatial_filter, show_progress=True
