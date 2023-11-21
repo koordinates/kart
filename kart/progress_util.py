@@ -12,8 +12,9 @@ def progress_bar(*args, show_progress=None, disable=None, **kwargs):
     elif disable is None and os.environ.get("KART_SHOW_PROGRESS"):
         disable = False
 
+    kwargs = {"smoothing": 0.1, **kwargs}
+    tqdm_progress_bar = tqdm.tqdm(*args, disable=disable, **kwargs)
     try:
-        tqdm_progress_bar = tqdm.tqdm(*args, disable=disable, **kwargs)
         yield tqdm_progress_bar
     finally:
         tqdm_progress_bar.close()
