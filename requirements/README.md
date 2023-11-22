@@ -3,8 +3,6 @@
 Kart uses [pip-tools](https://pip-tools.readthedocs.io/en/latest/) to manage
 Python dependencies for releases, test, and development.
 
-
-
 ### To update the requirements
 
 1. do a CMake+VCPKG build
@@ -19,3 +17,8 @@ Python dependencies for releases, test, and development.
 2. `cmake --build build --target py-requirements-upgrade`
 3. run `cmake --build build` to install the new dependencies
 4. check & commit the changes to `requirements/*.txt`
+
+### `vendor-wheels.txt`
+
+Update versions here to match the package versions we're building in
+[`vcpkg-vendor/CMakeLists.txt`](../vcpkg-vendor/CMakeLists.txt).

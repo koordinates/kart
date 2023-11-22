@@ -363,7 +363,7 @@ cmake_path(GET RUST_EXECUTABLE PARENT_PATH RUST_DIR)
 
 file(
   GENERATE
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cryptography-prefix/setup.cfg.inc
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cryptography-prefix/setup.cfg
   CONTENT
     "
 [build_ext]
@@ -371,7 +371,7 @@ include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
-set(CRYPTOGRAPHY_WHEEL_VER 38.0.3)
+set(CRYPTOGRAPHY_WHEEL_VER 41.0.4)
 ExternalProject_Add(
   cryptography
   GIT_REPOSITORY https://github.com/pyca/cryptography.git
@@ -380,8 +380,8 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS cryptographyWheelBuildEnv OpenSSL::SSL OpenSSL::Crypto
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ${GIT_EXECUTABLE} checkout -- setup.cfg
-  COMMAND ${CMAKE_COMMAND} -E cat <INSTALL_DIR>/setup.cfg.inc >> setup.cfg
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy
+                    ${CMAKE_CURRENT_BINARY_DIR}/cryptography-prefix/setup.cfg <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND
     ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${RUST_DIR}
