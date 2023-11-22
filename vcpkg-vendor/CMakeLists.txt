@@ -361,16 +361,6 @@ find_package(OpenSSL REQUIRED)
 find_package(Rust 1.41 REQUIRED)
 cmake_path(GET RUST_EXECUTABLE PARENT_PATH RUST_DIR)
 
-file(
-  GENERATE
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cryptography-prefix/setup.cfg
-  CONTENT
-    "
-[build_ext]
-include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
-library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
-")
-
 set(CRYPTOGRAPHY_WHEEL_VER 41.0.4)
 ExternalProject_Add(
   cryptography
@@ -380,12 +370,12 @@ ExternalProject_Add(
   BUILD_IN_SOURCE ON
   DEPENDS cryptographyWheelBuildEnv OpenSSL::SSL OpenSSL::Crypto
   EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy
-                    ${CMAKE_CURRENT_BINARY_DIR}/cryptography-prefix/setup.cfg <SOURCE_DIR>
+  CONFIGURE_COMMAND ""
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND
-    ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${RUST_DIR}
-    ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all: --no-build-isolation --no-deps
+    ${CMAKE_COMMAND} -E env OPENSSL_LIB_DIR=${CURRENT_PACKAGES_DIR}/lib
+    OPENSSL_INCLUDE_DIR=${CURRENT_PACKAGES_DIR}/include --modify PATH=path_list_prepend:${RUST_DIR}
+    -- ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all: --no-build-isolation --no-deps
     --no-index --wheel-dir <TMP_DIR>/dist .
   INSTALL_COMMAND
     ${CMAKE_COMMAND} -E copy
