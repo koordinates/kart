@@ -1,4 +1,4 @@
-boto3
+boto3>=1.29.1
 certifi
 click~=8.1
 docutils<0.18
