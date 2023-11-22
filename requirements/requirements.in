@@ -16,10 +16,6 @@ jsonschema>=4.3
 # versions come from vcpkg-vendor/CMakeLists.txt
 -r vendor-wheels.txt
 
-# SQLAlchemy on Windows
-# FIXME: the constraint seems to be dropped during pip-compile
-greenlet; os_name!="posix"
-
 # workaround weird import error with pyinstaller
 # https://github.com/pypa/setuptools/issues/1963#issuecomment-656811086
 #setuptools~=49.1.1
