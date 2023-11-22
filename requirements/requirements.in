@@ -15,7 +15,3 @@ jsonschema>=4.3
 # and they're removed by CMake from the final requirements.txt files.
 # versions come from vcpkg-vendor/CMakeLists.txt
 -r vendor-wheels.txt
-
-# workaround weird import error with pyinstaller
-# https://github.com/pypa/setuptools/issues/1963#issuecomment-656811086
-#setuptools~=49.1.1
