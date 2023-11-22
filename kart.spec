@@ -259,6 +259,12 @@ if USE_CLI_HELPER and dist_contents_root != dist_bin_root:
     (dist_contents_root / f"kart{exe_suffix}").rename(
         dist_bin_root / f"kart{exe_suffix}"
     )
+    if is_darwin:
+        # There could be a symlink in Resources that points to the file we just moved out of Frameworks.
+        # We don't want any such symlinks since the kart executable only works from dist_bin_root anyway.
+        p = Path(DISTPATH) / "Kart.app" / "Contents" / "Resources" / f"kart{exe_suffix}"
+        if p.is_symlink():
+            p.unlink()
 
 
 # Ideally we'd do this before BUNDLE so it could sign it on macOS, but we
