@@ -381,6 +381,7 @@ if(MACOS)
           execute_process(
             COMMAND ${XCODE_XCRUN} notarytool submit \${CPACK_TEMPORARY_PACKAGE_FILE_NAME}
               --keychain-profile \"$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}\"
+              --keychain \"$ENV{MACOS_NOTARIZE_KEYCHAIN}\"
               --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
             COMMAND_ECHO NONE
             COMMAND_ERROR_IS_FATAL ANY)

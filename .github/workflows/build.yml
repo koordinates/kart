@@ -735,6 +735,8 @@ jobs:
       MACOS_CODESIGN_ID: ${{ secrets.MACOS_CODESIGN_ID }}
       MACOS_PKGSIGN_ID: ${{ secrets.MACOS_PKGSIGN_ID }}
       MACOS_NOTARIZE_KEYCHAIN_PROFILE: "NOTARIZE_AUTH"
+      MACOS_NOTARIZE_KEYCHAIN_FILENAME: "signing_temp"
+      MACOS_NOTARIZE_KEYCHAIN: "~/Library/Keychains/signing_temp.keychain-db"
       # X.Y version needs to match PY_VER:
       PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.6/python-3.11.6-macos11.pkg"
 
@@ -891,6 +893,8 @@ jobs:
         uses: apple-actions/import-codesign-certs@v1
         if: env.MACOS_SIGN_BUNDLE == 'ON'
         with:
+          # This action auto generates the keychain password (only works if the keychain name is "signing_temp").
+          keychain: ${{ env.MACOS_NOTARIZE_KEYCHAIN_FILENAME }}
           p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
           p12-password: ${{ secrets.MACOS_CERT_PW }}
 
@@ -904,7 +908,8 @@ jobs:
           xcrun notarytool store-credentials "$MACOS_NOTARIZE_KEYCHAIN_PROFILE" \
               --apple-id "$MACOS_NOTARIZE_USER" \
               --team-id "$MACOS_NOTARIZE_TEAMID" \
-              --password "$MACOS_NOTARIZE_PW"
+              --password "$MACOS_NOTARIZE_PW" \
+              --keychain "$MACOS_NOTARIZE_KEYCHAIN"
 
       - name: "bundle: assemble"
         uses: lukka/run-cmake@v10.6

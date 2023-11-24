@@ -97,8 +97,10 @@ elseif(MACOS AND MACOS_SIGN_BUNDLE)
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist
       COMMAND ${XCODE_DITTO} -c -k --sequesterRsrc --keepParent "Kart.app"
               "kart-bundle-notarize.zip"
-      COMMAND ${XCODE_XCRUN} notarytool submit kart-bundle-notarize.zip --keychain-profile
-              "$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}" --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
+      COMMAND ${XCODE_XCRUN} notarytool submit kart-bundle-notarize.zip
+              --keychain-profile "$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}"
+              --keychain "$ENV{MACOS_NOTARIZE_KEYCHAIN}"
+              --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
       COMMAND ${XCODE_XCRUN} stapler staple Kart.app
       COMMAND ${XCODE_SPCTL} --assess -t execute -vvv Kart.app
       COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/notarize.stamp
