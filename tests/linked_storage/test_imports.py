@@ -11,7 +11,14 @@ DUMMY_REPO = "git@example.com/example.git"
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("command", ["linked-point-cloud-import", "import --link"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "linked-point-cloud-import --no-checkout",
+        "import --link --no-checkout",
+        "import --link",
+    ],
+)
 def test_linked_point_cloud_import(
     command,
     tmp_path,
@@ -31,7 +38,6 @@ def test_linked_point_cloud_import(
                 *command.split(" "),
                 s3_test_data_point_cloud,
                 "--dataset-path=auckland",
-                "--no-checkout",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -101,21 +107,25 @@ def test_linked_point_cloud_import(
             "size": 51489,
         }
 
-        r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
-        assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines()[:6] == [
-            "Running fetch with --dry-run:",
-            "  Found 16 LFS blobs (373KiB) to fetch from specific URLs",
-            "",
-            "LFS blob OID:                                                    (Pointer file OID):",
-            "03e3d4dc6fc8e75c65ffdb39b630ffe26e4b95982b9765c919e34fb940e66fc0 (ecb9c281c7e8cc354600d41e88d733faf2e991e1) → s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/auckland_3_2.laz",
-            "06bd15fbb6616cf63a4a410c5ba4666dab76177a58cb99c3fa2afb46c9dd6379 (f9ad3012492840d3c51b9b029a81c1cdbb11eef2) → s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/auckland_1_3.laz",
-        ]
-
-        r = cli_runner.invoke(["checkout", "--dataset=auckland"])
-        assert r.exit_code == 0, r.stderr
-
         repo = KartRepo(repo_path)
+
+        if "--no-checkout" in command:
+            check_lfs_hashes(repo, expected_file_count=0)
+
+            r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[:6] == [
+                "Running fetch with --dry-run:",
+                "  Found 16 LFS blobs (373KiB) to fetch from specific URLs",
+                "",
+                "LFS blob OID:                                                    (Pointer file OID):",
+                "03e3d4dc6fc8e75c65ffdb39b630ffe26e4b95982b9765c919e34fb940e66fc0 (ecb9c281c7e8cc354600d41e88d733faf2e991e1) → s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/auckland_3_2.laz",
+                "06bd15fbb6616cf63a4a410c5ba4666dab76177a58cb99c3fa2afb46c9dd6379 (f9ad3012492840d3c51b9b029a81c1cdbb11eef2) → s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/auckland_1_3.laz",
+            ]
+
+            r = cli_runner.invoke(["checkout", "--dataset=auckland"])
+            assert r.exit_code == 0, r.stderr
+
         check_lfs_hashes(repo, expected_file_count=16)
         for x in range(4):
             for y in range(4):
@@ -148,7 +158,14 @@ def test_linked_point_cloud_import(
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("command", ["linked-raster-import", "import --link"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "linked-raster-import --no-checkout",
+        "import --link --no-checkout",
+        "import --link",
+    ],
+)
 def test_linked_raster_import(
     command,
     tmp_path,
@@ -168,7 +185,6 @@ def test_linked_raster_import(
                 *command.split(" "),
                 s3_test_data_raster,
                 "--dataset-path=erorisk_si",
-                "--no-checkout",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -212,20 +228,25 @@ def test_linked_raster_import(
             "oid": "sha256:c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
             "size": 604652,
             "pamName": "erorisk_silcdb4.tif.aux.xml",
+            "pamUrl": "s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif.aux.xml",
             "pamOid": "sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
             "pamSize": 36908,
         }
 
-        r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
-        assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines() == [
-            "Running fetch with --dry-run:",
-            "  Found 2 LFS blobs (627KiB) to fetch from specific URLs",
-            "",
-            "LFS blob OID:                                                    (Pointer file OID):",
-            "c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa (6864fc3291a79b2ce9e4c89004172aa698b84d7c) → s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif",
-            "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca (5f50b7e893da8782d5877177fab2e9a3b20fa9dc) → s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif.aux.xml",
-        ]
+        if "--no-checkout" in command:
+            r = cli_runner.invoke(["lfs+", "fetch", "--dry-run"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines() == [
+                "Running fetch with --dry-run:",
+                "  Found 2 LFS blobs (627KiB) to fetch from specific URLs",
+                "",
+                "LFS blob OID:                                                    (Pointer file OID):",
+                "c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa (6864fc3291a79b2ce9e4c89004172aa698b84d7c) → s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif",
+                "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca (5f50b7e893da8782d5877177fab2e9a3b20fa9dc) → s3://kart-bring-your-own-data-poc/erorisk_si/erorisk_silcdb4.tif.aux.xml",
+            ]
+
+            repo = KartRepo(repo_path)
+            check_lfs_hashes(repo, expected_file_count=0)
 
         r = cli_runner.invoke(["checkout", "--dataset=erorisk_si"])
         assert r.exit_code == 0, r.stderr

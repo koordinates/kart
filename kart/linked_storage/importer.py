@@ -22,10 +22,23 @@ class LinkedTileImporter:
 
     @property
     def extracting_tile_metadata_desc(self):
-        return "Fetching tile metadata"
+        return "Fetching tiles" if self.do_checkout else "Fetching tile metadata"
 
     def extract_tile_metadata(self, tile_location):
-        # Implemented in subclasses.
+        if self.do_checkout:
+            # Standard import flow will work - which fetches tiles first and extracts after.
+            local_path, metadata = super().extract_tile_metadata(tile_location)
+            metadata["tile"]["url"] = tile_location
+            if "pamOid" in metadata["tile"]:
+                metadata["tile"]["pamUrl"] = tile_location + PAM_SUFFIX
+            return local_path, metadata
+        else:
+            # Linked-dataset specific flow which extracts metadata from remote tile.
+            return None, self.extract_tile_metadata_from_s3(tile_location)
+
+    def extract_tile_metadata_from_s3(self, tile_location):
+        """Returns tile metadata without fetching the entire tile from S3."""
+        # Overridden in subclasses.
         raise NotImplementedError()
 
     def get_conversion_func(self, source_metadata):
@@ -43,32 +56,14 @@ class LinkedTileImporter:
                 )
                 blob_path = f"{self.dataset_inner_path}/{rel_blob_path}"
 
-                # Check if tile has already been imported previously:
-                if self.existing_dataset is not None:
-                    existing_summary = self.existing_dataset.get_tile_summary(
-                        tilename, missing_ok=True
-                    )
-                    if existing_summary:
-                        source_oid = self.source_to_hash_and_size[source][0]
-                        if self.existing_tile_matches_source(
-                            source_oid, existing_summary
-                        ):
-                            # This tile has already been imported before. Reuse it rather than re-importing it.
-                            # Re-importing it could cause it to be re-converted, which is a waste of time,
-                            # and it may not convert the same the second time, which is then a waste of space
-                            # and shows up as a pointless diff.
-                            write_blob_to_stream(
-                                stream,
-                                blob_path,
-                                (self.existing_dataset.inner_tree / rel_blob_path).data,
-                            )
-                            self.include_existing_metadata = True
-                            continue
-
-                # Tile hasn't been imported previously.
                 tile_info = self.source_to_metadata[source]["tile"]
                 pointer_data = dict_to_pointer_file_bytes(tile_info)
+                if self.do_checkout:
+                    self.copy_file_to_local_lfs_cache(
+                        source, oid_and_size=self.source_to_hash_and_size[source]
+                    )
                 write_blob_to_stream(stream, blob_path, pointer_data)
+
                 if "pamOid" in tile_info:
                     pam_data = dict_to_pointer_file_bytes(
                         {
@@ -77,6 +72,11 @@ class LinkedTileImporter:
                             "size": tile_info["pamSize"],
                         }
                     )
+                    if self.do_checkout:
+                        self.copy_file_to_local_lfs_cache(
+                            str(self.source_to_local_path.get(source)) + PAM_SUFFIX,
+                            oid_and_size=self.source_to_hash_and_size[source],
+                        )
                     write_blob_to_stream(stream, blob_path + PAM_SUFFIX, pam_data)
                 p.update(1)
 

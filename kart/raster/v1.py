@@ -235,6 +235,8 @@ class RasterV1(TileDataset):
             # PAM files deltas are output in the same delta as the tile they are attached to.
             pam_summary = super().get_tile_summary_from_pointer_blob(pam_pointer_blob)
             result["pamName"] = result["name"] + PAM_SUFFIX
+            if "url" in pam_summary:
+                result["pamUrl"] = pam_summary["url"]
             result["pamOid"] = pam_summary["oid"]
             result["pamSize"] = pam_summary["size"]
         return result

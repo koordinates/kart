@@ -158,6 +158,7 @@ def linked_point_cloud_import(
 
 
 class LinkedPointCloudImporter(LinkedTileImporter, PointCloudImporter):
-    def extract_tile_metadata(self, tile_location):
+    def extract_tile_metadata_from_s3(self, tile_location):
+        assert tile_location.startswith("s3://")
         oid_and_size = get_hash_and_size_of_s3_object(tile_location)
-        return None, extract_pc_tile_metadata(tile_location, oid_and_size=oid_and_size)
+        return extract_pc_tile_metadata(tile_location, oid_and_size=oid_and_size)
