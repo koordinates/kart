@@ -1,14 +1,91 @@
 Using Kart with S3
-==================
+------------------
 
-This page is a placeholder - eventually there will be more documentation on using Kart with S3, which is still in development.
+Kart can import tile-based datasets directly from `Amazon S3 <s3_>`_.
+The basic import command is the same as importing locally, some variation of:
+
+``kart import s3://some-bucket/path-to-laz-files/*.laz``
+``kart import s3://some-bucket/path-to-tif-files/*.tif``
+
+This will fetch the tiles and place them in the LFS cache. From this point on, it makes no difference that the tiles
+were originally fetched from S3 - they will be stored, pushed to a remote, or fetched from a remote as needed.
+This is in contrast to a "linked" tile-based dataset - explained below.
+
+
+Linked Datasets
+~~~~~~~~~~~~~~~
+
+For tile-based datasets where the original tiles are found on S3, Kart can reference the original tiles as the authoritative
+"master copy" of the tiles - this means there is no need for these tiles to be pushed and pulled between Kart repositories
+using the LFS protocol that would otherwise be used for transferring tiles. Instead, any Kart repo that needs the tiles
+will simply fetch them directly from the original source. This could be helpful for you if the following are true:
+
+* The original files will be hosted at their current location on S3 indefinitely.
+* The Kart repo and any clones of it will have read access to the tiles at their current location on S3.
+* You want to avoid duplicating the tiles to minimise hosted storage costs - you don't want them hosted both on S3 *and* the LFS server.
+
+In this case, you can add the ``--link`` option to the import command:
+
+``kart import s3://some-bucket/path-to-tiles/*.[laz|tif] --link``
+
+This creates a dataset where each tile in the dataset is linked to the original tile on S3 - it stores the S3 URL from which it was
+imported. Tiles with these URLs are not pushed to remotes or fetched from remotes like other tiles - they are always fetched from
+this URL, so there is no need to push them to any other remote. However, the metadata describing the dataset and the tiles is still
+pushed and fetched as in any other dataset.
+
+A user who clones a repository containing a linked dataset may not notice anything unusual. Ordinarily, the metadata would
+be fetched from the remote, then the tiles downloaded from the LFS server. For a linked dataset, the metadata is fetched from
+the remote as before, then the tiles are downloaded directly from their original location on S3. Either way, the user now has
+the relevant tiles in their working copy.
+
+
+No-checkout Option
+^^^^^^^^^^^^^^^^^^
+
+When importing a dataset, Kart generally checks out the newly imported dataset to the working copy immediately, but provides an option
+to skip this step. Ordinarily, skipping this step provides only limited benefits, since it only skips a local copy operation: it saves
+a bit of time and could save some disk space (depending on how the filesystem in question deals with duplicated data).
+
+However, it can be much more useful to do so when creating a linked dataset. This is because it allows for the creation of a linked
+dataset by extracting all the metadata of the tiles from S3, without actually downloading all the tiles to the local machine.
+Avoiding the download of a large dataset could save a lot of time and bandwidth, and associated costs from S3.
+
+To create a linked dataset without downloading the original data, use:
+
+``kart import s3://some-bucket/path-to-tiles/*.[laz|tif] --link --no-checkout``
+
+This dataset will not be checked out during the import operation, or any time later, until the user reverses their decision
+using ``kart checkout --dataset=PATH_TO_DATASET``. This configuration option only affects a single repository - if any user
+later clones the repository, the dataset will still be checked out as normal in their cloned repository, unless they too opt out.
+
+
+S3 Credentials
+^^^^^^^^^^^^^^
+
+Kart uses the AWS-provided `boto3 <boto3_>`_ library to fetch data from S3. AWS credentials are loaded from the standard locations -
+a folder called ``.aws`` in the user's home or user-profile directory. If credentials are unnecessary and unavailable, the environment
+variable ``AWS_NO_SIGN_REQUEST`` should be set to 1.
+
+
+Editing Tiles
+^^^^^^^^^^^^^
+
+Currently, Kart does not write to S3 on the user's behalf for any reason. Any edits made to the linked dataset will be stored
+in Kart, and will work the same as in any other dataset - the modified tiles will not be linked to any particular URL, and they
+will not be written back to S3.
+
+Users may opt to write the required changes to S3 themselves, at which point they can use the ``kart import --replace-existing --link``
+command to create a new version of the linked dataset. However, when doing so, take care not to overwrite any of the original tiles
+in S3, since that would break the requirement that Kart can continue to access those files whenever older versions of the dataset
+are checked out.
+
 
 SHA256 hashes
-=============
+~~~~~~~~~~~~~
 
 Kart uses `Git LFS <git_lfs_>`_ pointer files to point to point-cloud or raster tiles - even when those tiles
 are found in S3, rather than on a Git LFS server. For more details, see the section on :doc:`Git LFS </pages/git_lfs>`
-In order to create a dataset where every tile is backed by an object on S3, Kart needs to learn the SHA256
+In order to create a linked dataset where every tile is backed by an object on S3, Kart needs to learn the SHA256
 hash of each object in order to populate the pointer file. Currently, it does this by querying S3 directly,
 which works as long as the S3 objects already have SHA256 checksums attached (which is not guaranteed).
 
