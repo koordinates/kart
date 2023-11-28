@@ -2,7 +2,7 @@ from io import StringIO
 
 from osgeo import gdal
 
-from kart.lfs_util import get_hash_and_size_of_file
+from kart.lfs_util import get_oid_and_size_of_file
 from kart.raster import pam_util
 
 
@@ -182,17 +182,17 @@ def test_add_stats_to_existing_pam(
         tile_path = repo_path / "erorisk_si" / "erorisk_silcdb4.tif"
         pam_path = repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml"
 
-        orig_hash_and_size = (
+        orig_oid_and_size = (
             "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
             36908,
         )
-        assert get_hash_and_size_of_file(pam_path) == orig_hash_and_size
+        assert get_oid_and_size_of_file(pam_path) == orig_oid_and_size
 
         # This sort of command causes stats to be generated, but we don't want
         # to show it as a diff to the user unless they make further changes:
         gdal.Info(str(tile_path), options=["-stats", "-hist"])
 
-        assert get_hash_and_size_of_file(pam_path) != orig_hash_and_size
+        assert get_oid_and_size_of_file(pam_path) != orig_oid_and_size
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr

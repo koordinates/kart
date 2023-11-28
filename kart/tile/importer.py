@@ -1,16 +1,14 @@
 import concurrent.futures
-import functools
+from functools import cached_property
 import glob
 import logging
 import math
 import os
 from pathlib import Path
-import re
 import sys
 import uuid
 
 import click
-import botocore
 import pygit2
 
 from kart.cli_util import find_param
@@ -31,15 +29,14 @@ from kart.fast_import import (
     write_blobs_to_stream,
 )
 from kart.key_filters import RepoKeyFilter
-from kart import lfs_util
 from kart.lfs_util import (
     install_lfs_hooks,
-    merge_dicts_to_pointer_file_bytes,
     dict_to_pointer_file_bytes,
 )
 from kart.list_of_conflicts import ListOfConflicts
 from kart.meta_items import MetaItemFileType
-from kart.s3_util import expand_s3_glob, fetch_from_s3, get_error_code
+from kart.s3_util import expand_s3_glob
+from kart.tile.tile_source import TileSource
 from kart.progress_util import progress_bar
 from kart.output_util import (
     format_json_for_output,
@@ -77,6 +74,7 @@ class TileImporter:
         amend,
         allow_empty,
         num_workers,
+        do_link,
         sources,
     ):
         """
@@ -111,11 +109,44 @@ class TileImporter:
         self.amend = amend
         self.allow_empty = allow_empty
         self.num_workers = num_workers
+        self.do_link = do_link
         self.sources = sources
+        self.do_fetch_tiles = self.do_checkout or (not self.do_link)
 
         # When doing any kind of initial import we still have to write the table_dataset_version,
         # even though it's not really relevant to tile imports.
         assert self.repo.table_dataset_version in SUPPORTED_VERSIONS
+
+    # A dict of the form {sidecar-key-prefix: sidecar-filename-suffix}
+    # For example: {"pam": ".aux.xml"} since we use the prefix pam to label keys from .aux.xml aka PAM files.
+    SIDECAR_FILES = {}
+
+    @cached_property
+    def ALLOWED_SCHEMES(self):
+        if self.do_link:
+            return ("s3",)
+        else:
+            return (None, "s3")
+
+    @cached_property
+    def ALLOWED_SCHEMES_DESC(self):
+        if self.do_link:
+            return "an S3 URL"
+        else:
+            return "a path to a file or an S3 URL"
+
+    @cached_property
+    def FETCH_OR_EXTRACT_TILE_METADATA_DESC(self):
+        if not self.all_source_schemes or self.all_source_schemes == {None}:
+            # The 'None' scheme means local file. All files are local:
+            return "Checking tiles"
+        else:
+            # Some tiles are remote
+            return "Fetching tiles" if self.do_fetch_tiles else "Fetching tile metadata"
+
+    @cached_property
+    def IMPORT_TILES_TO_STREAM_DESC(self):
+        return "Importing tiles" if self.do_fetch_tiles else "Importing tile metadata"
 
     def import_tiles(self):
         """
@@ -133,6 +164,14 @@ class TileImporter:
         if self.delete and not self.dataset_path:
             # Dataset-path is required if you use --delete.
             raise self.missing_parameter("dataset_path")
+
+        if self.do_link:
+            if self.convert_to_cloud_optimized:
+                raise click.UsageError(
+                    f"Sorry, converting a linked dataset to {self.CLOUD_OPTIMIZED_VARIANT_ACRONYM} is not supported - "
+                    "the data must remain in its original location and its original format as the authoritative source."
+                )
+            self.convert_to_cloud_optimized = False
 
         if not self.dataset_path:
             self.dataset_path = self.infer_dataset_path(self.sources)
@@ -177,7 +216,7 @@ class TileImporter:
             self.update_existing and self.existing_dataset is not None
         )
 
-        self.preprocess_sources(self.sources)
+        self.tile_sources = self.preprocess_sources(self.sources)
 
         if self.delete and self.existing_dataset is None:
             # Trying to delete specific paths from a nonexistent dataset?
@@ -186,35 +225,21 @@ class TileImporter:
                 f"Dataset {self.dataset_path} does not exist. Cannot delete paths from it."
             )
 
-        # For keeping track of files that we need to fetch before we can import:
-        self.source_to_local_path = {}
-        # These two dicts contain information about the sources, pre-conversion.
-        self.source_to_metadata = {}
-        self.source_to_hash_and_size = {}
-
-        if self.sources:
+        if self.tile_sources:
             if self.convert_to_cloud_optimized is None:
                 self.convert_to_cloud_optimized = (
                     self.prompt_for_convert_to_cloud_optimized()
                 )
 
             progress = progress_bar(
-                total=len(self.sources),
+                total=len(self.tile_sources),
                 unit="tile",
-                desc=self.extracting_tile_metadata_desc,
+                desc=self.FETCH_OR_EXTRACT_TILE_METADATA_DESC,
             )
             with progress as p:
-                for (
-                    source,
-                    local_path,
-                    tile_metadata,
-                ) in self.extract_multiple_tiles_metadata(self.sources):
-                    self.source_to_local_path[source] = local_path
-                    self.source_to_metadata[source] = tile_metadata
-                    self.source_to_hash_and_size[source] = (
-                        tile_metadata["tile"]["oid"],
-                        tile_metadata["tile"]["size"],
-                    )
+                for _ in self.fetch_or_extract_multiple_tiles_metadata(
+                    self.tile_sources
+                ):
                     p.update(1)
 
             self.check_metadata_pre_convert()
@@ -222,7 +247,7 @@ class TileImporter:
             # All these checks are just so we can give slightly better error messages
             # is the source wrong pre-conversion, or will it be wrong post-conversion?
 
-            all_metadata = list(self.source_to_metadata.values())
+            all_metadata = [s.metadata for s in self.tile_sources]
             merged_source_metadata = self.get_merged_source_metadata(all_metadata)
             self.check_for_non_homogenous_metadata(
                 merged_source_metadata, future_tense=False
@@ -236,18 +261,8 @@ class TileImporter:
                 self.predicted_merged_metadata, future_tense=True
             )
 
-        # Inverse mapping of self.source_to_local_path:
-        self.local_path_to_source = {
-            path: source
-            for source, path in self.source_to_local_path.items()
-            if path is not None
-        }
-
         # Set up LFS hooks. This is also in `kart init`, but not every existing Kart repo will have these hooks.
         install_lfs_hooks(self.repo)
-
-        # Metadata in this dict is updated as we convert some or all tiles to COPC.
-        self.source_to_imported_metadata = {}
 
         # fast-import doesn't really have a way to amend a commit.
         # So we'll use a temporary branch for this fast-import,
@@ -298,12 +313,16 @@ class TileImporter:
                     proc.stdin.write(f"D {blob_path}\n".encode("utf8"))
 
             if self.sources:
-                self.import_tiles_to_stream(proc.stdin, self.sources)
+                self.import_tiles_to_stream(proc.stdin, self.tile_sources)
 
                 all_metadata = (
                     [self.existing_metadata] if self.include_existing_metadata else []
                 )
-                all_metadata.extend(self.source_to_imported_metadata.values())
+                all_metadata.extend(
+                    source.imported_metadata
+                    for source in self.tile_sources
+                    if source.imported_metadata
+                )
                 self.actual_merged_metadata = self.get_actual_merged_metadata(
                     all_metadata
                 )
@@ -345,9 +364,8 @@ class TileImporter:
             # Clean up the temp branch
             self.repo.references[fast_import_on_branch].delete()
             # Clean up the temporary local copies of tiles (the tiles are now stored properly in the LFS cache).
-            for path in self.source_to_local_path.values():
-                if path is not None:
-                    path.unlink(missing_ok=True)
+            for source in self.tile_sources:
+                source.cleanup()
 
         parts_to_create = [PartType.WORKDIR] if self.do_checkout else []
         self.repo.configure_do_checkout_datasets([self.dataset_path], self.do_checkout)
@@ -356,19 +374,6 @@ class TileImporter:
             repo_key_filter=RepoKeyFilter.datasets([self.dataset_path]),
             create_parts_if_missing=parts_to_create,
         )
-
-    @property
-    def extracting_tile_metadata_desc(self):
-        """
-        Return the progress bar description for the pass where metadata is extracted
-        (includes fetching any files that are remote)
-        """
-        if not self.all_source_schemes or self.all_source_schemes == {None}:
-            # The 'None' scheme means local file. All files are local:
-            return "Checking tiles"
-        else:
-            # Some tiles are remote
-            return "Fetching tiles"
 
     def infer_dataset_path(self, sources):
         """Given a list of sources to import, choose a reasonable name for the dataset."""
@@ -391,16 +396,15 @@ class TileImporter:
             return None
         return prefix
 
-    URI_PATTERN = re.compile(r"([A-Za-z0-9-]{,20})://")
-    ALLOWED_SCHEMES = (None, "s3")
-    ALLOWED_SCHEMES_DESC = "a path to a file or an S3 URL"
-
     def preprocess_sources(self, sources):
+        """
+        Goes through the source specification as supplied by the user and makes a TileSource for each
+        individual tile to be imported. Wildcards are expanded at this step.
+        """
         # Sanity check - make sure we support this type of file / URL, make sure that the specified files exist.
         self.all_source_schemes = set()
         for source in sources:
-            m = self.URI_PATTERN.match(source)
-            scheme = m.group(1) if m else None
+            scheme = TileSource.parse_scheme(source)
             if scheme not in self.ALLOWED_SCHEMES:
                 suffix = f", not a {scheme} URI" if scheme else ""
                 raise click.UsageError(
@@ -410,16 +414,18 @@ class TileImporter:
                 raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
             self.all_source_schemes.add(scheme)
 
-        # Now expand any wildcards.
-        for source in list(sources):
+        result = []
+        for source in sources:
             if "*" in source:
-                sources.remove(source)
-                sources += self.expand_source_wildcard(source)
+                for match in self.expand_source_wildcard(source):
+                    result.append(TileSource(match))
+            else:
+                result.append(TileSource(source))
+        return result
 
     def expand_source_wildcard(self, source):
         """Given a source with a wildcard '*' in it, expand it into the list of sources it represents."""
-        m = self.URI_PATTERN.match(source)
-        scheme = m.group(1) if m else None
+        scheme = TileSource.parse_scheme(source)
         if scheme == "s3":
             return expand_s3_glob(source)
         elif scheme is None:
@@ -429,72 +435,58 @@ class TileImporter:
             return expanded
         else:
             raise click.UsageError(
-                f"SOURCE {source} should be {self.ALLOWED_SCHEMES_DESC}, not a {m.group(1)} URI"
+                f"SOURCE {source} should be {self.ALLOWED_SCHEMES_DESC}, not a {scheme} URI"
             )
 
     def get_default_message(self):
         """Return a default commit message to describe this import."""
         raise NotImplementedError()
 
-    def extract_tile_metadata(self, source):
+    def fetch_or_extract_tile_metadata(self, tile_source):
         """
         Read the metadata for the given tile source. Includes both "dataset" metadata and "tile" metadata -
         that is, metadata that we expect to be homogenous for a dataset, such as the CRS,
         and metadata that we expect to vary per tile, such as the extent.
-        Returns the tuple (local_path, metadata) where
-        - local_path is a path to a fetched local copy of the tile in the case where the source is remote, otherwise None
-        - metadata is the tile's metadata.
         """
-        if source.startswith("s3://"):
-            local_path = self.repo.lfs_tmp_path / str(uuid.uuid4())
-            fetch_from_s3(source, local_path)
-            tile_path = local_path
-            # Also fetch sidecar files, if present.
-            for sidecar_file, suffix in self.sidecar_files(source):
-                try:
-                    fetch_from_s3(
-                        sidecar_file,
-                        local_path.with_name(local_path.name + suffix),
-                    )
-                except botocore.exceptions.ClientError as e:
-                    if get_error_code(e) == 404:
-                        # Not having any particular type of sidecar for any particular tile is allowed.
-                        continue
-                    else:
-                        raise e
-        else:
-            local_path = None
-            tile_path = source
+        if self.do_fetch_tiles and not tile_source.local_path:
+            tile_source.fetch_if_remote(self.repo.lfs_tmp_path)
+        # We always fetch the entire sidecar files even when remote - they are small compared to tiles.
+        tile_source.find_or_fetch_sidecar_files(
+            self.repo.lfs_tmp_path, self.SIDECAR_FILES
+        )
+        metadata = tile_source.extract_metadata(self)
+        if self.do_link:
+            metadata["tile"]["url"] = tile_source.spec
+            for prefix, suffix in self.SIDECAR_FILES.items():
+                if f"{prefix}Oid" in metadata["tile"]:
+                    metadata["tile"][f"{prefix}Url"] = tile_source.spec + suffix
 
-        metadata = self.extract_tile_metadata_from_filesystem_path(tile_path)
-        return local_path, metadata
+        return metadata
 
-    def extract_tile_metadata_from_filesystem_path(self, tile_path):
-        return self.DATASET_CLASS.extract_tile_metadata_from_filesystem_path(tile_path)
-
-    def extract_multiple_tiles_metadata(self, sources):
+    def fetch_or_extract_multiple_tiles_metadata(self, tile_sources):
         """
-        Like extract_tile_metadata, but works for a list of several tiles. The metadata may
+        Like fetch_or_extract_tile_metadata, but works for a list of several tiles. The metadata may
         be extracted serially or with a thread-pool, depending on the value of self.num_workers.
-        Yields a tuple (source, local_path, metadata) for each tile in turn, in some unspecified order.
         """
         # Single-threaded variant - uses the calling thread.
         if self.num_workers == 1:
-            for source in sources:
-                yield source, *self.extract_tile_metadata(source)
+            for source in tile_sources:
+                yield self.fetch_or_extract_tile_metadata(source)
             return
 
         # Multi-worker variant - uses a thread-pool, calling thread just receives the results.
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.num_workers
         ) as executor:
-            future_to_source = {
-                executor.submit(self.extract_tile_metadata, source): source
-                for source in sources
-            }
-            for future in concurrent.futures.as_completed(future_to_source):
-                source = future_to_source[future]
-                yield source, *future.result()
+            futures = [
+                executor.submit(self.fetch_or_extract_tile_metadata, source)
+                for source in tile_sources
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                yield future.result()
+
+    def extract_tile_metadata(self, tile_path, **kwargs):
+        return self.DATASET_CLASS.extract_tile_metadata(tile_path, **kwargs)
 
     def check_metadata_pre_convert(self):
         """
@@ -603,154 +595,91 @@ class TileImporter:
             exit_code=WORKING_COPY_OR_IMPORT_CONFLICT,
         )
 
-    def copy_file_to_local_lfs_cache(
-        self, source, conversion_func=None, oid_and_size=None
-    ):
-        is_remote_source = self.source_to_local_path.get(source) is not None
-        path_to_copy_from = (
-            self.source_to_local_path[source] if is_remote_source else source
-        )
-        preserve_original = not is_remote_source
-        return lfs_util.copy_file_to_local_lfs_cache(
-            self.repo,
-            path_to_copy_from,
-            conversion_func=conversion_func,
-            oid_and_size=oid_and_size,
-            preserve_original=preserve_original,
-        )
-
-    def get_conversion_func(self, source_metadata):
+    def get_conversion_func(self, tile_source):
         """
         Given the metadata for a particular tile, return a function to convert it as required during import
-        - eg, to make it cloud-optimized if required -  or None if nothing is required.
+        - eg, to make it cloud-optimized if required - or None if nothing is required.
         The conversion function has the following interface: convert(source, dest)
-        where source is the path to the tile pre-conversion,
-        and dest is the path where the converted tile is written.
+        where source is the path to the tile pre-conversion, and dest is the path where the converted tile is written.
         """
         raise NotImplementedError()
 
-    def wrap_conversion_func(self, conversion_func):
-        """
-        Given a conversion function - as produced by get_conversion_func - creates a wrapped
-        version of it that also updates self.source_to_imported_metadata once the conversion completes.
-        """
-        if conversion_func is None:
-            return None
+    def import_tiles_to_stream(self, stream, tile_sources):
+        already_imported = set()
 
-        def wrapped_func(source, dest):
-            conversion_func(source, dest)
-
-            # The source provided to the conversion step may actually be just the local path.
-            # Find the original source as specified, which is what we use as keys.
-            if source in self.local_path_to_source:
-                source = self.local_path_to_source[source]
-
-            metadata = self.extract_tile_metadata_from_filesystem_path(dest)
-            self.source_to_imported_metadata[source] = metadata
-            source_oid = self.source_to_hash_and_size[source][0]
-            if not source_oid.startswith("sha256:"):
-                source_oid = "sha256:" + source_oid
-            self.source_to_imported_metadata[source]["tile"]["sourceOid"] = source_oid
-
-        return wrapped_func
-
-    def import_tiles_to_stream(self, stream, sources):
-        already_imported = 0
-        copy_and_convert_tasks = {}
-
-        # First pass - check if the tile is already imported or if it needs to be converted,
-        # set up a callable function that will convert / hash / copy the tile to the right place as needed.
-        # This part is fast and runs single-threaded.
-        for source in sources:
-            source_metadata = self.source_to_metadata[source]
-            tilename = self.DATASET_CLASS.tilename_from_path(source)
-            rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
-                tilename, relative=True
-            )
-            blob_path = f"{self.dataset_inner_path}/{rel_blob_path}"
-
-            # Check if tile has already been imported previously:
-            if self.existing_dataset is not None:
-                existing_summary = self.existing_dataset.get_tile_summary(
-                    tilename, missing_ok=True
-                )
-                if existing_summary:
-                    source_oid = self.source_to_hash_and_size[source][0]
-                    if self.existing_tile_matches_source(source_oid, existing_summary):
-                        # This tile has already been imported before. Reuse it rather than re-importing it.
-                        # Re-importing it could cause it to be re-converted, which is a waste of time,
-                        # and it may not convert the same the second time, which is then a waste of space
-                        # and shows up as a pointless diff.
-                        write_blob_to_stream(
-                            stream,
-                            blob_path,
-                            (self.existing_dataset.inner_tree / rel_blob_path).data,
-                        )
-                        self.include_existing_metadata = True
-                        already_imported += 1
-                        continue
-
-            conversion_func = self.wrap_conversion_func(
-                self.get_conversion_func(source_metadata)
-            )
-            if conversion_func is None:
-                self.source_to_imported_metadata[source] = self.source_to_metadata[
-                    source
-                ]
-                oid_and_size = self.source_to_hash_and_size[source]
-            else:
-                oid_and_size = None
-
-            copy_and_convert_tasks[source] = functools.partial(
-                self.copy_file_to_local_lfs_cache,
-                source,
-                conversion_func,
-                oid_and_size=oid_and_size,
-            )
-
-        # Second pass - actually convert / hash / copy the tile. This part can be multi-worker.
-        progress = progress_bar(total=len(sources), unit="tile", desc="Importing tiles")
+        progress = progress_bar(
+            total=len(tile_sources), unit="tile", desc=self.IMPORT_TILES_TO_STREAM_DESC
+        )
         with progress as p:
-            p.update(already_imported)
+            # First pass - check if the tile is already imported.
+            # If already-imported tiles are found, they can be skipped in the second pass.
+            # This is fast so we just do it up-front on the calling thread.
+            if self.existing_dataset is not None:
+                for source in tile_sources:
+                    tilename = self.DATASET_CLASS.tilename_from_path(source.spec)
+                    existing_summary = self.existing_dataset.get_tile_summary(
+                        tilename, missing_ok=True
+                    )
+                    if not existing_summary:
+                        continue
+                    if not self.existing_tile_matches_source(
+                        source.oid, existing_summary
+                    ):
+                        continue
+                    # This tile has already been imported before. Reuse it rather than re-importing it.
+                    # Re-importing it could cause it to be re-converted, which is a waste of time,
+                    # and it may not convert the same the second time, which is then a waste of space
+                    # and shows up as a pointless diff.
+                    rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
+                        tilename, relative=True
+                    )
+                    blob_path = f"{self.dataset_inner_path}/{rel_blob_path}"
+                    prev_imported_blob_data = (
+                        self.existing_dataset.inner_tree / rel_blob_path
+                    ).data
+                    write_blob_to_stream(stream, blob_path, prev_imported_blob_data)
+                    source.imported_metadata = None
+                    self.include_existing_metadata = True
+                    already_imported.add(source)
+                    p.update(1)
 
-            for source, pointer_dict in self.copy_multiple_files_to_lfs_cache(
-                copy_and_convert_tasks
+            # Second pass - actually convert / hash / copy the tile. This part can be multi-worker.
+            not_yet_imported = [
+                source for source in tile_sources if source not in already_imported
+            ]
+            for source, imported_metadata in self.copy_or_convert_multiple_tiles(
+                not_yet_imported
             ):
-                pointer_data = merge_dicts_to_pointer_file_bytes(
-                    self.source_to_imported_metadata[source]["tile"], pointer_dict
+                tile_metadata, sidecar_metadata = self.separate_sidecar_metadata(
+                    imported_metadata["tile"]
                 )
 
-                tilename = self.DATASET_CLASS.tilename_from_path(source)
+                tilename = self.DATASET_CLASS.tilename_from_path(source.spec)
                 rel_blob_path = self.DATASET_CLASS.tilename_to_blob_path(
                     tilename, relative=True
                 )
                 blob_path = f"{self.dataset_inner_path}/{rel_blob_path}"
-                write_blob_to_stream(stream, blob_path, pointer_data)
+                write_blob_to_stream(
+                    stream, blob_path, dict_to_pointer_file_bytes(tile_metadata)
+                )
 
-                for sidecar_file, suffix in self.sidecar_files(
-                    self.source_to_local_path.get(source) or source
-                ):
-                    pointer_dict = self.copy_file_to_local_lfs_cache(sidecar_file)
-                    pointer_data = dict_to_pointer_file_bytes(pointer_dict)
-                    write_blob_to_stream(stream, blob_path + suffix, pointer_data)
+                for suffix, metadata in sidecar_metadata.items():
+                    write_blob_to_stream(
+                        stream, blob_path + suffix, dict_to_pointer_file_bytes(metadata)
+                    )
 
                 p.update(1)
 
-    def copy_multiple_files_to_lfs_cache(self, copy_and_convert_tasks):
+    def copy_or_convert_multiple_tiles(self, tile_sources):
         """
-        Runs all the supplied tasks which hash / convert / copy the source files to the LFS cache.
-        Tasks may be run in series or by a threadpool, depending on self.num_workers.
-        Yields a tuple (source, pointer_dict) for each tile in turn, in some unspecified order, where
-        pointer_dict contains the OID and size that should be written as a pointer-file in order to
-        reference the tile that has been imported to the LFS cache.
-
-        copy_and_convert_tasks - a dict keyed by the source file, as supplied by user, where each
-            value is a task to be run that hashes / converts / copies the tile to the LFS cache as required.
+        Calls copy_or_convert on each TileSource in tile_sources, which causes each tile to be simply copied
+        from its source into the LFS cache, or converted (if self.convert_to_cloud_optimized is True) with
+        the converted result placed in the LFS cache.
         """
         # Single-threaded variant - uses the calling thread.
         if self.num_workers == 1:
-            for source, task in copy_and_convert_tasks.items():
-                yield source, task()
+            for source in tile_sources:
+                yield source, source.copy_or_convert(self)
             return
 
         # Multi-worker variant - uses a thread-pool, calling thread just receives the results.
@@ -758,15 +687,20 @@ class TileImporter:
             max_workers=self.num_workers
         ) as executor:
             future_to_source = {
-                executor.submit(task): source
-                for source, task in copy_and_convert_tasks.items()
+                executor.submit(source.copy_or_convert, self): source
+                for source in tile_sources
             }
             for future in concurrent.futures.as_completed(future_to_source):
-                source = future_to_source[future]
-                yield source, future.result()
+                yield future_to_source[future], future.result()
 
     def write_meta_blobs_to_stream(self, stream, merged_metadata):
         """Writes the format.json, schema.json and crs.wkt meta items to the dataset."""
+        if self.do_link:
+            merged_metadata = {
+                **merged_metadata,
+                "linked-storage.json": {"urlRedirects": {}},
+            }
+
         for key, value in merged_metadata.items():
             definition = self.DATASET_CLASS.get_meta_item_definition(key)
             file_type = MetaItemFileType.get_from_definition_or_suffix(definition, key)
@@ -780,8 +714,30 @@ class TileImporter:
         """Raise a MissingParameter exception."""
         return click.MissingParameter(param=find_param(self.ctx, param_name))
 
-    def sidecar_files(self, source):
-        return []
+    def separate_sidecar_metadata(self, all_tile_metadata):
+        """
+        Puts all the side-car prefixed keys eg "pam..." into separate dict(s) from the main tile_metadata dict.
+        """
+        if not self.SIDECAR_FILES:
+            return all_tile_metadata, {}
+
+        def _remove_prefix(key, prefix):
+            key = key[len(prefix) :]
+            return key[0].lower() + key[1:]
+
+        tile_metadata = {}
+        sidecar_metadata = {}
+        for key, value in all_tile_metadata.items():
+            for prefix, suffix in self.SIDECAR_FILES.items():
+                if key.startswith(prefix):
+                    sidecar_metadata.setdefault(suffix, {})[
+                        _remove_prefix(key, prefix)
+                    ] = value
+                    break
+            else:
+                tile_metadata[key] = value
+
+        return tile_metadata, sidecar_metadata
 
     def check_num_workers(self, num_workers):
         if num_workers is None:

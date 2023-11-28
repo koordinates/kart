@@ -1274,7 +1274,7 @@ def check_lfs_hashes(requires_git_lfs):
     """
     LFS_OID_PATTERN = re.compile("[0-9a-fA-F]{64}")
 
-    from kart.lfs_util import get_hash_and_size_of_file
+    from kart.lfs_util import get_oid_and_size_of_file
 
     def _check_lfs_hashes(repo, expected_file_count=None):
         file_count = 0
@@ -1282,7 +1282,7 @@ def check_lfs_hashes(requires_git_lfs):
             if not file.is_file() or not LFS_OID_PATTERN.fullmatch(file.name):
                 continue
             file_count += 1
-            file_hash, size = get_hash_and_size_of_file(file)
+            file_hash, size = get_oid_and_size_of_file(file)
             assert file_hash == file.name
 
             odb_hash = pygit2.hashfile(file)
@@ -1312,7 +1312,7 @@ def check_tile_is_reflinked():
     import reflink
 
     from kart import is_windows
-    from kart.lfs_util import get_hash_and_size_of_file, get_local_path_from_lfs_hash
+    from kart.lfs_util import get_oid_and_size_of_file, get_local_path_from_lfs_oid
 
     clone_checker = shutil.which("clone_checker")
     fienode = shutil.which("fienode")
@@ -1340,8 +1340,8 @@ def check_tile_is_reflinked():
             else:
                 return
 
-        tile_hash, size = get_hash_and_size_of_file(tile_path)
-        lfs_path = get_local_path_from_lfs_hash(repo, tile_hash)
+        oid, size = get_oid_and_size_of_file(tile_path)
+        lfs_path = get_local_path_from_lfs_oid(repo, oid)
 
         if clone_checker:
             output = subprocess.check_output(

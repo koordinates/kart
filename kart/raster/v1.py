@@ -5,9 +5,7 @@ import re
 from kart.core import all_blobs_in_tree
 from kart.diff_structs import DeltaDiff, Delta
 from kart.key_filters import FeatureKeyFilter
-from kart.lfs_util import (
-    get_local_path_from_lfs_hash,
-)
+from kart.lfs_util import get_local_path_from_lfs_oid
 from kart.list_of_conflicts import ListOfConflicts
 from kart.meta_items import MetaItemDefinition, MetaItemFileType
 from kart.raster.gdal_convert import convert_tile_to_format
@@ -67,8 +65,8 @@ class RasterV1(TileDataset):
         return set_tile_extension(filename, ext=ext, tile_format=tile_format)
 
     @classmethod
-    def extract_tile_metadata_from_filesystem_path(cls, path):
-        return extract_raster_tile_metadata(path)
+    def extract_tile_metadata(cls, path, **kwargs):
+        return extract_raster_tile_metadata(path, **kwargs)
 
     @classmethod
     def get_format_summary(cls, format_json):
@@ -162,7 +160,7 @@ class RasterV1(TileDataset):
 
         old_pam_path = None
         if old_pam_oid:
-            old_pam_path = get_local_path_from_lfs_hash(self.repo, old_pam_oid)
+            old_pam_path = get_local_path_from_lfs_oid(self.repo, old_pam_oid)
             if not old_pam_path.is_file():
                 return False  # Can't check the contents, so don't suppress the change.
             old_pam_path = str(old_pam_path)

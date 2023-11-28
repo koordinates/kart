@@ -2,7 +2,7 @@ import json
 import pytest
 
 from kart.exceptions import INVALID_ARGUMENT, NO_CHANGES
-from kart.lfs_util import get_hash_and_size_of_file
+from kart.lfs_util import get_oid_and_size_of_file
 from kart.repo import KartRepo
 
 AERIAL_CRS_DIFF = [
@@ -384,7 +384,7 @@ def test_import_single_geotiff_with_rat(
             tif = repo_path / "erorisk_silcdb4" / "erorisk_silcdb4.tif"
             assert tif.is_file()
             check_tile_is_reflinked(tif, repo)
-            assert get_hash_and_size_of_file(tif) == (
+            assert get_oid_and_size_of_file(tif) == (
                 "c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
                 604652,
             )
@@ -394,7 +394,7 @@ def test_import_single_geotiff_with_rat(
             pam = repo_path / "erorisk_silcdb4" / "erorisk_silcdb4.tif.aux.xml"
             assert pam.is_file()
             check_tile_is_reflinked(pam, repo)
-            assert get_hash_and_size_of_file(pam) == (
+            assert get_oid_and_size_of_file(pam) == (
                 "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
                 36908,
             )

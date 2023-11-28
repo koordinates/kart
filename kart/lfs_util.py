@@ -38,7 +38,7 @@ def install_lfs_hooks(repo):
         )
 
 
-def get_hash_and_size_of_file(path):
+def get_oid_and_size_of_file(path):
     """Given a path to a file, calculates and returns its SHA256 hash and length in bytes."""
     if not isinstance(path, Path):
         path = Path(path)
@@ -55,7 +55,7 @@ def get_hash_and_size_of_file(path):
     return sha256.hexdigest(), size
 
 
-def get_hash_and_size_of_file_while_copying(src_path, dest_path, allow_overwrite=False):
+def get_oid_and_size_of_file_while_copying(src_path, dest_path, allow_overwrite=False):
     """
     Given a path to a file, calculates and returns its SHA256 hash and length in bytes,
     while copying it to the given destination.
@@ -283,9 +283,7 @@ def get_hash_from_pointer_file(pointer_file_bytes):
     if isinstance(pointer_file_bytes, dict):
         # Already decoded - just trim off the sha256:
         oid = pointer_file_bytes["oid"]
-        if oid.startswith("sha256:"):
-            oid = oid[7:]  # len("sha256:")
-        return oid
+        return unprefix_sha256(oid)
 
     if isinstance(pointer_file_bytes, pygit2.Blob):
         pointer_file_bytes = memoryview(pointer_file_bytes)
@@ -295,13 +293,10 @@ def get_hash_from_pointer_file(pointer_file_bytes):
     return None
 
 
-def get_local_path_from_lfs_hash(repo, lfs_hash):
-    """Given a sha256 LFS hash, finds where the object would be stored in the local LFS cache."""
-    if lfs_hash.startswith("sha256:"):
-        lfs_hash = lfs_hash[7:]  # len("sha256:")
-    return (
-        repo.gitdir_path / "lfs" / "objects" / lfs_hash[0:2] / lfs_hash[2:4] / lfs_hash
-    )
+def get_local_path_from_lfs_oid(repo, oid):
+    """Given a sha256 LFS OID, finds where the object would be stored in the local LFS cache."""
+    oid = unprefix_sha256(oid)
+    return repo.gitdir_path / "lfs" / "objects" / oid[0:2] / oid[2:4] / oid
 
 
 def copy_file_to_local_lfs_cache(
@@ -327,15 +322,15 @@ def copy_file_to_local_lfs_cache(
             else:
                 # We can find the hash while copying in this case.
                 # TODO - check if this is actually any faster.
-                oid_and_size = get_hash_and_size_of_file_while_copying(
+                oid_and_size = get_oid_and_size_of_file_while_copying(
                     source_path, tmp_object_path
                 )
 
     if not oid_and_size:
-        oid_and_size = get_hash_and_size_of_file(tmp_object_path)
+        oid_and_size = get_oid_and_size_of_file(tmp_object_path)
     oid, size = oid_and_size
 
-    actual_object_path = get_local_path_from_lfs_hash(repo, oid)
+    actual_object_path = get_local_path_from_lfs_oid(repo, oid)
 
     # Move tmp_object_path to actual_object_path in a robust way -
     # check to see if its already there:
@@ -347,11 +342,17 @@ def copy_file_to_local_lfs_cache(
         actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
         tmp_object_path.rename(actual_object_path)
 
-    if not oid.startswith("sha256:"):
-        oid = "sha256:" + oid
-
     return {
         "version": GIT_LFS_SPEC_V1,
-        "oid": oid,
+        "oid": prefix_sha256(oid),
         "size": size,
     }
+
+
+def prefix_sha256(oid):
+    return oid if oid.startswith("sha256:") else f"sha256:{oid}"
+
+
+def unprefix_sha256(oid):
+    # len("sha256:") = 7
+    return oid[7:] if oid.startswith("sha256:") else oid

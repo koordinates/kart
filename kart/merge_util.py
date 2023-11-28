@@ -6,7 +6,7 @@ from collections import namedtuple
 import click
 import pygit2
 
-from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
+from .lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_oid
 from .key_filters import RepoKeyFilter
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
@@ -942,7 +942,7 @@ class WorkingCopyMerger:
                     version_name = version.version_name
                     pointer_blob = self.repo[version.id]
                     pointer_dict = pointer_file_bytes_to_dict(pointer_blob)
-                    lfs_path = get_local_path_from_lfs_hash(
+                    lfs_path = get_local_path_from_lfs_oid(
                         self.repo, pointer_dict["oid"]
                     )
                     if not lfs_path.is_file():

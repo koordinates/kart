@@ -6,10 +6,9 @@ from kart.cli_util import (
     StringFromFile,
     MutexOption,
     KartCommand,
-    forward_context_to_command,
 )
 from kart.completion_shared import file_path_completer
-from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
+from kart.lfs_util import prefix_sha256
 from kart.parse_args import parse_import_sources_and_datasets
 from kart.raster.gdal_convert import convert_tile_to_cog
 from kart.raster.metadata_util import (
@@ -19,7 +18,7 @@ from kart.raster.metadata_util import (
 )
 from kart.raster.v1 import RasterV1
 from kart.tile.importer import TileImporter
-from kart.tile.tilename_util import find_similar_files_case_insensitive, PAM_SUFFIX
+from kart.tile.tilename_util import PAM_SUFFIX
 
 L = logging.getLogger(__name__)
 
@@ -138,12 +137,6 @@ def raster_import(
 
     SOURCES should be one or more GeoTIFF files (or wildcards that match multiple GeoTIFF files).
     """
-    if do_link:
-        from kart.linked_storage.raster_import import linked_raster_import
-
-        forward_context_to_command(ctx, linked_raster_import)
-        return
-
     repo = ctx.obj.repo
 
     sources, datasets = parse_import_sources_and_datasets(args)
@@ -166,6 +159,7 @@ def raster_import(
         amend=amend,
         allow_empty=allow_empty,
         num_workers=num_workers,
+        do_link=do_link,
         sources=sources,
     ).import_tiles()
 
@@ -175,6 +169,8 @@ class RasterImporter(TileImporter):
 
     CLOUD_OPTIMIZED_VARIANT = "Cloud-Optimized GeoTIFF"
     CLOUD_OPTIMIZED_VARIANT_ACRONYM = "COG"
+
+    SIDECAR_FILES = {"pam": PAM_SUFFIX}
 
     def get_default_message(self):
         return f"Importing {len(self.sources)} GeoTIFF tiles as {self.dataset_path}"
@@ -204,15 +200,14 @@ class RasterImporter(TileImporter):
         )
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
-    def get_conversion_func(self, source_metadata):
-        if self.convert_to_cloud_optimized and not is_cog(source_metadata):
+    def get_conversion_func(self, tile_source):
+        if self.convert_to_cloud_optimized and not is_cog(tile_source.metadata):
             return convert_tile_to_cog
         return None
 
     def existing_tile_matches_source(self, source_oid, existing_summary):
         """Check if the existing tile can be reused instead of reimporting."""
-        if not source_oid.startswith("sha256:"):
-            source_oid = "sha256:" + source_oid
+        source_oid = prefix_sha256(source_oid)
 
         if existing_summary.get("oid") == source_oid:
             # The import source we were given has already been imported in its native format.
@@ -229,21 +224,3 @@ class RasterImporter(TileImporter):
             return self.convert_to_cloud_optimized and is_cog(existing_summary)
 
         return False
-
-    def sidecar_files(self, source):
-        source = str(source)
-        if source.startswith("s3://"):
-            # Can't directly check if this S3 object exists, but here's where it should be:
-            yield source + PAM_SUFFIX, PAM_SUFFIX
-            return
-
-        pam_path = source + PAM_SUFFIX
-        pams = find_similar_files_case_insensitive(pam_path)
-        if len(pams) == 1:
-            yield pams[0], PAM_SUFFIX
-        if len(pams) > 1:
-            detail = "\n".join(str(p) for p in pams)
-            raise InvalidOperation(
-                f"More than one PAM file found for {source}:\n{detail}",
-                exit_code=INVALID_FILE_FORMAT,
-            )

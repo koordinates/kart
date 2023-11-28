@@ -277,7 +277,8 @@ class TileDataset(BaseDataset):
         return self.repo.workdir_file(self.path)
 
     @classmethod
-    def extract_tile_metadata_from_filesystem_path(cls, path):
+    def extract_tile_metadata(cls, path, oid_and_size=None):
+        """Given the location of any tile, extracts all relevant tile metadata."""
         raise NotImplementedError()
 
     def diff(
@@ -424,9 +425,7 @@ class TileDataset(BaseDataset):
             if workdir_path is None:
                 new_half_delta = None
             elif extract_metadata:
-                tile_metadata = self.extract_tile_metadata_from_filesystem_path(
-                    workdir_path
-                )
+                tile_metadata = self.extract_tile_metadata(workdir_path)
                 tilename_to_metadata[tilename] = tile_metadata
                 new_tile_summary = self.get_envisioned_tile_summary(
                     tile_metadata["tile"], target_format

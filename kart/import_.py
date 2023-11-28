@@ -8,7 +8,7 @@ from kart.cli_util import (
     forward_context_to_command,
 )
 from kart.completion_shared import file_path_completer
-from kart.import_sources import from_spec, suggest_specs
+from kart.import_sources import from_spec, suggest_specs, ImportType
 
 
 def list_import_formats(ctx):
@@ -67,8 +67,8 @@ def list_import_formats(ctx):
     is_flag=True,
     help=(
         "Link the created dataset to the original source location, so that the original source location is treated as "
-        "the authoritative source for the given data and data is fetched from there if needed. Only supported for "
-        "tile-based datasets."
+        "the authoritative source for the given data and data is fetched from there if needed. Currently only "
+        "supported for tile-based datasets where the tiles are sourced from S3."
     ),
 )
 @click.argument(
@@ -145,13 +145,11 @@ def import_(ctx, args, **kwargs):
             f"Try one of the following:\n{suggest_specs()}"
         )
 
-    if kwargs.get("do_link"):
-        import_cmd = import_source_type.linked_import_cmd
-        if import_cmd is None:
-            raise click.UsageError(
-                "--link is not supported for vector or tabular imports"
-            )
-    else:
-        import_cmd = import_source_type.import_cmd
+    if kwargs.get("do_link") and import_source_type.import_type in (
+        ImportType.SQLALCHEMY_TABLE,
+        ImportType.OGR_TABLE,
+    ):
+        raise click.UsageError("--link is not supported for vector or tabular imports")
 
+    import_cmd = import_source_type.import_cmd
     forward_context_to_command(ctx, import_cmd)

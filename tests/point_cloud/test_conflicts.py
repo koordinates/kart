@@ -2,7 +2,7 @@ import re
 import shutil
 
 from .fixtures import requires_pdal  # noqa
-from kart.lfs_util import get_hash_and_size_of_file
+from kart.lfs_util import get_oid_and_size_of_file
 from kart.repo import KartRepo
 
 
@@ -66,13 +66,13 @@ def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
         assert "+++ auckland:tile:auckland_0_0.theirs" in lines
 
         # Check the conflict versions were written to the working copy for the user to compare:
-        assert get_hash_and_size_of_file(
+        assert get_oid_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.ancestor.copc.laz"
         ) == ("adbc1dc7fc99c88fcb627b9c40cdb56c211b791fe9cf83fe066b1a9932c12569", 54396)
-        assert get_hash_and_size_of_file(
+        assert get_oid_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.ours.copc.laz"
         ) == ("583789bcea43177dbba446574f00f817b2f89782fcf71709d911b2ad10872d0e", 18317)
-        assert get_hash_and_size_of_file(
+        assert get_oid_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.theirs.copc.laz"
         ) == ("8624133a3fa257e528fe1e0a01e1f2a7fa9f453cbe4fe283a31eabaf77c68794", 19975)
 
@@ -92,7 +92,7 @@ def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
         assert not (repo_path / "auckland" / "auckland_0_0.ours.copc.laz").exists()
         assert not (repo_path / "auckland" / "auckland_0_0.theirs.copc.laz").exists()
 
-        assert get_hash_and_size_of_file(
+        assert get_oid_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
         ) == ("8624133a3fa257e528fe1e0a01e1f2a7fa9f453cbe4fe283a31eabaf77c68794", 19975)
 
@@ -124,7 +124,7 @@ def test_merge_and_resolve_conflicts(cli_runner, data_archive, requires_pdal):
         )
         assert r.stdout.splitlines()[3] == "Updating file-system working copy ..."
 
-        assert get_hash_and_size_of_file(
+        assert get_oid_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
         ) == ("8624133a3fa257e528fe1e0a01e1f2a7fa9f453cbe4fe283a31eabaf77c68794", 19975)
 
@@ -186,7 +186,7 @@ def test_resolve_conflict_with_workingcopy(cli_runner, data_archive, requires_pd
             "+                                     size = 2314",
         ]
 
-        assert get_hash_and_size_of_file(
+        assert get_oid_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
         ) == ("0fd4dc03d2e9963658cf70e9d52fa1eaa7292da71d89d0188cfa88d5afb75ab6", 2314)
 
@@ -243,6 +243,6 @@ def test_resolve_conflict_with_file(cli_runner, data_archive, requires_pdal, tmp
             "-                                     size = 18317",
             "+                                     size = 2137",
         ]
-        assert get_hash_and_size_of_file(
+        assert get_oid_and_size_of_file(
             repo_path / "auckland" / "auckland_0_0.copc.laz"
         ) == ("32b5fe23040b236dfe469456dd8f7ebbb4dcb3326305ba3e183714a32e4dd1ac", 2137)

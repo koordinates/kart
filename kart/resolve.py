@@ -10,7 +10,7 @@ from kart.completion_shared import conflict_completer
 
 from kart.cli_util import MutexOption, KartCommand
 from kart.exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
-from kart.lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_hash
+from kart.lfs_util import pointer_file_bytes_to_dict, get_local_path_from_lfs_oid
 from kart.geometry import geojson_to_gpkg_geom
 from kart.merge_util import (
     MergeContext,
@@ -92,13 +92,13 @@ def _load_file_resolve_for_feature(rich_conflict, file_path):
 
 
 def _load_file_resolve_for_tile(rich_conflict, file_path):
-    from kart.lfs_util import get_local_path_from_lfs_hash, dict_to_pointer_file_bytes
+    from kart.lfs_util import get_local_path_from_lfs_oid, dict_to_pointer_file_bytes
 
     tilename = rich_conflict.decoded_path[2]
     dataset = load_dataset(rich_conflict)
     repo = dataset.repo
     rel_tile_path = os.path.relpath(file_path.resolve(), repo.workdir_path.resolve())
-    tile_summary = dataset.extract_tile_metadata_from_filesystem_path(file_path)["tile"]
+    tile_summary = dataset.extract_tile_metadata(file_path)["tile"]
     if not dataset.is_tile_compatible(
         tile_summary, dataset.tile_metadata["format.json"]
     ):
@@ -107,7 +107,7 @@ def _load_file_resolve_for_tile(rich_conflict, file_path):
             f"The tile at {rel_tile_path} does not match the dataset's format"
         )
 
-    path_in_lfs_cache = get_local_path_from_lfs_hash(repo, tile_summary["oid"])
+    path_in_lfs_cache = get_local_path_from_lfs_oid(repo, tile_summary["oid"])
     if not path_in_lfs_cache.is_file():
         path_in_lfs_cache.parents[0].mkdir(parents=True, exist_ok=True)
         try_reflink(file_path, path_in_lfs_cache)
@@ -298,7 +298,7 @@ def update_workingcopy_with_resolve(
         for r in res:
             tilename = dataset.tilename_from_path(r.path)
             pointer_dict = pointer_file_bytes_to_dict(repo[r.id])
-            lfs_path = get_local_path_from_lfs_hash(repo, pointer_dict["oid"])
+            lfs_path = get_local_path_from_lfs_oid(repo, pointer_dict["oid"])
             filename = set_tile_extension(tilename, tile_format=pointer_dict)
             workdir_path = workdir.path / dataset.path / filename
             if workdir_path.is_file():

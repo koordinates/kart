@@ -12,7 +12,7 @@ import boto3
 import click
 
 from kart.exceptions import NotFound, NO_IMPORT_SOURCE, NO_CHECKSUM
-from kart.lfs_util import get_hash_and_size_of_file
+from kart.lfs_util import get_oid_and_size_of_file
 from kart.progress_util import progress_bar
 
 # Utility functions for dealing with S3 - not yet launched.
@@ -135,7 +135,7 @@ def fetch_from_s3(s3_url, output_path=None, sha256_hash=None):
     get_s3_bucket(bucket).download_file(key, str(output_path))
 
     if sha256_hash:
-        actual_hash, size = get_hash_and_size_of_file(output_path)
+        actual_hash, size = get_oid_and_size_of_file(output_path)
         if actual_hash != sha256_hash:
             output_path.unlink()
             raise ValueError(
@@ -216,8 +216,8 @@ def expand_s3_glob(source_spec):
     return result
 
 
-def get_hash_and_size_of_s3_object(s3_url):
-    """Returns the (SHA256-hash-in-Base64, filesize) of an S3 object."""
+def get_lfs_oid_and_size_of_s3_object(s3_url):
+    """Returns a tuple (LFS-OID, filesize) of an S3 object."""
     bucket, key = parse_s3_url(s3_url)
     response = get_s3_client(bucket=bucket).head_object(
         Bucket=bucket, Key=key, ChecksumMode="ENABLED"

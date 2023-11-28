@@ -10,7 +10,7 @@ from kart.exceptions import (
     NO_CHANGES,
     INVALID_OPERATION,
 )
-from kart.lfs_util import get_hash_and_size_of_file
+from kart.lfs_util import get_oid_and_size_of_file
 from kart.point_cloud.metadata_util import extract_pc_tile_metadata
 from kart.repo import KartRepo
 from kart import subprocess_util as subprocess
@@ -1235,11 +1235,11 @@ def test_working_copy_add_with_non_standard_extension(
 ):
     with data_archive("point-cloud/auckland.tgz") as repo_path:
         tile_path = repo_path / "auckland" / "auckland_0_0.copc.laz"
-        orig_hash_and_size = get_hash_and_size_of_file(tile_path)
+        orig_oid_and_size = get_oid_and_size_of_file(tile_path)
 
         new_tile_path = repo_path / "auckland" / tile_filename
         shutil.copy(tile_path, new_tile_path)
-        assert get_hash_and_size_of_file(new_tile_path) == orig_hash_and_size
+        assert get_oid_and_size_of_file(new_tile_path) == orig_oid_and_size
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr
@@ -1264,8 +1264,8 @@ def test_working_copy_add_with_non_standard_extension(
         names = {f.name for f in (repo_path / "auckland").glob("auckland_0_0.*")}
         assert names == {"auckland_0_0.copc.laz"}
         assert (
-            get_hash_and_size_of_file(repo_path / "auckland" / "auckland_0_0.copc.laz")
-            == orig_hash_and_size
+            get_oid_and_size_of_file(repo_path / "auckland" / "auckland_0_0.copc.laz")
+            == orig_oid_and_size
         )
 
 
@@ -1282,11 +1282,11 @@ def test_working_copy_rename_extension(
 ):
     with data_archive("point-cloud/auckland.tgz") as repo_path:
         tile_path = repo_path / "auckland" / "auckland_0_0.copc.laz"
-        orig_hash_and_size = get_hash_and_size_of_file(tile_path)
+        orig_oid_and_size = get_oid_and_size_of_file(tile_path)
 
         new_tile_path = repo_path / "auckland" / tile_filename
         tile_path.rename(new_tile_path)
-        assert get_hash_and_size_of_file(new_tile_path) == orig_hash_and_size
+        assert get_oid_and_size_of_file(new_tile_path) == orig_oid_and_size
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr
@@ -1307,7 +1307,7 @@ def test_working_copy_rename_extension(
         names = {f.name for f in (repo_path / "auckland").glob("auckland_0_0.*")}
         assert names == {"auckland_0_0.copc.laz"}
 
-        assert get_hash_and_size_of_file(tile_path) == orig_hash_and_size
+        assert get_oid_and_size_of_file(tile_path) == orig_oid_and_size
 
 
 def test_working_copy_conflicting_extension(cli_runner, data_archive, requires_pdal):

@@ -13,7 +13,7 @@ from kart.exceptions import (
     INVALID_FILE_FORMAT,
 )
 from kart.list_of_conflicts import ListOfConflicts
-from kart.lfs_util import get_hash_and_size_of_file
+from kart.lfs_util import get_oid_and_size_of_file, prefix_sha256
 from kart.geometry import ring_as_wkt
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf_and_vlr,
@@ -214,7 +214,7 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
     if oid_and_size:
         oid, size = oid_and_size
     else:
-        oid, size = get_hash_and_size_of_file(pc_tile_path)
+        oid, size = get_oid_and_size_of_file(pc_tile_path)
 
     name = Path(pc_tile_path).name
     url = pc_tile_path if pc_tile_path.startswith("s3://") else None
@@ -229,7 +229,7 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
         "nativeExtent": _format_list_as_str(native_extent),
         "pointCount": metadata["count"],
         "url": url,
-        "oid": f"sha256:{oid}",
+        "oid": prefix_sha256(oid),
         "size": size,
     }
 

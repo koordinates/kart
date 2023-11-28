@@ -1,15 +1,13 @@
 import pytest
 import shutil
 
-import reflink
-
 from kart import is_windows
 from kart.exceptions import (
     WORKING_COPY_OR_IMPORT_CONFLICT,
     NO_CHANGES,
     INVALID_OPERATION,
 )
-from kart.lfs_util import get_hash_and_size_of_file
+from kart.lfs_util import get_oid_and_size_of_file
 from kart.repo import KartRepo
 
 
@@ -98,7 +96,7 @@ def test_working_copy_edit(cli_runner, data_archive, requires_git_lfs):
             r.stdout.splitlines()[4:] == ["    Remove alpha band", ""] + EXPECTED_DIFF
         )
 
-        assert get_hash_and_size_of_file(repo_path / "aerial/aerial.tif") == (
+        assert get_oid_and_size_of_file(repo_path / "aerial/aerial.tif") == (
             "60d8c02dbff57aaebd5eccd51f7cdf0f0234d6507591a122f1a683817d8f59e3",
             533940,
         )
@@ -106,7 +104,7 @@ def test_working_copy_edit(cli_runner, data_archive, requires_git_lfs):
         r = cli_runner.invoke(["reset", "HEAD^"])
         assert r.exit_code == 0
 
-        assert get_hash_and_size_of_file(repo_path / "aerial/aerial.tif") == (
+        assert get_oid_and_size_of_file(repo_path / "aerial/aerial.tif") == (
             "e6cbc8210f9cae3c8b72985e553e97af51fb9c20d17f5a06b7579943fed57b2c",
             516216,
         )
@@ -197,7 +195,7 @@ def test_working_copy_edit_rat(
         )
 
         pam_path = repo_path / "erorisk_si/erorisk_silcdb4.tif.aux.xml"
-        assert get_hash_and_size_of_file(pam_path) == (
+        assert get_oid_and_size_of_file(pam_path) == (
             "1829b97c9fb5d8cc574a41b7af729da794ba0b4880182f820cdbf416f0a328f5",
             36943,
         )
@@ -205,7 +203,7 @@ def test_working_copy_edit_rat(
         r = cli_runner.invoke(["reset", "HEAD^"])
         assert r.exit_code == 0
 
-        assert get_hash_and_size_of_file(pam_path) == (
+        assert get_oid_and_size_of_file(pam_path) == (
             "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
             36908,
         )
@@ -387,7 +385,7 @@ def test_working_copy_add_or_remove_rat(
         )
 
         pam_path = repo_path / "erorisk_si/erorisk_silcdb4.tif.aux.xml"
-        assert get_hash_and_size_of_file(pam_path) == (
+        assert get_oid_and_size_of_file(pam_path) == (
             "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
             36908,
         )
@@ -543,7 +541,7 @@ def test_working_copy_edit__convert_to_cog(
 
             shutil.copy(tif_aerial / "aerial.tif", repo_path / "aerial/aerial2.tif")
 
-            assert get_hash_and_size_of_file(repo_path / "aerial/aerial2.tif") == (
+            assert get_oid_and_size_of_file(repo_path / "aerial/aerial2.tif") == (
                 "bdbb58a399b60231f7a017fd76659efb0f5c1d82ab892248123d14d9a1e838e1",
                 393860,
             )
@@ -626,7 +624,7 @@ def test_working_copy_edit__convert_to_cog(
                 "+                                     size = 552340",
             ]
 
-            assert get_hash_and_size_of_file(repo_path / "aerial/aerial2.tif") == (
+            assert get_oid_and_size_of_file(repo_path / "aerial/aerial2.tif") == (
                 "b5a949f332d2d5afbfe9c164a4060e130c7d95d77aa3d48780c2adffc12ff36b",
                 552340,
             )
@@ -647,11 +645,11 @@ def test_working_copy_add_with_non_standard_extension(
 ):
     with data_archive("raster/aerial.tgz") as repo_path:
         tile_path = repo_path / "aerial" / "aerial.tif"
-        orig_hash_and_size = get_hash_and_size_of_file(tile_path)
+        orig_oid_and_size = get_oid_and_size_of_file(tile_path)
 
         new_tile_path = repo_path / "aerial" / tile_filename
         shutil.copy(tile_path, new_tile_path)
-        assert get_hash_and_size_of_file(new_tile_path) == orig_hash_and_size
+        assert get_oid_and_size_of_file(new_tile_path) == orig_oid_and_size
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr
@@ -676,8 +674,8 @@ def test_working_copy_add_with_non_standard_extension(
         names = {f.name for f in (repo_path / "aerial").glob("new.*")}
         assert names == {"new.tif"}
         assert (
-            get_hash_and_size_of_file(repo_path / "aerial" / "new.tif")
-            == orig_hash_and_size
+            get_oid_and_size_of_file(repo_path / "aerial" / "new.tif")
+            == orig_oid_and_size
         )
 
 
@@ -692,11 +690,11 @@ def test_working_copy_add_with_non_standard_extension(
 def test_working_copy_rename_extension(tile_filename, cli_runner, data_archive):
     with data_archive("raster/aerial.tgz") as repo_path:
         tile_path = repo_path / "aerial" / "aerial.tif"
-        orig_hash_and_size = get_hash_and_size_of_file(tile_path)
+        orig_oid_and_size = get_oid_and_size_of_file(tile_path)
 
         new_tile_path = repo_path / "aerial" / tile_filename
         tile_path.rename(new_tile_path)
-        assert get_hash_and_size_of_file(new_tile_path) == orig_hash_and_size
+        assert get_oid_and_size_of_file(new_tile_path) == orig_oid_and_size
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr
@@ -717,7 +715,7 @@ def test_working_copy_rename_extension(tile_filename, cli_runner, data_archive):
         names = {f.name for f in (repo_path / "aerial").glob("aerial.*")}
         assert names == {"aerial.tif", "aerial.vrt"}
 
-        assert get_hash_and_size_of_file(tile_path) == orig_hash_and_size
+        assert get_oid_and_size_of_file(tile_path) == orig_oid_and_size
 
 
 def test_working_copy_conflicting_extension(cli_runner, data_archive):
@@ -761,7 +759,6 @@ def test_working_copy_vrt(cli_runner, data_archive, monkeypatch):
 
 def test_working_copy_vrt_disabled(cli_runner, data_archive, monkeypatch):
     with data_archive("raster/elevation.tgz") as repo_path:
-
         shutil.rmtree(repo_path / "elevation")
 
         r = cli_runner.invoke(

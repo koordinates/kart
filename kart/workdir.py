@@ -22,7 +22,7 @@ from kart.exceptions import (
     NO_WORKING_COPY,
     translate_subprocess_exit_code,
 )
-from kart.lfs_util import get_local_path_from_lfs_hash, dict_to_pointer_file_bytes
+from kart.lfs_util import get_local_path_from_lfs_oid, dict_to_pointer_file_bytes
 from kart.lfs_commands import fetch_lfs_blobs_for_pointer_files
 from kart.key_filters import RepoKeyFilter
 from kart.output_util import InputMode, get_input_mode
@@ -658,7 +658,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         tilename = tile_summary["pamName" if use_pam_prefix else "name"]
         oid = tile_summary["pamOid" if use_pam_prefix else "oid"]
         size = tile_summary["pamSize" if use_pam_prefix else "size"]
-        lfs_path = get_local_path_from_lfs_hash(self.repo, oid)
+        lfs_path = get_local_path_from_lfs_oid(self.repo, oid)
         if not lfs_path.is_file():
             click.echo(f"Couldn't find {tilename} locally - skipping...", err=True)
             return

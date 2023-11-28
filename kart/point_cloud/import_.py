@@ -6,10 +6,10 @@ from kart.cli_util import (
     StringFromFile,
     MutexOption,
     KartCommand,
-    forward_context_to_command,
 )
 from kart.completion_shared import file_path_completer
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
+from kart.lfs_util import prefix_sha256
 from kart.parse_args import parse_import_sources_and_datasets
 from kart.point_cloud.metadata_util import (
     RewriteMetadata,
@@ -138,12 +138,6 @@ def point_cloud_import(
 
     SOURCES should be one or more LAZ or LAS files (or wildcards that match multiple LAZ or LAS files).
     """
-    if do_link:
-        from kart.linked_storage.point_cloud_import import linked_point_cloud_import
-
-        forward_context_to_command(ctx, linked_point_cloud_import)
-        return
-
     repo = ctx.obj.repo
 
     sources, datasets = parse_import_sources_and_datasets(args)
@@ -166,6 +160,7 @@ def point_cloud_import(
         amend=amend,
         allow_empty=allow_empty,
         num_workers=num_workers,
+        do_link=do_link,
         sources=sources,
     ).import_tiles()
 
@@ -184,7 +179,7 @@ class PointCloudImporter(TileImporter):
 
     def check_metadata_pre_convert(self):
         if not self.convert_to_cloud_optimized and self._is_any_las(
-            self.source_to_metadata.values()
+            s.metadata for s in self.tile_sources
         ):
             raise InvalidOperation(
                 "LAS datasets are not supported - dataset must be converted to LAZ / COPC",
@@ -192,7 +187,7 @@ class PointCloudImporter(TileImporter):
             )
 
     def check_metadata_post_convert(self):
-        if self._is_any_las(self.source_to_imported_metadata.values()):
+        if self._is_any_las(s.imported_metadata for s in self.tile_sources):
             raise InvalidOperation(
                 "LAS datasets are not supported - dataset must be converted to LAZ / COPC",
                 exit_code=INVALID_FILE_FORMAT,
@@ -231,15 +226,14 @@ class PointCloudImporter(TileImporter):
 
         return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
 
-    def get_conversion_func(self, source_metadata):
-        if self.convert_to_cloud_optimized and not is_copc(source_metadata):
+    def get_conversion_func(self, tile_source):
+        if self.convert_to_cloud_optimized and not is_copc(tile_source.metadata):
             return convert_tile_to_copc
         return None
 
     def existing_tile_matches_source(self, source_oid, existing_summary):
         """Check if the existing tile can be reused instead of reimporting."""
-        if not source_oid.startswith("sha256:"):
-            source_oid = "sha256:" + source_oid
+        source_oid = prefix_sha256(source_oid)
 
         if existing_summary.get("oid") == source_oid:
             # The import source we were given has already been imported in its native format.

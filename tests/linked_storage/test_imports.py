@@ -14,7 +14,6 @@ DUMMY_REPO = "git@example.com/example.git"
 @pytest.mark.parametrize(
     "command",
     [
-        "linked-point-cloud-import --no-checkout",
         "import --link --no-checkout",
         "import --link",
     ],
@@ -161,7 +160,6 @@ def test_linked_point_cloud_import(
 @pytest.mark.parametrize(
     "command",
     [
-        "linked-raster-import --no-checkout",
         "import --link --no-checkout",
         "import --link",
     ],

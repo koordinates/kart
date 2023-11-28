@@ -13,7 +13,7 @@ from kart.exceptions import SubprocessError, InvalidOperation
 from kart.lfs_util import (
     pointer_file_bytes_to_dict,
     get_hash_from_pointer_file,
-    get_local_path_from_lfs_hash,
+    get_local_path_from_lfs_oid,
 )
 from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
@@ -68,7 +68,7 @@ def ls_files(ctx, show_size, all, ref1, ref2):
 
     @functools.lru_cache()
     def is_present(lfs_hash):
-        return get_local_path_from_lfs_hash(repo, lfs_hash).is_file()
+        return get_local_path_from_lfs_oid(repo, lfs_hash).is_file()
 
     for commit_id, path_match_result, pointer_blob in rev_list_tile_pointer_files(
         repo, start_commits, stop_commits
@@ -324,7 +324,7 @@ def fetch_lfs_blobs_for_pointer_files(
         url = pointer_dict.get("url")
         lfs_oid = get_hash_from_pointer_file(pointer_dict)
         pointer_file_oid = pointer_blob.hex
-        lfs_path = get_local_path_from_lfs_hash(repo, lfs_oid)
+        lfs_path = get_local_path_from_lfs_oid(repo, lfs_oid)
         if lfs_path.is_file():
             continue  # Already fetched.
 
@@ -380,7 +380,7 @@ def _do_fetch_from_urls(repo, urls_and_lfs_oids, quiet=False):
         )
 
     urls_and_paths_and_oids = [
-        (url, get_local_path_from_lfs_hash(repo, lfs_oid), lfs_oid)
+        (url, get_local_path_from_lfs_oid(repo, lfs_oid), lfs_oid)
         for (url, lfs_oid) in urls_and_lfs_oids
     ]
     path_parents = {path.parent for url, path, lfs_oid in urls_and_paths_and_oids}

@@ -36,8 +36,8 @@ class PointCloudV1(TileDataset):
         return set_tile_extension(filename, ext=ext, tile_format=tile_format)
 
     @classmethod
-    def extract_tile_metadata_from_filesystem_path(cls, path):
-        return extract_pc_tile_metadata(path)
+    def extract_tile_metadata(cls, path, **kwargs):
+        return extract_pc_tile_metadata(path, **kwargs)
 
     @classmethod
     def get_format_summary(self, format_json):
