@@ -28,6 +28,13 @@
             "features": ["ssl", "http2"]
         },
         {
+            "name": "tiff",
+            "features": [
+                "webp",
+                "zstd"
+            ]
+        },
+        {
             "name": "proj",
             "features": [
                 "tools"
@@ -41,7 +48,10 @@
                 "tools",
                 "postgresql",
                 "geos",
-                "curl"
+                "curl",
+                "lzma",
+                "webp",
+                "zstd"
             ]
         },
         {

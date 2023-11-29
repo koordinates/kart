@@ -15,6 +15,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Now using Python 3.11 to build Kart, and vendored dependencies have been updated to newer versions. [#933](https://github.com/koordinates/kart/pull/933)
 - Adds support for importing point-cloud and raster tiles directly from an S3 URL. [#940](https://github.com/koordinates/kart/pull/940)
 - `checkout`: Smoother progressbar updates
+- Add library support for WEBP & ZSTD compression with GeoTIFF raster datasets. [#951](https://github.com/koordinates/kart/pull/951)
 
 ## 0.14.2
 
