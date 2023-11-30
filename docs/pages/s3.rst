@@ -65,9 +65,7 @@ can store the SHA256 hash without fetching the entire tile (see the "SHA256 hash
 S3 Credentials
 ^^^^^^^^^^^^^^
 
-Kart uses the AWS-provided `boto3 <boto3_>`_ library to fetch data from S3. AWS credentials are loaded from the standard locations -
-a folder called ``.aws`` in the user's home or user-profile directory. If credentials are unnecessary and unavailable, the environment
-variable ``AWS_NO_SIGN_REQUEST`` should be set to 1.
+Kart uses a standard AWS SDK to fetch data from S3. AWS credentials are loaded from the standard locations - AWS config files, environment variables, IAM roles, etc. If credentials are unnecessary and unavailable, the environment variable ``AWS_NO_SIGN_REQUEST`` should be set to 1.
 
 
 Editing Tiles
