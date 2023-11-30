@@ -7,7 +7,7 @@ endif()
 
 project(
   kart
-  VERSION 0.14.3
+  VERSION 0.15.0
   DESCRIPTION "Version control for geospatial data"
   HOMEPAGE_URL "https://kartproject.org"
   LANGUAGES C CXX)
