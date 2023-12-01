@@ -303,19 +303,20 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         track_changes_as_dirty=False,
         quiet=False,
     ):
-        pointer_files_to_fetch = set()
+        dataset_to_pointer_oids_to_fetch = {}
         workdir_diff_cache = self.workdir_diff_cache()
         update_diffs = {}
 
         # First pass - make sure the LFS blobs are present in the local LFS cache:
         # - For the datasets that will be inserted (written from scratch):
         for ds_path in ds_inserts:
-            pointer_files_to_fetch.update(
-                blob.hex
-                for blob in target_datasets[ds_path].tile_pointer_blobs(
-                    self.repo.spatial_filter
-                )
+            pointer_file_oids = dataset_to_pointer_oids_to_fetch.setdefault(
+                ds_path, set()
             )
+            for blob in target_datasets[ds_path].tile_pointer_blobs(
+                self.repo.spatial_filter
+            ):
+                pointer_file_oids.add(blob.hex)
 
         # - For the datasets that will be updated:
         for ds_path in ds_updates:
@@ -326,17 +327,18 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 workdir_diff_cache,
                 repo_key_filter[ds_path],
             )
-            pointer_files_to_fetch.update(
-                blob.hex
-                for blob in self._list_new_pointer_blobs_for_diff(
-                    update_diffs[ds_path], target_datasets[ds_path]
-                )
+            pointer_file_oids = dataset_to_pointer_oids_to_fetch.setdefault(
+                ds_path, set()
             )
+            for blob in self._list_new_pointer_blobs_for_diff(
+                update_diffs[ds_path], target_datasets[ds_path]
+            ):
+                pointer_file_oids.add(blob.hex)
 
         # We fetch the LFS tiles immediately before writing them to the working copy -
         # unlike ODB objects that are already fetched.
         fetch_lfs_blobs_for_pointer_files(
-            self.repo, pointer_files_to_fetch, quiet=quiet
+            self.repo, dataset_to_pointer_oids_to_fetch, quiet=quiet
         )
 
         # Second pass - actually update the working copy:
