@@ -169,7 +169,9 @@ class WorkingCopy:
         w = self.workdir
         return w.workdir_diff_cache() if w else None
 
-    def create_parts_if_missing(self, parts_to_create, reset_to=DONT_RESET):
+    def create_parts_if_missing(
+        self, parts_to_create, reset_to=DONT_RESET, non_checkout_datasets=None
+    ):
         """
         Creates the given parts if they are missing and can be created. Returns any created parts themselves.
         parts_to_create is a collection of PartType enum values.
@@ -189,7 +191,7 @@ class WorkingCopy:
 
         if reset_to != self.DONT_RESET:
             for p in created_parts:
-                p.reset(reset_to)
+                p.reset(reset_to, non_checkout_datasets=non_checkout_datasets)
 
         return created_parts
 
@@ -311,7 +313,9 @@ class WorkingCopy:
             # is newly created since it won't otherwise contain any data yet. The extra parameters (repo_key_filter
             # and track_changes_as_dirty) don't have any effect for a WC part that is newly created.
             created_parts = self.create_parts_if_missing(
-                create_parts_if_missing, reset_to=commit_or_tree
+                create_parts_if_missing,
+                reset_to=commit_or_tree,
+                non_checkout_datasets=non_checkout_datasets,
             )
 
         for p in self.parts():

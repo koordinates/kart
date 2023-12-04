@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.15.1 (UNRELEASED)
 
 - Prevented committing local changes to linked datasets. [#953](https://github.com/koordinates/kart/pull/953)
+- Fixes a bug where even datasets marked as `--no-checkout` are checked out when the working copy is first created. [#954](https://github.com/koordinates/kart/pull/954)
 
 ## 0.15.0
 
