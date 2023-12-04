@@ -71,9 +71,8 @@ Kart uses a standard AWS SDK to fetch data from S3. AWS credentials are loaded f
 Editing Tiles
 ^^^^^^^^^^^^^
 
-Currently, Kart does not write to S3 on the user's behalf for any reason. Any edits made to the linked dataset will be stored
-in Kart, and will work the same as in any other dataset - the modified tiles will not be linked to any particular URL, and they
-will not be written back to S3.
+Currently, Kart does not write to S3 on the user's behalf for any reason. This means linked datasets cannot be edited by modifying
+the working copy - committing such changes is prevented.
 
 Users may opt to write the required changes to S3 themselves, at which point they can use the ``kart import --replace-existing --link``
 command to create a new version of the linked dataset. However, when doing so, take care not to overwrite any of the original tiles
