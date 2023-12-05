@@ -13,7 +13,6 @@ from kart.diff_structs import FILES_KEY, WORKING_COPY_EDIT, BINARY_FILE, Delta
 from kart.exceptions import CrsError, InvalidOperation
 from kart.key_filters import RepoKeyFilter
 from kart import list_of_conflicts
-from kart.list_of_conflicts import ListOfConflicts
 from kart.promisor_utils import FetchPromisedBlobsProcess, object_is_promised
 from kart.repo import KartRepoState
 from kart.spatial_filter import SpatialFilter
@@ -83,7 +82,7 @@ class BaseDiffWriter:
         # used by json-lines diffs only
         diff_estimate_accuracy=None,
         # used by html diff only
-        html_template=None
+        html_template=None,
     ):
         self.repo = repo
         self.commit_spec = commit_spec
@@ -115,6 +114,7 @@ class BaseDiffWriter:
             self.spatial_filter_conflicts = RepoKeyFilter()
 
         self.list_of_conflicts_warnings = []
+        self.linked_dataset_changes = set()
 
         self.output_path = self._check_output_path(
             repo, self._normalize_output_path(output_path)
@@ -226,6 +226,7 @@ class BaseDiffWriter:
         """For writing any footer that is not part of the diff itself. Generally just writes warnings to stderr."""
         self.write_spatial_filter_conflicts_warning_footer()
         self.write_list_of_conflicts_warning_footer()
+        self.write_linked_dataset_changes_warning_footer()
 
     def write_spatial_filter_conflicts_warning_footer(self):
         """
@@ -288,6 +289,23 @@ class BaseDiffWriter:
         for warning in self.list_of_conflicts_warnings:
             click.echo(f"  {warning}", err=True)
 
+    def write_linked_dataset_changes_warning_footer(self):
+        if not self.linked_dataset_changes:
+            return
+        click.secho(
+            "Warning: changes to linked datasets cannot be committed.",
+            bold=True,
+            err=True,
+        )
+        click.echo(
+            "To update a linked dataset, re-import from the source with both --link and --replace-existing.\n"
+            "To discard these changes, use `kart reset --discard-changes`.",
+            err=True,
+        )
+        click.echo("Linked datasets with uncommitted changes:", err=True)
+        for ds_path in sorted(self.linked_dataset_changes):
+            click.echo(f"  {ds_path}", err=True)
+
     def write_diff(self, diff_format=DiffFormat.FULL):
         """Default implementation for writing a diff. Subclasses can override."""
         # Entered when -o is text
@@ -322,6 +340,8 @@ class BaseDiffWriter:
         list_of_conflicts.extract_error_messages_from_dataset_diff(
             ds_path, ds_diff, self.list_of_conflicts_warnings
         )
+        if self.include_wc_diff:
+            self._check_for_linked_dataset_changes(ds_path, ds_diff)
         self.write_ds_diff(ds_path, ds_diff, diff_format=diff_format)
         return has_changes
 
@@ -386,6 +406,9 @@ class BaseDiffWriter:
         list_of_conflicts.extract_error_messages_from_repo_diff(
             repo_diff, self.list_of_conflicts_warnings
         )
+        if self.include_wc_diff:
+            for ds_path, ds_diff in repo_diff.items():
+                self._check_for_linked_dataset_changes(ds_path, ds_diff)
         return repo_diff
 
     def get_dataset_diff(self, ds_path, diff_format=DiffFormat.FULL):
@@ -706,6 +729,11 @@ class BaseDiffWriter:
         if not dataset:
             dataset = self.target_rs.datasets().get(ds_path)
         return dataset
+
+    def _check_for_linked_dataset_changes(self, ds_path, ds_diff):
+        dataset = self._get_old_or_new_dataset(ds_path)
+        if dataset and dataset.get_meta_item("linked-storage.json") and ds_diff:
+            self.linked_dataset_changes.add(ds_path)
 
 
 class FeatureDeltaFetcher:

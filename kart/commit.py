@@ -169,6 +169,9 @@ def commit(
             "(this will overwrite some existing features that are outside of the current spatial filter)",
             exit_code=SPATIAL_FILTER_CONFLICT,
         )
+    if commit_diff_writer.linked_dataset_changes:
+        commit_diff_writer.write_warnings_footer()
+        raise InvalidOperation("Aborting commit due to changes to linked datasets.")
 
     do_json = output_format == "json"
     commit_msg = None
