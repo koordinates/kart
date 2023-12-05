@@ -1,3 +1,7 @@
+import logging
+import os
+import time
+
 from kart.tile.tile_dataset import TileDataset
 from kart.list_of_conflicts import ListOfConflicts, InvalidNewValue
 from kart.point_cloud.metadata_util import (
@@ -14,6 +18,9 @@ from kart.point_cloud.tilename_util import (
     set_tile_extension,
     get_tile_path_pattern,
 )
+
+
+L = logging.getLogger("kart.point_cloud")
 
 
 class PointCloudV1(TileDataset):
@@ -66,8 +73,12 @@ class PointCloudV1(TileDataset):
 
     @classmethod
     def write_mosaic_for_directory(cls, directory_path):
-        # TODO: Not yet implemented
-        pass
+        from kart.point_cloud.mosaic_util import write_vpc_for_directory
+
+        if os.environ.get("KART_POINT_CLOUD_VPCS"):
+            t0 = time.time()
+            write_vpc_for_directory(directory_path)
+            L.info("Generated VPC in %ss", (time.time() - t0))
 
     def get_dirty_dataset_paths(self, workdir_diff_cache):
         # TODO - improve finding and handling of non-standard tile filenames.
