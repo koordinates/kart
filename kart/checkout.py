@@ -249,7 +249,9 @@ def checkout(
     elif parts_to_create:
         # Possibly we needn't auto-create any working copy here at all, but lots of tests currently depend on it.
         repo.working_copy.create_parts_if_missing(
-            parts_to_create, reset_to=repo.head_commit
+            parts_to_create,
+            reset_to=repo.head_commit,
+            non_checkout_datasets=non_checkout_datasets,
         )
 
 
