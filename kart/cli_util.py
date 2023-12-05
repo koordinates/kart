@@ -424,3 +424,19 @@ def forward_context_to_command(ctx, command):
     subctx = command.make_context(command.name, ctx.unparsed_args)
     subctx.obj = ctx.obj
     subctx.forward(command)
+
+
+def get_bool_from_env(env_var_name, default=False):
+    """
+    Checks what the user has requested in terms of environment variables in the form:
+    SOME_FEATURE=YES or OTHER_FEATURE=0
+    - 0, N, NO, FALSE and OFF are falsey (case insensitive)
+    - every other string is truthy
+    - if the variable is unset, the default is returned.
+    """
+    env_var_val = os.environ.get(env_var_name)
+    if env_var_val is None:
+        return default
+    if env_var_val.upper() in ("0", "N", "NO", "FALSE", "OFF"):
+        return False
+    return True

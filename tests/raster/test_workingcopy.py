@@ -731,8 +731,6 @@ def test_working_copy_conflicting_extension(cli_runner, data_archive):
 
 
 def test_working_copy_vrt(cli_runner, data_archive, monkeypatch):
-    monkeypatch.setenv("KART_RASTER_VRTS", "1")
-
     with data_archive("raster/elevation.tgz") as repo_path:
         vrt_path = repo_path / "elevation" / "elevation.vrt"
 
@@ -758,6 +756,8 @@ def test_working_copy_vrt(cli_runner, data_archive, monkeypatch):
 
 
 def test_working_copy_vrt_disabled(cli_runner, data_archive, monkeypatch):
+    monkeypatch.setenv("KART_RASTER_VRTS", "0")
+
     with data_archive("raster/elevation.tgz") as repo_path:
         shutil.rmtree(repo_path / "elevation")
 
