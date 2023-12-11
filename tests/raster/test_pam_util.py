@@ -149,6 +149,11 @@ def test_add_stats_to_new_pam(
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0
 
+        r = cli_runner.invoke(["reset", "--discard-changes"])
+        assert r.exit_code == 0
+
+        assert not pam_path.exists()
+
         # Real changes are not suppressed:
         pam_path.write_text("<whatever />")
 
@@ -168,6 +173,11 @@ def test_add_stats_to_new_pam(
 
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 1
+
+        r = cli_runner.invoke(["reset", "--discard-changes"])
+        assert r.exit_code == 0
+
+        assert not pam_path.exists()
 
 
 def test_add_stats_to_existing_pam(

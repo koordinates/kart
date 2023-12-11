@@ -434,6 +434,12 @@ class TileDataset(BaseDataset):
                 new_half_delta = tilename, new_tile_summary
             else:
                 new_half_delta = tilename, {"sourceName": workdir_path.name}
+                expected_pam_path = workdir_path.with_name(
+                    workdir_path.name + PAM_SUFFIX
+                )
+                pams = find_similar_files_case_insensitive(expected_pam_path)
+                if len(pams) == 1:
+                    new_half_delta[1]["pamSourceName"] = pams[0].name
 
             if old_half_delta is None and new_half_delta is None:
                 # This can happen by eg editing a .tif.aux.xml file that's not attached to anything.

@@ -276,13 +276,26 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             self.get_tree_id(), filter_dataset_type=self.SUPPORTED_DATASET_TYPE
         )
         workdir_diff_cache = self.workdir_diff_cache()
+        changed_pam_datasets = set()
+        # First pass - see if any tiles have changed. If yes, return dirty, if no, return clean.
+        # Exception - if only PAM files have changed, we need to do a second pass.
         for dataset in datasets:
             ds_tiles_path_pattern = dataset.get_tile_path_pattern(
                 parent_path=dataset.path
             )
             for tile_path in workdir_diff_cache.dirty_paths_for_dataset(dataset):
                 if ds_tiles_path_pattern.fullmatch(tile_path):
-                    return True
+                    if not tile_path.endswith(PAM_SUFFIX):
+                        return True
+                    else:
+                        changed_pam_datasets.add(dataset)
+
+        # Second pass - run the actual diff code on datasets with changed PAM files.
+        # Changes to PAM files may or may not be "minor" diffs which are hidden from the user.
+        for dataset in changed_pam_datasets:
+            if dataset.diff_to_working_copy(workdir_diff_cache):
+                return True
+
         return False
 
     def _is_head(self, commit_or_tree):
@@ -600,7 +613,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             for tile_summary in tile_delta.old_value, tile_delta.new_value:
                 if tile_summary is None:
                     continue
-                for key in ("name", "sourceName", "pamName", "sourcePamName"):
+                for key in ("name", "sourceName", "pamName", "pamSourceName"):
                     if key in tile_summary:
                         yield tile_summary[key]
 
@@ -812,7 +825,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             for tile_delta in tile_diff.values():
                 if tile_delta.type in ("update", "delete"):
                     old_val = tile_delta.old_value
-                    for key in ("name", "sourceName", "pamName", "sourcePamName"):
+                    for key in ("name", "sourceName", "pamName", "pamSourceName"):
                         if key in old_val:
                             workdir_index.remove_all([f"{dataset.path}/{old_val[key]}"])
 
