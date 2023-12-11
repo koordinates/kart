@@ -32,4 +32,9 @@ def write_vrt_for_directory(directory_path):
     del vrt
 
     vrt_text = vrt_path.read_text()
+    vrt_text = vrt_text.replace(
+        "</VRTDataset>",
+        '  <OverviewList resampling="average">2 4 8</OverviewList>\n</VRTDataset>',
+    )
+
     vrt_path.write_text(KART_VRT_HEADING + vrt_text)
