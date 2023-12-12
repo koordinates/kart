@@ -22,7 +22,7 @@ import re
 import shlex
 import subprocess
 import traceback
-from functools import wraps
+from functools import cached_property, wraps
 from pathlib import Path
 from typing import Tuple
 
@@ -101,14 +101,13 @@ class Layer(BaseLayer):
         self.name = name
         self.options = options
 
-        self._ds_info = self._kart_get_dataset_info()
-        self._parse_schema()
         self._feature_count = None
 
         # self.iterator_honour_spatial_filter = self.dataset.is_spatial
         # self.kart_spatial_filter = None
 
-    def _kart_get_dataset_info(self):
+    @cached_property
+    def _ds_info(self):
         data = invoke_kart(
             [
                 "-C",
@@ -131,17 +130,16 @@ class Layer(BaseLayer):
             raise NotImplementedError("Support for non-EPSG CRS")
         return int(crs_id.split(":")[1])
 
-    def _parse_schema(self):
-        schema = self._ds_info["schema.json"]
+    @cached_property
+    def _schema(self):
+        return self._ds_info["schema.json"]
 
-        fields = []
-        geom_fields = []
-        self.geom_columns = []
-        self.pk_column = None
-
-        for col_schema in schema:
+    @cached_property
+    def geometry_fields(self):
+        result = []
+        override_geom_type = self.options.get("GEOMTYPE", None)
+        for col_schema in self._schema:
             if col_schema["dataType"] == "geometry":
-                override_geom_type = self.options.get("GEOMTYPE", None)
                 if override_geom_type:
                     gdal.Debug(
                         "KART",
@@ -151,25 +149,38 @@ class Layer(BaseLayer):
                 else:
                     ogr_type = OGR_GEOMTYPE_MAP[col_schema["geometryType"]]
 
-                geom_fields.append(
+                result.append(
                     {
                         "name": col_schema["name"],
                         "type": ogr_type,
                         "srs": col_schema["geometryCRS"],
                     }
                 )
-                self.geom_columns.append(col_schema["name"])
-            else:
+        return result
+
+    @cached_property
+    def geometry_columns(self):
+        return [c["name"] for c in self.geometry_fields]
+
+    @cached_property
+    def fields(self):
+        result = []
+        for col_schema in self._schema:
+            if col_schema["dataType"] != "geometry":
                 ogr_type = OGR_DATATYPE_MAP[col_schema["dataType"]]
-                fields.append({"name": col_schema["name"], "type": ogr_type})
+                result.append({"name": col_schema["name"], "type": ogr_type})
+        return result
 
+    @cached_property
+    def pk_column(self):
+        for col_schema in self._schema:
             if col_schema.get("primaryKeyIndex", -1) == 0:
-                self.pk_column = col_schema["name"]
+                return col_schema["name"]
+        return None
 
-        # GDAL accesses these attributes
-        self.fid_name = self.pk_column
-        self.fields = fields
-        self.geometry_fields = geom_fields
+    @cached_property
+    def fid_name(self):
+        return self.pk_column
 
     @gdal_api_wrapper
     def test_capability(self, cap):
@@ -213,7 +224,7 @@ class Layer(BaseLayer):
             f["id"] = feature[self.pk_column]
 
         for col, value in feature.items():
-            if col in self.geom_columns:
+            if col in self.geometry_columns:
                 if value:
                     f["geometry_fields"][col] = bytes.fromhex(value)
                 else:
