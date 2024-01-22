@@ -1,7 +1,7 @@
 import functools
-import os
 import re
 
+from kart.cli_util import get_bool_from_env
 from kart.core import all_blobs_in_tree
 from kart.diff_structs import DeltaDiff, Delta
 from kart.key_filters import FeatureKeyFilter
@@ -80,7 +80,7 @@ class RasterV1(TileDataset):
     def write_mosaic_for_directory(cls, directory_path):
         from kart.raster.mosaic_util import write_vrt_for_directory
 
-        if os.environ.get("KART_RASTER_VRTS"):
+        if get_bool_from_env("KART_RASTER_VRTS", default=True):
             write_vrt_for_directory(directory_path)
 
     @classmethod
