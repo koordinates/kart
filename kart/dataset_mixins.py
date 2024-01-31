@@ -1,3 +1,6 @@
+from collections.abc import Iterable
+from typing import Callable, Optional
+
 import pygit2
 
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta
@@ -6,15 +9,20 @@ from kart.key_filters import DatasetKeyFilter, MetaKeyFilter, UserStringKeyFilte
 
 
 class DatasetDiffMixin:
-    """Adds diffing of meta-items to a dataset, by delegating to dataset.meta_items()"""
+    """
+    This mixin should be added to a dataset to add diffing functionality.
+
+    self.diff_meta() should work "out of the box" as long as self.meta_items() is implemented.
+    self.diff_subtree() can be called with appropriate args to generate diffs of dataset contents, eg, features.
+    """
 
     # Returns the meta-items diff for this dataset.
     def diff(
-        self,
-        other,
-        ds_filter=DatasetKeyFilter.MATCH_ALL,
-        reverse=False,
-        diff_format=DiffFormat.FULL,
+        self: "BaseDataset",
+        other: Optional["BaseDataset"],
+        ds_filter: DatasetKeyFilter = DatasetKeyFilter.MATCH_ALL,
+        reverse: bool = False,
+        diff_format: DiffFormat = DiffFormat.FULL,
     ):
         """
         Generates a Diff from self -> other.
@@ -25,7 +33,12 @@ class DatasetDiffMixin:
         ds_diff["meta"] = self.diff_meta(other, meta_filter, reverse=reverse)
         return ds_diff
 
-    def diff_meta(self, other, meta_filter=MetaKeyFilter.MATCH_ALL, reverse=False):
+    def diff_meta(
+        self: "BaseDataset",
+        other: Optional["BaseDataset"],
+        meta_filter: UserStringKeyFilter = MetaKeyFilter.MATCH_ALL,
+        reverse: bool = False,
+    ):
         """
         Returns a diff from self -> other, but only for meta items.
         If reverse is true, generates a diff from other -> self.
@@ -48,11 +61,11 @@ class DatasetDiffMixin:
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     def diff_to_working_copy(
-        self,
-        workdir_diff_cache,
-        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        self: "BaseDataset",
+        workdir_diff_cache: "WorkdirDiffCache",
+        ds_filter: DatasetKeyFilter = DatasetKeyFilter.MATCH_ALL,
         *,
-        convert_to_dataset_format=None,
+        convert_to_dataset_format: bool = None,
     ):
         """
         Generates a diff from self to the working-copy.
@@ -63,10 +76,15 @@ class DatasetDiffMixin:
         # Subclasses to override.
         pass
 
-    def get_raw_diff_for_subtree(self, other, subtree_name, reverse=False):
+    def get_raw_diff_for_subtree(
+        self: "BaseDataset",
+        other: Optional["BaseDataset"],
+        subtree_name: str,
+        reverse: bool = False,
+    ):
         """
         Get a pygit2.Diff of the diff between some subtree of this dataset, and the same subtree of another dataset
-        (generally the "same" dataset at a different revision).
+        (typically actually the "same" dataset, but at a different revision).
         """
         flags = pygit2.GIT_DIFF_SKIP_BINARY_CHECK
         self_subtree = self.get_subtree(subtree_name)
@@ -84,15 +102,15 @@ class DatasetDiffMixin:
         return diff
 
     def diff_subtree(
-        self,
-        other,
-        subtree_name,
-        key_filter=UserStringKeyFilter.MATCH_ALL,
+        self: "BaseDataset",
+        other: Optional["BaseDataset"],
+        subtree_name: str,
+        key_filter: UserStringKeyFilter = UserStringKeyFilter.MATCH_ALL,
         *,
-        key_decoder_method,
-        value_decoder_method,
-        key_encoder_method=None,
-        reverse=False,
+        key_decoder_method: str,
+        value_decoder_method: str,
+        key_encoder_method: Optional[str] = None,
+        reverse: bool = False,
     ):
         """
         A pattern for datasets to use for diffing some specific subtree. Works as follows:
@@ -111,6 +129,8 @@ class DatasetDiffMixin:
         key_filter - deltas are only yielded if they involve at least one key that matches the key filter.
         key_decoder_method, value_decoder_method - these must be names of methods that are present in both
             self and other - self's methods are used to decode self's items, and other's methods for other's items.
+        key_encoder_method - optional. A method that is present in both self and other that allows us to go
+            straight to the keys the user is interested in (if they have requested specific keys in the key_filter).
         reverse - normally yields deltas from self -> other, but if reverse is True, yields deltas from other -> self.
         """
 
@@ -167,7 +187,11 @@ class DatasetDiffMixin:
     _UPDATE_DELETE = _UPDATE_TYPES + _DELETE_TYPES
 
     def get_raw_deltas_for_keys(
-        self, other, key_encoder_method, key_filter, reverse=False
+        self: "BaseDataset",
+        other: Optional["BaseDataset"],
+        key_encoder_method: str,
+        key_filter: UserStringKeyFilter,
+        reverse: bool = False,
     ):
         """
         Since we know which keys we are looking for, we can encode those keys and look up those blobs directly.
@@ -220,33 +244,31 @@ class DatasetDiffMixin:
                 path if old_blob else None, path if new_blob else None
             )
 
-    def wrap_deltas_from_raw_diff(self, raw_diff, path_transform):
+    def wrap_deltas_from_raw_diff(
+        self: "BaseDataset", raw_diff: pygit2.Diff, path_transform: Callable[[str], str]
+    ):
         for delta in raw_diff.deltas:
             old_path = path_transform(delta.old_file.path) if delta.old_file else None
             new_path = path_transform(delta.new_file.path) if delta.new_file else None
             yield RawDiffDelta(delta.status, delta.status_char(), old_path, new_path)
 
     def transform_raw_deltas(
-        self,
-        deltas,
-        key_filter=UserStringKeyFilter.MATCH_ALL,
+        self: "BaseDataset",
+        deltas: Iterable["RawDiffDelta"],
+        key_filter: UserStringKeyFilter = UserStringKeyFilter.MATCH_ALL,
         *,
-        old_path_transform=lambda x: x,
-        old_key_transform=lambda x: x,
-        old_value_transform=lambda x: x,
-        new_path_transform=lambda x: x,
-        new_key_transform=lambda x: x,
-        new_value_transform=lambda x: x,
+        old_key_transform: Callable[[str], str] = lambda x: x,
+        old_value_transform: Callable[[str], str] = lambda x: x,
+        new_key_transform: Callable[[str], str] = lambda x: x,
+        new_value_transform: Callable[[str], str] = lambda x: x,
     ):
         """
-        Given a list of deltas - inserts, updates, and deletes -
+        Given a list of RawDiffDeltas - inserts, updates, and deletes that happened at particular paths -
         yields a list of Kart deltas, which look something like ((old_key, old_value), (new_key, new_value)).
         A key could be a path, a meta-item name, or a primary key value.
 
         key-filter - deltas are discarded if they don't involve any keys that matches the key filter.
-        old/new_path_transform - converts the raw-path into a canonical path.
-            Useful if the raw-path is not relative to the preferred folder, you can tidy it up first.
-        old/new_key_transform - converts the canonical-path into a key.
+        old/new_key_transform - converts the path into a key.
         old/new_value_transform - converts the canonical-path into a value,
             presumably first by loading the file contents at that path.
 

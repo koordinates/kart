@@ -1587,7 +1587,7 @@ def test_diff_filtered_text(
 ):
     def _get_raw_diff_for_subtree(self, *args, **kwargs):
         # When only nz_pa_points_topo_150k:1182 is requested, a different more efficient code-path should be used.
-        raise AssertionError(
+        pytest.fail(
             "This method should not be called when only a single feature is required"
         )
 
