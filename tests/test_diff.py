@@ -10,6 +10,7 @@ import html5lib
 import pytest
 
 import kart
+from kart.tabular.v3 import TableV3
 from kart.diff_format import DiffFormat
 from kart.diff_structs import Delta, DeltaDiff
 from kart.html_diff_writer import HtmlDiffWriter
@@ -1581,7 +1582,17 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
         ["show", "HEAD", "--", "nz_pa_points_topo_150k:1182"],
     ],
 )
-def test_diff_filtered_text(diff_command, data_archive_readonly, cli_runner):
+def test_diff_filtered_text(
+    diff_command, data_archive_readonly, cli_runner, monkeypatch
+):
+    def _get_raw_diff_for_subtree(self, *args, **kwargs):
+        # When only nz_pa_points_topo_150k:1182 is requested, a different more efficient code-path should be used.
+        pytest.fail(
+            "This method should not be called when only a single feature is required"
+        )
+
+    monkeypatch.setattr(TableV3, "get_raw_diff_for_subtree", _get_raw_diff_for_subtree)
+
     with data_archive_readonly("points"):
         r = cli_runner.invoke(diff_command)
         assert r.exit_code == 0, r.stderr

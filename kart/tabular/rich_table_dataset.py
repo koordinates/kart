@@ -163,6 +163,7 @@ class RichTableDataset(TableDataset):
             "feature",
             key_filter=feature_filter,
             key_decoder_method="decode_path_to_1pk",
+            key_encoder_method="encode_1pk_to_path",
             value_decoder_method="get_feature_promise_from_path",
             reverse=reverse,
         )

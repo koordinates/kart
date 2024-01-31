@@ -37,7 +37,7 @@ def _make_format_str(length, separator="", group_length=1):
 
 def _calculate_group_length(encoding, base, branches):
     group_length = int(math.log(max(branches, 1)) / math.log(max(base, 1)))
-    if base ** group_length != branches:
+    if base**group_length != branches:
         raise ValueError(
             f"Invalid path specification: {encoding} encoding and {branches} branches are incompatible"
         )
@@ -144,7 +144,7 @@ class PathEncoder:
         base = len(self.alphabet)
         self.group_length = _calculate_group_length(encoding, base, branches)
 
-        self.max_trees = self.branches ** self.levels
+        self.max_trees = self.branches**self.levels
 
         self._path_int_encoder = FixedLengthIntEncoder(
             self.alphabet, self.levels * self.group_length, "/", self.group_length
@@ -285,8 +285,12 @@ class IntPathEncoder(PathEncoder):
     DISTRIBUTED_FEATURES = False
 
     def encode_pks_to_path(self, pk_values):
-        assert len(pk_values) == 1
-        pk = pk_values[0]
+        if len(pk_values) != 1:
+            raise TypeError("IntPathEncoder can only encode a single integer value")
+        if not isinstance(pk_values[0], int):
+            raise TypeError("IntPathEncoder can only encode a single integer value")
+
+        pk = int(pk_values[0])
         tree_path = self._path_int_encoder.encode_int(
             (pk // self.branches) % self.max_trees
         )
@@ -320,7 +324,7 @@ class IntPathEncoder(PathEncoder):
             paths_fully_explored.add(path)
             return len(diff)
 
-        for (name, (child1, child2)) in diff_items:
+        for name, (child1, child2) in diff_items:
             child_path = f"{path}/{name}"
             if child_path in paths_fully_explored:
                 continue
