@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import re
 import struct
@@ -232,58 +233,58 @@ class KartRepo(pygit2.Repository):
         - the .kart/index file has been extended to stop git messing things up - see LOCKED_EMPTY_GIT_INDEX.
         """
         repo_root_path = repo_root_path.resolve()
-        cls._ensure_exists_and_empty(repo_root_path)
-        if not bare:
-            from kart.tabular.working_copy.base import TableWorkingCopy
+        with cls._ensure_exists_and_empty(repo_root_path):
+            if not bare:
+                from kart.tabular.working_copy.base import TableWorkingCopy
 
-            TableWorkingCopy.check_valid_creation_location(
-                wc_location, PotentialRepo(repo_root_path)
+                TableWorkingCopy.check_valid_creation_location(
+                    wc_location, PotentialRepo(repo_root_path)
+                )
+
+            extra_args = []
+            if initial_branch is not None:
+                extra_args += [f"--initial-branch={initial_branch}"]
+            if bare:
+                # Create bare-style repo:
+                kart_repo = cls._create_with_git_command(
+                    [
+                        "git",
+                        "init",
+                        "--bare",
+                        *extra_args,
+                        str(repo_root_path),
+                    ],
+                    gitdir_path=repo_root_path,
+                )
+            else:
+                # Create tidy-style repo:
+                dot_kart_path = repo_root_path / cls.DIRNAME_FOR_NEW_REPOS
+                dot_init_path = repo_root_path / ".init"
+
+                kart_repo = cls._create_with_git_command(
+                    [
+                        "git",
+                        "init",
+                        f"--separate-git-dir={dot_kart_path}",
+                        *extra_args,
+                        str(dot_init_path),
+                    ],
+                    gitdir_path=dot_kart_path,
+                    temp_workdir_path=dot_init_path,
+                )
+                kart_repo.lock_git_index()
+
+            kart_repo.write_config(
+                wc_location,
+                bare,
+                spatial_filter_spec,
+                table_dataset_version=DEFAULT_NEW_REPO_VERSION,
             )
-
-        extra_args = []
-        if initial_branch is not None:
-            extra_args += [f"--initial-branch={initial_branch}"]
-        if bare:
-            # Create bare-style repo:
-            kart_repo = cls._create_with_git_command(
-                [
-                    "git",
-                    "init",
-                    "--bare",
-                    *extra_args,
-                    str(repo_root_path),
-                ],
-                gitdir_path=repo_root_path,
-            )
-        else:
-            # Create tidy-style repo:
-            dot_kart_path = repo_root_path / cls.DIRNAME_FOR_NEW_REPOS
-            dot_init_path = repo_root_path / ".init"
-
-            kart_repo = cls._create_with_git_command(
-                [
-                    "git",
-                    "init",
-                    f"--separate-git-dir={dot_kart_path}",
-                    *extra_args,
-                    str(dot_init_path),
-                ],
-                gitdir_path=dot_kart_path,
-                temp_workdir_path=dot_init_path,
-            )
-            kart_repo.lock_git_index()
-
-        kart_repo.write_config(
-            wc_location,
-            bare,
-            spatial_filter_spec,
-            table_dataset_version=DEFAULT_NEW_REPO_VERSION,
-        )
-        kart_repo.write_attributes()
-        kart_repo.write_readme()
-        kart_repo.activate()
-        install_lfs_hooks(kart_repo)
-        return kart_repo
+            kart_repo.write_attributes()
+            kart_repo.write_readme()
+            kart_repo.activate()
+            install_lfs_hooks(kart_repo)
+            return kart_repo
 
     @classmethod
     def clone_repository(
@@ -297,81 +298,84 @@ class KartRepo(pygit2.Repository):
         spatial_filter_after_clone=False,
     ):
         repo_root_path = repo_root_path.resolve()
-        cls._ensure_exists_and_empty(repo_root_path)
-        if not bare:
-            from kart.tabular.working_copy.base import TableWorkingCopy
+        with cls._ensure_exists_and_empty(repo_root_path):
+            if not bare:
+                from kart.tabular.working_copy.base import TableWorkingCopy
 
-            TableWorkingCopy.check_valid_creation_location(
-                wc_location, PotentialRepo(repo_root_path)
-            )
-
-        extra_args = []
-        is_spatial_filter_clone = False
-        if spatial_filter_spec is not None:
-            # Make sure we fetch any spatial filters that might exist - we need those straight away.
-            # TODO - This is a bit magic, look into further. We might need it always - or there might be another way.
-            extra_args = [
-                "-c",
-                "remote.origin.fetch=+refs/filters/*:refs/filters/*",
-            ]
-            if not spatial_filter_after_clone:
-                is_spatial_filter_clone = True
-                partial_clone_spec = spatial_filter_spec.partial_clone_filter_spec()
-                extra_args.append(partial_clone_spec)
-                click.echo(
-                    f"Cloning using git spatial filter extension: {partial_clone_spec}",
-                    err=True,
+                TableWorkingCopy.check_valid_creation_location(
+                    wc_location, PotentialRepo(repo_root_path)
                 )
 
-        if bare:
-            kart_repo = cls._clone_with_git_command(
-                [
-                    "git",
-                    "clone",
-                    "--bare",
-                    *extra_args,
-                    *clone_args,
-                    clone_url,
-                    str(repo_root_path),
-                ],
-                gitdir_path=repo_root_path,
-                is_spatial_filter_clone=is_spatial_filter_clone,
-            )
+            extra_args = []
+            is_spatial_filter_clone = False
+            if spatial_filter_spec is not None:
+                # Make sure we fetch any spatial filters that might exist - we need those straight away.
+                # TODO - This is a bit magic, look into further. We might need it always - or there might be another way.
+                extra_args = [
+                    "-c",
+                    "remote.origin.fetch=+refs/filters/*:refs/filters/*",
+                ]
+                if not spatial_filter_after_clone:
+                    is_spatial_filter_clone = True
+                    partial_clone_spec = spatial_filter_spec.partial_clone_filter_spec()
+                    extra_args.append(partial_clone_spec)
+                    click.echo(
+                        f"Cloning using git spatial filter extension: {partial_clone_spec}",
+                        err=True,
+                    )
 
-        else:
-            dot_kart_path = (
-                repo_root_path if bare else repo_root_path / cls.DIRNAME_FOR_NEW_REPOS
-            )
-            dot_clone_path = repo_root_path / ".clone"
+            if bare:
+                kart_repo = cls._clone_with_git_command(
+                    [
+                        "git",
+                        "clone",
+                        "--bare",
+                        *extra_args,
+                        *clone_args,
+                        clone_url,
+                        str(repo_root_path),
+                    ],
+                    gitdir_path=repo_root_path,
+                    is_spatial_filter_clone=is_spatial_filter_clone,
+                )
 
-            kart_repo = cls._clone_with_git_command(
-                [
-                    "git",
-                    "clone",
-                    "--no-checkout",
-                    f"--separate-git-dir={dot_kart_path}",
-                    *extra_args,
-                    *clone_args,
-                    clone_url,
-                    str(dot_clone_path),
-                ],
-                gitdir_path=dot_kart_path,
-                temp_workdir_path=dot_clone_path,
-                is_spatial_filter_clone=is_spatial_filter_clone,
-            )
-            kart_repo.lock_git_index()
+            else:
+                dot_kart_path = (
+                    repo_root_path
+                    if bare
+                    else repo_root_path / cls.DIRNAME_FOR_NEW_REPOS
+                )
+                dot_clone_path = repo_root_path / ".clone"
 
-        kart_repo.write_config(wc_location, bare, spatial_filter_spec)
-        kart_repo.write_attributes()
-        kart_repo.write_readme()
-        kart_repo.activate()
-        install_lfs_hooks(kart_repo)
-        return kart_repo
+                kart_repo = cls._clone_with_git_command(
+                    [
+                        "git",
+                        "clone",
+                        "--no-checkout",
+                        f"--separate-git-dir={dot_kart_path}",
+                        *extra_args,
+                        *clone_args,
+                        clone_url,
+                        str(dot_clone_path),
+                    ],
+                    gitdir_path=dot_kart_path,
+                    temp_workdir_path=dot_clone_path,
+                    is_spatial_filter_clone=is_spatial_filter_clone,
+                )
+                kart_repo.lock_git_index()
+
+            kart_repo.write_config(wc_location, bare, spatial_filter_spec)
+            kart_repo.write_attributes()
+            kart_repo.write_readme()
+            kart_repo.activate()
+            install_lfs_hooks(kart_repo)
+            return kart_repo
 
     @classmethod
     def _create_with_git_command(cls, cmd, gitdir_path, temp_workdir_path=None):
         proc = subprocess.run_and_tee_output(cmd, tee_stderr=not is_windows)
         if proc.returncode != 0:
+            cls._cleanup_dir_if_empty(gitdir_path)
             raise SubprocessError(
                 f"Error calling {cmd[0]} {cmd[1]}",
                 exit_code=proc.returncode,
@@ -671,11 +675,35 @@ class KartRepo(pygit2.Repository):
         """Runs git-gc on the Kart repository."""
         self.invoke_git("gc", *args)
 
-    def _ensure_exists_and_empty(dir_path):
-        if dir_path.exists() and any(dir_path.iterdir()):
-            raise InvalidOperation(f'"{dir_path}" isn\'t empty')
-        elif not dir_path.exists():
-            dir_path.mkdir(parents=True)
+    @classmethod
+    def _cleanup_dir_if_empty(cls, dir_path):
+        """
+        If the operation failed, try to clean up a directory that we created.
+        Don't throw any error - an error will have already been thrown.
+        """
+        try:
+            if not dir_path.is_dir() or any(dir_path.iterdir()):
+                return
+            dir_path.rmdir()
+        except OSError:
+            pass
+
+    @classmethod
+    @contextlib.contextmanager
+    def _ensure_exists_and_empty(cls, dir_path):
+        try:
+            dir_created = False
+            if dir_path.is_file():
+                raise InvalidOperation(f'"{dir_path}" is not a directory')
+            elif dir_path.is_dir() and any(dir_path.iterdir()):
+                raise InvalidOperation(f'"{dir_path}" isn\'t empty')
+            elif not dir_path.exists():
+                dir_created = True
+                dir_path.mkdir(parents=True)
+            yield
+        finally:
+            if dir_created:
+                cls._cleanup_dir_if_empty(dir_path)
 
     @property
     def head_commit(self):
