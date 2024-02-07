@@ -26,7 +26,7 @@ def test_init_repository(tmp_path):
 
 
 def test_git_disabled(tmp_path, cli_runner, chdir):
-    """ Create an empty Kart repository. """
+    """Create an empty Kart repository."""
     repo_path = tmp_path / "test_repo"
     repo_path.mkdir()
 
@@ -40,12 +40,17 @@ def test_git_disabled(tmp_path, cli_runner, chdir):
     with chdir(repo_path):
         # Clean the environment so it behaves as it would if
         # the user typed git at the command line without our GIT_* settings in place.
-        clean_env = {k: v for k, v in os.environ.items() if not re.match(r'(PATH$)|(GIT)', k)}
+        clean_env = {
+            k: v for k, v in os.environ.items() if not re.match(r"(PATH$)|(GIT)", k)
+        }
 
         from kart import git_bin_path
+
         git_bin = os.path.join(git_bin_path, "git")
 
-        r = subprocess.run([git_bin, "gc"], capture_output=True, encoding="utf-8", env=clean_env)
+        r = subprocess.run(
+            [git_bin, "gc"], capture_output=True, encoding="utf-8", env=clean_env
+        )
         assert r.returncode != 0
         assert "index uses kart extension, which we do not understand" in r.stderr
         assert "fatal:" in r.stderr
@@ -54,7 +59,9 @@ def test_git_disabled(tmp_path, cli_runner, chdir):
         r = subprocess.run([git_bin, "gc"], capture_output=True, encoding="utf-8")
         assert r.returncode == 0, r.stderr
 
-        r = subprocess.run([git_bin, "gc"], capture_output=True, encoding="utf-8", env=clean_env)
+        r = subprocess.run(
+            [git_bin, "gc"], capture_output=True, encoding="utf-8", env=clean_env
+        )
         assert r.returncode != 0
         assert "index uses kart extension, which we do not understand" in r.stderr
         assert "fatal:" in r.stderr
@@ -64,3 +71,12 @@ def test_git_disabled(tmp_path, cli_runner, chdir):
 
     # git-gc shouldn't create an index where there wasn't one already.
     assert not (repo_path / ".kart" / "unlocked_index").exists()
+
+
+def test_failed_clone(tmp_path, cli_runner, chdir):
+    # Make sure failed clones don't leave empty directories.
+    with chdir(tmp_path):
+        r = cli_runner.invoke(["clone", "nonexistent"])
+        assert r.exit_code != 0
+
+        assert not (tmp_path / "nonexistent").exists()

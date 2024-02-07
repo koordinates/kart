@@ -147,9 +147,6 @@ def clone(
         wc_location, PotentialRepo(repo_path)
     )
 
-    if not repo_path.exists():
-        repo_path.mkdir(parents=True)
-
     args = ["--progress" if do_progress else "--quiet"]
     if depth is not None:
         args.append(f"--depth={depth}")
