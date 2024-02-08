@@ -332,7 +332,7 @@ def test_commit_schema_violation(cli_runner, data_working_copy):
         ]
 
 
-def test_commit_table_json_output(cli_runner, data_working_copy):
+def test_add_dataset_json_output__gpkg(cli_runner, data_working_copy):
     new_table = "test_table"
     message = "test commit"
     with data_working_copy("points") as (path, wc):
@@ -381,7 +381,7 @@ def test_commit_table_json_output(cli_runner, data_working_copy):
         assert json.loads(r.stdout) == expected_output
 
 
-def test_commit_table_text_output(cli_runner, data_working_copy):
+def test_add_dataset_text_output__gpkg(cli_runner, data_working_copy):
     new_table = "test_table"
     message = "test commit"
     with data_working_copy("points") as (path, wc):
@@ -424,7 +424,7 @@ def test_commit_table_text_output(cli_runner, data_working_copy):
         assert r.stdout == expected_output
 
 
-def test_commit_table_nonexistent(cli_runner, data_working_copy):
+def test_add_dataset_nonexistent__gpkg(cli_runner, data_working_copy):
     new_table = "test_table"
     wrong_table = "wrong_test_table"
     message = "test commit"
@@ -445,7 +445,7 @@ def test_commit_table_nonexistent(cli_runner, data_working_copy):
             assert e.exit_code == NO_CHANGES
 
 
-def test_commit_table_twice(cli_runner, data_working_copy):
+def test_add_dataset_twice__gpkg(cli_runner, data_working_copy):
     new_table = "test_table"
     message1 = "test commit1"
     message2 = "test commit2"
@@ -465,7 +465,7 @@ def test_commit_table_twice(cli_runner, data_working_copy):
             assert e.exit_code == NO_CHANGES
 
 
-def test_commit_table_triggers(cli_runner, data_working_copy):
+def test_add_dataset_triggers__gpkg(cli_runner, data_working_copy):
     new_table = "test_table"
     message = "test commit"
 
