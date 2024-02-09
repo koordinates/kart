@@ -155,7 +155,7 @@ def get_untracked_tables(repo):
 
     if wc is not None and wc.session() is not None:
         with wc.session() as sess:
-            wc_items = wc.adapter.list_tables(sess)
+            wc_items = wc.adapter.list_tables(sess, db_schema=wc.db_schema)
         # Get all tables in working copy
         all_tables = [table_name for table_name, title in wc_items.items()]
         # Get tables shown in kart data ls
