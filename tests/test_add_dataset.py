@@ -8,6 +8,10 @@ from kart.exceptions import (
 )
 from kart.repo import KartRepo
 
+import pytest
+
+H = pytest.helpers.helpers()
+
 
 def test_add_dataset_json_output__gpkg(cli_runner, data_working_copy):
     new_table = "test_table"
@@ -190,3 +194,58 @@ def test_add_dataset_triggers__gpkg(cli_runner, data_working_copy):
         }
 
         assert output["kart.diff/v1+hexwkb"] == expected
+
+
+def test_add_dataset__postgis(data_archive, cli_runner, new_postgis_db_schema):
+    with data_archive("points") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+        with new_postgis_db_schema() as (postgres_url, postgres_schema):
+            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+            assert r.exit_code == 0, r.stderr
+
+            with repo.working_copy.tabular.session() as sess:
+                sess.execute(
+                    f"""CREATE TABLE {postgres_schema}.dupe AS (SELECT * FROM {postgres_schema}.{H.POINTS.LAYER});"""
+                )
+                sess.execute(
+                    f"""ALTER TABLE {postgres_schema}.dupe ADD PRIMARY KEY ({H.POINTS.LAYER_PK});"""
+                )
+
+            r = cli_runner.invoke(["status", "-ojson", "--list-untracked-tables"])
+            assert r.exit_code == 0, r.stderr
+
+            output = json.loads(r.stdout)
+            assert output["kart.status/v2"]["workingCopy"]["untrackedTables"] == [
+                "dupe"
+            ]
+
+            r = cli_runner.invoke(
+                ["add-dataset", "dupe", "-ojson", "-m" "test commit"],
+                env={
+                    "GIT_AUTHOR_DATE": "2010-1-1T00:00:00Z",
+                    "GIT_COMMITTER_DATE": "2010-1-1T00:00:00Z",
+                    "GIT_AUTHOR_EMAIL": "user@example.com",
+                    "GIT_COMMITTER_EMAIL": "committer@example.com",
+                },
+            )
+            assert r.exit_code == 0, r.stderr
+
+            output = json.loads(r.stdout)
+            COMMIT_SHA = output["kart.commit/v1"]["commit"]
+            ABBREV_COMMIT_SHA = output["kart.commit/v1"]["abbrevCommit"]
+            assert output == {
+                "kart.commit/v1": {
+                    "commit": COMMIT_SHA,
+                    "abbrevCommit": ABBREV_COMMIT_SHA,
+                    "author": "user@example.com",
+                    "committer": "committer@example.com",
+                    "branch": "main",
+                    "message": "test commit",
+                    "changes": {
+                        "dupe": {"meta": {"inserts": 2}, "feature": {"inserts": 2143}}
+                    },
+                    "commitTime": "2010-01-01T00:00:00Z",
+                    "commitTimeOffset": "+00:00",
+                }
+            }
