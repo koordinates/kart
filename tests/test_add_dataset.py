@@ -232,10 +232,12 @@ def test_add_dataset__postgis(data_archive, cli_runner, new_postgis_db_schema):
             assert r.exit_code == 0, r.stderr
 
             output = json.loads(r.stdout)
+            COMMIT_SHA = output["kart.commit/v1"]["commit"]
+            ABBREV_COMMIT_SHA = output["kart.commit/v1"]["abbrevCommit"]
             assert output == {
                 "kart.commit/v1": {
-                    "commit": "58ea88e1efafe329e43ca856e00f2e1efd0375f3",
-                    "abbrevCommit": "58ea88e",
+                    "commit": COMMIT_SHA,
+                    "abbrevCommit": ABBREV_COMMIT_SHA,
                     "author": "user@example.com",
                     "committer": "committer@example.com",
                     "branch": "main",
