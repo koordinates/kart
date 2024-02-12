@@ -795,7 +795,7 @@ jobs:
 
       - name: "setup: misc"
         run: |
-          brew unlink openssl
+          brew uninstall openssl
           brew install -q autoconf automake ccache pandoc pkg-config libtool
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
