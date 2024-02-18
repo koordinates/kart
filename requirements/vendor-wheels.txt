@@ -1,5 +1,5 @@
 cffi==1.16.0
-cryptography==41.0.6
+cryptography==42.0.2
 gdal==3.8.0
 psycopg2==2.9.9
 pygit2==1.12.1
