@@ -12,6 +12,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Improved performance when the user filters a diff request to only show certain features. [#962](https://github.com/koordinates/kart/pull/962)
 - Clean up the empty directory if a clone fails outright. [#963](https://github.com/koordinates/kart/issues/963)
 - Fixes `add-dataset` to work for PostGIS working copies. [#965](https://github.com/koordinates/kart/issues/965)
+- Fixes `kart import --link` to not fetch any tiles when importing into a bare Kart repo. [#970](https://github.com/koordinates/kart/pull/970)
 
 ## 0.15.0
 

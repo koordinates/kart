@@ -95,3 +95,30 @@ def test_linked_non_checkout_datasets(
                 check_tile_is_reflinked(
                     repo_path / "auckland" / f"auckland_{x}_{y}.laz", repo
                 )
+
+
+def test_linked_bare_repo(
+    data_archive,
+    tmp_path,
+    chdir,
+    cli_runner,
+    s3_test_data_point_cloud,
+    check_lfs_hashes,
+):
+    repo_path = tmp_path / "linked-dataset-repo"
+    r = cli_runner.invoke(["init", repo_path, "--bare"])
+    assert r.exit_code == 0
+
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            [
+                "import",
+                "--link",
+                s3_test_data_point_cloud,
+                "--dataset-path=auckland",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        repo = KartRepo(repo_path)
+        check_lfs_hashes(repo, expected_file_count=0)

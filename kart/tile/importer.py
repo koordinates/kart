@@ -111,7 +111,10 @@ class TileImporter:
         self.num_workers = num_workers
         self.do_link = do_link
         self.sources = sources
-        self.do_fetch_tiles = self.do_checkout or (not self.do_link)
+
+        need_to_store_tiles = not self.do_link
+        need_tiles_for_wc = self.do_checkout and not self.repo.is_bare
+        self.do_fetch_tiles = need_to_store_tiles or need_tiles_for_wc
 
         # When doing any kind of initial import we still have to write the table_dataset_version,
         # even though it's not really relevant to tile imports.
