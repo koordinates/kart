@@ -12,7 +12,6 @@ from kart.exceptions import (
     NO_CHANGES,
 )
 from kart.repo import KartRepo
-from .fixtures import requires_pdal  # noqa
 
 DUMMY_REPO = "git@example.com/example.git"
 

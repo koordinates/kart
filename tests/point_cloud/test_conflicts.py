@@ -1,7 +1,6 @@
 import re
 import shutil
 
-from .fixtures import requires_pdal  # noqa
 from kart.lfs_util import get_oid_and_size_of_file
 from kart.repo import KartRepo
 

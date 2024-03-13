@@ -1,7 +1,5 @@
 import shutil
 
-from .fixtures import requires_pdal  # noqa
-
 from kart.geometry import ring_as_wkt
 from kart.repo import KartRepo
 

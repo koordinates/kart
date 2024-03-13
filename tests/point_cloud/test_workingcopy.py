@@ -15,7 +15,6 @@ from kart.point_cloud.metadata_util import extract_pc_tile_metadata
 from kart.repo import KartRepo
 from kart import subprocess_util as subprocess
 from kart.workdir import FileSystemWorkingCopy
-from .fixtures import requires_pdal  # noqa
 
 
 def test_working_copy_edit(cli_runner, data_archive, requires_pdal):
