@@ -7,7 +7,7 @@ import re
 
 from osgeo import osr
 
-from kart.crs_util import normalise_wkt
+from kart.crs_util import normalise_wkt, wkt_equal
 from kart.exceptions import (
     InvalidOperation,
     INVALID_FILE_FORMAT,
@@ -68,7 +68,9 @@ def rewrite_and_merge_metadata(
         _merge_metadata_field(
             result, "schema.json", rewrite_schema(tile_metadata, rewrite_metadata)
         )
-        _merge_metadata_field(result, "crs.wkt", tile_metadata["crs.wkt"])
+        _merge_metadata_field(
+            result, "crs.wkt", tile_metadata["crs.wkt"], eq_func=wkt_equal
+        )
         # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
     return result
 
@@ -117,7 +119,11 @@ def rewrite_schema(tile_metadata, rewrite_metadata=RewriteMetadata.NO_REWRITE):
         return orig_schema
 
 
-def _merge_metadata_field(output, key, value):
+def _equal(x, y):
+    return x == y
+
+
+def _merge_metadata_field(output, key, value, *, eq_func=_equal):
     if key not in output:
         output[key] = value
         return
@@ -125,8 +131,10 @@ def _merge_metadata_field(output, key, value):
     if isinstance(existing_value, ListOfConflicts):
         if value not in existing_value:
             existing_value.append(value)
-    elif existing_value != value:
-        output[key] = ListOfConflicts([existing_value, value])
+    else:
+        values_are_equal = eq_func(existing_value, value)
+        if not values_are_equal:
+            output[key] = ListOfConflicts([existing_value, value])
 
 
 def get_copc_version(info):
