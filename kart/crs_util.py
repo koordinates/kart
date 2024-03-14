@@ -201,6 +201,17 @@ def get_identifier_int_from_dataset(dataset, crs_name=None):
     return get_identifier_int(definition)
 
 
+def wkt_equal(wkt1, wkt2):
+    """
+    Compare two CRSes for equality
+    """
+    if wkt1 == wkt2:
+        return True
+    a = osr.SpatialReference(wkt1)
+    b = osr.SpatialReference(wkt2)
+    return a.IsSame(b)
+
+
 def normalise_wkt(wkt):
     if not wkt:
         return wkt

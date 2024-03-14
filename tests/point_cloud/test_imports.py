@@ -2,6 +2,8 @@ from glob import glob
 import json
 import shutil
 import subprocess
+import textwrap
+
 import pytest
 
 
@@ -576,6 +578,78 @@ def test_import_update_existing(cli_runner, data_archive, requires_pdal):
             assert inserts == 1
             assert updates == 1
             assert deletes == 1
+
+
+def test_import_update_existing_homogenous_crs(
+    cli_runner, data_archive_readonly, requires_pdal, chdir, tmp_path
+):
+    """
+    Regression test for https://github.com/koordinates/kart/issues/973
+    """
+    EXPECTED_CRS_WKT = textwrap.dedent(
+        """\
+        COMPD_CS["NAD83(2011) / UTM zone 12N + NAVD88 height",
+            PROJCS["NAD83(2011) / UTM zone 12N",
+                GEOGCS["NAD83(2011)",
+                    DATUM["NAD83_National_Spatial_Reference_System_2011",
+                        SPHEROID["GRS 1980", 6378137, 298.257222101,
+                            AUTHORITY["EPSG", "7019"]],
+                        AUTHORITY["EPSG", "1116"]],
+                    PRIMEM["Greenwich", 0,
+                        AUTHORITY["EPSG", "8901"]],
+                    UNIT["degree", 0.0174532925199433,
+                        AUTHORITY["EPSG", "9122"]],
+                    AUTHORITY["EPSG", "6318"]],
+                PROJECTION["Transverse_Mercator"],
+                PARAMETER["latitude_of_origin", 0],
+                PARAMETER["central_meridian", -111],
+                PARAMETER["scale_factor", 0.9996],
+                PARAMETER["false_easting", 500000],
+                PARAMETER["false_northing", 0],
+                UNIT["meter", 1,
+                    AUTHORITY["EPSG", "9001"]],
+                AXIS["X", EAST],
+                AXIS["Y", NORTH],
+                AUTHORITY["EPSG", "6341"]],
+            VERT_CS["NAVD88 height",
+                VERT_DATUM["North American Vertical Datum 1988", 2005,
+                    AUTHORITY["EPSG", "5103"]],
+                UNIT["meter", 1,
+                    AUTHORITY["EPSG", "9001"]],
+                AXIS["Up", UP],
+                AUTHORITY["EPSG", "5703"]]]
+        """
+    )
+
+    with data_archive_readonly("point-cloud/laz-utah.tgz") as src:
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        with chdir(repo_path):
+            # Import a single tile
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    "--dataset-path=utah",
+                    "--convert-to-copc",
+                    str(src / "utah_1.laz"),
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["meta", "get", "utah", "crs.wkt", "-ojson"])
+            crs_wkt = json.loads(r.stdout)["utah"]["crs.wkt"]
+            assert crs_wkt == EXPECTED_CRS_WKT
+
+            # Import a second tile. It should work since they have the same CRS
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    "--dataset-path=utah",
+                    "--convert-to-copc",
+                    "--update-existing",
+                    str(src / "utah_2.laz"),
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
 
 
 def test_import_replace_existing_with_no_changes(
