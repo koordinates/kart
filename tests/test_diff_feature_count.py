@@ -35,6 +35,25 @@ def test_feature_count_noops(head_sha, head1_sha, accuracy, data_archive, cli_ru
             assert r.exit_code == 0, r
 
 
+def test_feature_count_estimate_after_deleting_all_features(
+    data_working_copy, cli_runner
+):
+    with data_working_copy("points") as (repo_path, wc):
+        repo = KartRepo(repo_path)
+        with repo.working_copy.tabular.session() as sess:
+            # this actually undoes a change from the HEAD commit
+            r = sess.execute(f"DELETE FROM  {H.POINTS.LAYER};")
+        r = cli_runner.invoke(["commit", "-m", "delete all features"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(
+            ["diff", "--only-feature-count=medium", "[EMPTY]...HEAD", "-o", "json"]
+        )
+        assert r.exit_code == 0, r.stderr
+        # Only datasets with nonzero counts are included in the diff
+        assert json.loads(r.stdout) == {}
+
+
 def test_feature_count_commits_exact(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(["diff", "--only-feature-count=exact", "HEAD^...HEAD"])
