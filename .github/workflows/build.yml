@@ -296,9 +296,11 @@ jobs:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       - name: "setup: rust"
-        uses: ATiltedTree/setup-rust@v1
-        with:
-          rust-version: stable
+        run: |
+          curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh -s -- -y
+          . "$HOME/.cargo/env"
+          rustc --version
+
 
       - name: "setup: misc"
         shell: bash
