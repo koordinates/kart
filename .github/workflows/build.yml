@@ -5,7 +5,7 @@ on: [push, pull_request]
 
 env:
   PY_VER: "3.11"
-  CMAKE_VERSION: "~3.25.0"
+  CMAKE_VERSION: "3.29.2"
   FORCE_COLOR: "YES"
   KART_S3_TEST_DATA_POINT_CLOUD: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
   KART_S3_TEST_DATA_RASTER: "s3://kart-bring-your-own-data-poc/erorisk_si/*.tif"
