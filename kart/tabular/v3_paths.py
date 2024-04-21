@@ -315,9 +315,15 @@ class IntPathEncoder(PathEncoder):
             diff = self._nonrecursive_diff(tree1, tree2)
             diffs_by_path[path] = diff
 
-        diff_items = list(diff.items())
-        rand.shuffle(diff_items)
+        if not diff:
+            # This can happen after a delete-all-features commit - at some level there may be an empty tree.
+            # Since tree1=None and tree2=EMPTY_TREE, we'll get here (tree1 != tree2) but diff will actually be empty.
+            paths_fully_explored.add(path)
+            return 0
 
+        diff_items = list(diff.items())
+
+        rand.shuffle(diff_items)
         child1, child2 = diff_items[0][1]
         if isinstance(child1, pygit2.Blob) or isinstance(child2, pygit2.Blob):
             # we're at the bottom level
