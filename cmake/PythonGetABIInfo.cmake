@@ -8,12 +8,12 @@ Output Variables:
     Python3_ABIFLAGS:
         ABI flag code string (d=debug, m=malloc, etc)
     Python3_WHEEL_ID:
-        Wheel ABI identifier. eg: cp37-cp37m-macosx_10.9_x86_64
+        Wheel ABI identifier. eg: cp312-cp312-macosx_14_0_arm64
     Python3_MACOSX_DEPLOYMENT_TARGET: (macOS only)
-        Stores the macOS deployment target Python was built with (eg: 10.9)
+        Stores the macOS deployment target Python was built with (eg: 14.0)
     Python3_PURELIB_REL_PATH:
         Relative path from a virtualenv root to the site-packages directory
-        eg: lib/python3.11/site-packages
+        eg: lib/python3.12/site-packages
 
 #]=============================================================================]
 
@@ -23,31 +23,30 @@ function(PythonGetABIInfo)
     message(FATAL_ERROR "Unsupported Python interpreter: ${Python3_INTERPRETER_ID}")
   endif()
 
-  if(NOT DEFINED Python3_ABIFLAGS)
-    # ABI flags are 'd'/'m'/''/etc
-    execute_process(
-      COMMAND
-        ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_config_var('abiflags'))"
-        COMMAND_ERROR_IS_FATAL ANY
-      OUTPUT_VARIABLE py_ABIFLAGS
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    set(Python3_ABIFLAGS
-        ${py_ABIFLAGS}
-        CACHE INTERNAL "Python3 ABI flags")
-    message(STATUS "Python3 ABI flags: [${py_ABIFLAGS}]")
+  set(_vcpkg_triplet_dir "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+  cmake_path(IS_PREFIX _vcpkg_triplet_dir ${Python3_EXECUTABLE} NORMALIZE py_isVcpkg)
+  if(py_isVcpkg)
+    # vcpkg's python doesn't include pip?!
+    message(STATUS "Python3 interpreter is from vcpkg, installing pip...")
+    execute_process(COMMAND ${Python3_EXECUTABLE} -m ensurepip COMMAND_ERROR_IS_FATAL ANY
+                    ERROR_QUIET)
   endif()
 
-  if(NOT (DEFINED Python3_PLATFORM_TAG AND DEFINED Python3_WHEEL_ID))
-    # Platform tag (win32_x64, linux_x86_64, MACOSX_10_9_x86_64, macosx_10_9_universal2, etc)
+  if(NOT DEFINED Python3_WHEEL_ID)
+    # Platform wheel ABI identifier (win32_x64, linux_x86_64, macosx_10_9_x86_64, macosx_14_0_arm64,
+    # etc)
     execute_process(
-      COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_platform())"
-              COMMAND_ERROR_IS_FATAL ANY
-      OUTPUT_VARIABLE py_PLATFORM_TAG
+      COMMAND
+        ${Python3_EXECUTABLE} -c
+        "from pip._vendor.packaging.tags import sys_tags; print(list(sys_tags())[0])"
+        COMMAND_ERROR_IS_FATAL ANY
+      OUTPUT_VARIABLE py_WHEEL_ID
       OUTPUT_STRIP_TRAILING_WHITESPACE)
-    message(STATUS "Python3 interpreter platform tag: ${py_PLATFORM_TAG}")
-    set(Python3_INTERPRETER_PLATFORM_TAG
-        ${py_PLATFORM_TAG}
-        CACHE INTERNAL "Python3 original interpreter platform tag")
+
+    set(Python3_WHEEL_ID
+        ${py_WHEEL_ID}
+        CACHE INTERNAL "Python3 wheel identifier")
+    message(STATUS "Python3 Wheel identifier: ${py_WHEEL_ID}")
 
     if(MACOS)
       # Get interpreter macOS deployment target
@@ -80,30 +79,9 @@ function(PythonGetABIInfo)
 
       set(Python3_MACOSX_DEPLOYMENT_TARGET
           ${py_MACOSX_DEPLOYMENT_TARGET}
-          CACHE INTERNAL "Python3 interpreter macOS deployment target")
-      message(STATUS "Python3 interpreter macOS deployment target: ${py_MACOSX_DEPLOYMENT_TARGET}")
-
-      string(REGEX REPLACE "${py_INTERPRETER_MACOSX_DEPLOYMENT_TARGET}"
-                           "${py_MACOSX_DEPLOYMENT_TARGET}" py_PLATFORM_TAG "${py_PLATFORM_TAG}")
+          CACHE INTERNAL "Python3 macOS deployment target")
+      message(STATUS "Python3 macOS deployment target: ${py_MACOSX_DEPLOYMENT_TARGET}")
     endif()
-
-    string(REGEX REPLACE "[-\.]+" "_" py_PLATFORM_TAG "${py_PLATFORM_TAG}")
-    set(Python3_PLATFORM_TAG
-        ${py_PLATFORM_TAG}
-        CACHE INTERNAL "Python3 platform tag")
-    message(STATUS "Final Python3 platform tag: ${py_PLATFORM_TAG}")
-
-    # eg: cp37-cp37m
-    set(py_ver_code
-        "cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}-cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}${Python3_ABIFLAGS}"
-    )
-
-    # Full Wheel ABI ID
-    set(py_wheelid "${py_ver_code}-${py_PLATFORM_TAG}")
-    set(Python3_WHEEL_ID
-        ${py_wheelid}
-        CACHE INTERNAL "Python3 wheel identifier")
-    message(STATUS "Python3 Wheel identifier: ${py_wheelid}")
   endif()
 
   if(NOT DEFINED Python3_PURELIB_REL_PATH)
