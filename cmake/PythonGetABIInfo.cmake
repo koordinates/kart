@@ -73,8 +73,11 @@ function(PythonGetABIInfo)
         set(py_MACOSX_DEPLOYMENT_TARGET "${py_INTERPRETER_MACOSX_DEPLOYMENT_TARGET}")
       endif()
 
+      # We need MAJOR.MINOR for both these variables - if we have MAJOR but not .MINOR, append ".0" to the end.
+      if(py_INTERPRETER_MACOSX_DEPLOYMENT_TARGET MATCHES "^[0-9]+$")
+        set(py_INTERPRETER_MACOSX_DEPLOYMENT_TARGET "${py_INTERPRETER_MACOSX_DEPLOYMENT_TARGET}.0")
+      endif()
       if(py_MACOSX_DEPLOYMENT_TARGET MATCHES "^[0-9]+$")
-        # We need MAJOR.MINOR - if we have MAJOR but not .MINOR, append ".0" to the end.
         set(py_MACOSX_DEPLOYMENT_TARGET "${py_MACOSX_DEPLOYMENT_TARGET}.0")
       endif()
 
