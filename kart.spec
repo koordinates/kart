@@ -84,6 +84,7 @@ binaries = [
     (f'{BINARY_DIR}/venv/lib/mod_spatialite.{lib_suffix_glob}', '.'),
     (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs{exe_suffix}', '.'),
     (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/pdal{exe_suffix}', '.'),
+    (f'{BINARY_DIR}/venv/tools/gdal/*{exe_suffix}', 'tools/gdal'),
 ]
 if not is_win:
     binaries += [
