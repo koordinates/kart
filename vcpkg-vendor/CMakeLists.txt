@@ -142,12 +142,6 @@ list(APPEND WHEEL_LIST ${CFFI_WHEEL})
 #
 find_package(GDAL REQUIRED)
 
-file(
-  GLOB GDAL_DATA_FILES
-  RELATIVE ${CURRENT_PACKAGES_DIR}
-  "share/gdal/*")
-list(APPEND ENV_FILE_LIST ${GDAL_DATA_FILES})
-
 if(WIN32)
   set(GDAL_CONFIG_EXE "")
 else()
@@ -414,11 +408,6 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/reflink-${REFLINK_WHEEL_VER}-${Python3_WHE
 # Proj
 #
 find_package(PROJ CONFIG REQUIRED)
-file(
-  GLOB PROJ_DATA_FILES
-  RELATIVE ${CURRENT_PACKAGES_DIR}
-  "share/proj/*")
-list(APPEND ENV_FILE_LIST ${PROJ_DATA_FILES})
 
 #
 # mod_spatialite
@@ -630,10 +619,11 @@ add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
   DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
-  COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/share env/${EXE_DIR}
+  COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/tools env/share env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
   COMMAND ${CMAKE_COMMAND} -E copy ${LIB_LIST} env/lib
   COMMAND ${CMAKE_COMMAND} -E copy ${EXE_LIST} env/${EXE_DIR}
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/tools/gdal/ env/tools/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/gdal/ env/share/gdal
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CURRENT_PACKAGES_DIR}/share/proj/ env/share/proj
   COMMAND ${EXTRA_COPY_COMMAND}
