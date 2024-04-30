@@ -75,7 +75,8 @@ The in-process plugin uses Kart internal Python APIs to find and expose features
 
 ### Usage
 
-This currently only works from a local build tree in `/path/to/kart/build/`. See [CONTRIBUTING](../../CONTRIBUTING.md) for details. GDAL v3.8.0 isn't currently built with Kart currently, so this will require some changes in `vcpkg-vendor/` to make it work.
+This currently only works from a local build tree in `/path/to/kart/build/`. See [CONTRIBUTING](../../CONTRIBUTING.md) for details. GDAL v3.8.0 is built with Kart,
+but currently the `ogrinfo` and `ogr2ogr` GDAL tools are not - you will currently need to modify the build so that these tools are also bundled.
 
 ```console
 # Configure paths

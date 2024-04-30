@@ -43,17 +43,32 @@ OGR_DATATYPE_MAP = {
     "time": ogr.OFTTime,
     "timestamp": ogr.OFTDateTime,
 }
-OGR_GEOMTYPE_MAP = {
-    "POINT": ogr.wkbPoint,
-    "LINESTRING": ogr.wkbLineString,
-    "POLYGON": ogr.wkbPolygon,
-    "MULTIPOINT": ogr.wkbMultiPoint,
-    "MULTILINESTRING": ogr.wkbMultiLineString,
-    "MULTIPOLYGON": ogr.wkbMultiPolygon,
-    "GEOMETRYCOLLECTION": ogr.wkbGeometryCollection,
-    "GEOMETRY": ogr.wkbUnknown,
-    # TODO? Z/M types
-}
+
+
+def _build_ogr_geomtype_map():
+    type_names = [
+        "Point",
+        "LineString",
+        "Polygon",
+        "MultiPoint",
+        "MultiLineString",
+        "MultiPolygon",
+        "GeometryCollection",
+    ]
+    result = {}
+    for type_name in type_names:
+        kart_type = type_name.upper()
+        base_val = getattr(ogr, f"wkb{type_name}")
+        result[kart_type] = base_val
+        result[f"{kart_type} Z"] = getattr(ogr, f"wkb{type_name}Z", base_val + 1000)
+        result[f"{kart_type} M"] = getattr(ogr, f"wkb{type_name}M", base_val + 2000)
+        result[f"{kart_type} ZM"] = getattr(ogr, f"wkb{type_name}ZM", base_val + 3000)
+
+    result["GEOMETRY"] = ogr.wkbUnknown
+    return result
+
+
+OGR_GEOMTYPE_MAP = _build_ogr_geomtype_map()
 
 
 def invoke_kart(
@@ -137,7 +152,7 @@ class Layer(BaseLayer):
     @cached_property
     def geometry_fields(self):
         result = []
-        override_geom_type = self.options.get("GEOMTYPE", None)
+        override_geom_type = self.options.get("GEOMTYPE")
         for col_schema in self._schema:
             if col_schema["dataType"] == "geometry":
                 if override_geom_type:
@@ -299,15 +314,6 @@ class Layer(BaseLayer):
         except OSError as ex:
             gdal.Error(f"KART !__iter__() {ex}")
             raise
-
-    # @gdal_api_wrapper
-    # def spatial_filter_changed(self):
-    #     filter_wkt = self.spatial_filter
-    #     if filter_wkt is None:
-    #         self.kart_spatial_filter = None
-    #     else:
-    #         ogr_geom = ogr.CreateGeometryFromWkt(filter_wkt)
-    #         self.kart_spatial_filter = spatial_filter.SpatialFilter(self.geom_crs_id, ogr_geom)
 
 
 class DiffLayer(BaseLayer):
