@@ -110,6 +110,7 @@ datas = [
     (f'{BINARY_DIR}/venv/share/gdal', 'share/gdal'),
     (f'{BINARY_DIR}/venv/share/proj', 'share/proj'),
     (f'{BINARY_DIR}/venv/help', 'help'),
+    ('contrib', 'share/kart/contrib'),
 ]
 
 if is_win:
