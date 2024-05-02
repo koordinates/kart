@@ -71,7 +71,7 @@ if PLATFORM == "Windows":
     RPATH_PREFIX = ""
     LIB_EXTENSIONS = [".lib", ".dll", ".pyd"]
     SYSTEM_PREFIXES = []
-    EXE_PATHS = ["env/scripts"]
+    EXE_PATHS = ["env/scripts", "env/tools/gdal"]
     EXE_EXTENSION = ".exe"
     TOP_LEVEL_DIRECTORIES += ["git"]
     NOFIX_PATHS = ["git"]
@@ -81,7 +81,7 @@ elif PLATFORM == "Darwin":
     RPATH_PREFIX = "@rpath/"
     LIB_EXTENSIONS = [".dylib", ".so"]
     SYSTEM_PREFIXES = ["/usr/lib/"]
-    EXE_PATHS = ["env/bin", "env/libexec/git-core"]
+    EXE_PATHS = ["env/bin", "env/libexec/git-core", "env/tools/gdal"]
     EXE_EXTENSION = ""
 elif PLATFORM == "Linux":
     VENDOR_ARCHIVE_NAME = "vendor-Linux.tar.gz"
@@ -89,7 +89,7 @@ elif PLATFORM == "Linux":
     RPATH_PREFIX = ""
     LIB_EXTENSIONS = [".so", ".so.*"]
     SYSTEM_PREFIXES = []
-    EXE_PATHS = ["env/bin", "env/libexec/git-core"]
+    EXE_PATHS = ["env/bin", "env/libexec/git-core", "env/tools/gdal"]
     EXE_EXTENSION = ""
 
 if PLATFORM == "Windows":

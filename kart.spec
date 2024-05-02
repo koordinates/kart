@@ -84,6 +84,10 @@ binaries = [
     (f'{BINARY_DIR}/venv/lib/mod_spatialite.{lib_suffix_glob}', '.'),
     (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/git-lfs{exe_suffix}', '.'),
     (f'{BINARY_DIR}/venv/{VENV_BIN_DIR}/pdal{exe_suffix}', '.'),
+    # We put all exes in the same directory as DLLs on windows, so that they still
+    # work if run from outside Kart - note that this works on other systems due to RPATH,
+    # and when run from within Kart we can use os.add_dll_directory in kart/__init__.py
+    (f'{BINARY_DIR}/venv/tools/gdal/*{exe_suffix}', '.' if is_win else "tools/gdal"),
 ]
 if not is_win:
     binaries += [
