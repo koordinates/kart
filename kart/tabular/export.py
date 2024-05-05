@@ -253,9 +253,9 @@ def kart_col_to_ogr_field(col):
         # Rather confusingly, OGR's concepts of 'width' and 'precision'
         # correspond to 'precision' and 'scale' in most other systems, respectively:
         if precision:
-            col.SetWidth(precision)
+            result.SetWidth(precision)
         if scale:
-            col.SetPrecision(scale)
+            result.SetPrecision(scale)
 
     return result
 
