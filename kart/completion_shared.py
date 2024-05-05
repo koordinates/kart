@@ -79,7 +79,7 @@ def repo_path_completer(ctx=None, param=None, incomplete=""):
 
 def _do_complete_paths(repo, incomplete=""):
     all_ds_paths = repo.datasets("HEAD").paths()
-    return set(p for p in all_ds_paths if p.startswith(incomplete))
+    return CompletionSet(p for p in all_ds_paths if p.startswith(incomplete))
 
 
 def ref_or_repo_path_completer(ctx=None, param=None, incomplete=""):
