@@ -29,15 +29,12 @@ def list_export_formats(ctx):
 
 def get_driver_by_shortname(shortname):
     shortname = shortname.upper()
-    for i in range(ogr.GetDriverCount()):
-        d = ogr.GetDriver(i)
-        if d.GetName().upper() == shortname:
-            if not is_writable_vector_format(d):
-                raise click.UsageError(
-                    f"Driver {shortname} does not support writing vectors"
-                )
-            return d
-    raise click.UsageError(f"Destination format {shortname} not recognized")
+    d = ogr.GetDriverByName(shortname)
+    if d is None:
+        raise click.UsageError(f"Destination format {shortname} not recognized")
+    if not is_writable_vector_format(d):
+        raise click.UsageError(f"Driver {shortname} does not support writing vectors")
+    return d
 
 
 def get_driver_by_ext(filename):
@@ -117,7 +114,12 @@ def get_driver(destination_spec):
 )
 @click.option(
     "--override-geometry",
-    help="Override the geometry type to something more specific than in the Kart dataset",
+    help="Override the geometry type to something more specific than in the Kart dataset.",
+)
+@click.option(
+    "--drop-null-geometry-features",
+    is_flag=True,
+    help="Skips export of those features where the geometry is null.",
 )
 @click.argument(
     "args",
@@ -134,6 +136,7 @@ def table_export(
     primary_key_as_field,
     primary_key_as_fid,
     override_geometry,
+    drop_null_geometry_features,
     args,
     **kwargs,
 ):
@@ -215,11 +218,12 @@ def table_export(
             out_feature.SetFID(feature[pk_name])
         if geom_key:
             geom = feature[geom_key]
+            if geom is None and drop_null_geometry_features:
+                continue
             out_feature.SetGeometry(geom.to_ogr() if geom else None)
         for i, key in enumerate(regular_keys):
             out_feature.SetField(i, feature[key])
         out_layer.CreateFeature(out_feature)
-        out_feature = None
 
     out_ds = None
 
@@ -227,16 +231,10 @@ def table_export(
 def kart_col_to_ogr_field(col):
     ogr_type = None
     size = col.get("size")
-    if size is not None:
-        ogr_type = OGR_DATATYPE_MAP.get((col.data_type, size))
-    if ogr_type is None:
-        ogr_type = OGR_DATATYPE_MAP[col.data_type]
-    assert ogr_type is not None
-
-    if isinstance(ogr_type, tuple):
-        ogr_type, ogr_subtype = ogr_type
+    if size is not None and (col.data_type, size) in OGR_DATATYPE_MAP:
+        ogr_type, ogr_subtype = OGR_DATATYPE_MAP[(col.data_type, size)]
     else:
-        ogr_subtype = None
+        ogr_type, ogr_subtype = OGR_DATATYPE_MAP[col.data_type]
 
     result = ogr.FieldDefn(col.name, ogr_type)
     if ogr_subtype is not None:
@@ -262,21 +260,21 @@ def kart_col_to_ogr_field(col):
 
 OGR_DATATYPE_MAP = {
     "boolean": (ogr.OFTInteger, ogr.OFSTBoolean),
-    "blob": ogr.OFTBinary,
-    "date": ogr.OFTDate,
-    "float": ogr.OFTReal,
+    "blob": (ogr.OFTBinary, None),
+    "date": (ogr.OFTDate, None),
+    "float": (ogr.OFTReal, None),
     ("float", 32): (ogr.OFTReal, ogr.OFSTFloat32),
-    ("float", 64): ogr.OFTReal,
-    "integer": ogr.OFTInteger64,
+    ("float", 64): (ogr.OFTReal, None),
+    "integer": (ogr.OFTInteger64, None),
     ("integer", 8): (ogr.OFTInteger, ogr.OFSTInt16),
     ("integer", 16): (ogr.OFTInteger, ogr.OFSTInt16),
-    ("integer", 32): ogr.OFTInteger,
-    ("integer", 64): ogr.OFTInteger64,
-    "interval": ogr.OFTInteger64,
-    "numeric": ogr.OFTString,
-    "text": ogr.OFTString,
-    "time": ogr.OFTTime,
-    "timestamp": ogr.OFTDateTime,
+    ("integer", 32): (ogr.OFTInteger, None),
+    ("integer", 64): (ogr.OFTInteger64, None),
+    "interval": (ogr.OFTInteger64, None),
+    "numeric": (ogr.OFTString, None),
+    "text": (ogr.OFTString, None),
+    "time": (ogr.OFTTime, None),
+    "timestamp": (ogr.OFTDateTime, None),
 }
 
 
