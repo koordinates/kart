@@ -507,9 +507,9 @@ class OgrTableImportSource(TableImportSource):
             # correspond to 'precision' and 'scale' in most other systems, respectively:
             extra_type_info = {
                 # total number of decimal digits
-                "precision": ogr.GetWidth(),
+                "precision": fd.GetWidth(),
                 # total number of decimal digits to the right of the decimal point
-                "scale": ogr.GetPrecision(),
+                "scale": fd.GetPrecision(),
             }
         else:
             data_type, extra_type_info = ogr_field_definition_to_kart_type(fd)
