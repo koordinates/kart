@@ -11,6 +11,10 @@ from kart.cli_util import (
 from kart.completion_shared import repo_path_completer
 from kart.crs_util import make_crs
 from kart.exceptions import CrsError
+from kart.tabular.ogr_adapter import (
+    kart_schema_col_to_ogr_field_definition,
+    KART_GEOM_TYPE_TO_OGR_GEOM_TYPE,
+)
 
 
 def is_writable_vector_format(driver):
@@ -104,16 +108,25 @@ def get_driver(destination_spec):
     "--primary-key-as-field/--no-primary-key-as-field",
     is_flag=True,
     default=True,
-    help="Include the primary key column as a regular field that is sent to the GDAL driver.",
+    help=(
+        "Include the primary key column as a regular field that is sent to the GDAL driver. Defaults to on. "
+        "Turning this off may be preferable for GDAL drivers which adequately store the FID - in that case supplying "
+        "it as a field also would cause it to be stored redundantly, twice per feature."
+    ),
 )
 @click.option(
     "--primary-key-as-fid/--no-primary-key-as-fid",
     is_flag=True,
-    default=False,
-    help="Report to the GDAL driver that the FID of each feature is the primary key value.",
+    default=None,
+    help=(
+        "Report to the GDAL driver that the FID of each feature is the primary key value. By default this is on "
+        "for datasets which have an integer primary key, and off for other primary key types (which GDAL will not"
+        "accept as a valid FID). Depending on the driver, GDAL may or may not store the FID in the output dataset in "
+        "a recoverable way (for some export types the first FID must be one, in others it can be any value)."
+    ),
 )
 @click.option(
-    "--override-geometry",
+    "--override-geometry-type",
     help="Override the geometry type to something more specific than in the Kart dataset.",
 )
 @click.option(
@@ -135,7 +148,7 @@ def table_export(
     dataset_creation_option,
     primary_key_as_field,
     primary_key_as_fid,
-    override_geometry,
+    override_geometry_type,
     drop_null_geometry_features,
     args,
     **kwargs,
@@ -145,9 +158,13 @@ def table_export(
 
     Uses GDAL's OGR drivers to do so - consult https://gdal.org/drivers/vector/index.html
     to find the options specific to a particular driver, which can then be set using
-    -dsco and -lco just as when using `ogr2ogr`.
+    -dsco and -lco just as when using `ogr2ogr`. If these are not set, GDAL's defaults
+    are used, which can also be found in the documentation.
+
+    GDAL's general configuration options can be controlled by setting environment variables -
+    see https://gdal.org/user/configoptions.html
     """
-    if len(args) < 2:
+    if len(args) != 2:
         raise click.UsageError(
             "Usage: kart table-export DATASET [EXPORT_TYPE:]DESTINATION"
         )
@@ -169,13 +186,17 @@ def table_export(
     out_ds = driver.CreateDataSource(destination, options=list(dataset_creation_option))
     layer_name = layer or ds_path
 
-    if override_geometry and override_geometry.upper() not in OGR_GEOMTYPE_MAP:
+    if (
+        override_geometry_type
+        and override_geometry_type.upper() not in KART_GEOM_TYPE_TO_OGR_GEOM_TYPE
+    ):
         click.echo("Geometry type should be one of:", err=True)
-        click.echo("\n".join(OGR_GEOMTYPE_MAP.keys()), err=True)
-        raise click.UsageError(f"Unknown geometry type: {override_geometry}")
+        click.echo("\n".join(KART_GEOM_TYPE_TO_OGR_GEOM_TYPE.keys()), err=True)
+        raise click.UsageError(f"Unknown geometry type: {override_geometry_type}")
 
     schema = dataset.schema
     pk_name = schema.first_pk_column.name
+    primary_key_as_fid = _validate_primary_key_as_fid(primary_key_as_fid, schema)
 
     geom_key = None
     ogr_geom_type = None
@@ -184,8 +205,8 @@ def table_export(
     if schema.has_geometry:
         geom_col = schema.geometry_columns[0]
         geom_key = geom_col.name
-        kart_geom_type = override_geometry or geom_col["geometryType"]
-        ogr_geom_type = OGR_GEOMTYPE_MAP[kart_geom_type.upper()]
+        kart_geom_type = override_geometry_type or geom_col["geometryType"]
+        ogr_geom_type = KART_GEOM_TYPE_TO_OGR_GEOM_TYPE[kart_geom_type.upper()]
 
         crs_defs = list(dataset.crs_definitions().values())
         if len(crs_defs) > 1:
@@ -208,7 +229,7 @@ def table_export(
         if col.data_type == "geometry":
             continue  # Handled separately
         regular_keys.append(col.name)
-        out_layer.CreateField(kart_col_to_ogr_field(col))
+        out_layer.CreateField(kart_schema_col_to_ogr_field_definition(col))
 
     for feature in dataset.features_with_crs_ids(
         repo.spatial_filter, show_progress=True
@@ -228,77 +249,11 @@ def table_export(
     out_ds = None
 
 
-def kart_col_to_ogr_field(col):
-    ogr_type = None
-    size = col.get("size")
-    if size is not None and (col.data_type, size) in OGR_DATATYPE_MAP:
-        ogr_type, ogr_subtype = OGR_DATATYPE_MAP[(col.data_type, size)]
-    else:
-        ogr_type, ogr_subtype = OGR_DATATYPE_MAP[col.data_type]
-
-    result = ogr.FieldDefn(col.name, ogr_type)
-    if ogr_subtype is not None:
-        result.SetSubType(ogr_subtype)
-
-    if col.data_type in ("text", "blob"):
-        length = col.get("length")
-        if length:
-            result.SetWidth(length)
-
-    if col.data_type == "numeric":
-        precision = col.get("precision")
-        scale = col.get("scale")
-        # Rather confusingly, OGR's concepts of 'width' and 'precision'
-        # correspond to 'precision' and 'scale' in most other systems, respectively:
-        if precision:
-            result.SetWidth(precision)
-        if scale:
-            result.SetPrecision(scale)
-
-    return result
-
-
-OGR_DATATYPE_MAP = {
-    "boolean": (ogr.OFTInteger, ogr.OFSTBoolean),
-    "blob": (ogr.OFTBinary, None),
-    "date": (ogr.OFTDate, None),
-    "float": (ogr.OFTReal, None),
-    ("float", 32): (ogr.OFTReal, ogr.OFSTFloat32),
-    ("float", 64): (ogr.OFTReal, None),
-    "integer": (ogr.OFTInteger64, None),
-    ("integer", 8): (ogr.OFTInteger, ogr.OFSTInt16),
-    ("integer", 16): (ogr.OFTInteger, ogr.OFSTInt16),
-    ("integer", 32): (ogr.OFTInteger, None),
-    ("integer", 64): (ogr.OFTInteger64, None),
-    "interval": (ogr.OFTInteger64, None),
-    "numeric": (ogr.OFTString, None),
-    "text": (ogr.OFTString, None),
-    "time": (ogr.OFTTime, None),
-    "timestamp": (ogr.OFTDateTime, None),
-}
-
-
-def _build_ogr_geomtype_map():
-    type_names = [
-        "Point",
-        "LineString",
-        "Polygon",
-        "MultiPoint",
-        "MultiLineString",
-        "MultiPolygon",
-        "GeometryCollection",
-    ]
-    result = {}
-    for type_name in type_names:
-        kart_type = type_name.upper()
-        base_val = getattr(ogr, f"wkb{type_name}")
-        result[kart_type] = base_val
-        result[f"{kart_type} Z"] = getattr(ogr, f"wkb{type_name}Z", base_val + 1000)
-        result[f"{kart_type} M"] = getattr(ogr, f"wkb{type_name}M", base_val + 2000)
-        result[f"{kart_type} ZM"] = getattr(ogr, f"wkb{type_name}ZM", base_val + 3000)
-
-    result["GEOMETRY"] = ogr.wkbUnknown
-    return result
-
-
-OGR_GEOMTYPE_MAP = _build_ogr_geomtype_map()
+def _validate_primary_key_as_fid(primary_key_as_fid, schema):
+    if schema.pk_columns[0].data_type == "integer":
+        return primary_key_as_fid if primary_key_as_fid is not None else True
+    if primary_key_as_fid is True:
+        raise click.UsageError(
+            "Sorry, --primary-key-as-fid is not supported for datasets with non-integer primary keys"
+        )
+    return False

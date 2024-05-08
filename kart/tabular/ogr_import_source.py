@@ -14,11 +14,14 @@ from kart.exceptions import (
     NO_TABLE,
     InvalidOperation,
     NotFound,
-    NotYetImplemented,
 )
 from kart.geometry import ogr_to_gpkg_geom
 from kart.output_util import dump_json_output
 from kart.schema import ColumnSchema, Schema
+from kart.tabular.ogr_adapter import (
+    ogr_field_definition_to_kart_type,
+    ogr_geometry_type_to_kart_geometry_type,
+)
 from kart.utils import chunk, ungenerator
 
 from .import_source import TableImportSource
@@ -41,23 +44,6 @@ class OgrTableImportSource(TableImportSource):
     """
     Imports from an OGR source, currently from a whitelist of formats.
     """
-
-    # NOTE: We don't support *List fields (eg IntegerList).
-    OGR_TYPE_TO_V2_SCHEMA_TYPE = {
-        "Integer": ("integer", 32),
-        "Integer64": ("integer", 64),
-        "Real": ("float", 64),
-        "String": "text",
-        "Binary": "blob",
-        "Date": "date",
-        "DateTime": "timestamp",
-        "Time": "time",
-    }
-    OGR_SUBTYPE_TO_V2_SCHEMA_TYPE = {
-        ogr.OFSTBoolean: "boolean",
-        ogr.OFSTInt16: ("integer", 16),
-        ogr.OFSTFloat32: ("float", 32),
-    }
 
     DEFAULT_GEOMETRY_COLUMN_NAME = "geom"
 
@@ -496,8 +482,10 @@ class OgrTableImportSource(TableImportSource):
             if ld.GetFieldDefn(i).GetName() != self.primary_key
         ]
 
-    def _should_import_as_numeric(self, ogr_type, ogr_width, ogr_precision):
-        if ogr_type not in ("Real", "Integer", "Integer64"):
+    def _should_import_as_numeric(self, fd):
+        if fd.GetSubType():
+            return False
+        if fd.GetType() not in (ogr.OFTReal, ogr.OFTInteger, ogr.OFTInteger64):
             return False
         # We import numeric real/integer as numeric if they have a
         # nonzero width specified.
@@ -505,53 +493,26 @@ class OgrTableImportSource(TableImportSource):
         #    NUMERIC (unqualified) --> ogr.Real(0.0) --> double
         #    FLOAT --> ogr.Real(0.0) --> double
         #    DOUBLE PRECISION --> ogr.Real(0.0) --> double
-        # Fixing this collision might be a good reason to move away from OGR
-        # for import processing in the near future.
+        # This is one reason why we use Kart adapter code rather than OGR code for import,
+        # whereever we can.
         #
         # Note that ESRIShapefileImportSource overrides this since OGR *always* reports
         # a nonzero width for floats/ints in shapefiles.
-        return ogr_width != 0
+        return fd.GetWidth() != 0
 
     def _field_to_v2_column_schema(self, fd):
-        ogr_type = fd.GetTypeName()
-        ogr_width = fd.GetWidth()
-        ogr_precision = fd.GetPrecision()
-        ogr_subtype = fd.GetSubType()
-        if (not ogr_subtype) and self._should_import_as_numeric(
-            ogr_type, ogr_width, ogr_precision
-        ):
+        if self._should_import_as_numeric(fd):
             data_type = "numeric"
             # Note 2: Rather confusingly, OGR's concepts of 'width' and 'precision'
             # correspond to 'precision' and 'scale' in most other systems, respectively:
             extra_type_info = {
                 # total number of decimal digits
-                "precision": ogr_width,
+                "precision": fd.GetWidth(),
                 # total number of decimal digits to the right of the decimal point
-                "scale": ogr_precision,
+                "scale": fd.GetPrecision(),
             }
         else:
-            if ogr_subtype == ogr.OFSTNone:
-                data_type_info = self.OGR_TYPE_TO_V2_SCHEMA_TYPE.get(ogr_type)
-                if data_type_info is None:
-                    raise NotYetImplemented(
-                        f"Unsupported column type for import: OGR type={ogr_type}"
-                    )
-            else:
-                data_type_info = self.OGR_SUBTYPE_TO_V2_SCHEMA_TYPE.get(ogr_subtype)
-                if data_type_info is None:
-                    raise NotYetImplemented(
-                        f"Unsupported column type for import: OGR subtype={ogr_subtype}"
-                    )
-
-            if isinstance(data_type_info, tuple):
-                data_type, size = data_type_info
-                extra_type_info = {"size": size}
-            elif isinstance(data_type_info, str):
-                data_type = data_type_info
-                extra_type_info = {}
-
-            if data_type in ("text", "blob") and ogr_width:
-                extra_type_info["length"] = ogr_width
+            data_type, extra_type_info = ogr_field_definition_to_kart_type(fd)
 
         name = fd.GetName()
         pk_index = 0 if name == self.primary_key else None
@@ -579,30 +540,12 @@ class OgrTableImportSource(TableImportSource):
 
     def _get_v2_geometry_type(self, geom_fd):
         name = geom_fd.GetName() or self.DEFAULT_GEOMETRY_COLUMN_NAME
-        ogr_geom_type = geom_fd.GetType()
-        z = ogr.GT_HasZ(ogr_geom_type)
-        m = ogr.GT_HasM(ogr_geom_type)
-
-        sampled_geom = self.sample_geometry(name)
-        if sampled_geom:
-            sampled_geom_type = sampled_geom.geometry_type
-            z |= ogr.GT_HasZ(sampled_geom_type)
-            m |= ogr.GT_HasM(sampled_geom_type)
-
-        z = "Z" if z else ""
-        m = "M" if m else ""
-
-        ogr_geom_type = ogr.GT_Flatten(ogr_geom_type)
-        if ogr_geom_type == ogr.wkbUnknown:
-            v2_type = "GEOMETRY"
-        else:
-            # 'Line String' --> 'LineString' --> 'LINESTRING'
-            v2_type = ogr.GeometryTypeToName(ogr_geom_type).replace(" ", "").upper()
+        v2_type = ogr_geometry_type_to_kart_geometry_type(geom_fd.GetType())
 
         if self._should_promote_to_multi(name, v2_type):
-            v2_type = f"MULTI{v2_type}"
+            return f"MULTI{v2_type}"
 
-        return f"{v2_type} {z}{m}".strip()
+        return v2_type
 
     def _should_promote_to_multi(self, name, v2_geom_type):
         return False
@@ -623,8 +566,8 @@ class ESRIShapefileImportSource(OgrTableImportSource):
         super().__init__(*args, **kwargs)
         self.force_promote_geom_columns = {}
 
-    def _should_import_as_numeric(self, ogr_type, ogr_width, ogr_precision):
-        if not super()._should_import_as_numeric(ogr_type, ogr_width, ogr_precision):
+    def _should_import_as_numeric(self, fd):
+        if not super()._should_import_as_numeric(fd):
             return False
 
         # Generally speaking, we import Real/Integer with nonzero 'width'
@@ -633,13 +576,16 @@ class ESRIShapefileImportSource(OgrTableImportSource):
         # in shapefiles. They have specific widths.
         # If we find fields with those specific widths, we can assume they're
         # actually ints/doubles, not NUMERIC
+        ogr_type = fd.GetType()
+        ogr_width = fd.GetWidth()
+        ogr_precision = fd.GetPrecision()
         if (
             # double or float
-            (ogr_type == "Real" and ogr_width == 24 and ogr_precision == 15)
+            (ogr_type == ogr.OFTReal and ogr_width == 24 and ogr_precision == 15)
             # smallint or integer. normally integer is 9 but some can be 10
-            or (ogr_type == "Integer" and ogr_width in (5, 9, 10))
+            or (ogr_type == ogr.OFTInteger and ogr_width in (5, 9, 10))
             # integer64. normally width is 18 but can be up to 20
-            or (ogr_type == "Integer64" and ogr_width in (18, 19, 20))
+            or (ogr_type == ogr.OFTInteger64 and ogr_width in (18, 19, 20))
         ):
             return False
         return True
