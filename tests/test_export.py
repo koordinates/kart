@@ -79,21 +79,24 @@ def test_export_with_transformed_crs(epsg, data_archive, cli_runner):
 
         if epsg == 4326:
             assert "World Geodetic System 1984" in output
-            assert (
-                re.search(
-                    r"Extent: \(172\.\d+, -43.\d+\) - \(176\.\d+, -35\.\d+\)", output
-                )
-                is not None
+            assert _get_extent(output) == pytest.approx(
+                (172.32, -43.63, 176.99, -35.69), 0.01
             )
         else:
             assert "NZGD49 / New Zealand Map Grid" in output
-            assert (
-                re.search(
-                    r"Extent: \(2455036\.\d+, 5730002.\d+\) - \(2860434\.\d+, 6611594\.\d+\)",
-                    output,
-                )
-                is not None
+            assert _get_extent(output) == pytest.approx(
+                (2455030, 5730000, 2860430, 6611590), 10
             )
+
+
+def _get_extent(output):
+    number = r"([0-9.-]+)"
+    match = re.search(
+        rf"Extent: \({number}, {number}\) - \({number}, {number}\)", output
+    )
+    if match:
+        return tuple(float(match.group(i + 1)) for i in range(4))
+    return None
 
 
 def test_dataset_creation_options(data_archive, cli_runner):
