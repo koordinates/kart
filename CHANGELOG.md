@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.15.2 (UNRELEASED)
+
+- Adds a new command `kart export` which enables export of vector or tabular datasets to any OGR format. [#992](https://github.com/koordinates/kart/issues/992)
+
 ## 0.15.1
 
 - Prevented committing local changes to linked datasets. [#953](https://github.com/koordinates/kart/pull/953)
