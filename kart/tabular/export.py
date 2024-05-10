@@ -77,7 +77,6 @@ def get_driver(destination_spec):
 @click.command(
     "table-export",
     cls=KartCommand,
-    hidden=True,
     context_settings=dict(ignore_unknown_options=True),
 )
 @click.pass_context
@@ -153,6 +152,12 @@ def get_driver(destination_spec):
     is_flag=True,
     help="Skips export of those features where the geometry is null.",
 )
+@click.option(
+    "--drop-geometry",
+    "drop_geometry_column",
+    is_flag=True,
+    help="Skips export of each feature's geometry when exporting each feature.",
+)
 @click.argument(
     "args",
     nargs=-1,
@@ -171,10 +176,11 @@ def table_export(
     primary_key_as_fid,
     override_geometry_type,
     drop_null_geometry_features,
+    drop_geometry_column,
     args,
 ):
     """
-    Experimental export command - exports a tabular kart dataset at a particular commit.
+    Basic export command - exports a tabular kart dataset at a particular commit.
 
     Uses GDAL's OGR drivers to do so - consult https://gdal.org/drivers/vector/index.html
     to find the options specific to a particular driver, which can then be set using
@@ -221,7 +227,11 @@ def table_export(
     geometry_transform = None
 
     # Plan how to export geometry.
-    if schema.has_geometry and _should_export_geometry(driver, layer_creation_options):
+    if (
+        schema.has_geometry
+        and not drop_geometry_column
+        and _should_export_geometry(driver, layer_creation_options)
+    ):
         geom_col = schema.geometry_columns[0]
         geom_key = geom_col.name
         kart_geom_type = override_geometry_type or geom_col["geometryType"]

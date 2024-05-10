@@ -13,7 +13,6 @@ from kart.cli_util import KartCommand, forward_context_to_command
 @click.command(
     "export",
     cls=KartCommand,
-    hidden=True,
     context_settings=dict(ignore_unknown_options=True),
 )
 @click.pass_context
@@ -30,7 +29,7 @@ from kart.cli_util import KartCommand, forward_context_to_command
 )
 def export(ctx, args, **kwargs):
     """
-    Experimental export command - exports a tabular kart dataset at a particular commit.
+    Basic export command - exports a tabular kart dataset at a particular commit.
     Currently only vector / tabular datasets are supported.
 
     To see help specific to vector / tabular datasets, look up kart table-export.
