@@ -6,9 +6,10 @@ import subprocess
 from sqlalchemy.orm import sessionmaker
 
 from kart import prefix, is_frozen, is_windows
-from kart.exceptions import INVALID_ARGUMENT
+from kart.exceptions import INVALID_ARGUMENT, UNCATEGORIZED_ERROR
 from kart.geometry import Geometry
 from kart.sqlalchemy.sqlite import sqlite_engine
+from kart.tabular.export import get_driver_by_ext
 
 H = pytest.helpers.helpers()
 
@@ -63,6 +64,41 @@ def test_export_datasets(archive, layer, geometry, data_archive, cli_runner):
             assert field_name[0:10] in output
 
 
+@pytest.mark.parametrize("epsg", [4326, 27200])
+def test_export_with_transformed_crs(epsg, data_archive, cli_runner):
+    with data_archive("polygons") as repo_dir:
+        r = cli_runner.invoke(
+            ["export", H.POLYGONS.LAYER, "output.shp", f"--crs=EPSG:{epsg}"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert (repo_dir / "output.shp").exists()
+
+        output = subprocess.check_output(
+            [get_ogr_tool("ogrinfo"), "-so", "-al", "output.shp"], text=True
+        )
+
+        if epsg == 4326:
+            assert "World Geodetic System 1984" in output
+            assert _get_extent(output) == pytest.approx(
+                (172.32, -43.63, 176.99, -35.69), 0.01
+            )
+        else:
+            assert "NZGD49 / New Zealand Map Grid" in output
+            assert _get_extent(output) == pytest.approx(
+                (2455030, 5730000, 2860430, 6611590), 10
+            )
+
+
+def _get_extent(output):
+    number = r"([0-9.-]+)"
+    match = re.search(
+        rf"Extent: \({number}, {number}\) - \({number}, {number}\)", output
+    )
+    if match:
+        return tuple(float(match.group(i + 1)) for i in range(4))
+    return None
+
+
 def test_dataset_creation_options(data_archive, cli_runner):
     extra_args = ["-dsco", "ADD_GPKG_OGR_CONTENTS=NO"]
 
@@ -105,6 +141,26 @@ def test_layer_creation_options(data_archive, cli_runner):
                 'survey_reference',
                 'adjusted_nodes',
             ]
+
+
+def test_gdal_config_options(monkeypatch, data_archive, cli_runner):
+    # Make sure that GDAL config options are being honoured.
+    with data_archive("points") as repo_dir:
+        monkeypatch.setenv("OGR_CURRENT_DATE", "2000-01-01T00:00:00Z")
+        r = cli_runner.invoke(["export", H.POINTS.LAYER, "--layer=one", "output.gpkg"])
+        assert r.exit_code == 0, r.stderr
+
+        monkeypatch.setenv("OGR_CURRENT_DATE", "2012-03-04T05:06:07Z")
+        r = cli_runner.invoke(["export", H.POINTS.LAYER, "--layer=two", "output.gpkg"])
+        assert r.exit_code == 0, r.stderr
+
+        engine = sqlite_engine(repo_dir / "output.gpkg")
+        with sessionmaker(bind=engine)() as sess:
+            r = sess.execute("SELECT last_change FROM gpkg_contents;")
+            assert set(row[0] for row in r) == {
+                "2000-01-01T00:00:00Z",
+                "2012-03-04T05:06:07Z",
+            }
 
 
 @pytest.mark.parametrize(
@@ -213,3 +269,84 @@ def test_primary_key_as_fid__string_pks(fid_option, data_archive, cli_runner):
             )
             # OGR assigns default FIDs into its FID column.
             assert (min_fid, max_fid) == (1, 228)
+
+
+@pytest.mark.parametrize("ext", ["csv", "fgb", "geojson", "gdb", "gpkg", "shp"])
+def test_export_overwrite(ext, data_archive, cli_runner):
+    multiple_layers_supported = ext in ("gpkg", "gdb")
+    filename = f"output.{ext}"
+    with data_archive("points") as repo_dir:
+        r = cli_runner.invoke(["export", H.POINTS.LAYER, filename, "--layer=one"])
+        assert r.exit_code == 0, r.stderr
+        assert (repo_dir / filename).exists()
+
+        r = cli_runner.invoke(["export", H.POINTS.LAYER, filename, "--layer=one"])
+        assert r.exit_code != 0
+
+        r = cli_runner.invoke(
+            ["export", H.POINTS.LAYER, filename, "--layer=one", "--overwrite"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["export", H.POINTS.LAYER, filename, "--layer=two"])
+        if multiple_layers_supported:
+            assert r.exit_code == 0, r.stderr
+        else:
+            assert r.exit_code != 0
+
+        ds = get_driver_by_ext(filename).Open(filename)
+        if multiple_layers_supported:
+            assert ds.GetLayerByName("one") is not None
+            assert ds.GetLayerByName("two") is not None
+        else:
+            assert ds.GetLayerCount() == 1
+        ds = None
+
+
+# These drivers support opening a directory as a dataset, such that creating a layer
+# creates a file or files inside that directory.
+@pytest.mark.parametrize(
+    "driver,ext",
+    [
+        pytest.param("CSV", "csv", id="CSV"),
+        pytest.param("FlatGeobuf", "fgb", id="FlatGeobuf"),
+        pytest.param("ESRI Shapefile", "shp", id="ESRI Shapefile"),
+    ],
+)
+def test_export_to_directory(driver, ext, data_archive, cli_runner):
+    with data_archive("points") as repo_dir:
+        r = cli_runner.invoke(
+            ["export", H.POINTS.LAYER, f"{driver}:output_dir/", "--layer=one"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert (repo_dir / "output_dir" / f"one.{ext}").exists()
+
+        r = cli_runner.invoke(
+            ["export", H.POINTS.LAYER, f"{driver}:output_dir/", "--layer=one"]
+        )
+        assert r.exit_code != 0
+
+        # None of these drivers support OVERWRITE=YES, so no point testing the "--overwrite" flag to make them
+        # overwrite the first layer.
+        # The FlatGeobuf driver also doesn't support reopening the directory as a dataset and adding another
+        # layer to that dataset, but it will let you directly open a file inside that directory and write to that.
+
+        if driver == "FlatGeobuf":
+            r = cli_runner.invoke(
+                ["export", H.POINTS.LAYER, f"{driver}:output_dir/two.{ext}"]
+            )
+        else:
+            r = cli_runner.invoke(
+                ["export", H.POINTS.LAYER, f"{driver}:output_dir/", "--layer=two"]
+            )
+        assert r.exit_code == 0, r.stderr
+        assert (repo_dir / "output_dir" / f"two.{ext}").exists()
+
+
+def test_error_from_ogr(data_archive, cli_runner):
+    with data_archive("points") as _:
+        r = cli_runner.invoke(
+            ["export", H.POINTS.LAYER, "output.csv", "-lco", "GEOMETRY=AS_MAGIC_SPELL"]
+        )
+        assert r.exit_code == UNCATEGORIZED_ERROR
+        assert "Error running GDAL OGR driver:" in r.stderr
