@@ -318,37 +318,6 @@ def _should_export_geometry(driver, layer_creation_options):
     return True
 
 
-SINGLE_LAYER_FILE_DRIVERS = set(
-    [
-        'CSV',
-        'DGN',
-        'DXF',
-        'ESRI Shapefile',
-        'FlatGeobuf',
-        'GML',
-        'GPSBabel',
-        'GPX',
-        'GeoJSON',
-        'GeoJSONSeq',
-        'Geoconcept',
-        'JML',
-        'JSONFG',
-        'KML',
-        'MBTiles',
-        'MVT',
-        'MapInfo File',
-        'ODS',
-        'OGR_GMT',
-        'PGDUMP',
-        'PMTiles',
-        'S57',
-        'VDV',
-        'WAsP',
-        'XLSX',
-    ]
-)
-
-
 def open_dataset_for_export(
     driver,
     destination,
@@ -363,7 +332,7 @@ def open_dataset_for_export(
     If overwrite is False, makes sure that the given layer doesn't already exist at the target dataset.
     If overwrite is True and the output is a file, removes that file since not all drivers support OVERWRITE=YES.
     """
-    if driver.GetName() in SINGLE_LAYER_FILE_DRIVERS and Path(destination).is_file():
+    if _is_single_layer_file_driver(driver) and Path(destination).is_file():
         if not overwrite:
             raise InvalidOperation(
                 f"Driver {driver.GetName()} cannot add a new layer to an existing file, and file {destination} already exists.\n"
@@ -394,6 +363,14 @@ def open_dataset_for_export(
         return result
     click.echo(f"Creating new dataset {destination}")
     return driver.CreateDataSource(destination, options=dataset_creation_options)
+
+
+def _is_single_layer_file_driver(driver):
+    """Returns True if a driver works on files (at least sometimes) and can only write a single layer at a time."""
+    return (
+        driver.GetMetadataItem(gdal.DMD_EXTENSIONS)
+        and driver.GetMetadataItem(gdal.DCAP_MULTIPLE_VECTOR_LAYERS) != "YES"
+    )
 
 
 def _get_dataset_crs(dataset):
