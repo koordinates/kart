@@ -64,11 +64,11 @@ def test_export_datasets(archive, layer, geometry, data_archive, cli_runner):
             assert field_name[0:10] in output
 
 
-@pytest.mark.parametrize("crs", ["EPSG:4326", "EPSG:27200"])
-def test_export_with_transformed_crs(crs, data_archive, cli_runner):
+@pytest.mark.parametrize("epsg", [4326, 27200])
+def test_export_with_transformed_crs(epsg, data_archive, cli_runner):
     with data_archive("polygons") as repo_dir:
         r = cli_runner.invoke(
-            ["export", H.POLYGONS.LAYER, "output.shp", f"--crs={crs}"]
+            ["export", H.POLYGONS.LAYER, "output.shp", f"--crs=EPSG:{epsg}"]
         )
         assert r.exit_code == 0, r.stderr
         assert (repo_dir / "output.shp").exists()
@@ -77,7 +77,7 @@ def test_export_with_transformed_crs(crs, data_archive, cli_runner):
             [get_ogr_tool("ogrinfo"), "-so", "-al", "output.shp"], text=True
         )
 
-        if crs == "EPSG:4326":
+        if epsg == 4326:
             assert "World Geodetic System 1984" in output
             assert (
                 re.search(
