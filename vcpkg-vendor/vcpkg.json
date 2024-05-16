@@ -51,7 +51,8 @@
                 "curl",
                 "lzma",
                 "webp",
-                "zstd"
+                "zstd",
+                "kea"
             ]
         },
         {
