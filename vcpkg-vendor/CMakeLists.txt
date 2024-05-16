@@ -493,8 +493,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 
   ExternalProject_Add(
     git
-    URL https://github.com/koordinates/git/releases/download/kart-0.11.0-windows/MinGit-v2.34.0.windows.1.13-64-bit.zip
-    URL_HASH SHA256=7dcbf2826721bde668bdc809539bf8cdaf49c11d5a66dd3a003949e95e992687
+    URL https://github.com/koordinates/git/releases/download/kart-v0.15.2-windows-mingit-build/MinGit-2.45.1.7.g5be46a8262-64-bit.zip
+    URL_HASH SHA256=322a7b292c382f39d54ff4bd421f240d5ef16f10bffa485718076907750de351
     DOWNLOAD_NO_PROGRESS ON
     BUILD_IN_SOURCE 1 # avoid creation of a build directory
     INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/git
@@ -507,10 +507,18 @@ else()
   # Build Git with spatial-filter extension on macOS and Linux
   find_package(OpenSSL REQUIRED)
   pkg_check_modules(OPENSSL REQUIRED openssl)
-  pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
   pkg_check_modules(LIBCURL REQUIRED libcurl)
+  find_package(pcre2 CONFIG REQUIRED)
 
   cmake_path(SET GIT_SPATIAL_FILTER_EXT contrib/filter-extensions/spatial/spatial.a)
+
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
+    set(CXX_STD_LIB_LDFLAGS "-lc++")
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    set(CXX_STD_LIB_LDFLAGS "-L/lib -lstdc++")
+  else()
+    message(FATAL_ERROR "Unknown C++ compiler")
+  endif()
 
   set(gitBuildConfig
       "prefix=/"
@@ -523,23 +531,24 @@ else()
       "NO_PERL=1"
       "NO_TCLTK=1"
       "RUNTIME_PREFIX=1"
-      "LIBPCREDIR=${PCRE2_PREFIX}"
+      "LIBPCREDIR=${CURRENT_PACKAGES_DIR}"
       "OPENSSLDIR=${OPENSSL_PREFIX}"
-      "CURL_CONFIG=${CURRENT_PACKAGES_DIR}/tools/curl/bin/curl-config"
+      "CURLDIR=${CURRENT_PACKAGES_DIR}"
+      "CURL_LDFLAGS=-lcurl"
       # stuff for building the spatial partial clone filter extension
       "CXX=${CMAKE_CXX_COMPILER}"
       "LINK=${CMAKE_CXX_COMPILER}"
+      "LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib"
       "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}"
-      "CFLAGS=-I<SOURCE_DIR>"
-      "EXTENSION_LIBS=-L${CURRENT_PACKAGES_DIR}/lib -lsqlite3")
+      "EXTENSION_LIBS=-L${CURRENT_PACKAGES_DIR}/lib -lsqlite3 ${CXX_STD_LIB_LDFLAGS}")
 
   ExternalProject_Add(
     git
     GIT_REPOSITORY https://github.com/koordinates/git
-    GIT_TAG kart-v0.12.0-rc3
+    GIT_TAG kart-v0.15.2
     GIT_SHALLOW ON
     BUILD_IN_SOURCE ON
-    DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3
+    DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3 PCRE2::8BIT
     EXCLUDE_FROM_ALL ON
     CONFIGURE_COMMAND ""
     INSTALL_DIR env
@@ -619,7 +628,8 @@ add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
   DEPENDS vendor_wheels git git-lfs ${VENDOR_CONFIG} fix_vendor_libs.py
   COMMAND ${CMAKE_COMMAND} -E rm -rf env/share/git-gui
-  COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/tools env/share env/${EXE_DIR}
+  COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env env/lib env/tools env/share
+          env/${EXE_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
   COMMAND ${CMAKE_COMMAND} -E copy ${LIB_LIST} env/lib
   COMMAND ${CMAKE_COMMAND} -E copy ${EXE_LIST} env/${EXE_DIR}
