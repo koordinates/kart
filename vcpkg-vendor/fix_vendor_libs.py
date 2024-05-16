@@ -106,6 +106,7 @@ if PLATFORM == "Windows":
     SYSTEM_DEPS_ALLOW_LIST = [
         "advapi32.dll",
         "api-ms-win-core-path-l1-1-0.dll",
+        "api-ms-win-core-synch-l1-2-0.dll",
         "api-ms-win-crt-conio-l1-1-0.dll",
         "api-ms-win-crt-convert-l1-1-0.dll",
         "api-ms-win-crt-environment-l1-1-0.dll",
@@ -120,6 +121,7 @@ if PLATFORM == "Windows":
         "api-ms-win-crt-time-l1-1-0.dll",
         "api-ms-win-crt-utility-l1-1-0.dll",
         "bcrypt.dll",
+        "bcryptprimitives.dll",
         "crypt32.dll",
         "kernel32.dll",
         "kernel32.dll",
