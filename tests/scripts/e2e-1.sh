@@ -25,7 +25,9 @@ function do_cleanup {
     if [ -f "$KART_HELPER_LOG" ]; then
         cat "$KART_HELPER_LOG"
     fi
-    rm -rf "$TMP_PATH"
+    if [ -z "${NO_CLEANUP-}" ]; then
+        rm -rf "$TMP_PATH"
+    fi
 }
 trap do_cleanup EXIT
 
@@ -35,9 +37,13 @@ if [ "$(uname -s)" == "Linux" ]; then
     cp -a /etc/skel/. "$HOME/"
 fi
 export SHELL=/bin/bash
+export PAGER=cat
 
 KART_PATH=$(dirname "$(realpath "$(command -v kart)")")
 echo "Kart is at: ${KART_PATH}"
+
+SQLITE3_PATH=$(dirname "$(realpath "$(command -v sqlite3)")")
+echo "sqlite3 is at: ${SQLITE3_PATH}"
 
 SPATIALITE_PATH=$(echo 'from kart import spatialite_path; print(spatialite_path)' | kart --post-mortem 2>/dev/null | grep spatialite | awk '{print $2}')
 echo "Spatialite is at: ${SPATIALITE_PATH}"
