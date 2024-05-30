@@ -420,7 +420,7 @@ function(find_mod_spatialite)
     find_file(
       SPATIALITE_EXTENSION
       NAMES mod_spatialite.dll REQUIRED
-      PATHS "${CURRENT_PACKAGES_DIR}/bin" "${CURRENT_PACKAGES_DIR}/plugins/libspatialite"
+      PATHS "${CURRENT_PACKAGES_DIR}/bin"
       NO_DEFAULT_PATH)
   else()
     set(CMAKE_FIND_LIBRARY_PREFIXES "") # otherwise it looks for `libmod_spatialite`
