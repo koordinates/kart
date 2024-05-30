@@ -244,12 +244,14 @@ jobs:
             image: quay.io/pypa/manylinux2014_x86_64
             arch: amd64
             arch_triplet: x64-linux
+            build_parallel: ""
 
           - base: buildjet-4vcpu-ubuntu-2204-arm
             label: centos7/arm64
             image: quay.io/pypa/manylinux2014_aarch64
             arch: arm64
             arch_triplet: arm64-linux
+            build_parallel: 1
 
     name: Linux ${{ matrix.os.arch }}
     runs-on: ${{ matrix.os.base }}
@@ -396,7 +398,7 @@ jobs:
       - name: "app: build"
         shell: bash
         run: |
-          cmake --build --preset=ci-linux --verbose --parallel
+          cmake --build --preset=ci-linux --verbose --parallel ${{ matrix.os.build_parallel }}
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
