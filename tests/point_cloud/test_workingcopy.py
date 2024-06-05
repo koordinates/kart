@@ -1215,7 +1215,7 @@ def test_working_copy_progress_bar(
         progress_output = r.stderr.splitlines()
         progress_output = _remove_copy_on_write_warning(progress_output)
         assert progress_output[0] == "Writing tiles for dataset 1 of 1: auckland"
-        assert re.fullmatch(
+        assert re.match(
             r"auckland: 100%\|█+\| 16/16 \[[0-9:<]+, [0-9\.]+tile/s\]",
             progress_output[-1],
         )

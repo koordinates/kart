@@ -12,12 +12,37 @@ env:
   AWS_NO_SIGN_REQUEST: "1"
 
 jobs:
+  # Increase rate limits for public registry
+  amazon-ecr-auth:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: 'arn:aws:iam::276514628126:role/ci-kart'
+          aws-region: us-east-1
+          mask-aws-account-id: 'false'
+          role-session-name: kart-ci-gha
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+          mask-password: 'false'
+    outputs:
+      registry: ${{ steps.login-ecr.outputs.registry }}
+      docker_username: ${{ steps.login-ecr.outputs.docker_username_public_ecr_aws }}
+      docker_password: ${{ steps.login-ecr.outputs.docker_password_public_ecr_aws }}
+
   #
   # Linux development build on modern Ubuntu
   #
   Linux-dev:
     name: "Linux dev"
     runs-on: ubuntu-22.04
+    needs: amazon-ecr-auth
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -56,6 +81,9 @@ jobs:
           - 1433:1433
       mysql:
         image: public.ecr.aws/docker/library/mysql:latest
+        credentials:
+          username: ${{ needs.amazon-ecr-auth.outputs.docker_username }}
+          password: ${{ needs.amazon-ecr-auth.outputs.docker_password }}
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -216,15 +244,18 @@ jobs:
             image: quay.io/pypa/manylinux2014_x86_64
             arch: amd64
             arch_triplet: x64-linux
+            build_parallel: ""
 
           - base: buildjet-4vcpu-ubuntu-2204-arm
             label: centos7/arm64
             image: quay.io/pypa/manylinux2014_aarch64
             arch: arm64
             arch_triplet: arm64-linux
+            build_parallel: 1
 
     name: Linux ${{ matrix.os.arch }}
     runs-on: ${{ matrix.os.base }}
+    needs: amazon-ecr-auth
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -256,6 +287,9 @@ jobs:
           - 1433:1433
       mysql:
         image: public.ecr.aws/docker/library/mysql:latest
+        credentials:
+          username: ${{ needs.amazon-ecr-auth.outputs.docker_username }}
+          password: ${{ needs.amazon-ecr-auth.outputs.docker_password }}
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -364,7 +398,7 @@ jobs:
       - name: "app: build"
         shell: bash
         run: |
-          cmake --build --preset=ci-linux --verbose --parallel
+          cmake --build --preset=ci-linux --verbose --parallel ${{ matrix.os.build_parallel }}
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v3
@@ -464,7 +498,7 @@ jobs:
   # Install on a wide variety of Linux distributions and run E2E tests
   #
   Linux-Package-Tests:
-    needs: ["Linux-Package"]
+    needs: [Linux-Package, amazon-ecr-auth]
     strategy:
       fail-fast: false
       matrix:
@@ -511,6 +545,9 @@ jobs:
 
     container:
       image: ${{ matrix.os.image }}
+      credentials:
+        username: ${{ needs.amazon-ecr-auth.outputs.docker_username }}
+        password: ${{ needs.amazon-ecr-auth.outputs.docker_password }}
       env:
         DEBIAN_FRONTEND: noninteractive
 

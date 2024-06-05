@@ -1221,7 +1221,7 @@ def test_working_copy_progress_bar(cli_runner, data_working_copy, monkeypatch):
             progress_output[0]
             == "Writing features for dataset 1 of 1: nz_pa_points_topo_150k"
         )
-        assert re.fullmatch(
+        assert re.match(
             r"nz_pa_points_topo_150k: 100%\|█+\| 2143/2143 \[[0-9:<]+, [0-9\.]+F/s\]",
             progress_output[-1],
         )

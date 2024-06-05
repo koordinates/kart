@@ -175,6 +175,8 @@ pyi_analysis = Analysis(
         'shellingham.posix',
         'shellingham.nt',
         *collect_submodules('sqlalchemy'),
+        # required for setuptools >=70.0.0 and pyinstaller <=6.7.0
+        'pkg_resources.extern',
     ],
     hookspath=[],
     runtime_hooks=[],

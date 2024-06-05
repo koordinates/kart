@@ -14,6 +14,8 @@ import sys
 import time
 import typing as t
 
+from kart import cli
+
 import click
 import rst2txt
 from docutils.core import publish_string
@@ -342,7 +344,6 @@ def main():
     input_dir = sys.argv[1]
     output_dir = Path(sys.argv[2])
     output_dir.mkdir(parents=True, exist_ok=True)
-    from kart import cli
 
     cli.load_all_commands()
     generate_help_pages(name, input_dir, cli.cli, target_dir=output_dir)
