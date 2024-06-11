@@ -76,6 +76,7 @@
 .. _kart_github_issue_772: https://github.com/koordinates/kart/issues/772
 .. _s3: https://aws.amazon.com/s3/
 .. _boto3: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
+.. _gdal_vector_drivers: https://gdal.org/drivers/vector/index.html
 
 .. _sqlite3_tool: https://sqlite.org/cli.html
 .. _psql_tool: https://www.postgresql.org/docs/current/app-psql.html
