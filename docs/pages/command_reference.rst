@@ -325,8 +325,8 @@ Resolving a Conflict
    are available by running ``kart conflicts``
 
 -  ``--with=<resolution>`` The resolution here must be one of
-   ``ancestor``, ``ours``, ``theirs``, or ``delete``, which resolve the
-   conflict in the following manner:
+   ``ancestor``, ``ours``, ``theirs``, ``delete``, or ``workingcopy``,
+   which resolve the conflict in the following manner:
 
    -  ``ancestor`` resolve the conflict by accepting the ancestor
       version, essentially undoing both changes that conflict
@@ -336,6 +336,10 @@ Resolving a Conflict
       keeping their change but discarding our change
    -  ``delete`` resolve the conflict by deleting the item which has
       conflicting changes
+   -  ``workingcopy`` resolve the conflict by accepting whatever is
+      currently found in the working copy with the expected name or
+      primary key value. This allows you to provide any resolution
+      that is a single feature or tile by first editing the working copy.
 
 These resolutions are the only resolutions that can be selected by name.
 Other resolutions are also possible, but must be supplied in a file.
@@ -357,6 +361,48 @@ Other resolutions are also possible, but must be supplied in a file.
    Merging branch "my_work" into master
    No conflicts!
    Merge committed as 2a645ba3987625b723f0f4bc406e7da877bd30c2
+
+Exporting data
+--------------
+
+Exporting vector / tables from an existing repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The basic form is either of the following:
+
+- ``kart export <dataset> <destination>``
+- ``kart export <dataset> <export-type>:<destination>``
+
+For example:
+
+.. code:: bash
+
+   $ kart export my_layer my_layer.shp
+   $ kart export my_layer CSV:my_layer.csv
+
+Export options
+^^^^^^^^^^^^^^
+
+- ``--ref <commit or branch>`` export data from a particular revision
+- ``--crs <crs>`` transform the layer to a particular CRS during export
+
+Further options are documented at ``kart table-export --help``.
+
+GDAL driver options
+^^^^^^^^^^^^^^^^^^^
+
+All exports are currently built on top of GDAL drivers. Extra flags can be
+supplied to the export command that are forwarded to the GDAL drivers, for
+example ``-dsco LAUNDER=YES``. The GDAL drivers and the extra options that
+they accept are documented `here <gdal_vector_drivers_>`_.
+
+Show list of supported export formats
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``kart export --list-formats``
+
+Currently, exporting data from a Kart repository is only supported for
+vector / table datasets.
 
 Working with LFS files
 ----------------------
