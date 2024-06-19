@@ -3,7 +3,7 @@ import click
 from kart.completion_shared import ref_completer
 
 from kart import diff_estimation
-from kart.cli_util import KartCommand, OutputFormatType
+from kart.cli_util import KartCommand, OutputFormatType, DeltaFilterType
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
 from kart.diff_format import DiffFormat
@@ -83,6 +83,19 @@ from kart.repo import KartRepoState
     default=DiffFormat.FULL,
     help="Choose the diff format: \n'full' for full diff, 'none' for viewing commit metadata only, or 'no-data-changes' for metadata and a bool indicating the feature/tile tree changes.",
 )
+@click.option(
+    "--delta-filter",
+    type=DeltaFilterType(),
+    hidden=True,
+    help="Filter out particular parts of each delta - for example, --delta-filter=+ only shows new values of updates. "
+    "Setting this option modifies Kart's behaviour when outputting JSON diffs - "
+    "instead using minus to mean old value and plus to mean new value, it uses a more specific scheme: "
+    "-- (minus-minus) means deleted value, ++ (plus-plus) means inserted value, "
+    "and - and + still mean old and new value but are only used for updates (not for inserts and deletes). "
+    "These keys are used when outputting the diffs, and these keys can be whitelisted using this flag to minimise the "
+    "size of the diff if some types of values are not required. "
+    "As a final example, --delta-filter=all is equivalent to --delta-filter=--,-,+,++",
+)
 def show(
     ctx,
     *,
@@ -94,6 +107,7 @@ def show(
     diff_files,
     args,
     diff_format=DiffFormat.FULL,
+    delta_filter,
 ):
     """
     Shows the given REVISION, or HEAD if none is specified.
@@ -133,7 +147,13 @@ def show(
 
     diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_type)
     diff_writer = diff_writer_class(
-        repo, commit_spec, filters, output_path, json_style=fmt, target_crs=crs
+        repo,
+        commit_spec,
+        filters,
+        output_path,
+        json_style=fmt,
+        delta_filter=delta_filter,
+        target_crs=crs,
     )
     diff_writer.full_file_diffs(diff_files)
     diff_writer.include_target_commit_as_header()

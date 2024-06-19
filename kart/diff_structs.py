@@ -2,8 +2,6 @@ from collections import UserDict
 from dataclasses import dataclass
 from typing import Any
 
-from kart.diff_format import DiffFormat
-
 from .exceptions import InvalidOperation
 
 
@@ -193,10 +191,19 @@ class Delta:
             result.flags = self.flags | other.flags
         return result
 
-    def to_plus_minus_dict(self, minimal=False):
-        # NOTE - it might make more sense to have:
-        # insert ++      delete --      update - +      minimal-update +
-        # but this is a breaking change, would need to be co-ordinated.
+    def to_plus_minus_dict(self, delta_filter=None):
+        from .key_filters import DeltaFilter
+
+        if delta_filter is None:
+            return self.to_plus_minus_dict__simple()
+        elif delta_filter is DeltaFilter.MINIMAL_WITH_STARS:
+            return self.to_plus_minus_dict__minimal_with_stars()
+        else:
+            return self.to_plus_minus_dict__advanced(delta_filter)
+
+    def to_plus_minus_dict__simple(self, minimal=False):
+        # Simplest behaviour - minus means old value, plus means new value.
+        # Not configurable.
         if minimal and self.old and self.new:
             return {"*": self.new_value}
         result = {}
@@ -205,6 +212,37 @@ class Delta:
         if self.new:
             result["+"] = self.new_value
         return result
+
+    def to_plus_minus_dict__advanced(self, delta_filter=None):
+        # New, more complicated but more useful / configurable behaviour.
+        # Uses different keys for inserts / updates / deletes.
+        # Currently only used when --delta-filter is requested.
+        # "--" means delete's old value
+        # "-" means update's old value
+        # "+" means update's new value.
+        # "++" means insert's new value.
+
+        if delta_filter is None:
+            from .key_filters import DeltaFilter
+
+            delta_filter = DeltaFilter.MATCH_ALL
+        result = {}
+        if self.old and self.new:
+            result["-"] = self.old_value if "-" in delta_filter else None
+            result["+"] = self.new_value if "+" in delta_filter else None
+        elif self.old:
+            result["--"] = self.old_value if "--" in delta_filter else None
+        elif self.new:
+            result["++"] = self.new_value if "++" in delta_filter else None
+        return result
+
+    def to_plus_minus_dict__minimal_with_stars(self):
+        # Pre-existing behaviour for minimal patches - "*" means update's new-value - and that old-value is hidden.
+        # TODO: Switch this to use delta-filters at some point, which has a more straight forward way of distinguishing
+        # updates and inserts, even when old values are hidden.
+        if self.old and self.new:
+            return {"*": self.new_value}
+        return self.to_plus_minus_dict__simple()
 
 
 class RichDict(UserDict):

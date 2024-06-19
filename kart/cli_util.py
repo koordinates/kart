@@ -397,6 +397,34 @@ class OutputFormatType(click.ParamType):
         ]
 
 
+class DeltaFilterType(click.ParamType):
+    """
+    Filters parts of individual deltas - new or old values for inserts, updates, or deletes.
+    "--" is the key for old values of deletes
+    "-" is the key for old values of updates
+    "+" is the key for new values of updates
+    "++" is they key for new values of inserts
+    """
+
+    name = "string"
+
+    ALLOWED_KEYS = ("--", "-", "+", "++")
+
+    def convert(self, value, param, ctx):
+        from kart.key_filters import DeltaFilter
+
+        if value is None:
+            return None
+        if value.lower() == "all":
+            return DeltaFilter.MATCH_ALL
+        pieces = value.split(",")
+        if any(p for p in pieces if p not in self.ALLOWED_KEYS):
+            self.fail(
+                "Delta filter only accepts any subset of the following comma separated keys: --,-,+,++"
+            )
+        return DeltaFilter(pieces)
+
+
 def find_param(ctx_or_params, name):
     """Given the click context / command / list of params - find the param with the given name."""
     ctx = ctx_or_params

@@ -2111,6 +2111,40 @@ def test_attached_files_patch(data_archive, cli_runner):
         }
 
 
+@pytest.mark.parametrize("cmd", ["diff", "show"])
+@pytest.mark.parametrize("commit", ["HEAD^", "HEAD"])
+@pytest.mark.parametrize("delta_filter", ["--,-", "++,+"])
+def test_delta_filter(delta_filter, commit, cmd, data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        if cmd == "diff":
+            commit_spec = {"HEAD": "HEAD^...HEAD", "HEAD^": "HEAD^^?...HEAD^"}[commit]
+        else:
+            commit_spec = commit
+
+        r = cli_runner.invoke(
+            [cmd, "-ojson", f"--delta-filter={delta_filter}", commit_spec]
+        )
+        assert r.exit_code == 0, r.stderr
+        jdict = json.loads(r.stdout)
+        features = jdict["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
+        assert len(features) >= 5
+        if commit == "HEAD":
+            # Second commit has only updates
+            for feature in features:
+                assert set(feature.keys()) == {"+", "-"}
+        else:
+            # Initial commit has only inserts
+            for feature in features:
+                assert set(feature.keys()) == {"++"}
+        filter_parts = set(delta_filter.split(","))
+        for feature in features:
+            for key in feature:
+                if key not in filter_parts:
+                    assert feature[key] is None
+                else:
+                    assert feature[key] is not None
+
+
 def test_load_user_provided_html_template(data_archive, cli_runner, monkeypatch):
     def noop(*args, **kwargs):
         pass
@@ -2120,8 +2154,8 @@ def test_load_user_provided_html_template(data_archive, cli_runner, monkeypatch)
         r = cli_runner.invoke(
             [
                 "diff",
-                f"--output-format=html",
-                f"--html-template="
+                "--output-format=html",
+                "--html-template="
                 + str(
                     Path(__file__).absolute().parent.parent / "kart" / "diff-view.html"
                 ),

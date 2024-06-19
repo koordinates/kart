@@ -16,6 +16,7 @@ from .diff_estimation import (
     terminate_estimate_thread,
 )
 from kart.diff_structs import FILES_KEY, BINARY_FILE, DatasetDiff
+from kart.key_filters import DeltaFilter
 from kart.log import commit_obj_to_json
 from kart.output_util import dump_json_output, resolve_output_path
 from kart.tabular.feature_output import feature_as_geojson, feature_as_json
@@ -43,9 +44,12 @@ class JsonDiffWriter(BaseDiffWriter):
     which contains information about the commit object.
     """
 
-    def __init__(self, *args, patch_type="full", **kwargs):
+    def __init__(self, *args, patch_type="full", delta_filter=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.patch_type = patch_type
+        if patch_type == "minimal":
+            self.delta_filter = DeltaFilter.MINIMAL_WITH_STARS
+        else:
+            self.delta_filter = delta_filter
 
     @classmethod
     def _check_output_path(cls, repo, output_path):
@@ -81,12 +85,12 @@ class JsonDiffWriter(BaseDiffWriter):
         self.write_warnings_footer()
 
     def _postprocess_simple_delta(self, delta):
-        return delta.to_plus_minus_dict(minimal=self.patch_type == "minimal")
+        return delta.to_plus_minus_dict(self.delta_filter)
 
     def _postprocess_attachment_delta(self, delta):
         if self.do_full_file_diffs:
             delta = self._full_file_delta(delta)
-        return delta.to_plus_minus_dict(minimal=self.patch_type == "minimal")
+        return delta.to_plus_minus_dict(self.delta_filter)
 
     def default(self, obj):
         # Part of JsonEncoder interface - adapt objects that couldn't otherwise be encoded.
@@ -123,25 +127,17 @@ class JsonDiffWriter(BaseDiffWriter):
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
 
         for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
-            delta_as_json = {}
+            yield self.delta_as_json(delta, old_transform, new_transform)
 
-            if delta.old:
-                if self.patch_type == "full" or not delta.new:
-                    delta_as_json["-"] = feature_as_json(
-                        delta.old_value, delta.old_key, old_transform
-                    )
-
-            if delta.new:
-                feature = feature_as_json(delta.new_value, delta.new_key, new_transform)
-                if delta.old and self.patch_type == "minimal":
-                    # mark feature updates using a different key, otherwise they can
-                    # be easily confused with inserts, since minimal-style patches don't
-                    # include a `-` key.
-                    key = "*"
-                else:
-                    key = "+"
-                delta_as_json[key] = feature
-            yield delta_as_json
+    def delta_as_json(self, delta, old_transform, new_transform):
+        result = {}
+        for json_key, feature in delta.to_plus_minus_dict(self.delta_filter).items():
+            pk_value = delta.old_key if "-" in json_key else delta.new_key
+            transform = old_transform if "-" in json_key else new_transform
+            result[json_key] = (
+                feature_as_json(feature, pk_value, transform) if feature else None
+            )
+        return result
 
 
 class PatchWriter(JsonDiffWriter):
@@ -238,11 +234,12 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             )
         return output_path
 
-    def __init__(self, *args, diff_estimate_accuracy=None, **kwargs):
+    def __init__(self, *args, diff_estimate_accuracy=None, delta_filter=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fp = resolve_output_path(self.output_path)
         self.separators = (",", ":") if self.json_style == "extracompact" else None
         self._diff_estimate_accuracy = diff_estimate_accuracy
+        self.delta_filter = delta_filter
         self._output_lock = threading.RLock()
 
     def dump(self, obj):
@@ -352,17 +349,18 @@ class JsonLinesDiffWriter(BaseDiffWriter):
 
         for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
             obj["type"] = item_type
-            change = {}
-            if delta.old:
-                change["-"] = feature_as_json(
-                    delta.old_value, delta.old_key, old_transform
-                )
-            if delta.new:
-                change["+"] = feature_as_json(
-                    delta.new_value, delta.new_key, new_transform
-                )
-            obj["change"] = change
+            obj["change"] = self.delta_as_json(delta, old_transform, new_transform)
             self.dump(obj)
+
+    def delta_as_json(self, delta, old_transform, new_transform):
+        result = {}
+        for json_key, feature in delta.to_plus_minus_dict(self.delta_filter).items():
+            pk_value = delta.old_key if "-" in json_key else delta.new_key
+            transform = old_transform if "-" in json_key else new_transform
+            result[json_key] = (
+                feature_as_json(feature, pk_value, transform) if feature else None
+            )
+        return result
 
     def write_file_diff(self, file_diff):
         obj = {"type": "file", "path": None, "binary": False, "change": None}
