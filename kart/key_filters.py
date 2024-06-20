@@ -307,3 +307,23 @@ class NegateKeyFilter:
 
 
 RepoKeyFilter.MATCH_ALL = RepoKeyFilter(match_all=True)
+
+
+class DeltaFilter(set):
+    """
+    Filters parts of individual deltas - new or old values for inserts, updates, or deletes.
+    "--" is the key for old values of deletes
+    "-" is the key for old values of updates
+    "+" is the key for new values of updates
+    "++" is they key for new values of inserts
+    """
+
+    def __init__(self, *args, match_all=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.match_all = match_all
+
+    def __contains__(self, key):
+        return self.match_all or super().__contains__(key)
+
+
+DeltaFilter.MATCH_ALL = DeltaFilter(match_all=True)

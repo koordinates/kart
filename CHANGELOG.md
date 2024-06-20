@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.15.3 (UNRELEASED)
+
+- Replaces minimal patches with delta-filters - a more general-purpose way of filtering parts (inserts, updates, deletes) of JSON diffs when not all parts are required. [#998](https://github.com/koordinates/kart/pull/998)
+
 ## 0.15.2
 
 - Adds a new command `kart export` which enables export of vector or tabular datasets to any OGR format. [#992](https://github.com/koordinates/kart/issues/992)

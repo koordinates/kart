@@ -78,6 +78,7 @@ class BaseDiffWriter:
         output_path="-",
         *,
         json_style="pretty",
+        delta_filter=None,
         target_crs=None,
         # used by json-lines diffs only
         diff_estimate_accuracy=None,

@@ -3,7 +3,7 @@ import sys
 import click
 
 from kart import diff_estimation
-from kart.cli_util import OutputFormatType
+from kart.cli_util import OutputFormatType, DeltaFilterType
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
 from kart.output_util import dump_json_output
@@ -130,6 +130,18 @@ def feature_count_diff(
     help="Show changes to file contents (instead of just showing the object IDs of changed files)",
 )
 @click.option(
+    "--delta-filter",
+    type=DeltaFilterType(),
+    help="Filter out particular parts of each delta - for example, --delta-filter=+ only shows new values of updates. "
+    "Setting this option modifies Kart's behaviour when outputting JSON diffs - "
+    "instead using minus to mean old value and plus to mean new value, it uses a more specific scheme: "
+    "-- (minus-minus) means deleted value, ++ (plus-plus) means inserted value, "
+    "and - and + still mean old and new value but are only used for updates (not for inserts and deletes). "
+    "These keys are used when outputting the diffs, and these keys can be whitelisted using this flag to minimise the "
+    "size of the diff if some types of values are not required. "
+    "As a final example, --delta-filter=all is equivalent to --delta-filter=--,-,+,++",
+)
+@click.option(
     "--html-template",
     default=None,
     help="Provide a user defined/specific html template for diff representation",
@@ -153,6 +165,7 @@ def diff(
     add_feature_count_estimate,
     convert_to_dataset_format,
     diff_files,
+    delta_filter,
     html_template,
     args,
 ):
@@ -210,6 +223,7 @@ def diff(
         filters,
         output_path,
         json_style=fmt,
+        delta_filter=delta_filter,
         target_crs=crs,
         diff_estimate_accuracy=add_feature_count_estimate,
         html_template=html_template,
