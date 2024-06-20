@@ -132,7 +132,6 @@ def feature_count_diff(
 @click.option(
     "--delta-filter",
     type=DeltaFilterType(),
-    hidden=True,
     help="Filter out particular parts of each delta - for example, --delta-filter=+ only shows new values of updates. "
     "Setting this option modifies Kart's behaviour when outputting JSON diffs - "
     "instead using minus to mean old value and plus to mean new value, it uses a more specific scheme: "

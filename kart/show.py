@@ -86,7 +86,6 @@ from kart.repo import KartRepoState
 @click.option(
     "--delta-filter",
     type=DeltaFilterType(),
-    hidden=True,
     help="Filter out particular parts of each delta - for example, --delta-filter=+ only shows new values of updates. "
     "Setting this option modifies Kart's behaviour when outputting JSON diffs - "
     "instead using minus to mean old value and plus to mean new value, it uses a more specific scheme: "
@@ -178,16 +177,6 @@ def show(
     type=click.Path(writable=True, allow_dash=True),
 )
 @click.option(
-    "--patch-type",
-    type=click.Choice(["full", "minimal"]),
-    default="full",
-    help=(
-        "Style of patch to produce. 'full' is the default and most applyable, but is quite a verbose patch. "
-        "'minimal' creates a much smaller patch by omitting the 'old' version of edits, "
-        "but 'minimal' patches are only applyable if the parent commit is present in the target repo."
-    ),
-)
-@click.option(
     "--diff-format",
     type=click.Choice(["none", "full", "no-data-changes"]),
     default="full",
@@ -202,7 +191,6 @@ def create_patch(
     refish,
     json_style,
     output_path,
-    patch_type,
     diff_format=DiffFormat.FULL,
     **kwargs,
 ):
@@ -226,7 +214,6 @@ def create_patch(
         [],
         output_path,
         json_style=json_style,
-        patch_type=patch_type,
     )
     diff_writer.full_file_diffs(True)
     diff_writer.include_target_commit_as_header()

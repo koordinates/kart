@@ -102,17 +102,11 @@ class Delta:
         return Delta(old, None)
 
     @staticmethod
-    def from_key_and_plus_minus_dict(key, d, allow_minimal_updates=False):
-        if "*" in d:
-            if allow_minimal_updates:
-                return Delta(
-                    None,
-                    (key, d["*"]),
-                )
-            else:
-                raise InvalidOperation(
-                    "No 'base' commit specified in patch, can't accept '*' deltas"
-                )
+    def from_key_and_plus_minus_dict(key, d):
+        if "--" in d:
+            return Delta.delete((key, d["++"]))
+        elif "++" in d:
+            return Delta.insert((key, d["++"]))
         else:
             return Delta(
                 (key, d["-"]) if "-" in d else None,
@@ -196,8 +190,6 @@ class Delta:
 
         if delta_filter is None:
             return self.to_plus_minus_dict__simple()
-        elif delta_filter is DeltaFilter.MINIMAL_WITH_STARS:
-            return self.to_plus_minus_dict__minimal_with_stars()
         else:
             return self.to_plus_minus_dict__advanced(delta_filter)
 
@@ -235,14 +227,6 @@ class Delta:
         elif self.new:
             result["++"] = self.new_value if "++" in delta_filter else None
         return result
-
-    def to_plus_minus_dict__minimal_with_stars(self):
-        # Pre-existing behaviour for minimal patches - "*" means update's new-value - and that old-value is hidden.
-        # TODO: Switch this to use delta-filters at some point, which has a more straight forward way of distinguishing
-        # updates and inserts, even when old values are hidden.
-        if self.old and self.new:
-            return {"*": self.new_value}
-        return self.to_plus_minus_dict__simple()
 
 
 class RichDict(UserDict):

@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from kart.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY
+from kart.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY, NOT_YET_IMPLEMENTED
 from kart.repo import KartRepo
 
 
@@ -284,74 +284,7 @@ def test_apply_minimal_style_patch_without_base(data_archive, cli_runner, tmp_pa
         assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
 
 
-def test_apply_minimal_style_meta_patch_with_update(data_archive, cli_runner, tmp_path):
-    patch = points_patch(
-        {
-            "meta": {
-                "title": {
-                    "*": "new title:",
-                }
-            }
-        }
-    )
-    with data_archive("points"):
-        with write_patch(patch, tmp_path) as patch_path:
-            r = cli_runner.invoke(["apply", patch_path])
-        assert r.exit_code == 0, r.stderr
-
-        # Check that the change was actually applied
-        r = cli_runner.invoke(["show", "-o", "json", "HEAD"])
-        assert r.exit_code == 0
-        show = json.loads(r.stdout)
-        meta = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
-        assert meta == {"title": {"+": "new title:", "-": "NZ Pa Points (Topo, 1:50k)"}}
-
-        # now check that a conflict gets rejected
-        # note: we change the title here but don't change the base,
-        # so this change now conflicts with the change we just applied.
-        patch = points_patch(
-            {
-                "meta": {
-                    "title": {
-                        "*": "differently new title:",
-                    }
-                }
-            }
-        )
-        with write_patch(patch, tmp_path) as patch_path:
-            r = cli_runner.invoke(["apply", patch_path])
-        assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
-
-
-def test_apply_minimal_style_meta_patch_with_delete(data_archive, cli_runner, tmp_path):
-    patch = points_patch(
-        {
-            "meta": {
-                "description": {
-                    # content is ignored, so this must work
-                    "-": None,
-                }
-            }
-        }
-    )
-    with data_archive("points"):
-        with write_patch(patch, tmp_path) as patch_path:
-            r = cli_runner.invoke(["apply", patch_path])
-        assert r.exit_code == 0, r.stderr
-
-        # Check that the change was actually applied
-        r = cli_runner.invoke(["show", "-o", "json", "HEAD"])
-        assert r.exit_code == 0
-        show = json.loads(r.stdout)
-        meta = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
-        # description was deleted
-        assert meta["description"].keys() == {"-"}
-
-
-def test_apply_minimal_style_feature_patch_with_edit(
-    data_archive, cli_runner, tmp_path
-):
-
+def test_apply_minimal_style_patch(data_archive, cli_runner, tmp_path):
     patch = points_patch(
         {
             "feature": [
@@ -374,60 +307,12 @@ def test_apply_minimal_style_feature_patch_with_edit(
     with data_archive("points"):
         with write_patch(patch, tmp_path) as patch_path:
             r = cli_runner.invoke(["apply", patch_path])
-        assert r.exit_code == 0, r.stderr
-
-        # Check that the change was actually applied
-        r = cli_runner.invoke(["show", "-o", "json", "HEAD"])
-        assert r.exit_code == 0
-        show = json.loads(r.stdout)
-        features = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
-        assert len(features) == 1
-        assert features[0]["-"] == {
-            "fid": 1182,
-            "geom": "01010000009933726825F76540140C370F236742C0",
-            "t50_fid": 2427426,
-            "name_ascii": "Ko Te Ra Matiti (Wharekaho)",
-            "macronated": "Y",
-            "name": "Ko Te Rā Matiti (Wharekaho)",
-        }
-        assert features[0]["+"] == {
-            "fid": 1182,
-            "geom": "01010000009933726825F76540140C370F236742C0",
-            "t50_fid": 9999999,
-            "name_ascii": "Ko Te Ra Matiti (Wharekaho)",
-            "macronated": "Y",
-            "name": "Ko Te Rā Matiti (Wharekaho)",
-        }
-
-        # now check that a conflict gets rejected
-        # note: we change the feature here but don't change the base,
-        # so this change now conflicts with the change we just applied.
-        patch = points_patch(
-            {
-                "feature": [
-                    {
-                        "*": {
-                            "fid": 1182,
-                            "geom": "01010000009933726825F76540140C370F236742C0",
-                            "t50_fid": 2427426,
-                            "name_ascii": "Ko Te Ra Matiti (Wharekaho)",
-                            "name": "Ko Te Rā Matiti (Wharekaho)",
-                            # this is the edit
-                            "macronated": "N",
-                        }
-                    },
-                ]
-            }
-        )
-        with write_patch(patch, tmp_path) as patch_path:
-            r = cli_runner.invoke(["apply", patch_path])
-        assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
+        assert r.exit_code == NOT_YET_IMPLEMENTED, r.stderr
 
 
 def test_apply_minimal_style_feature_patch_with_insert(
     data_archive, cli_runner, tmp_path
 ):
-
     patch = points_patch(
         {
             "feature": [

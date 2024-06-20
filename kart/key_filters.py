@@ -327,4 +327,3 @@ class DeltaFilter(set):
 
 
 DeltaFilter.MATCH_ALL = DeltaFilter(match_all=True)
-DeltaFilter.MINIMAL_WITH_STARS = DeltaFilter(["MINIMAL_WITH_STARS"])

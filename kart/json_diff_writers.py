@@ -44,12 +44,9 @@ class JsonDiffWriter(BaseDiffWriter):
     which contains information about the commit object.
     """
 
-    def __init__(self, *args, patch_type="full", delta_filter=None, **kwargs):
+    def __init__(self, *args, delta_filter=None, **kwargs):
         super().__init__(*args, **kwargs)
-        if patch_type == "minimal":
-            self.delta_filter = DeltaFilter.MINIMAL_WITH_STARS
-        else:
-            self.delta_filter = delta_filter
+        self.delta_filter = delta_filter
 
     @classmethod
     def _check_output_path(cls, repo, output_path):
