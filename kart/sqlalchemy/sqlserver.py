@@ -31,10 +31,7 @@ class Db_SqlServer(BaseDb):
             {"driver": cls.get_sqlserver_driver(), "Application Name": "kart"},
         )
 
-        # SQL Server driver prefers 127.0.0.1 or similar to localhost.
-        url_netloc = cls._replace_localhost_with_ip(url.netloc)
-
-        msurl = urlunsplit([cls.INTERNAL_SCHEME, url_netloc, url.path, url_query, ""])
+        msurl = urlunsplit([cls.INTERNAL_SCHEME, url.netloc, url.path, url_query, ""])
 
         engine = sqlalchemy.create_engine(msurl, poolclass=cls._pool_class())
         return engine

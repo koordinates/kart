@@ -53,13 +53,6 @@ class BaseDb:
         return NullPool if "PYTEST_CURRENT_TEST" in os.environ else None
 
     @classmethod
-    def _replace_localhost_with_ip(cls, url_netloc):
-        def _get_localhost_ip(*args, **kwargs):
-            return socket.gethostbyname("localhost")
-
-        return re.sub(r"\blocalhost\b", _get_localhost_ip, url_netloc)
-
-    @classmethod
     def _append_query_to_url(cls, uri, new_query_dict):
         url = urlsplit(uri)
         url_query = cls._append_to_query(url.query, new_query_dict)
