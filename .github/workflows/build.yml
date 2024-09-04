@@ -331,11 +331,7 @@ jobs:
           git checkout FETCH_HEAD
           git submodule update --init --recursive
 
-      # lukka/get-cmake uses Node... avoid using it.
-      - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
-        with:
-          cmakeVersion: "${{ env.CMAKE_VERSION }}"
+      # lukka/get-cmake uses Node, but cmake is already installed.
 
       - name: "setup: rust"
         run: |
