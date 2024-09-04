@@ -317,15 +317,25 @@ jobs:
         PATH: "/opt/python/cp311-cp311/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
+      # Setup
+
+      # actions/checkout and ukka/get-cmake use node, node uses GLIBC, GLIBC is very old on manylinux... things are off to a bad start.
+      # But if we can get node working, things should be okay.
+      - name: "setup: node"
+        run: |
+          curl https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
+          export NVM_DIR="$HOME/.nvm"
+          source "$NVM_DIR/nvm.sh"
+          nvm install 16 && nvm use 16
+          node -e "console.log('Running Node.js ' + process.version)"
+
       - uses: actions/checkout@v3
         with:
           submodules: recursive
 
-      #
-      # setup
-      #
+
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
+        uses: lukka/get-cmake@v3.25.2
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
