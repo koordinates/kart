@@ -90,16 +90,16 @@ jobs:
           - 3306:3306
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
       #
       # setup
       #
+      - name: "setup: checkout ${{ github.repository }}"
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -317,13 +317,21 @@ jobs:
         PATH: "/opt/python/cp311-cp311/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
       #
       # setup
       #
+
+      # actions/checkout uses Node. Node uses GLIBC. GLIBC is very old on manylinux and Node doesn't like it. Avoid using actions/checkout.
+      - name: "setup: checkout ${{ github.repository }}"
+        run: |
+          git config --global --add safe.directory $(pwd)
+          git init
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch --depth 1 origin ${GITHUB_SHA}
+          git checkout FETCH_HEAD
+          git submodule update --init --recursive
+
+      # lukka/get-cmake uses Node... avoid using it.
       - name: "setup: cmake & ninja"
         uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
         with:
@@ -604,7 +612,8 @@ jobs:
           command -v kart
           kart --version
 
-      - uses: actions/checkout@v3
+      - name: "Checkout ${{ github.repository }}"
+        uses: actions/checkout@v4
 
       - name: e2e test (no helper)
         env:
@@ -643,10 +652,6 @@ jobs:
       PY_VER_ID: "cp311-cp311"
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
       #
       # setup
       #
@@ -780,13 +785,13 @@ jobs:
       PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.6/python-3.11.6-macos11.pkg"
 
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
       #
       # setup
       #
+      - name: "setup: checkout ${{ github.repository }}"
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -1038,11 +1043,13 @@ jobs:
       )
 
     steps:
-      - uses: actions/checkout@v3
+      #
+      # setup
+      #
+      - name: "setup: checkout ${{ github.repository }}"
+        uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      # Setup
 
       - name: "msvc setup"
         uses: ilammy/msvc-dev-cmd@v1
