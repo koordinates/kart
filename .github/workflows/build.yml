@@ -545,6 +545,10 @@ jobs:
     name: "Install-check: ${{ matrix.os.label }}/${{ matrix.arch.label }}"
     continue-on-error: ${{ !!matrix.os.xfail }}
 
+    env:
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
     container:
       image: ${{ matrix.os.image }}
       credentials:
@@ -552,8 +556,6 @@ jobs:
         password: ${{ needs.amazon-ecr-auth.outputs.docker_password }}
       env:
         DEBIAN_FRONTEND: noninteractive
-        ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
-        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - name: setup
