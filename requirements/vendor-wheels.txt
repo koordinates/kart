@@ -3,6 +3,6 @@ cryptography==42.0.4
 gdal==3.8.0
 psycopg2==2.9.9
 pygit2==1.12.1
-pyodbc==5.0.1
+pyodbc==5.1.0
 pysqlite3==0.5.2
 reflink==0.2.2

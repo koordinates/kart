@@ -289,12 +289,12 @@ include_dirs=${BUILD_WHEEL_INCLUDE_DIRS}
 library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
-set(PYODBC_WHEEL_VER 5.0.1)
+set(PYODBC_WHEEL_VER 5.1.0)
 ExternalProject_Add(
   pyodbc
   # if you build from a git repository, pyodbc adds +commit0c0ffee to the wheel version
-  URL https://files.pythonhosted.org/packages/22/6f/012f32aecf744e439980257be0ba4dd8c70a4e03c9f86f5fcd986fbfb012/pyodbc-5.0.1.tar.gz
-  URL_HASH SHA256=03d7d0b04d5a9156099ce8d03e92f3956783746fa9234eb6f5b5cfc12b645011
+  URL https://files.pythonhosted.org/packages/d5/5b/a93f7017d4df84c3971cf60ee935149f12e0d1e111febc67ba2e23015a79/pyodbc-5.1.0.tar.gz
+  URL_HASH SHA256=397feee44561a6580be08cedbe986436859563f4bb378f48224655c8e987ea60
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv ${PYODBC_BUILD_DEPENDS}
