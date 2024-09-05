@@ -296,6 +296,8 @@ jobs:
           - 3306:3306
 
     env:
+      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       KART_POSTGIS_URL: "postgresql://postgres:@postgis:5432/postgres"
       SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
       KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
@@ -550,6 +552,8 @@ jobs:
         password: ${{ needs.amazon-ecr-auth.outputs.docker_password }}
       env:
         DEBIAN_FRONTEND: noninteractive
+        ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
+        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - name: setup
