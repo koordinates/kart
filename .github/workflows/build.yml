@@ -849,6 +849,10 @@ jobs:
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
           doNotCache: false  # do-cache
 
+      - name: "Setup tmate session"
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+
       #
       # App Build
       #
