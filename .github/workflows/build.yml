@@ -838,9 +838,11 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-${{ matrix.os.id }}-vcpkg
 
+      # The brew install command sometimes fails on the first try but succeeds on the second :-/
       - name: "setup: misc"
         run: |
-          brew install -q autoconf automake ccache libtool openssl pandoc pkg-config
+          PACKAGES="autoconf automake ccache libtool openssl pandoc pkg-config"
+          brew install -q $PACKAGES || brew install -q $PACKAGES
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
