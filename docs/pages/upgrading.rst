@@ -3,6 +3,35 @@ Upgrading
 
 .. warning:: A reminder that compatibility for Kart 0.x releases (software or repositories) isn't guaranteed, Kart is evolving quickly and things will change. However, we aim to provide the means to upgrade existing repositories between 0.x versions and to 1.0.*
 
+v0.15 - Linked datasets added
+-----------------------------
+Repositories created with Kart 0.15 are compatible with earlier
+Kart versions, unless they include "linked" datasets (which is a
+different way of structuring point cloud and raster datasets).
+Kart 0.14 and earlier cannot checkout, display or commit changes
+to linked datasets.
+
+If you encounter linked datasets, simply install the latest
+version of Kart. You don't need to upgrade any repositories.
+
+v0.14 - Raster datasets added
+-----------------------------
+Repositories created with Kart 0.12 are compatible with earlier
+Kart versions, unless they include raster datasets. Kart 0.13 and
+earlier cannot checkout, display or commit changes to raster datasets.
+
+If you encounter raster datasets, simply install the latest
+version of Kart. You don't need to upgrade any repositories.
+
+v0.12 - Point cloud datasets added
+----------------------------------
+Repositories created with Kart 0.12 are compatible with earlier Kart
+versions, unless they include point cloud datasets. Kart 0.11
+and earlier cannot checkout, display or commit changes to point cloud datasets.
+
+If you encounter point cloud datasets, simply install the latest
+version of Kart. You don't need to upgrade any repositories.
+
 v0.9 (first "Kart" release)
 ---------------------------
 
