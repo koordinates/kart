@@ -31,9 +31,12 @@ Why Kart
 Project Status
 --------------
 
-Kart is under rapid development and some APIs and data structures are
-subject to change. While Kart has undergone considerable testing there
-is potential for data corrupting bugs. Please use with caution.
+Kart is actively developed and some APIs are subject to change.
+
+Useful Links
+------------
+-  `Kart Website <kart_website_>`_
+-  `Github Project <kart_github_>`_
 
 Reporting Bugs & Feature Suggestions
 ------------------------------------
