@@ -331,7 +331,6 @@ def test_edit_schema_table(output_format, data_working_copy, cli_runner):
 
 def check_points_diff_output(r, output_format):
     if output_format == "text":
-
         # New column "colour" has an ID is deterministically generated from the commit hash,
         # but we don't care exactly what it is.
         try:

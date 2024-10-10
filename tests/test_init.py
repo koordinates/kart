@@ -912,7 +912,6 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
     with chdir(repo_path):
         # working copy exists
         with Db_GPKG.create_engine("wc.gpkg").connect() as conn:
-
             expected_tables = set(a[3].replace("/", "__") for a in ARCHIVE_PATHS)
             r = conn.execute("SELECT name FROM sqlite_master WHERE type='table';")
             db_tables = set(row[0] for row in r)

@@ -104,7 +104,6 @@ def test_log_shallow_clone(
     output_format, data_archive_readonly, cli_runner, tmp_path, chdir
 ):
     with data_archive_readonly("points") as path:
-
         clone_path = tmp_path / "shallow.clone"
         r = cli_runner.invoke(
             ["clone", "--bare", "--depth=1", f"file://{path}", str(clone_path)]

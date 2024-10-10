@@ -144,15 +144,18 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         """Generate all the gpkg_meta_items from the given v2 object (eg dataset)."""
         yield "sqlite_table_info", cls.generate_sqlite_table_info(v2_obj)
         yield "gpkg_contents", cls.generate_gpkg_contents(v2_obj, table_name)
-        yield "gpkg_geometry_columns", cls.generate_gpkg_geometry_columns(
-            v2_obj, table_name
+        yield (
+            "gpkg_geometry_columns",
+            cls.generate_gpkg_geometry_columns(v2_obj, table_name),
         )
         yield "gpkg_spatial_ref_sys", cls.generate_gpkg_spatial_ref_sys(v2_obj)
-        yield "gpkg_metadata", cls.generate_gpkg_metadata(
-            v2_obj, table_name, reference=False
+        yield (
+            "gpkg_metadata",
+            cls.generate_gpkg_metadata(v2_obj, table_name, reference=False),
         )
-        yield "gpkg_metadata_reference", cls.generate_gpkg_metadata(
-            v2_obj, table_name, reference=True
+        yield (
+            "gpkg_metadata_reference",
+            cls.generate_gpkg_metadata(v2_obj, table_name, reference=True),
         )
 
     @classmethod

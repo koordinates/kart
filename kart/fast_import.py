@@ -389,7 +389,6 @@ def _import_single_source(
         # Features
         t1 = time.monotonic()
         if replace_ids is not None:
-
             # As we iterate over IDs, also delete them from the dataset.
             # This means we don't have to load the whole list into memory.
             def _ids():
