@@ -1,4 +1,5 @@
 from enum import Enum, auto
+import binascii
 import functools
 import re
 
