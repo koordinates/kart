@@ -245,8 +245,11 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             if not auth_name and not auth_code:
                 auth_name, auth_code = "CUSTOM", crs_info["srid"]
             wkt = crs_info["well_known_text"] or ""
-            yield f"crs/{auth_name}:{auth_code}.wkt", crs_util.normalise_wkt(
-                crs_util.ensure_authority_specified(wkt, auth_name, auth_code)
+            yield (
+                f"crs/{auth_name}:{auth_code}.wkt",
+                crs_util.normalise_wkt(
+                    crs_util.ensure_authority_specified(wkt, auth_name, auth_code)
+                ),
             )
 
     @classmethod

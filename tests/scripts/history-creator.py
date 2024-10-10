@@ -273,7 +273,6 @@ def main():
     t0 = time.monotonic()
     try:
         for i in range(options.commits or 1):
-
             with wc.session() as sess:
                 for table in tables:
                     update(sess, table, num_updates)

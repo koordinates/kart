@@ -97,7 +97,7 @@ def test_e2e(
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0
             line = r.stdout.splitlines()[0]
-            assert re.match(fr"\+\+\+ {table}:feature:\d+$", line), line
+            assert re.match(rf"\+\+\+ {table}:feature:\d+$", line), line
 
             # commit it
             r = cli_runner.invoke(["commit", "-m", "commit-1"])

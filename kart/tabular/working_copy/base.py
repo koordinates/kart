@@ -46,7 +46,7 @@ class TableWorkingCopy(WorkingCopyPart):
     SUPPORTED_META_ITEMS = (
         meta_items.TITLE,
         meta_items.SCHEMA_JSON,
-        meta_items.CRS_DEFINITIONS
+        meta_items.CRS_DEFINITIONS,
         # Not description, not metadata.xml, except where overridden by a subclass.
     )
 

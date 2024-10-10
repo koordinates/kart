@@ -65,7 +65,6 @@ def full_check_band(
     block_trailer_last_4_bytes_repeated,
     mask_interleaved_with_imagery,
 ):
-
     block_size = band.GetBlockSize()
     mask_band = None
     if mask_interleaved_with_imagery:
@@ -82,7 +81,6 @@ def full_check_band(
     last_offset = 0
     for y in range(yblocks):
         for x in range(xblocks):
-
             offset = band.GetMetadataItem("BLOCK_OFFSET_%d_%d" % (x, y), "TIFF")
             offset = int(offset) if offset is not None else 0
             bytecount = band.GetMetadataItem("BLOCK_SIZE_%d_%d" % (x, y), "TIFF")
@@ -215,7 +213,6 @@ def validate(ds, check_tiled=True, full_check=False):
     mask_interleaved_with_imagery = False
 
     if ifd_offset not in (8, 16):
-
         # Check if there is GDAL hidden structural metadata
         f = gdal.VSIFOpenL(filename, "rb")
         if not f:

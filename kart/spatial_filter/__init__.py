@@ -277,9 +277,9 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
             repo.del_config(self.REF_KEY)
             repo.del_config(self.OID_KEY)
             if update_remote:
-                repo.config[
-                    f"remote.{update_remote}.partialclonefilter"
-                ] = self.partial_clone_filter_spec(specify_in_full=False)
+                repo.config[f"remote.{update_remote}.partialclonefilter"] = (
+                    self.partial_clone_filter_spec(specify_in_full=False)
+                )
 
     def delete_all_config(self, repo, update_remote=None):
         for key in (self.GEOM_KEY, self.CRS_KEY, self.REF_KEY, self.OID_KEY):

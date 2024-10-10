@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 
 import pygit2
 
@@ -352,3 +352,8 @@ class RawDiffDelta:
             return RawDiffDelta(pygit2.GIT_DELTA_DELETED, "D", old_path, new_path)
         else:
             return RawDiffDelta(pygit2.GIT_DELTA_MODIFIED, "M", old_path, new_path)
+
+
+if TYPE_CHECKING:
+    # This is here to avoid circular imports
+    from kart.base_dataset import BaseDataset, WorkdirDiffCache

@@ -10,10 +10,13 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
       - id: check-json
-  - repo: https://github.com/psf/black
-    rev: 22.3.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.6.1
     hooks:
-      - id: black
+      - id: ruff
+        # Run both the linter and formatter (and commit the changes automatically)
+        entry: ".hooks/kx-ruff.py"
   - repo: https://github.com/sirosen/check-jsonschema
     rev: 0.6.0
     hooks:

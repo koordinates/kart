@@ -30,7 +30,9 @@ class HtmlDiffWriter(BaseDiffWriter):
         return output_path or repo.workdir_path / "DIFF.html"
 
     def write_diff(self, diff_format=DiffFormat.FULL):
-        template_path = self.html_template or (Path(kart.package_data_path) / "diff-view.html")
+        template_path = self.html_template or (
+            Path(kart.package_data_path) / "diff-view.html"
+        )
         if not os.path.exists(template_path):
             raise click.UsageError("Html template not found")
         if diff_format != DiffFormat.FULL:

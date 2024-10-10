@@ -4,6 +4,7 @@ import socket
 # Setting the message length higher than this has no effect - the message gets chunked by TCP anyway.
 MAX_CHUNK_LEN = 8164
 
+
 # Function modified from https://docs.python.org/3/library/socket.html#socket.socket.recvmsg
 def recv_json_and_fds(sock, maxfds=0):
     chunks = []

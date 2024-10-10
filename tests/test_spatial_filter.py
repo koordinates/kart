@@ -430,7 +430,6 @@ def test_spatially_filtered_partial_clone(data_archive, cli_runner):
 def test_spatially_filtered_fetch_promised(
     data_archive, cli_runner, insert, monkeypatch, git_supports_spatial_filter
 ):
-
     # Keep track of how many features we fetch lazily after the partial clone.
     orig_fetch_func = FetchPromisedBlobsProcess.fetch
     fetch_count = 0

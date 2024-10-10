@@ -80,7 +80,6 @@ AUTHORITY_PATTERN = ("AUTHORITY", OpenBracket, String, Comma, String, CloseBrack
 
 
 def parse_authority(crs):
-
     if isinstance(crs, str):
         result = WKTLexer().find_pattern(
             crs, AUTHORITY_PATTERN, at_depth=1, extract_strings=True

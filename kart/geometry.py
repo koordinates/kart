@@ -466,7 +466,7 @@ def hex_wkb_to_ogr(hex_wkb):
 # The GPKG spec says we should use POINT(NaN, NaN) instead.
 # Here's the WKB of that.
 # We can't use WKT here: https://github.com/OSGeo/gdal/issues/2472
-WKB_POINT_EMPTY_LE = b"\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F"
+WKB_POINT_EMPTY_LE = b"\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf8\x7f\x00\x00\x00\x00\x00\x00\xf8\x7f"
 
 
 def ogr_to_hex_wkb(ogr_geom):
@@ -520,7 +520,6 @@ def ogr_to_gpkg_geom(
     )
     envelope = b""
     if _add_envelope_type:
-
         if _add_envelope_type == GPKG_ENVELOPE_XY:
             envelope = ogr_geom.GetEnvelope()
         elif _add_envelope_type == GPKG_ENVELOPE_XYZ:

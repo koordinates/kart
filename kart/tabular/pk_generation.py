@@ -253,7 +253,6 @@ class PkGeneratingTableImportSource(TableImportSource):
                 next_new_pk += 1
 
         if buffered_inserts:
-
             # Look for matching inserts-deletes - reassign the PK from the delete, treat is as an edit:
             yield from self._match_similar_features_and_remove(
                 self._find_deleted_features(hash_to_unassigned_pks), buffered_inserts

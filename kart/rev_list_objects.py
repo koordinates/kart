@@ -105,7 +105,7 @@ def rev_list_blobs(repo, start_commits, stop_commits, pathspecs):
     Yield all the blobs referenced between the start and stop commits as tuples (commit_id, path, blob).
     Each blob will only be yielded once, so not necessarily at all paths and commits where it can be found.
     """
-    for (commit_id, path, oid) in rev_list_object_oids(
+    for commit_id, path, oid in rev_list_object_oids(
         repo, start_commits, stop_commits, pathspecs
     ):
         obj = repo[oid]
@@ -118,7 +118,7 @@ def rev_list_matching_blobs(repo, start_commits, stop_commits, pathspecs, path_p
     Yield all the blobs with a path matching the given pattern referenced between the start and stop commits as tuples
     (commit_id, match_result, blob). To get the entire path, use match_result.group(0).
     """
-    for (commit_id, path, oid) in rev_list_object_oids(
+    for commit_id, path, oid in rev_list_object_oids(
         repo, start_commits, stop_commits, pathspecs
     ):
         m = path_pattern.fullmatch(path)

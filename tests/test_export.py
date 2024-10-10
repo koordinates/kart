@@ -135,11 +135,11 @@ def test_layer_creation_options(data_archive, cli_runner):
             col_names = [row[1] for row in r]
             # FID column has been named id, geometry column has been named geometry.
             assert col_names == [
-                'id',
-                'geometry',
-                'date_adjusted',
-                'survey_reference',
-                'adjusted_nodes',
+                "id",
+                "geometry",
+                "date_adjusted",
+                "survey_reference",
+                "adjusted_nodes",
             ]
 
 
@@ -182,21 +182,21 @@ def test_primary_key_as_field(field_option, data_archive, cli_runner):
                 # So --primary-key-as-field means that we end up with two id columns, FID and ID.
                 # This is redundant here but would be useful if the PK column had string values.
                 assert col_names == [
-                    'fid',
-                    'geom',
-                    'id',
-                    'date_adjusted',
-                    'survey_reference',
-                    'adjusted_nodes',
+                    "fid",
+                    "geom",
+                    "id",
+                    "date_adjusted",
+                    "survey_reference",
+                    "adjusted_nodes",
                 ]
             else:
                 # Using --no-primary-key-as-field gets rid of the redundant column here.
                 assert col_names == [
-                    'fid',
-                    'geom',
-                    'date_adjusted',
-                    'survey_reference',
-                    'adjusted_nodes',
+                    "fid",
+                    "geom",
+                    "date_adjusted",
+                    "survey_reference",
+                    "adjusted_nodes",
                 ]
 
             # Both the fid column and the id column (if present) should contain the primary key values.

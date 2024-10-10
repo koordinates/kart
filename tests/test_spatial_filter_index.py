@@ -40,27 +40,27 @@ class IndexSummary:
 EXPECTED_POINTS_INDEX = IndexSummary(
     features=2148,
     first_blob_id=Entry(
-        blob_id='0075ca2608a7ea5a8883123d4767eb0056dc9fbe',
+        blob_id="0075ca2608a7ea5a8883123d4767eb0056dc9fbe",
         envelope=(174.37455885, -35.81883419, 174.37455885, -35.81883419),
     ),
     last_blob_id=Entry(
-        blob_id='ffefdaa2170c33397e147d9c521dbd0e83362cfc',
+        blob_id="ffefdaa2170c33397e147d9c521dbd0e83362cfc",
         envelope=(174.51729394, -38.89953452, 174.51729394, -38.89953452),
     ),
     westernmost=Entry(
-        blob_id='ea098c7b7bbbb57d5069bbfefe332300bc5af316',
+        blob_id="ea098c7b7bbbb57d5069bbfefe332300bc5af316",
         envelope=(170.61676942, -45.73477461, 170.61676942, -45.73477461),
     ),
     southernmost=Entry(
-        blob_id='ea098c7b7bbbb57d5069bbfefe332300bc5af316',
+        blob_id="ea098c7b7bbbb57d5069bbfefe332300bc5af316",
         envelope=(170.61676942, -45.73477461, 170.61676942, -45.73477461),
     ),
     easternmost=Entry(
-        blob_id='6523dde7f3b2172c6090563d9e99b32918703017',
+        blob_id="6523dde7f3b2172c6090563d9e99b32918703017",
         envelope=(178.43023198, -37.64119695, 178.43023198, -37.64119695),
     ),
     northernmost=Entry(
-        blob_id='81e591a2e7c4985e2b82b6ef3e74a3a1b298e472',
+        blob_id="81e591a2e7c4985e2b82b6ef3e74a3a1b298e472",
         envelope=(172.99773191, -34.40609417, 172.99773191, -34.40609417),
     ),
     widest=None,
@@ -69,31 +69,31 @@ EXPECTED_POINTS_INDEX = IndexSummary(
 EXPECTED_POLYGONS_INDEX = IndexSummary(
     features=228,
     first_blob_id=Entry(
-        blob_id='0299357eda50165abaec3c59b34334a02d4edbc6',
+        blob_id="0299357eda50165abaec3c59b34334a02d4edbc6",
         envelope=(175.35810762, -37.80139598, 175.38388545, -37.78176863),
     ),
     last_blob_id=Entry(
-        blob_id='ff7dacd17bc855fdb29873dc25f5c3853bdfcf7f',
+        blob_id="ff7dacd17bc855fdb29873dc25f5c3853bdfcf7f",
         envelope=(172.57772642, -43.30073398, 172.58457937, -43.29684273),
     ),
     westernmost=Entry(
-        blob_id='091eb2f16039471a6cc15adb8ae1fd4218ec751d',
+        blob_id="091eb2f16039471a6cc15adb8ae1fd4218ec751d",
         envelope=(172.31957762, -43.59000687, 172.38531723, -43.55415243),
     ),
     southernmost=Entry(
-        blob_id='03f318186b6d7eef401c11465c443e7054e52123',
+        blob_id="03f318186b6d7eef401c11465c443e7054e52123",
         envelope=(172.36927828, -43.63570298, 172.39867563, -43.61338377),
     ),
     easternmost=Entry(
-        blob_id='ad9512b11f524e36237128fedd58f9ef71d07063',
+        blob_id="ad9512b11f524e36237128fedd58f9ef71d07063",
         envelope=(176.95962540, -37.95628630, 176.98604958, -37.93726660),
     ),
     northernmost=Entry(
-        blob_id='b8a2aed7d91fa91ad5aea47e3d0dea38027a4266',
+        blob_id="b8a2aed7d91fa91ad5aea47e3d0dea38027a4266",
         envelope=(174.27367710, -35.70618512, 174.29895293, -35.68906918),
     ),
     widest=Entry(
-        blob_id='c150c29a1606f9b3d6ad572d7f4bdf5352cc0d70',
+        blob_id="c150c29a1606f9b3d6ad572d7f4bdf5352cc0d70",
         envelope=(175.17343175, -37.93850625, 175.30657743, -37.89814838),
     ),
 )
@@ -101,31 +101,31 @@ EXPECTED_POLYGONS_INDEX = IndexSummary(
 EXPECTED_ANTIMERIDIAN_3994_INDEX = IndexSummary(
     features=616,
     first_blob_id=Entry(
-        blob_id='0008f607b7bb404c9d2d73e7377e7d10c5d04a6a',
+        blob_id="0008f607b7bb404c9d2d73e7377e7d10c5d04a6a",
         envelope=(-164.12204700, -14.00730160, -164.01131600, -13.89563250),
     ),
     last_blob_id=Entry(
-        blob_id='fe5af2ef96140331795504608fa7e22c4c18432b',
+        blob_id="fe5af2ef96140331795504608fa7e22c4c18432b",
         envelope=(-156.83539010, -17.26248740, -155.63135470, -17.08319900),
     ),
     westernmost=Entry(
-        blob_id='8b7f0d336356de4418274fc6c4e22235cca6a481',
+        blob_id="8b7f0d336356de4418274fc6c4e22235cca6a481",
         envelope=(161.73579840, -41.96151070, 161.95505280, -41.62362810),
     ),
     southernmost=Entry(
-        blob_id='88a069204c1c0f763aef1ec283a12404f927a6c6',
+        blob_id="88a069204c1c0f763aef1ec283a12404f927a6c6",
         envelope=(-175.33739650, -67.52500030, -175.12571240, -67.44136820),
     ),
     easternmost=Entry(
-        blob_id='38939239f7995decd10d082e8cc27e2e3c3f2b25',
+        blob_id="38939239f7995decd10d082e8cc27e2e3c3f2b25",
         envelope=(-148.19130080, -37.97096460, -143.83333330, -34.37675740),
     ),
     northernmost=Entry(
-        blob_id='13718b1889a591319c1f72e93b6c2412890b5026',
+        blob_id="13718b1889a591319c1f72e93b6c2412890b5026",
         envelope=(-160.57510810, -17.34120320, -153.50000000, -7.50000000),
     ),
     widest=Entry(
-        blob_id='3d7f1d09b02d3e3df1dc22777193535ebc38d0c1',
+        blob_id="3d7f1d09b02d3e3df1dc22777193535ebc38d0c1",
         envelope=(-162.10558360, -42.50000000, -148.61019660, -36.61721010),
     ),
 )
@@ -134,31 +134,31 @@ EXPECTED_ANTIMERIDIAN_3994_INDEX = IndexSummary(
 EXPECTED_ANTIMERIDIAN_3832_INDEX = IndexSummary(
     features=616,
     first_blob_id=Entry(
-        blob_id='00178a825ca904cd73fc144719205d523ee8bcbe',
+        blob_id="00178a825ca904cd73fc144719205d523ee8bcbe",
         envelope=(-153.75143160, -9.77738980, -153.50000000, -9.47359470),
     ),
     last_blob_id=Entry(
-        blob_id='fe9ccd848e82e73eddfc765a7dee93e2f533e719',
+        blob_id="fe9ccd848e82e73eddfc765a7dee93e2f533e719",
         envelope=(-171.45524940, -27.56882660, -170.74683640, -26.80289790),
     ),
     westernmost=Entry(
-        blob_id='9162f81b135232560874e4a095ce7718d9293f5b',
+        blob_id="9162f81b135232560874e4a095ce7718d9293f5b",
         envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.westernmost.envelope,
     ),
     southernmost=Entry(
-        blob_id='d0d91483159910ac42f791d0cf73d1e799c81144',
+        blob_id="d0d91483159910ac42f791d0cf73d1e799c81144",
         envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.southernmost.envelope,
     ),
     easternmost=Entry(
-        blob_id='8b6dfa16dbcd51639e417e756a324c9ce865a845',
+        blob_id="8b6dfa16dbcd51639e417e756a324c9ce865a845",
         envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.easternmost.envelope,
     ),
     northernmost=Entry(
-        blob_id='590f40c2aeeec46832ea23cf94cbf563b774245c',
+        blob_id="590f40c2aeeec46832ea23cf94cbf563b774245c",
         envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.northernmost.envelope,
     ),
     widest=Entry(
-        blob_id='1347b4ea194e641c5ea745ca84e38ade9a82de0b',
+        blob_id="1347b4ea194e641c5ea745ca84e38ade9a82de0b",
         envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.widest.envelope,
     ),
 )
@@ -372,7 +372,7 @@ def _get_index_summary(repo_path, unwrap_lon=-180):
         ]
 
         winners = [None] * len(score_funcs)
-        winning_scores = [-float('INF')] * len(score_funcs)
+        winning_scores = [-float("INF")] * len(score_funcs)
 
         encoder = EnvelopeEncoder()
         r = sess.execute("SELECT blob_id, envelope FROM feature_envelopes;")
