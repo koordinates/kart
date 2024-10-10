@@ -167,9 +167,12 @@ def fetch_multiple_from_s3(s3_urls_and_paths, quiet=False):
         disable=disable,
     )
 
-    with progress as p, concurrent.futures.ThreadPoolExecutor(
-        max_workers=_FETCH_MULTIPLE_FROM_S3_WORKER_COUNT
-    ) as executor:
+    with (
+        progress as p,
+        concurrent.futures.ThreadPoolExecutor(
+            max_workers=_FETCH_MULTIPLE_FROM_S3_WORKER_COUNT
+        ) as executor,
+    ):
         futures = [executor.submit(fetch_from_s3, *args) for args in s3_urls_and_paths]
         for future in concurrent.futures.as_completed(futures):
             future.result()  # Raises any exception that occurred in the worker thread.

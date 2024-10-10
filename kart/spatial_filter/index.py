@@ -666,7 +666,6 @@ def _get_envelope_for_indexing_verbose(geom, transforms, feature_desc):
         click.echo(f"Geometry envelope: {minmax_envelope}")
 
         for transform in transforms:
-
             desc = getattr(transform, "desc") or str(transform)
             click.echo()
             click.echo(f"Applying transform {desc}...")

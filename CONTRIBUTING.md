@@ -183,11 +183,8 @@ Continuous integration builds apps, tests, and installers for every commit on su
 
 ## Code formatting
 
-We use [Black](https://github.com/psf/black) to ensure consistent code formatting. We recommend integrating black with your editor:
+We use [Ruff](https://docs.astral.sh/ruff/) to ensure consistent code formatting. We recommend integrating Ruff with your editor - [see instructions here](https://docs.astral.sh/ruff/editors/setup/)
 
-* Sublime Text: install [sublack](https://packagecontrol.io/packages/sublack) via Package Control
-* VSCode [instructions](https://code.visualstudio.com/docs/python/editing#_formatting)
+We use the default settings, and target python 3.10+.
 
-We use the default settings, and target python 3.8+.
-
-One easy solution is to install [pre-commit](https://pre-commit.com), run `pre-commit install --install-hooks` and it'll automatically validate your changes code as a git pre-commit hook.
+One easy solution is to install [pre-commit](https://pre-commit.com), run `pre-commit install --install-hooks` and it'll automatically validate your changes as a git pre-commit hook.

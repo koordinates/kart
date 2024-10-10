@@ -349,9 +349,10 @@ class TableV3(RichTableDataset):
                 )
                 if existing_feature == feature:
                     # Nothing changed? No need to rewrite the feature blob
-                    yield self.encode_pks_to_path(
-                        pk_values, schema=schema
-                    ), existing_data
+                    yield (
+                        self.encode_pks_to_path(pk_values, schema=schema),
+                        existing_data,
+                    )
                 else:
                     yield self.encode_feature(feature, schema)
         else:

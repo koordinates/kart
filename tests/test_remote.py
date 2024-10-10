@@ -255,9 +255,12 @@ def test_pull(
     request,
     chdir,
 ):
-    with data_working_copy("points") as (path1, wc1), data_working_copy("points") as (
-        path2,
-        wc2,
+    with (
+        data_working_copy("points") as (path1, wc1),
+        data_working_copy("points") as (
+            path2,
+            wc2,
+        ),
     ):
         with chdir(path1):
             subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
