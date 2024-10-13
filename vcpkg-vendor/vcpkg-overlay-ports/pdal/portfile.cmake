@@ -4,7 +4,7 @@ vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO PDAL/PDAL
     REF "${VERSION}"
-    SHA512 66390a6fc6f898f7d7aa05d4a6ec428e9c7d2f6f0c835110bde2f6c452fa78fb5bf8e8db954153566bf771323bbb31d6153056659c536126721bf7561e91794f
+    SHA512 953cb0bc3ab79797352a3f8f4abb25b106d29f4057d7097b536c5b8b75a460da0066038e333581754239848cc9407d5e11c05678fe645b2115a02ea203b5be57
     HEAD_REF master
     PATCHES
         fix-dependency.patch
@@ -12,7 +12,6 @@ vcpkg_from_github(
         no-pkgconfig-requires.patch
         no-rpath.patch
         install-dimbuilder.patch
-        arbiter-aws-no-sign-request.patch # Merged upstream: https://github.com/connormanning/arbiter/pull/48
 )
 
 # Prefer pristine CMake find modules + wrappers and config files from vcpkg.
