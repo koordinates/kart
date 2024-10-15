@@ -12,6 +12,7 @@ vcpkg_from_github(
         no-pkgconfig-requires.patch
         no-rpath.patch
         install-dimbuilder.patch
+        arbiter-aws-virtual-hosting-var.patch  # https://github.com/connormanning/arbiter/pull/57
 )
 
 # Prefer pristine CMake find modules + wrappers and config files from vcpkg.
