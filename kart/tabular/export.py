@@ -153,6 +153,11 @@ def get_driver(destination_spec):
     help="Skips export of those features where the geometry is null.",
 )
 @click.option(
+    "--drop-empty-geometry-features",
+    is_flag=True,
+    help='Skips export of those features where the geometry is either null or empty, such as "POLYGON EMPTY".',
+)
+@click.option(
     "--drop-geometry",
     "drop_geometry_column",
     is_flag=True,
@@ -176,6 +181,7 @@ def table_export(
     primary_key_as_fid,
     override_geometry_type,
     drop_null_geometry_features,
+    drop_empty_geometry_features,
     drop_geometry_column,
     args,
 ):
@@ -284,6 +290,8 @@ def table_export(
             if geom_key:
                 geom = feature[geom_key]
                 if geom is None and drop_null_geometry_features:
+                    continue
+                if (geom is None or geom.is_empty()) and drop_empty_geometry_features:
                     continue
                 out_feature.SetGeometry(
                     _output_geometry(geom, geometry_transform, pk_value)

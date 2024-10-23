@@ -8,6 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## Unreleased
 
 - Upgrade to PDAL 2.7 [#1005](https://github.com/koordinates/kart/pull/1005)
+- Adds a `--drop-empty-geometry-features` option to `kart export`. [#1007](https://github.com/koordinates/kart/pull/1007)
 
 ## 0.15.3
 
