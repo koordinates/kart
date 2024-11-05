@@ -6,6 +6,7 @@ from kart import diff_estimation
 from kart.cli_util import OutputFormatType, DeltaFilterType
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
+from kart.diff_format import DiffFormat
 from kart.output_util import dump_json_output
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
@@ -130,6 +131,12 @@ def feature_count_diff(
     help="Show changes to file contents (instead of just showing the object IDs of changed files)",
 )
 @click.option(
+    "--diff-format",
+    type=click.Choice(DiffFormat),
+    default=DiffFormat.FULL,
+    help="Choose the diff format: \n'full' for full diff or 'no-data-changes' for metadata and a bool indicating the feature/tile tree changes.",
+)
+@click.option(
     "--delta-filter",
     type=DeltaFilterType(),
     help="Filter out particular parts of each delta - for example, --delta-filter=+ only shows new values of updates. "
@@ -165,6 +172,7 @@ def diff(
     add_feature_count_estimate,
     convert_to_dataset_format,
     diff_files,
+    diff_format,
     delta_filter,
     html_template,
     args,
@@ -230,7 +238,7 @@ def diff(
     )
     diff_writer.convert_to_dataset_format(convert_to_dataset_format)
     diff_writer.full_file_diffs(diff_files)
-    diff_writer.write_diff()
+    diff_writer.write_diff(diff_format=diff_format)
 
     if exit_code or output_type == "quiet":
         diff_writer.exit_with_code()
