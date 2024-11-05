@@ -2204,3 +2204,29 @@ def test_diff_format_no_data_changes_json(cli_runner, data_archive):
         assert output["kart.diff/v1+hexwkb"] == {
             "nz_pa_points_topo_150k": {"data_changes": True}
         }
+
+
+def test_diff_json_lines_with_no_data_changes(cli_runner, data_archive, monkeypatch):
+    # Check that the json output contains a boolean for data_changes (feature/tile changes)
+    with data_archive("points.tgz"):
+        r = cli_runner.invoke(
+            [
+                "diff",
+                "--diff-format=no-data-changes",
+                "-o",
+                "json-lines",
+                "HEAD^...HEAD",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        output = r.stdout.splitlines()
+        assert len(output) == 4
+        jsons = [json.loads(line) for line in output]
+        types = [j["type"] for j in jsons]
+        # note no "feature" items here
+        assert types == ["version", "datasetInfo", "metaInfo", "dataChanges"]
+        assert jsons[-1] == {
+            "type": "dataChanges",
+            "dataset": "nz_pa_points_topo_150k",
+            "value": True,
+        }

@@ -323,7 +323,16 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             )
 
         self.write_meta_deltas(ds_path, ds_diff)
-        self.write_filtered_dataset_deltas(ds_path, ds_diff)
+        if diff_format == DiffFormat.FULL.value:
+            self.write_filtered_dataset_deltas(ds_path, ds_diff)
+        elif diff_format == DiffFormat.NO_DATA_CHANGES.value:
+            self.dump(
+                {
+                    "type": "dataChanges",
+                    "dataset": ds_path,
+                    "value": ds_diff["data_changes"],
+                }
+            )
 
     def write_meta_deltas(self, ds_path, ds_diff):
         if "meta" not in ds_diff:
