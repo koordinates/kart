@@ -753,11 +753,11 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - id: macos-12
-            label: "12/x86_64"
+          - id: macos-13
+            label: "13/x86_64"
             arch_triplet: x64-osx
-          - id: "ghcr.io/cirruslabs/macos-monterey-xcode:14"
-            label: "12/arm64"
+          - id: "ghcr.io/cirruslabs/macos-ventura-xcode:14.3.1"
+            label: "13/arm64"
             arch_triplet: arm64-osx
     runs-on: ${{ matrix.os.id }}
     name: macOS ${{ matrix.os.label }}
