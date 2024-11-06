@@ -100,7 +100,7 @@ def dataset_class_for_version(version):
 
 
 def ensure_supported_repo_wide_version(version):
-    from kart.cli import get_version
+    from kart.version import get_version
 
     if not MIN_SUPPORTED_VERSION <= version <= MAX_SUPPORTED_VERSION:
         message = (

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from kart.cli import get_version
+from kart.version import get_version
 from kart.exceptions import UNSUPPORTED_VERSION
 from kart.repo import KartRepo
 

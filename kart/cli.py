@@ -15,6 +15,7 @@ import click
 import pygit2
 
 from . import core, is_darwin, is_linux, is_windows  # noqa
+from kart.version import get_version_info_text
 from kart.cli_util import (
     add_help_subcommand,
     call_and_exit_flag,
@@ -78,82 +79,8 @@ def load_all_commands():
         _load_commands_from_module(mod)
 
 
-def get_version():
-    import kart
-
-    with open(Path(kart.package_data_path) / "VERSION") as version_file:
-        return version_file.read().strip()
-
-
-def get_version_tuple():
-    return tuple(get_version().split("."))
-
-
 def print_version(ctx):
-    import osgeo
-    import psycopg2
-    import pysqlite3
-
-    import sqlalchemy
-    from kart.sqlalchemy.gpkg import Db_GPKG
-
-    click.echo(f"Kart v{get_version()}, Copyright (c) Kart Contributors")
-
-    git_version = (
-        subprocess.check_output(["git", "--version"])
-        .decode("ascii")
-        .strip()
-        .split()[-1]
-    )
-
-    gitlfs_version = re.match(
-        r"git-lfs/([^ ]+) \(",
-        subprocess.check_output(["git-lfs", "version"], text=True),
-    ).group(1)
-
-    pdal_version = (
-        subprocess.check_output(["pdal", "--version"])
-        .decode("ascii")
-        .strip()
-        .split()[2]
-    )
-
-    engine = Db_GPKG.create_engine(":memory:")
-    with engine.connect() as conn:
-        spatialite_version = conn.scalar("SELECT spatialite_version();")
-
-    pq_version = psycopg2.__libpq_version__
-    pq_version = "{}.{}.{}".format(
-        *[int(k) for k in re.findall(r"\d\d", str(psycopg2.__libpq_version__))]
-    )
-
-    proj_version = "{}.{}.{}".format(
-        osgeo.osr.GetPROJVersionMajor(),
-        osgeo.osr.GetPROJVersionMinor(),
-        osgeo.osr.GetPROJVersionMicro(),
-    )
-
-    click.echo(
-        (
-            f"» GDAL v{osgeo._gdal.__version__}; "
-            f"PROJ v{proj_version}; "
-            f"PDAL v{pdal_version}\n"
-            f"» PyGit2 v{pygit2.__version__}; "
-            f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
-            f"Git v{git_version}; "
-            f"Git LFS v{gitlfs_version}\n"
-            f"» SQLAlchemy v{sqlalchemy.__version__}; "
-            f"pysqlite3 v{pysqlite3.version}/v{pysqlite3.sqlite_version}; "
-            f"SpatiaLite v{spatialite_version}; "
-            f"Libpq v{pq_version}"
-        )
-    )
-
-    # report on whether this was run through helper mode
-    helper_pid = os.environ.get("KART_HELPER_PID")
-    if helper_pid:
-        click.echo(f"Executed via helper, SID={os.getsid(0)} PID={helper_pid}")
-
+    click.echo("\n".join(get_version_info_text()))
     ctx.exit()
 
 
