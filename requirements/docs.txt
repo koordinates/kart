@@ -60,7 +60,7 @@ sphinxcontrib-qthelp==1.0.3
     # via sphinx
 sphinxcontrib-serializinghtml==1.1.5
     # via sphinx
-tornado==6.3.3
+tornado==6.4.1
     # via livereload
 urllib3==1.26.16
     # via requests
