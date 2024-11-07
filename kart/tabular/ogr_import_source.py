@@ -244,7 +244,7 @@ class OgrTableImportSource(TableImportSource):
             layers[layer.GetName()] = layer
         return layers
 
-    def print_table_list(self, do_json=False):
+    def print_table_list(self, *, do_json=False):
         names = {}
         for table_name, ogrlayer in self.get_tables().items():
             try:
@@ -256,8 +256,8 @@ class OgrTableImportSource(TableImportSource):
             dump_json_output({"kart.tables/v1": names}, sys.stdout)
         else:
             click.secho(f"Tables found:", bold=True)
-            for table_name, pretty_name in names.items():
-                click.echo(f"  {table_name} - {pretty_name}")
+            for i, (table_name, pretty_name) in enumerate(names.items(), 1):
+                click.echo(f"{i}. {table_name} - {pretty_name}")
         return names
 
     def __str__(self):

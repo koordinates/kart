@@ -224,6 +224,10 @@ class TableImportSource:
         # Subclasses should override this if a more useful aggregate description can be generated.
         return "\n".join(s.import_source_desc() for s in import_sources)
 
+    def print_table_list(self, *, do_json=False):
+        """Print a list of tables. Subclasses should override this."""
+        raise NotImplementedError()
+
     def prompt_for_table(self, prompt):
         table_list = list(self.get_tables().keys())
 
@@ -236,11 +240,21 @@ class TableImportSource:
             self.print_table_list()
             if get_input_mode() == InputMode.NO_INPUT:
                 raise NotFound("No table specified", exit_code=NO_TABLE)
-            t_choices = click.Choice(choices=table_list)
+
+            def get_table(value):
+                try:
+                    idx = int(value)
+                    if 1 <= idx <= len(table_list):
+                        return table_list[idx - 1]
+                except ValueError:
+                    if value in table_list:
+                        return value
+                raise click.BadParameter(f"Please enter a number between 1 and {len(table_list)} or a valid table name")
+
             t_default = table_list[0] if len(table_list) == 1 else None
             return click.prompt(
                 f"\n{prompt}",
-                type=t_choices,
-                show_choices=False,
+                type=click.UNPROCESSED,
+                value_proc=get_table,
                 default=t_default,
             )
