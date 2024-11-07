@@ -157,17 +157,17 @@ class SqlAlchemyTableImportSource(TableImportSource):
         else:
             return tables
 
-    def print_table_list(self, do_json=False):
+    def print_table_list(self, *, do_json=False):
         tables = self.get_tables()
         if do_json:
             dump_json_output({"kart.tables/v1": tables}, sys.stdout)
         else:
             click.secho("Tables found:", bold=True)
-            for table_name, title in tables.items():
+            for i, (table_name, title) in enumerate(tables.items(), 1):
                 if title:
-                    click.echo(f"  {table_name} - {title}")
+                    click.echo(f"{i}. {table_name} - {title}")
                 else:
-                    click.echo(f"  {table_name}")
+                    click.echo(f"{i}. {table_name}")
         return tables
 
     def validate_table(self, table):

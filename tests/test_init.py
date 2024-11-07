@@ -101,7 +101,7 @@ def test_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner, c
             assert r.exit_code == 0, r
         assert "Tables found:" in r.stdout
         assert (
-            "  census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
+            "1. census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
             in r.stdout
         )
         assert "to census2016_sdhca_ot_ced_short/ ..." in r.stdout
@@ -174,7 +174,7 @@ def test_import_table_with_prompt_with_no_input(
             assert r.exit_code == NO_TABLE, r
         assert "Tables found:" in r.stdout
         assert (
-            "  census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
+            "1. census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
             in r.stdout
         )
         assert "No table specified" in r.stderr
