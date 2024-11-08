@@ -98,7 +98,7 @@ class Doc:
     INDENT = ""
 
     def __init__(self, ctx: click.Context, doc: t.Optional[str] = None) -> None:
-        from kart.cli import get_version
+        from kart.version import get_version
 
         self.command = ctx.command_path
         self.version = get_version()

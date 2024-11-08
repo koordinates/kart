@@ -124,7 +124,7 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
         # the same as any other unsupported dataset.
         capabilities = self.get_meta_item("capabilities.json", missing_ok=True)
         if capabilities is not None:
-            from .cli import get_version
+            from .version import get_version
             from .output_util import dump_json_output
 
             click.echo(

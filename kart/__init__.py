@@ -15,6 +15,7 @@ import os
 import platform
 import sys
 
+
 L = logging.getLogger("kart.__init__")
 
 # These env vars are retained in the helper process, rather than being clobbered
@@ -165,6 +166,15 @@ osr.UseExceptions()
 
 # Libgit2 options
 import pygit2  # noqa
+
+try:
+    if "KART_DIAGNOSTICS" in os.environ or pygit2.Config.get_global_config()["kart.diagnostics"]:
+        from kart.diagnostics import print_diagnostics
+
+        print_diagnostics()
+except:
+    pass
+
 
 pygit2.option(pygit2.GIT_OPT_ENABLE_STRICT_HASH_VERIFICATION, 0)
 
