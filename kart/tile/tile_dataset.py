@@ -1,6 +1,6 @@
 import functools
 import os
-
+from typing import ClassVar
 from kart.base_dataset import BaseDataset
 from kart.core import all_blobs_with_parent_in_tree
 from kart.decorators import allow_classmethod
@@ -61,7 +61,7 @@ class TileDataset(BaseDataset):
     LINKED_STORAGE_JSON = meta_items.LINKED_STORAGE_JSON
 
     # Subclasses may override to add extra meta-items.
-    META_ITEMS = (
+    META_ITEMS: ClassVar[tuple["MetaItemDefinition", ...]] = (
         TITLE,
         DESCRIPTION,
         TAGS_JSON,
@@ -283,7 +283,7 @@ class TileDataset(BaseDataset):
 
     def diff(
         self,
-        other,
+        other: BaseDataset | None,
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         reverse=False,
         diff_format=DiffFormat.FULL,
@@ -302,7 +302,7 @@ class TileDataset(BaseDataset):
             other_subtree = other.get_subtree("tile") if other else self._empty_tree
             data_changes = self_subtree != other_subtree
 
-            ds_diff["data_changes"]: bool = data_changes
+            ds_diff["data_changes"] = data_changes
 
         # Else do a full diff.
         else:
@@ -378,7 +378,7 @@ class TileDataset(BaseDataset):
             "crs.wkt": self.get_meta_item("crs.wkt"),
         }
 
-    def is_cloud_optimized():
+    def is_cloud_optimized(self) -> bool:
         """Returns True if this dataset is constrained so that only cloud-optimized tiles can be added to it."""
         raise NotImplementedError()
 

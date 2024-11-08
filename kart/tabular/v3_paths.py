@@ -111,6 +111,10 @@ class PathEncoder:
     which Kart continues to support.
     """
 
+    LEGACY_ENCODER: "PathEncoder"
+    INT_PK_ENCODER: "PathEncoder"
+    GENERAL_ENCODER: "PathEncoder"
+
     PATH_STRUCTURE_ITEM = "path-structure.json"
 
     @staticmethod

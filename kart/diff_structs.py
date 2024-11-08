@@ -145,7 +145,7 @@ class Delta:
         # This mostly works, but isn't perfect when renames are involved.
         return self.old_key if self.old_key is not None else self.new_key
 
-    def __add__(self, other):
+    def __add__(self, other: "Delta"):
         """Concatenate this delta with the subsequent delta, return the result as a single delta."""
         # Note: this method assumes that the deltas being concatenated are related,
         # ie that self.new == other.old. Don't try to concatenate arbitrary deltas together.
@@ -237,7 +237,7 @@ class RichDict(UserDict):
     or recursive_set, even if this involves creating extra dicts to contain the new value.
     """
 
-    child_type = None
+    child_type: type | tuple[type, ...] | None = None
 
     def __init__(self, *args, **kwargs):
         if type(self) == RichDict:
@@ -375,7 +375,7 @@ class Diff(RichDict):
             result[key] = ~value
         return result
 
-    def __add__(self, other, result=None):
+    def __add__(self, other: "Diff"):
         """Concatenate this Diff to the subsequent Diff, by concatenating all children with matching keys."""
 
         # FIXME: this algorithm isn't perfect when renames are involved.
@@ -383,8 +383,7 @@ class Diff(RichDict):
         if type(self) != type(other):
             raise TypeError(f"Diff type mismatch: {type(self)} != {type(other)}")
 
-        if result is None:
-            result = self.empty_copy()
+        result = self.empty_copy()
 
         for key in self.keys() | other.keys():
             lhs = self.get(key)
@@ -399,7 +398,7 @@ class Diff(RichDict):
                 result[key] = lhs if lhs is not None else rhs
         return result
 
-    def __iadd__(self, other):
+    def __iadd__(self, other: "Diff"):
         """
         Concatenate this Diff to the subsequent Diff, by concatenating all children with matching keys.
         Slightly faster than __add__, modifies self in place.

@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from enum import Enum, auto
+from typing import ClassVar
 
 import click
 import pygit2
@@ -454,6 +455,9 @@ class SpatialFilter:
     call SpatialFilter.transform_for_dataset or SpatialFilter.transform_for_crs
     """
 
+    _MATCH_ALL: ClassVar["SpatialFilter"]
+    MATCH_ALL: ClassVar["SpatialFilter"]
+
     @property
     def is_original(self):
         # Overridden by OriginalSpatialFilter.
@@ -634,6 +638,8 @@ class OriginalSpatialFilter(SpatialFilter):
     SpatialFilter may lead to extra data loss which could be avoided by only ever transforming the original.
     That is why only OriginalSpatialFilter supports transformation.
     """
+
+    _MATCH_ALL: ClassVar["OriginalSpatialFilter"]
 
     def __init__(self, crs_spec, geometry_spec, match_all=False):
         if match_all:

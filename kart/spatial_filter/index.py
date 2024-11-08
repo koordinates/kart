@@ -25,28 +25,24 @@ from kart import subprocess_util as subprocess
 
 
 L = logging.getLogger("kart.spatial_filter.index")
+_bulk_warns: dict[str, int] = {}
+_bulk_warn_samples: dict[str, object] = {}
 
 
-def buffered_bulk_warn(self, message, sample):
+def buffered_bulk_warn(message, sample):
     """For logging lots of identical warnings, but only actually outputs once per time flush_bulk_warns is called."""
-    self.bulk_warns.setdefault(message, 0)
-    self.bulk_warns[message] = abs(self.bulk_warns[message]) + 1
-    self.bulk_warn_samples[message] = sample
+    _bulk_warns.setdefault(message, 0)
+    _bulk_warns[message] = abs(_bulk_warns[message]) + 1
+    _bulk_warn_samples[message] = sample
 
 
-def flush_bulk_warns(self):
+def flush_bulk_warns():
     """Output the number of occurrences of each type of buffered_bulk_warn message."""
-    for message, occurrences in self.bulk_warns.items():
+    for message, occurrences in _bulk_warns.items():
         if occurrences > 0:
-            sample = self.bulk_warn_samples[message]
-            self.warn(f"{message} ({occurrences} total occurences)\nSample: {sample}")
-            self.bulk_warns[message] = -occurrences
-
-
-L.buffered_bulk_warn = buffered_bulk_warn.__get__(L)
-L.flush_bulk_warns = flush_bulk_warns.__get__(L)
-L.bulk_warns = {}
-L.bulk_warn_samples = {}
+            sample = _bulk_warn_samples[message]
+            L.warn(f"{message} ({occurrences} total occurences)\nSample: {sample}")
+            _bulk_warns[message] = -occurrences
 
 
 class CrsHelper:
@@ -353,7 +349,7 @@ def update_spatial_filter_index(
         ):
             if i and progress_every and i % progress_every == 0:
                 click.echo(f"  {i:,d} features... @{time.monotonic()-t0:.1f}s")
-                L.flush_bulk_warns()
+                flush_bulk_warns()
 
             ds_path = path_match_result.group(1)
             transforms = crs_helper.transforms_for_dataset_at_commit(
@@ -378,7 +374,7 @@ def update_spatial_filter_index(
             )
 
         click.echo(f"  {i:,d} features... @{time.monotonic()-t0:.1f}s")
-        L.flush_bulk_warns()
+        flush_bulk_warns()
 
         # Update indexed commits.
         params = [(bytes.fromhex(commit_id),) for commit_id in all_independent_commits]
@@ -498,22 +494,21 @@ def _debug_encoded_envelope(arg):
 
 NO_GEOMETRY_COLUMN = object()
 
+_legend_to_col_id: dict[str, int] = {}
+
 
 def get_geometry(repo, feature_blob):
     legend, fields = msg_unpack(memoryview(feature_blob))
-    col_id = get_geometry.legend_to_col_id.get(legend)
+    col_id = _legend_to_col_id.get(legend)
     if col_id is None:
         col_id = _find_geometry_column(fields)
     if col_id is None:
         return None
-    get_geometry.legend_to_col_id[legend] = col_id
+    _legend_to_col_id[legend] = col_id
     return fields[col_id] if col_id is not NO_GEOMETRY_COLUMN else None
 
 
-get_geometry.legend_to_col_id = {}
-
-
-def _find_geometry_column(fields):
+def _find_geometry_column(fields) -> int | object | None:
     result = NO_GEOMETRY_COLUMN
     for i, field in enumerate(fields):
         if isinstance(field, Geometry):
@@ -619,22 +614,22 @@ def get_envelope_for_indexing(geom, transforms, feature_desc):
                 envelope = transform_minmax_envelope(minmax_envelope, transform)
             except CannotIndex as e:
                 if isinstance(e, CannotIndexDueToWrongCrs) and len(transforms) > 1:
-                    L.buffered_bulk_warn(
+                    buffered_bulk_warn(
                         f"Skipped obviously bad transform {transform.desc}",
                         feature_desc,
                     )
                     continue
-                L.buffered_bulk_warn("Skipped indexing feature", feature_desc)
+                buffered_bulk_warn("Skipped indexing feature", feature_desc)
                 return None
 
             result = union_of_envelopes(result, envelope)
 
         if result is None:
-            L.buffered_bulk_warn("Skipped indexing feature", feature_desc)
+            buffered_bulk_warn("Skipped indexing feature", feature_desc)
             return None
 
         if not _is_valid_envelope(result):
-            L.buffered_bulk_warn(
+            buffered_bulk_warn(
                 "Couldn't index feature - resulting envelope not valid", feature_desc
             )
             return None

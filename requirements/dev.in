@@ -19,9 +19,8 @@ mypy
     # note: not maintained; not compatible with sqlalchemy 2.x
     # so, probably drop this when we upgrade sqlalchemy
     sqlalchemy-stubs==0.4
-    # NOTE: we actually still have pygit2 1.12, but this is the first release of types-pygit2
-    # TODO: upgrade to pygit2 1.16+ and use the builtin types rather than using this package.
-    types-pygit2==1.14.0.20240317
-
-    types-tqdm
+    msgpack-types
+    types-jsonschema
+    types-psycopg2
     types-Pygments==2.13.0
+    types-tqdm

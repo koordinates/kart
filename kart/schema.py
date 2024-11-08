@@ -14,6 +14,7 @@ from kart.serialise_util import (
     msg_unpack,
     sha256,
 )
+from kart.utils import classproperty
 
 
 class Legend:
@@ -165,8 +166,7 @@ class ColumnSchema(dict):
         "length",
     )
 
-    @classmethod
-    @property
+    @classproperty
     @functools.lru_cache(maxsize=1)
     def sort_order_dict(cls):
         return {

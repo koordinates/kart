@@ -12,7 +12,6 @@ __all__ = (
 import importlib
 import logging
 import os
-import platform
 import sys
 
 L = logging.getLogger("kart.__init__")
@@ -40,7 +39,7 @@ HELPER_PRESERVE_ENV_VARS = (
 )
 
 try:
-    import _kart_env
+    import _kart_env  # type: ignore[import]
 
     L.debug("Found _kart_env configuration module")
 except ImportError:
@@ -48,9 +47,9 @@ except ImportError:
     _kart_env = None
 
 is_frozen = getattr(sys, "frozen", None) and hasattr(sys, "_MEIPASS")
-is_darwin = platform.system() == "Darwin"
-is_linux = platform.system() == "Linux"
-is_windows = platform.system() == "Windows"
+is_darwin = sys.platform == "darwin"
+is_linux = sys.platform == "linux"
+is_windows = sys.platform == "win32"
 
 if is_darwin:
     libsuffix = "dylib"
@@ -146,7 +145,7 @@ if "OGR_SQLITE_PRAGMA" not in os.environ:
 os.environ["PATH"] = (
     os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
 )
-if is_windows:
+if sys.platform == "win32":
     os.add_dll_directory(prefix if is_frozen else os.path.join(prefix, "lib"))
     # FIXME: git2.dll is in the package directory, but isn't setup for ctypes to use
     _pygit2_spec = importlib.util.find_spec("pygit2")

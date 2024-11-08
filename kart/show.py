@@ -79,7 +79,7 @@ from kart.repo import KartRepoState
 )
 @click.option(
     "--diff-format",
-    type=click.Choice(DiffFormat),
+    type=click.Choice(list(DiffFormat)),
     default=DiffFormat.FULL,
     help="Choose the diff format: \n'full' for full diff, 'none' for viewing commit metadata only, or 'no-data-changes' for metadata and a bool indicating the feature/tile tree changes.",
 )

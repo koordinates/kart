@@ -73,15 +73,15 @@ class TableImportSource:
             return self._dest_path
         return self.default_dest_path()
 
+    @dest_path.setter
+    def dest_path(self, dest_path):
+        self._dest_path = self._normalise_dataset_path(dest_path)
+
     @classmethod
     def _normalise_dataset_path(cls, path):
         # we treat back-slash and forward-slash as equivalent at import time.
         # (but we only ever import forward-slashes)
         return path.strip("/").replace("\\", "/")
-
-    @dest_path.setter
-    def dest_path(self, dest_path):
-        self._dest_path = self._normalise_dataset_path(dest_path)
 
     def default_dest_path(self):
         """
@@ -249,7 +249,9 @@ class TableImportSource:
                 except ValueError:
                     if value in table_list:
                         return value
-                raise click.BadParameter(f"Please enter a number between 1 and {len(table_list)} or a valid table name")
+                raise click.BadParameter(
+                    f"Please enter a number between 1 and {len(table_list)} or a valid table name"
+                )
 
             t_default = table_list[0] if len(table_list) == 1 else None
             return click.prompt(

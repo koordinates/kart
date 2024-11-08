@@ -1,7 +1,7 @@
 import functools
 import os
 import re
-
+from typing import ClassVar
 import pygit2
 
 from kart.core import all_blobs_in_tree
@@ -86,7 +86,7 @@ class TableV3(RichTableDataset):
         MetaItemVisibility.INTERNAL_ONLY,
     )
 
-    META_ITEMS = (
+    META_ITEMS: ClassVar[tuple[MetaItemDefinition, ...]] = (
         TITLE,
         DESCRIPTION,
         TAGS_JSON,

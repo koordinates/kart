@@ -2,7 +2,7 @@ import contextlib
 import json
 import logging
 import threading
-
+from typing import TypeAlias
 import sqlalchemy
 
 from kart.sqlalchemy.sqlite import sqlite_engine
@@ -13,7 +13,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import CreateTable
 
 L = logging.getLogger(__name__)
-Base = declarative_base()
+
+# TODO: remove this type ignore when we upgrade sqlalchemy to 2.0 and replace with DeclarativeBase
+Base: TypeAlias = declarative_base()  # type: ignore[valid-type]
 
 
 class KartAnnotation(Base):

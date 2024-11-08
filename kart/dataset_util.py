@@ -81,7 +81,7 @@ def _validate_dataset_path(path: str) -> None:
 
 
 def validate_dataset_paths(paths: list[str]) -> None:
-    existing_paths_lower = {}
+    existing_paths_lower: dict[str, str] = {}
     for path in paths:
         _validate_dataset_path(path)
         path_lower = path.casefold()

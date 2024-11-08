@@ -130,7 +130,7 @@ class RichTableDataset(TableDataset):
             other_subtree = other.get_subtree("feature") if other else self._empty_tree
             data_changes = self_subtree != other_subtree
 
-            ds_diff["data_changes"]: bool = data_changes
+            ds_diff["data_changes"] = data_changes
 
         # Else do a full diff.
         else:

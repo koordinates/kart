@@ -80,8 +80,3 @@ class HtmlDiffWriter(BaseDiffWriter):
                 .replace(">", r"\x3e"),
             }
         )
-
-
-HtmlDiffWriter.filtered_dataset_deltas_as_geojson = (
-    GeojsonDiffWriter.filtered_dataset_deltas_as_geojson
-)

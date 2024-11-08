@@ -6,7 +6,7 @@ import sys
 from enum import Enum
 from functools import cached_property
 from pathlib import Path
-
+from typing import ClassVar
 import click
 import pygit2
 
@@ -61,6 +61,7 @@ class KartRepoFiles:
 class KartRepoState(Enum):
     NORMAL = "normal"
     MERGING = "merging"
+    ALL_STATES: ClassVar[tuple["KartRepoState", ...]]
 
     @classmethod
     def bad_state_message(cls, bad_state, allowed_states, command_extra):

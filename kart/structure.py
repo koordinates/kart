@@ -21,7 +21,11 @@ from .key_filters import RepoKeyFilter
 from . import list_of_conflicts
 from .pack_util import packfile_object_builder
 from .schema import Schema
-from .tabular.version import extra_blobs_for_version, dataset_class_for_version
+from .tabular.version import (
+    extra_blobs_for_version,
+    dataset_class_for_version,
+    DEFAULT_NEW_REPO_VERSION,
+)
 from .structs import CommitWithReference
 from .unsupported_dataset import UnsupportedDataset
 from .working_copy import ALL_PART_TYPES
@@ -232,7 +236,7 @@ class RepoStructure:
         if not self.tree:
             # This is the first commit to this branch - we may need to add extra blobs
             # to the tree to mark this data as being of a particular version.
-            extra_blobs = extra_blobs_for_version(self.version)
+            extra_blobs = extra_blobs_for_version(DEFAULT_NEW_REPO_VERSION)
             for path, blob in extra_blobs:
                 object_builder.insert(path, blob)
 

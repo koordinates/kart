@@ -2,6 +2,7 @@ import functools
 import json
 import re
 from collections import namedtuple
+from typing import ClassVar
 
 import click
 import pygit2
@@ -40,12 +41,11 @@ def write_merged_index_flags(repo):
 # Utility classes relevant to merges - used by merge command, conflicts command, resolve command.
 
 
-# pygit2 always has this order - we use it too for consistency,
-# and so we can meaningfully zip() our tuples with theirs
-_ANCESTOR_OURS_THEIRS_ORDER = ("ancestor", "ours", "theirs")
-
-
-class AncestorOursTheirs(namedtuple("AncestorOursTheirs", _ANCESTOR_OURS_THEIRS_ORDER)):
+class AncestorOursTheirs(
+    # pygit2 always has this order - we use it too for consistency,
+    # and so we can meaningfully zip() our tuples with theirs
+    namedtuple("AncestorOursTheirs", ("ancestor", "ours", "theirs"))
+):
     """
     When merging two commits, we can end up with three versions of lots of things -
     mostly pygit2 IndexEntrys, but could also be paths, repositories, structures, datasets.
@@ -53,7 +53,8 @@ class AncestorOursTheirs(namedtuple("AncestorOursTheirs", _ANCESTOR_OURS_THEIRS_
     Like pygit2, we keep the 3 versions always in the same order - ancestor, ours, theirs.
     """
 
-    NAMES = _ANCESTOR_OURS_THEIRS_ORDER
+    NAMES = ("ancestor", "ours", "theirs")
+    EMPTY: ClassVar["AncestorOursTheirs"]
 
     @staticmethod
     def partial(*, ancestor=None, ours=None, theirs=None):

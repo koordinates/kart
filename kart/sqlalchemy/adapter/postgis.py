@@ -487,7 +487,6 @@ class TextType(ConverterType):
         return str(value) if value is not None else None
 
 
-@staticmethod
 def is_postgis_installed(session):
     # Run a query to see if PostGIS is installed.
     query = "SELECT * FROM pg_extension WHERE extname = 'postgis';"

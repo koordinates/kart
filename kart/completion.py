@@ -12,10 +12,7 @@ from click.shell_completion import _SOURCE_BASH, _SOURCE_ZSH, _SOURCE_FISH
 from kart import subprocess_util as subprocess
 
 
-try:
-    import shellingham
-except ImportError:
-    shellingham = None
+import shellingham
 
 
 def provide_default_shell():
@@ -190,11 +187,13 @@ def install_powershell(*, prog_name: str, complete_var: str, shell: str) -> Path
 def install_tab_completion(
     shell: Optional[str] = None,
 ) -> Tuple[str, Path]:
-    if shell is None and shellingham is not None:
+    if shell is None:
         try:
             shell, _ = shellingham.detect_shell()
         except shellingham.ShellDetectionFailure:
             shell = os.path.basename(provide_default_shell())
+
+    assert shell
 
     # Hardcode these variables - kart helper means that click can get mixed up between KART and KART_CLI,
     # but this means we always use KART in practise.

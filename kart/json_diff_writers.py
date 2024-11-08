@@ -3,6 +3,7 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Generator
 
 import click
 
@@ -476,31 +477,3 @@ class GeojsonDiffWriter(BaseDiffWriter):
                 f"Warning: {count} tile changes in {ds_path} aren't included in GeoJSON output",
                 err=True,
             )
-
-    def filtered_dataset_deltas_as_geojson(
-        self, ds_path: str, ds_diff: DatasetDiff
-    ) -> Union[None, dict]:
-        if "feature" not in ds_diff:
-            return
-
-        old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
-
-        for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
-            if delta.old:
-                change_type = "U-" if delta.new else "D"
-                yield feature_as_geojson(
-                    delta.old_value,
-                    delta.old_key,
-                    ds_path,
-                    change_type,
-                    old_transform,
-                )
-            if delta.new:
-                change_type = "U+" if delta.old else "I"
-                yield feature_as_geojson(
-                    delta.new_value,
-                    delta.new_key,
-                    ds_path,
-                    change_type,
-                    new_transform,
-                )

@@ -3,8 +3,9 @@ import logging
 import sys
 import click
 import pygit2
+from typing import ClassVar
 
-from typing import Union, Type, List
+from typing import Union, Type, List, Iterable
 from pathlib import Path
 
 from .conflicts_util import (
@@ -23,6 +24,7 @@ from .merge_util import (
     ensure_conflicts_ready,
 )
 from .output_util import dump_json_output, resolve_output_path
+from .repo import KartRepo
 from . import diff_util
 
 L = logging.getLogger("kart.conflicts_writer")
@@ -33,25 +35,25 @@ class BaseConflictsWriter:
     A base class for writing conflicts output.
     """
 
+    output_format: ClassVar[str]
+
     def __init__(
         self,
-        repo: pygit2.Repository,
+        repo: KartRepo,
         user_key_filters: tuple = (),
         output_path: str = "-",
         summarise: int = 0,
         flat: bool = False,
         *,
         json_style: str = "pretty",
-        target_crs: CoordinateReferenceString = None,
-        merged_index: MergedIndex = None,
-        merge_context: MergeContext = None,
+        target_crs: CoordinateReferenceString | None = None,
+        merged_index: MergedIndex | None = None,
+        merge_context: MergeContext | None = None,
     ):
         self.repo = repo
         self.target_crs = target_crs
         self.flat = flat
         self.summarise = summarise
-        self.merge_context = merge_context
-        self.merged_index = merged_index
         self.repo_key_filter = RepoKeyFilter.build_from_user_patterns(user_key_filters)
         self.json_style = json_style
         self.output_path = self._check_output_path(
@@ -65,12 +67,14 @@ class BaseConflictsWriter:
         )
 
         if merged_index is None:
-            self.merged_index = MergedIndex.read_from_repo(repo)
+            merged_index = MergedIndex.read_from_repo(repo)
+        self.merged_index = merged_index
         if merge_context is None:
-            self.merge_context = MergeContext.read_from_repo(repo)
+            merge_context = MergeContext.read_from_repo(repo)
+        self.merge_context = merge_context
 
     @classmethod
-    def _normalize_output_path(cls, output_path: str) -> Union[str, Path]:
+    def _normalize_output_path(cls, output_path: str | Path) -> str | Path:
         if not output_path or output_path == "-":
             return output_path
         if isinstance(output_path, str):
@@ -82,23 +86,20 @@ class BaseConflictsWriter:
     @classmethod
     def get_conflicts_writer_class(
         cls, output_format: str
-    ) -> Union[Type[BaseConflictsWriter], None]:
+    ) -> Type[BaseConflictsWriter] | None:
         """Returns suitable subclass for desired output format"""
-        output_format_to_writer = {
-            "quiet": QuietConflictsWriter,
-            "json": JsonConflictsWriter,
-            "text": TextConflictsWriter,
-            "geojson": GeojsonConflictsWriter,
-        }
-
-        cls.output_format = output_format
-        if not output_format_to_writer.get(output_format):
-            raise click.BadParameter(
-                f"Unrecognized output format: {output_format}",
-                param_hint="output_format",
-            )
-
-        return output_format_to_writer.get(output_format)
+        for klass in (
+            QuietConflictsWriter,
+            JsonConflictsWriter,
+            TextConflictsWriter,
+            GeojsonConflictsWriter,
+        ):
+            if klass.output_format == output_format:
+                return klass
+        raise click.BadParameter(
+            f"Unrecognized output format: {output_format}",
+            param_hint="output_format",
+        )
 
     def get_conflicts(self) -> List[RichConflict]:
         """Returns a list of rich conflicts"""
@@ -112,13 +113,12 @@ class BaseConflictsWriter:
     def _check_output_path(
         cls,
         repo: pygit2.Repository,
-        output_path: Union[str, Path],
-        output_format: str = None,
-    ) -> Union[str, Path]:
+        output_path: str | Path,
+    ) -> str | Path:
         """Make sure the given output_path is valid for this implementation (ie, are directories supported)."""
-        if output_format and isinstance(output_path, Path) and output_path.is_dir():
+        if isinstance(output_path, Path) and output_path.is_dir():
             raise click.BadParameter(
-                f"Directory is not valid for --output with -o {output_format}",
+                f"Directory is not valid for --output with -o {cls.output_format}",
                 param_hint="--output",
             )
         return output_path
@@ -152,7 +152,7 @@ class BaseConflictsWriter:
         output_dict = {}
         conflict_output = _CONFLICT_PLACEHOLDER
 
-        conflicts = self.get_conflicts()
+        conflicts: Iterable[RichConflict] = self.get_conflicts()
         if not self.repo_key_filter.match_all:
             conflicts = (c for c in conflicts if c.matches_filter(self.repo_key_filter))
 
@@ -183,6 +183,8 @@ class BaseConflictsWriter:
 
 
 class QuietConflictsWriter(BaseConflictsWriter):
+    output_format = "quiet"
+
     def write_conflicts(self):
         pass
 
@@ -197,15 +199,16 @@ class JsonConflictsWriter(BaseConflictsWriter):
         {"kart.conflicts/v1": {"dataset-path": { "feature": { "id": { "ancestor/ours/theirs": [...]}}}}}
     """
 
+    output_format = "json"
+
     @classmethod
     def _check_output_path(
         cls,
         repo: pygit2.Repository,
-        output_path: Union[str, Path],
-        output_format: str = "json",
-    ) -> Union[str, Path]:
+        output_path: str | Path,
+    ) -> str | Path:
         """Make sure the given output_path is valid for this implementation (ie, are directories supported)."""
-        return super()._check_output_path(repo, output_path, output_format)
+        return super()._check_output_path(repo, output_path)
 
     def write_conflicts(self):
         output_obj = super().list_conflicts()
@@ -226,6 +229,8 @@ class TextConflictsWriter(BaseConflictsWriter):
     the changes on the ancestor, theirs and ours branch.
     """
 
+    output_format = "text"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fp = resolve_output_path(self.output_path)
@@ -235,11 +240,10 @@ class TextConflictsWriter(BaseConflictsWriter):
     def _check_output_path(
         cls,
         repo: pygit2.Repository,
-        output_path: Union[str, Path],
-        output_format: str = "text",
-    ) -> Union[str, Path]:
+        output_path: str | Path,
+    ) -> str | Path:
         """Make sure the given output_path is valid for this implementation (ie, are directories supported)."""
-        return super()._check_output_path(repo, output_path, output_format)
+        return super()._check_output_path(repo, output_path)
 
     def write_conflicts(self):
         output_dict = super().list_conflicts()
@@ -262,13 +266,19 @@ class GeojsonConflictsWriter(BaseConflictsWriter):
         Meta conflicts aren't output at all.
     """
 
+    output_format = "geojson"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.flat = True
         self.summarise = 0
 
     @classmethod
-    def _check_output_path(cls, repo: pygit2.Repository, output_path: Path):
+    def _check_output_path(
+        cls,
+        repo: pygit2.Repository,
+        output_path: str | Path,
+    ) -> str | Path:
         """Make sure the given output_path is valid for this implementation (ie, are directories supported)."""
         if isinstance(output_path, Path):
             if output_path.is_file():
@@ -298,7 +308,7 @@ class GeojsonConflictsWriter(BaseConflictsWriter):
                 "Need to specify a directory via --output for GeoJSON with more than one dataset",
                 param_hint="--output",
             )
-        conflicts = self.get_conflicts()
+        conflicts: Iterable[RichConflict] = self.get_conflicts()
 
         if not self.repo_key_filter.match_all:
             conflicts = (c for c in conflicts if c.matches_filter(self.repo_key_filter))
@@ -308,7 +318,7 @@ class GeojsonConflictsWriter(BaseConflictsWriter):
         geojson_conflicts = self.get_geojson_conflicts(conflicts)
         self.output_geojson_conflicts(geojson_conflicts)
 
-    def get_geojson_conflicts(self, conflicts: List[RichConflict]) -> dict:
+    def get_geojson_conflicts(self, conflicts: Iterable[RichConflict]) -> dict:
         """Returns geojson conflicts as a dict"""
         output_dict = {}
         for conflict in conflicts:
@@ -328,7 +338,9 @@ class GeojsonConflictsWriter(BaseConflictsWriter):
         conflicts = self.separate_geojson_conflicts_by_ds(json_obj)
 
         for ds_path, features in conflicts.items():
-            if self.output_path == "-":
+            ds_output_path: Path | str
+            if isinstance(self.output_path, str):
+                assert self.output_path == "-"
                 ds_output_path = "-"
             else:
                 ds_output_filename = str(ds_path).replace("/", "__") + ".geojson"
@@ -341,9 +353,9 @@ class GeojsonConflictsWriter(BaseConflictsWriter):
                 json_style=self.json_style,
             )
 
-    def separate_geojson_conflicts_by_ds(self, json_obj: dict) -> dict:
+    def separate_geojson_conflicts_by_ds(self, json_obj: dict[str, dict]) -> dict:
         """Separates geojson conflicts by datasets"""
-        conflicts = dict()
+        conflicts: dict[str, list[dict]] = dict()
         for key, feature in json_obj.items():
             if "meta" == key.split(":")[1]:
                 continue
