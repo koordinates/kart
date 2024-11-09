@@ -12,6 +12,19 @@ env:
   AWS_NO_SIGN_REQUEST: "1"
 
 jobs:
+  type-checking:
+    name: Run Type Checking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: 'pip' # caching pip dependencies
+      - run: pip install -r requirements/requirements.txt -r requirements/test.txt -r requirements/dev.txt
+      - name: Run mypy
+        run: mypy
+
   # Increase rate limits for public registry
   amazon-ecr-auth:
     runs-on: ubuntu-latest
