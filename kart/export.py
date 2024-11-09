@@ -25,7 +25,7 @@ from kart.cli_util import KartCommand, forward_context_to_command
     "args",
     nargs=-1,
     metavar="DATASET [EXPORT_TYPE:]DESTINATION",
-    shell_complete=repo_path_completer,
+    shell_complete=repo_path_completer,  # type: ignore[call-arg]
 )
 def export(ctx, args, **kwargs):
     """

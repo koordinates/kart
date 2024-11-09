@@ -167,7 +167,7 @@ def get_driver(destination_spec):
     "args",
     nargs=-1,
     metavar="DATASET [EXPORT_TYPE:]DESTINATION",
-    shell_complete=repo_path_completer,
+    shell_complete=repo_path_completer,  # type: ignore[call-arg]
 )
 def table_export(
     ctx,

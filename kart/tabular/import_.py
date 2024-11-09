@@ -179,7 +179,7 @@ def any_at_all(iterable):
     "args",
     nargs=-1,
     metavar="SOURCE ([SOURCES...] or [TABLES...])",
-    shell_complete=file_path_completer,
+    shell_complete=file_path_completer,  # type: ignore[call-arg]
 )
 def table_import(
     ctx,

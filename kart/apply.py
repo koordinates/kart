@@ -370,7 +370,7 @@ def apply_patch(
     "--ref",
     default="HEAD",
     help="Which ref to apply the patch onto.",
-    shell_complete=ref_completer,
+    shell_complete=ref_completer,  # type: ignore[call-arg]
 )
 @click.option(
     "--amend",

@@ -235,7 +235,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
     nargs=-1,
-    shell_complete=ref_or_repo_path_completer,
+    shell_complete=ref_or_repo_path_completer,  # type: ignore[call-arg]
 )
 def log(
     ctx,

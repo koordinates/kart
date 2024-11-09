@@ -33,7 +33,12 @@ def data(ctx, **kwargs):
     is_flag=True,
     help="When set, outputs the dataset type and version. (This may become the default in a later version of Kart)",
 )
-@click.argument("refish", required=False, default="HEAD", shell_complete=ref_completer)
+@click.argument(
+    "refish",
+    required=False,
+    default="HEAD",
+    shell_complete=ref_completer,  # type: ignore[call-arg]
+)
 @click.pass_context
 def data_ls(ctx, output_format, with_dataset_types, refish):
     """List all of the datasets in the Kart repository"""

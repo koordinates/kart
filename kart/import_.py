@@ -75,7 +75,7 @@ def list_import_formats(ctx):
     "args",
     nargs=-1,
     metavar="SOURCE [[SOURCES...] or [DATASETS...]]",
-    shell_complete=file_path_completer,
+    shell_complete=file_path_completer,  # type: ignore[call-arg]
 )
 def import_(ctx, args, **kwargs):
     """

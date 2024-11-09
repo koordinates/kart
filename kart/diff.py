@@ -159,7 +159,7 @@ def feature_count_diff(
     metavar="[REVISIONS] [--] [FILTERS]",
     nargs=-1,
     type=click.UNPROCESSED,
-    shell_complete=ref_or_repo_path_completer,
+    shell_complete=ref_or_repo_path_completer,  # type: ignore[call-arg]
 )
 def diff(
     ctx,

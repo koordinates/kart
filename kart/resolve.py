@@ -538,7 +538,7 @@ def _fix_conflict_label(conflict_label):
     "conflict_labels",
     nargs=-1,
     metavar="[CONFLICT_LABELS]",
-    shell_complete=conflict_completer,
+    shell_complete=conflict_completer,  # type: ignore[call-arg]
 )
 def resolve(ctx, with_version, file_path, renumber, conflict_labels):
     """Resolve a merge conflict, using one of the conflicting versions, or with a user-supplied resolution."""
