@@ -1,6 +1,6 @@
 boto3>=1.29.1
 certifi
-click~=8.1
+click~=8.1.7
 docutils<0.18
 msgpack~=0.6.1
 Pygments
