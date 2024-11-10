@@ -34,7 +34,7 @@ pygments==2.13.0
     # via sphinx
 pytz==2022.6
     # via babel
-requests==2.31.0
+requests==2.32.2
     # via sphinx
 six==1.16.0
     # via livereload
