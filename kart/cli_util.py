@@ -179,7 +179,7 @@ class MutexOption(click.Option):
                             f"is mutually exclusive with {other.get_error_hint(ctx)}."
                         )
                 else:
-                    self.prompt = ""
+                    self.prompt = None
         return super().handle_parse_result(ctx, opts, args)
 
 
