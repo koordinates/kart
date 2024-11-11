@@ -75,11 +75,11 @@ from kart.repo import KartRepoState
     metavar="[REVISION] [--] [FILTERS]",
     nargs=-1,
     type=click.UNPROCESSED,
-    shell_complete=ref_or_repo_path_completer,
+    shell_complete=ref_or_repo_path_completer,  # type: ignore[call-arg]
 )
 @click.option(
     "--diff-format",
-    type=click.Choice(DiffFormat),
+    type=click.Choice(list(DiffFormat)),
     default=DiffFormat.FULL,
     help="Choose the diff format: \n'full' for full diff, 'none' for viewing commit metadata only, or 'no-data-changes' for metadata and a bool indicating the feature/tile tree changes.",
 )
@@ -184,7 +184,10 @@ def show(
 )
 # NOTE: this is *required* for now.
 # A future version might create patches from working-copy changes.
-@click.argument("refish", shell_complete=ref_completer)
+@click.argument(
+    "refish",
+    shell_complete=ref_completer,  # type: ignore[call-arg]
+)
 def create_patch(
     ctx,
     *,

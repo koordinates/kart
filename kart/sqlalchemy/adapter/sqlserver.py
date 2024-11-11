@@ -10,7 +10,7 @@ from kart.sqlalchemy.sqlserver import Db_SqlServer
 from kart.schema import ColumnSchema, Schema
 from kart.utils import ungenerator
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql import quoted_name
+from sqlalchemy.sql import quoted_name  # type: ignore[attr-defined]
 from sqlalchemy.sql.functions import Function
 
 

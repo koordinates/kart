@@ -78,7 +78,7 @@ def _path_part_sort_key(path_part):
         return "N", path_part
 
 
-def conflicts_json_as_text(value, path="", level=0) -> str:
+def conflicts_json_as_text(value: str | int | dict | list, path="", level=0) -> str:
     """Converts the JSON output of list_conflicts to a string.
 
     The conflicts themselves should already be in the appropriate format -
@@ -96,6 +96,8 @@ def conflicts_json_as_text(value, path="", level=0) -> str:
     elif isinstance(value, list):
         indent = "    " * level
         return "".join(f"{indent}{path}{item}\n" for item in value)
+    else:
+        raise ValueError(f"Unexpected value type: {type(value)}")
 
 
 def item_to_text(key: str, value: dict, path: str, level: int) -> str:
@@ -110,7 +112,7 @@ def item_to_text(key: str, value: dict, path: str, level: int) -> str:
         return f"{styled_key_text}\n{value_text}"
 
 
-def get_key_text_color(key_text: str) -> str:
+def get_key_text_color(key_text: str) -> str | None:
     """Takes a given path and outputs an appropriate style for it
 
     The format for the key_text is:
@@ -125,3 +127,4 @@ def get_key_text_color(key_text: str) -> str:
     for key, color in style.items():
         if key_text.endswith(key):
             return color
+    return None

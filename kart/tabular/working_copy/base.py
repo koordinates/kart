@@ -43,7 +43,7 @@ class TableWorkingCopy(WorkingCopyPart):
     """
 
     # Subclasses should override if they can support more meta-items eg description or metadata.xml
-    SUPPORTED_META_ITEMS = (
+    SUPPORTED_META_ITEMS: tuple[meta_items.MetaItemDefinition, ...] = (
         meta_items.TITLE,
         meta_items.SCHEMA_JSON,
         meta_items.CRS_DEFINITIONS,
@@ -1455,10 +1455,8 @@ class TableWorkingCopy(WorkingCopyPart):
     def _check_for_unsupported_ds_types(self, sess, target_datasets, schema="public"):
         pass
 
-
-# Alias state_session to session:
-# a session the working-copy in general is also a good session for reading/writing the state table.
-TableWorkingCopy.state_session = TableWorkingCopy.session
+    def state_session(self):
+        return self.session()
 
 
 @contextlib.contextmanager

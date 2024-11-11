@@ -122,7 +122,7 @@ class TileImporter:
 
     # A dict of the form {sidecar-key-prefix: sidecar-filename-suffix}
     # For example: {"pam": ".aux.xml"} since we use the prefix pam to label keys from .aux.xml aka PAM files.
-    SIDECAR_FILES = {}
+    SIDECAR_FILES: dict[str, str] = {}
 
     @cached_property
     def ALLOWED_SCHEMES(self):

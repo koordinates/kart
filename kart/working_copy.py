@@ -668,14 +668,7 @@ class WorkingCopyPart:
             repo_key_filter,
         )
 
-        # Start a DB session that surrounds both the working copy modifications and the state table modifications -
-        # if the same DB session can be used for both, otherwise, let _do_reset_datasets handle it.
-        session_context = (
-            self.session
-            if hasattr(self, "session") and self.session == self.state_session
-            else contextlib.nullcontext
-        )
-        with session_context():
+        with self.state_session() as sess:
             if ds_inserts or ds_updates or ds_deletes:
                 self._do_reset_datasets(
                     base_datasets=base_datasets,
@@ -691,15 +684,12 @@ class WorkingCopyPart:
                     quiet=quiet,
                 )
 
-            with self.state_session() as sess:
-                if not track_changes_as_dirty:
-                    self._update_state_table_tree(sess, target_tree_id)
-                self._update_state_table_spatial_filter_hash(
-                    sess, self.repo.spatial_filter.hexhash
-                )
-                self._update_state_table_non_checkout_datasets(
-                    sess, non_checkout_datasets
-                )
+            if not track_changes_as_dirty:
+                self._update_state_table_tree(sess, target_tree_id)
+            self._update_state_table_spatial_filter_hash(
+                sess, self.repo.spatial_filter.hexhash
+            )
+            self._update_state_table_non_checkout_datasets(sess, non_checkout_datasets)
 
     def _do_reset_datasets(
         self,

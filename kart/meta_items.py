@@ -2,6 +2,7 @@ from enum import Enum, auto
 import binascii
 import functools
 import re
+from typing import ClassVar
 
 from kart import crs_util
 from kart.schema import Schema
@@ -9,6 +10,8 @@ from kart.serialise_util import ensure_text, ensure_bytes, json_pack, json_unpac
 
 
 class TagsJsonFileType:
+    INSTANCE: ClassVar["TagsJsonFileType"]
+
     # schema.json should be checked on read and write, by dropping any optional fields that are None.
     def decode_from_bytes(self, data):
         if data is None:
@@ -34,6 +37,8 @@ TagsJsonFileType.INSTANCE = TagsJsonFileType()
 
 
 class SchemaJsonFileType:
+    INSTANCE: ClassVar["SchemaJsonFileType"]
+
     # schema.json should be normalised on read and write, by dropping any optional fields that are None.
     def decode_from_bytes(self, data):
         if data is None:

@@ -132,7 +132,7 @@ def feature_count_diff(
 )
 @click.option(
     "--diff-format",
-    type=click.Choice(DiffFormat),
+    type=click.Choice(list(DiffFormat)),
     default=DiffFormat.FULL,
     help="Choose the diff format: \n'full' for full diff or 'no-data-changes' for metadata and a bool indicating the feature/tile tree changes.",
 )
@@ -159,7 +159,7 @@ def feature_count_diff(
     metavar="[REVISIONS] [--] [FILTERS]",
     nargs=-1,
     type=click.UNPROCESSED,
-    shell_complete=ref_or_repo_path_completer,
+    shell_complete=ref_or_repo_path_completer,  # type: ignore[call-arg]
 )
 def diff(
     ctx,

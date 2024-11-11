@@ -696,6 +696,3 @@ class WorkingCopy_GPKG(TableWorkingCopy):
                 {"last_change": gpkg_change_time, "table_name": dataset.table_name},
             ).rowcount
         assert rc == 1, f"gpkg_contents update: expected 1Δ, got {rc}"
-
-
-WorkingCopy_GPKG.state_session = WorkingCopy_GPKG.session

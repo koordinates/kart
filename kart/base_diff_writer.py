@@ -4,12 +4,19 @@ import logging
 import re
 import sys
 from pathlib import Path
+from typing import Generator
 
 import click
 
 from kart import diff_util
 from kart.diff_format import DiffFormat
-from kart.diff_structs import FILES_KEY, WORKING_COPY_EDIT, BINARY_FILE, Delta
+from kart.diff_structs import (
+    FILES_KEY,
+    WORKING_COPY_EDIT,
+    BINARY_FILE,
+    Delta,
+    DatasetDiff,
+)
 from kart.exceptions import CrsError, InvalidOperation
 from kart.key_filters import RepoKeyFilter
 from kart import list_of_conflicts
@@ -736,8 +743,51 @@ class BaseDiffWriter:
         if dataset and dataset.get_meta_item("linked-storage.json") and ds_diff:
             self.linked_dataset_changes.add(ds_path)
 
+    def filtered_dataset_deltas_as_geojson(
+        self, ds_path: str, ds_diff: DatasetDiff
+    ) -> Generator[dict, None, None]:
+        from kart.tabular.feature_output import feature_as_geojson
 
-class FeatureDeltaFetcher:
+        if "feature" not in ds_diff:
+            return
+
+        old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
+
+        for key, delta in self.filtered_dataset_deltas(ds_path, ds_diff):
+            if delta.old:
+                change_type = "U-" if delta.new else "D"
+                yield feature_as_geojson(
+                    delta.old_value,
+                    delta.old_key,
+                    ds_path,
+                    change_type,
+                    old_transform,
+                )
+            if delta.new:
+                change_type = "U+" if delta.old else "I"
+                yield feature_as_geojson(
+                    delta.new_value,
+                    delta.new_key,
+                    ds_path,
+                    change_type,
+                    new_transform,
+                )
+
+
+class BaseDeltaFetcher:
+    def _is_delta_value_ready(self, delta_key_value):
+        if delta_key_value is None:
+            return True
+        try:
+            delta_key_value.get_lazy_value()
+            return True
+        except KeyError as e:
+            if object_is_promised(e):
+                return False
+            raise
+
+
+class FeatureDeltaFetcher(BaseDeltaFetcher):
     """
     Given a diff Delta, either reports that it is available immediately, or kicks off a fetch so that it will be
     available soon, and adds it to the list of buffered deltas. This lets the diff writer above first output the deltas
@@ -795,19 +845,8 @@ class FeatureDeltaFetcher:
         self._fetch_process.finish()
         yield from self.buffered_deltas
 
-    def _is_delta_value_ready(self, delta_key_value):
-        if delta_key_value is None:
-            return True
-        try:
-            delta_key_value.get_lazy_value()
-            return True
-        except KeyError as e:
-            if object_is_promised(e):
-                return False
-            raise
 
-
-class NullDeltaFetcher:
+class NullDeltaFetcher(BaseDeltaFetcher):
     """
     Given a diff Delta, checks to make sure that it is immediately available. If it is not, outputs an error message.
     """
@@ -834,6 +873,3 @@ class NullDeltaFetcher:
     def finish_fetching_deltas(self):
         # Nothing to do here.
         yield from ()
-
-
-NullDeltaFetcher._is_delta_value_ready = FeatureDeltaFetcher._is_delta_value_ready

@@ -62,7 +62,12 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
     multiple=True,
     help="Request that a particular dataset *not* be checked out (one which is currently configured to be checked out)",
 )
-@click.argument("refish", default=None, required=False, shell_complete=ref_completer)
+@click.argument(
+    "refish",
+    default=None,
+    required=False,
+    shell_complete=ref_completer,  # type: ignore[call-arg]
+)
 def checkout(
     ctx,
     new_branch,
@@ -320,7 +325,12 @@ def git_refetch(repo, promisor_remote, spec):
     help="If a local branch of given name doesn't exist, but a remote does, "
     "this option guesses that the user wants to create a local to track the remote",
 )
-@click.argument("refish", default=None, required=False, shell_complete=ref_completer)
+@click.argument(
+    "refish",
+    default=None,
+    required=False,
+    shell_complete=ref_completer,  # type: ignore[call-arg]
+)
 def switch(ctx, create, force_create, discard_changes, do_guess, refish):
     """
     Switch branches
@@ -475,7 +485,7 @@ def _is_in_branches(branch_name, branches):
         "tag associated with it. "
     ),
     default="HEAD",
-    shell_complete=ref_completer,
+    shell_complete=ref_completer,  # type: ignore[call-arg]
 )
 @click.argument("filters", nargs=-1)
 def restore(ctx, source, filters):
@@ -512,7 +522,11 @@ def restore(ctx, source, filters):
     is_flag=True,
     help="Discard local changes in working copy if necessary",
 )
-@click.argument("refish", default="HEAD", shell_complete=ref_completer)
+@click.argument(
+    "refish",
+    default="HEAD",
+    shell_complete=ref_completer,  # type: ignore[call-arg]
+)
 def reset(ctx, discard_changes, refish):
     """
     Reset the branch head to point to a particular commit.

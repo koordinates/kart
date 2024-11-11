@@ -26,7 +26,7 @@ from .working_copy import PartType
     "--import",
     "import_from",
     help='Import a database (all tables): "FORMAT:PATH" eg. "GPKG:my.gpkg". Currently only tabular formats are supported.',
-    shell_complete=file_path_completer,
+    shell_complete=file_path_completer,  # type: ignore[call-arg]
 )
 @click.option(
     "--checkout/--no-checkout",

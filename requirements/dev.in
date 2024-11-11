@@ -14,3 +14,13 @@ ipython
     pexpect>4.3
     appnope
     colorama
+
+mypy
+    # note: not maintained; not compatible with sqlalchemy 2.x
+    # so, probably drop this when we upgrade sqlalchemy
+    sqlalchemy-stubs==0.4
+    msgpack-types
+    types-jsonschema
+    types-psycopg2
+    types-Pygments==2.13.0
+    types-tqdm

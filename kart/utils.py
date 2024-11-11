@@ -68,3 +68,11 @@ def get_num_available_cores():
         # sched_getaffinity isn't available on some platforms (macOS mostly I think)
         # Fallback to total machine CPUs
         return float(os.cpu_count())
+
+
+class classproperty:
+    def __init__(self, getter):
+        self.fget = getter
+
+    def __get__(self, cls, owner):
+        return self.fget(owner)

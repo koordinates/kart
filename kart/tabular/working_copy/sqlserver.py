@@ -6,7 +6,7 @@ from kart import crs_util
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
 from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
 from kart.schema import Schema
-from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer
+from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer  # type: ignore[attr-defined]
 from sqlalchemy.orm import sessionmaker
 
 from .db_server import DatabaseServer_WorkingCopy

@@ -116,7 +116,7 @@ L = logging.getLogger(__name__)
     "args",
     nargs=-1,
     metavar="SOURCE [SOURCES...]",
-    shell_complete=file_path_completer,
+    shell_complete=file_path_completer,  # type: ignore[call-arg]
 )
 def point_cloud_import(
     ctx,

@@ -45,7 +45,11 @@ L = logging.getLogger("kart.pull")
 )
 @click.argument("repository", required=False, metavar="REMOTE")
 @click.argument(
-    "refspecs", nargs=-1, required=False, metavar="REFISH", shell_complete=ref_completer
+    "refspecs",
+    nargs=-1,
+    required=False,
+    metavar="REFISH",
+    shell_complete=ref_completer,  # type: ignore[call-arg]
 )
 @click.pass_context
 def pull(ctx, ff, ff_only, launch_editor, do_progress, repository, refspecs):

@@ -114,7 +114,7 @@ def render_posix(command_path: str) -> None:
     p.communicate()
 
 
-def render_windows(command_path: str) -> bytes:
+def render_windows(command_path: str) -> None:
     from kart import prefix
 
     text_page = Path(prefix) / "help" / f'{command_path.replace(" ", "-")}'
@@ -155,8 +155,8 @@ class MutexOption(click.Option):
             print("...do what you like with the params you got...")
     """
 
-    def __init__(self, *args, **kwargs):
-        self.exclusive_with: list = kwargs.pop("exclusive_with")
+    def __init__(self, *args, exclusive_with: list[str], **kwargs):
+        self.exclusive_with = exclusive_with
 
         assert self.exclusive_with, "'exclusive_with' parameter required"
         kwargs["help"] = (
@@ -167,7 +167,7 @@ class MutexOption(click.Option):
         ).strip()
         super().__init__(*args, **kwargs)
 
-    def handle_parse_result(self, ctx, opts, args):
+    def handle_parse_result(self, ctx, opts, args: list[str]):
         current_opt: bool = self.name in opts
         for other_name in self.exclusive_with:
             if other_name in opts:

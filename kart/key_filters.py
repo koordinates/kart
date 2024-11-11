@@ -1,5 +1,6 @@
 import fnmatch
 import re
+from typing import ClassVar
 
 import click
 
@@ -17,6 +18,8 @@ class UserStringKeyFilter(set):
     A key filter that, given primary key values or similar,
     matches them against a set of strings the user has supplied.
     """
+
+    MATCH_ALL: ClassVar["UserStringKeyFilter"]
 
     def __init__(self, *args, match_all=False, **kwargs):
         super().__init__(*args, **kwargs)
@@ -80,6 +83,8 @@ class KeyFilterDict(RichDict):
     at any/all keys, and that child also matches all.
     """
 
+    MATCH_ALL: ClassVar["KeyFilterDict"]
+
     def __init__(self, *args, match_all=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.match_all = match_all
@@ -126,6 +131,8 @@ class DatasetKeyFilter(KeyFilterDict):
     for filtering meta items, features, tiles etc.
     """
 
+    MATCH_ALL: ClassVar["DatasetKeyFilter"]
+
     child_type = UserStringKeyFilter
     child_that_matches_all = UserStringKeyFilter(match_all=True)
 
@@ -142,7 +149,8 @@ class RepoKeyFilter(KeyFilterDict):
     for filtering items in any or all datasets.
     """
 
-    child_type = DatasetKeyFilter
+    MATCH_ALL: ClassVar["RepoKeyFilter"]
+    child_type: type = DatasetKeyFilter
     child_that_matches_all = DatasetKeyFilter(match_all=True)
 
     # https://github.com/koordinates/kart/blob/master/docs/DATASETS_v3.md#valid-dataset-names
@@ -284,6 +292,9 @@ class RepoKeyFilter(KeyFilterDict):
         super().__setitem__(key, value)
 
 
+RepoKeyFilter.MATCH_ALL = RepoKeyFilter(match_all=True)
+
+
 class NegateKeyFilter:
     """
     A key filter that contains whatever the given delegate does not contain, and vice versa.
@@ -306,9 +317,6 @@ class NegateKeyFilter:
         raise NotImplementedError()
 
 
-RepoKeyFilter.MATCH_ALL = RepoKeyFilter(match_all=True)
-
-
 class DeltaFilter(set):
     """
     Filters parts of individual deltas - new or old values for inserts, updates, or deletes.
@@ -317,6 +325,8 @@ class DeltaFilter(set):
     "+" is the key for new values of updates
     "++" is they key for new values of inserts
     """
+
+    MATCH_ALL: ClassVar["DeltaFilter"]
 
     def __init__(self, *args, match_all=False, **kwargs):
         super().__init__(*args, **kwargs)

@@ -4,10 +4,11 @@ from pathlib import PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
 import click
+from sqlalchemy.exc import DBAPIError
 
 from kart.exceptions import DbConnectionError, InvalidOperation
 from kart.sqlalchemy import DbType, strip_password
-from sqlalchemy.exc import DBAPIError
+from kart.utils import classproperty
 
 from . import TableWorkingCopyStatus
 from .base import TableWorkingCopy
@@ -16,8 +17,7 @@ from .base import TableWorkingCopy
 class DatabaseServer_WorkingCopy(TableWorkingCopy):
     """Functionality common to working copies that connect to a database server."""
 
-    @property
-    @classmethod
+    @classproperty
     def URI_SCHEME(cls):
         """The URI scheme to connect to this type of database, eg "postgresql"."""
         raise NotImplementedError()

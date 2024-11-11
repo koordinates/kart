@@ -3,9 +3,9 @@ import re
 from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy
-from kart.exceptions import NO_DRIVER, NotFound
-from sqlalchemy.dialects.mssql.base import MSDialect, MSIdentifierPreparer
+from sqlalchemy.dialects.mssql.base import MSDialect, MSIdentifierPreparer  # type: ignore[attr-defined]
 
+from kart.exceptions import NO_DRIVER, NotFound
 from .base import BaseDb
 
 L = logging.getLogger("kart.sqlalchemy.sqlserver")
