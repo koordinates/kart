@@ -3,6 +3,7 @@ certifi
 click~=8.1.7
 docutils<0.18
 msgpack~=0.6.1
+orjson
 Pygments
 pymysql
 rst2txt

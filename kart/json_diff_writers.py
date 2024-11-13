@@ -1,4 +1,4 @@
-import json
+import orjson
 import logging
 import threading
 from datetime import datetime, timedelta, timezone
@@ -19,7 +19,11 @@ from .diff_estimation import (
 from kart.diff_structs import FILES_KEY, BINARY_FILE, DatasetDiff
 from kart.key_filters import DeltaFilter
 from kart.log import commit_obj_to_json
-from kart.output_util import dump_json_output, resolve_output_path
+from kart.output_util import (
+    dump_json_output,
+    resolve_output_path,
+    orjson_encode_default,
+)
 from kart.tabular.feature_output import feature_as_geojson, feature_as_json
 from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
@@ -241,9 +245,13 @@ class JsonLinesDiffWriter(BaseDiffWriter):
         self._output_lock = threading.RLock()
 
     def dump(self, obj):
+        output: bytes = orjson.dumps(
+            obj,
+            default=orjson_encode_default,
+            option=orjson.OPT_APPEND_NEWLINE | orjson.OPT_NON_STR_KEYS,
+        )
         with self._output_lock:
-            json.dump(obj, self.fp, separators=self.separators)
-            self.fp.write("\n")
+            self.fp.buffer.write(output)
 
     def write_header(self):
         self.dump(

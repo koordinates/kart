@@ -22,7 +22,7 @@ certifi==2022.12.7
     #   reflink
 click==8.1.7
     # via -r requirements.in
-#cryptography==42.0.4
+#cryptography==43.0.1
     # via -r requirements/vendor-wheels.txt
 docutils==0.17.1
     # via
@@ -37,6 +37,8 @@ jmespath==1.0.1
 jsonschema==4.17.3
     # via -r requirements.in
 msgpack==0.6.2
+    # via -r requirements.in
+orjson==3.10.11
     # via -r requirements.in
 #psycopg2==2.9.9
     # via -r requirements/vendor-wheels.txt
