@@ -1,9 +1,12 @@
+import io
 import json
 import pytest
+from unittest.mock import ANY
 
 import pygit2
 
-from kart.exceptions import SUCCESS, INVALID_OPERATION, NO_CONFLICT
+from kart.apply import apply_patch
+from kart.exceptions import SUCCESS, INVALID_OPERATION, NO_CONFLICT, MERGE_CONFLICT
 from kart.merge_util import (
     MergedIndex,
     CommitWithReference,
@@ -423,3 +426,78 @@ def test_merge_into_branch_fastforward(data_archive, tmp_path, cli_runner):
         # b2 ref is now the same as b1 (because it was fastforwarded)
         b2_commit = repo.references["refs/heads/b2"].peel(pygit2.Commit)
         assert b2_commit.hex == b1_commit.hex
+
+
+def _apply_features(repo, features, ref):
+    patch = {
+        "kart.diff/v1+hexwkb": {
+            "nz_pa_points_topo_150k": {
+                "feature": features,
+            }
+        },
+        "kart.patch/v1": {"message": "m", "base": repo.references[ref].target.hex},
+    }
+    patch_file = io.StringIO()
+    json.dump(patch, patch_file)
+    patch_file.seek(0)
+    apply_patch(
+        repo=repo,
+        ref=ref,
+        do_commit=True,
+        patch_file=patch_file,
+        allow_empty=False,
+    )
+
+
+def test_merge_into_branch_with_conflict(data_archive, tmp_path, cli_runner):
+    with data_archive("points") as repo_path:
+        # create two branches
+        r = cli_runner.invoke(["branch", "b1", "main"])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["branch", "b2", "main"])
+        assert r.exit_code == 0, r.stderr
+
+        # Apply conflicting patches to two branches
+        FEATURE = {
+            "fid": 1168,
+            "geom": "0101000000FFA26275E7FA65405CAC5D37987E42C0",
+            "t50_fid": 2427412,
+            "name_ascii": "Tairua",
+            "macronated": "N",
+            "name": "Tairua",
+        }
+        repo = KartRepo(repo_path)
+        b1_commit = _apply_features(
+            repo,
+            ref="refs/heads/b1",
+            features=[{"-": FEATURE, "+": {**FEATURE, "name": "b1"}}],
+        )
+        b2_commit = _apply_features(
+            repo,
+            ref="refs/heads/b2",
+            features=[{"-": FEATURE, "+": {**FEATURE, "name": "b2"}}],
+        )
+
+        # Merge b1 into b2, even though main is still checked out
+        r = cli_runner.invoke(
+            [
+                "merge",
+                "--into=b2",
+                "b1",
+                "-m",
+                "merged",
+                "--output-format=json",
+                "--fail-on-conflict",
+            ]
+        )
+        assert r.exit_code == MERGE_CONFLICT, r.stderr
+        assert r.stderr == "Error: Merge failed due to conflicts\n"
+        jdict = json.loads(r.stdout)["kart.merge/v1"]
+        jdict.pop("merging")
+        assert jdict == {
+            "commit": ANY,
+            "branch": "b2",
+            "message": "merged",
+            "conflicts": {"nz_pa_points_topo_150k": {"feature": 1}},
+            "dryRun": False,
+        }

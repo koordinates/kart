@@ -8,7 +8,7 @@ from .cli_util import StringFromFile, call_and_exit_flag, KartCommand
 from .conflicts_writer import BaseConflictsWriter
 from .core import check_git_user
 from .diff_util import get_repo_diff
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, MERGE_CONFLICT
 from .merge_util import (
     ALL_MERGE_FILES,
     AncestorOursTheirs,
@@ -60,6 +60,7 @@ def do_merge(
     commit,
     message,
     into="HEAD",
+    fail_on_conflict=False,
     launch_editor=True,
     quiet=False,
 ):
@@ -136,14 +137,17 @@ def do_merge(
             repo, summarise=2, merged_index=merged_index, merge_context=merge_context
         )
         merge_jdict["conflicts"] = conflicts_writer.list_conflicts()
-        merge_jdict["state"] = "merging"
-        if not dry_run:
-            move_repo_to_merging_state(
-                repo,
-                merged_index,
-                merge_context,
-                message or merge_context.get_message(),
-            )
+        # If ref isn't HEAD, then we can't put the repo in a 'merging' state,
+        # so there's currently no way to resolve conflicts.
+        if into == "HEAD":
+            merge_jdict["state"] = "merging"
+            if not fail_on_conflict and not dry_run:
+                move_repo_to_merging_state(
+                    repo,
+                    merged_index,
+                    merge_context,
+                    message or merge_context.get_message(),
+                )
         return merge_jdict
 
     if dry_run:
@@ -342,9 +346,15 @@ def complete_merging_state(ctx):
 )
 @click.option(
     "--into",
-    help="Merge into the given ref instead of the currently active branch.",
+    help="Merge into the given ref instead of the currently active branch. If specified, the merge will fail if there are conflicts rather than entering a merging state.",
     hidden=True,
     default="HEAD",
+)
+@click.option(
+    "--fail-on-conflict",
+    help="Exits with code 1 if there are conflicts rather than entering a merging state.",
+    is_flag=True,
+    default=False,
 )
 @click.option(
     " /--no-editor",
@@ -369,7 +379,16 @@ def complete_merging_state(ctx):
 @click.argument("commit", required=True, metavar="COMMIT")
 @click.pass_context
 def merge(
-    ctx, ff, ff_only, dry_run, message, into, launch_editor, output_format, commit
+    ctx,
+    ff,
+    ff_only,
+    dry_run,
+    message,
+    into,
+    fail_on_conflict,
+    launch_editor,
+    output_format,
+    commit,
 ):
     """Incorporates changes from the named commits (usually other branch heads) into the current branch."""
 
@@ -389,6 +408,7 @@ def merge(
         commit,
         message,
         into=into,
+        fail_on_conflict=fail_on_conflict,
         launch_editor=launch_editor,
         quiet=do_json,
     )
@@ -402,3 +422,7 @@ def merge(
     if not no_op and not conflicts:
         repo.gc("--auto")
         repo.working_copy.reset_to_head(quiet=do_json)
+    if fail_on_conflict and conflicts:
+        raise InvalidOperation(
+            "Merge failed due to conflicts", exit_code=MERGE_CONFLICT
+        )
