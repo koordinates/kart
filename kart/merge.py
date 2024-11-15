@@ -53,7 +53,15 @@ def get_commit_message(
 
 
 def do_merge(
-    repo, ff, ff_only, dry_run, commit, message, launch_editor=True, quiet=False
+    repo,
+    ff,
+    ff_only,
+    dry_run,
+    commit,
+    message,
+    into="HEAD",
+    launch_editor=True,
+    quiet=False,
 ):
     """Does a merge, but doesn't update the working copy."""
     if ff_only and not ff:
@@ -69,8 +77,11 @@ def do_merge(
 
     # accept ref-ish things (refspec, branch, commit)
     theirs = CommitWithReference.resolve(repo, commit)
-    ours = CommitWithReference.resolve(repo, "HEAD")
+    ours = CommitWithReference.resolve(repo, into)
     ancestor_id = repo.merge_base(theirs.id, ours.id)
+
+    if not ours.reference:
+        raise click.BadParameter(f"--into: Ref {into!r} doesn't exist")
 
     if not ancestor_id:
         raise InvalidOperation(f"Commits {theirs.id} and {ours.id} aren't related.")
@@ -110,7 +121,7 @@ def do_merge(
         merge_jdict["commit"] = theirs.id.hex
         merge_jdict["fastForward"] = True
         if not dry_run:
-            repo.head.set_target(
+            ours.reference.set_target(
                 theirs.id, f"{merge_context.get_message()}: Fast-forward"
             )
         return merge_jdict
@@ -155,7 +166,7 @@ def do_merge(
                 quiet=quiet,
             )
         merge_commit_id = repo.create_commit(
-            repo.head.name,
+            ours.reference.name,
             user,
             user,
             message,
@@ -330,6 +341,12 @@ def complete_merging_state(ctx):
     is_eager=True,  # -m is eager and --continue is non-eager so we can access -m from complete_merging_state callback.
 )
 @click.option(
+    "--into",
+    help="Merge into the given ref instead of the currently active branch.",
+    hidden=True,
+    default="HEAD",
+)
+@click.option(
     " /--no-editor",
     "launch_editor",
     is_flag=True,
@@ -351,7 +368,9 @@ def complete_merging_state(ctx):
 )
 @click.argument("commit", required=True, metavar="COMMIT")
 @click.pass_context
-def merge(ctx, ff, ff_only, dry_run, message, launch_editor, output_format, commit):
+def merge(
+    ctx, ff, ff_only, dry_run, message, into, launch_editor, output_format, commit
+):
     """Incorporates changes from the named commits (usually other branch heads) into the current branch."""
 
     repo = ctx.obj.get_repo(
@@ -369,6 +388,7 @@ def merge(ctx, ff, ff_only, dry_run, message, launch_editor, output_format, comm
         dry_run,
         commit,
         message,
+        into=into,
         launch_editor=launch_editor,
         quiet=do_json,
     )

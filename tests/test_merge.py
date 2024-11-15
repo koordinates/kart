@@ -1,6 +1,8 @@
 import json
 import pytest
 
+import pygit2
+
 from kart.exceptions import SUCCESS, INVALID_OPERATION, NO_CONFLICT
 from kart.merge_util import (
     MergedIndex,
@@ -360,3 +362,64 @@ def test_merge_state_lock(data_archive, cli_runner):
         assert r.exit_code == SUCCESS
         r = cli_runner.invoke(["resolve", "dummy_conflict", "--with=delete"])
         assert r.exit_code == NO_CONFLICT  # "dummy_conflict" is not a real conflict
+
+
+def test_merge_into_branch(data_archive, tmp_path, cli_runner):
+    with data_archive("points") as repo_path:
+        # create two branches and put a commit on each
+        r = cli_runner.invoke(["branch", "b1", "main"])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(
+            ["commit-files", f"--ref=refs/heads/b1", "-m", "B1", "a=1"]
+        )
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["branch", "b2", "main"])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(
+            ["commit-files", f"--ref=refs/heads/b2", "-m", "B2", "b=1"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Merge b1 into b2, even though main is still checked out
+        r = cli_runner.invoke(["merge", "--into=b2", "b1", "-m", "merged"])
+        assert r.exit_code == 0, r.stderr
+
+        repo = KartRepo(repo_path)
+        # HEAD is unchanged
+        assert repo.head.name == "refs/heads/main"
+        head_commit = repo.head_commit
+        assert head_commit.message == "Improve naming on Coromandel East coast"
+
+        # b2 ref has a merge commit on it
+        b2_commit = repo.references["refs/heads/b2"].peel(pygit2.Commit)
+        assert len(b2_commit.parents) == 2
+        assert b2_commit.message == "merged"
+
+
+def test_merge_into_branch_fastforward(data_archive, tmp_path, cli_runner):
+    with data_archive("points") as repo_path:
+        # create two branches and put a commit on one of them
+        r = cli_runner.invoke(["branch", "b1", "main"])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(
+            ["commit-files", f"--ref=refs/heads/b1", "-m", "B1", "a=1"]
+        )
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["branch", "b2", "main"])
+        assert r.exit_code == 0, r.stderr
+
+        # Merge b1 into b2, even though main is still checked out
+        r = cli_runner.invoke(["merge", "--into=b2", "b1"])
+        assert r.exit_code == 0, r.stderr
+
+        repo = KartRepo(repo_path)
+        b1_commit = repo.references["refs/heads/b1"].peel(pygit2.Commit)
+
+        # HEAD is unchanged
+        assert repo.head.name == "refs/heads/main"
+        head_commit = repo.head_commit
+        assert head_commit.message == "Improve naming on Coromandel East coast"
+
+        # b2 ref is now the same as b1 (because it was fastforwarded)
+        b2_commit = repo.references["refs/heads/b2"].peel(pygit2.Commit)
+        assert b2_commit.hex == b1_commit.hex
