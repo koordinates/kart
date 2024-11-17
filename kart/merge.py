@@ -139,15 +139,15 @@ def do_merge(
         merge_jdict["conflicts"] = conflicts_writer.list_conflicts()
         # If ref isn't HEAD, then we can't put the repo in a 'merging' state,
         # so there's currently no way to resolve conflicts.
-        if into == "HEAD":
+        if not fail_on_conflict:
             merge_jdict["state"] = "merging"
-            if not fail_on_conflict and not dry_run:
-                move_repo_to_merging_state(
-                    repo,
-                    merged_index,
-                    merge_context,
-                    message or merge_context.get_message(),
-                )
+        if not fail_on_conflict and not dry_run:
+            move_repo_to_merging_state(
+                repo,
+                merged_index,
+                merge_context,
+                message or merge_context.get_message(),
+            )
         return merge_jdict
 
     if dry_run:
@@ -346,7 +346,7 @@ def complete_merging_state(ctx):
 )
 @click.option(
     "--into",
-    help="Merge into the given ref instead of the currently active branch. If specified, the merge will fail if there are conflicts rather than entering a merging state.",
+    help="Merge into the given ref instead of the currently active branch. Implies --fail-on-conflict.",
     hidden=True,
     default="HEAD",
 )
@@ -399,6 +399,8 @@ def merge(
     ctx.obj.check_not_dirty()
 
     do_json = output_format == "json"
+    if into != "HEAD":
+        fail_on_conflict = True
 
     jdict = do_merge(
         repo,
@@ -419,7 +421,7 @@ def merge(
         dump_json_output({"kart.merge/v1": jdict}, sys.stdout)
     else:
         click.echo(merge_status_to_text(jdict, fresh=True))
-    if not no_op and not conflicts:
+    if not no_op and not conflicts and into == "HEAD":
         repo.gc("--auto")
         repo.working_copy.reset_to_head(quiet=do_json)
     if fail_on_conflict and conflicts:
