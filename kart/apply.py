@@ -275,7 +275,7 @@ def apply_patch(
     if ref != "HEAD":
         if not do_commit:
             raise click.UsageError("--no-commit and --ref are incompatible")
-        if not ref.startswith("refs/heads/"):
+        if not ref.startswith("refs/"):
             ref = f"refs/heads/{ref}"
         try:
             repo.references[ref]
