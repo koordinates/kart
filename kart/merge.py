@@ -102,6 +102,7 @@ def do_merge(
     # We're up-to-date if we're trying to merge our own common ancestor.
     if ancestor_id == theirs.id:
         merge_jdict["noOp"] = True
+        merge_jdict["message"] = None
         return merge_jdict
 
     # "dryRun": True means we didn't actually do this

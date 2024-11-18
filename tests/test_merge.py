@@ -501,3 +501,27 @@ def test_merge_into_branch_with_conflict(data_archive, tmp_path, cli_runner):
             "conflicts": {"nz_pa_points_topo_150k": {"feature": 1}},
             "dryRun": False,
         }
+
+
+def test_merge_ancestor_text(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        # merge an ancestor commit
+        r = cli_runner.invoke(["merge", "HEAD^"])
+        assert r.exit_code == 0, r
+
+        # No merge commit is created, because the commit is an ancestor of the target branch
+        assert "Already up to date\n" in r.stdout
+        repo = KartRepo(repo_path)
+        assert repo.head.target.hex == H.POINTS.HEAD_SHA
+
+
+def test_merge_ancestor_json(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        repo = KartRepo(repo_path)
+        # new branch
+        r = cli_runner.invoke(["merge", "--output-format=json", "HEAD^"])
+        assert r.exit_code == 0, r
+        output = json.loads(r.stdout)["kart.merge/v1"]
+
+        assert output["noOp"]
+        assert output["message"] is None
