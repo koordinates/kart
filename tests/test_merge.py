@@ -525,3 +525,47 @@ def test_merge_ancestor_json(data_archive, cli_runner):
 
         assert output["noOp"]
         assert output["message"] is None
+
+
+def test_merge_signatures_from_environment(
+    data_archive, cli_runner, tmp_path_factory, monkeypatch
+):
+    with data_archive("points") as repo_path:
+        r = cli_runner.invoke(["branch", "b1", "main"])
+        assert r.exit_code == 0, r.stderr
+
+        # make a commit
+        FEATURE = {
+            "fid": 1168,
+            "geom": "0101000000FFA26275E7FA65405CAC5D37987E42C0",
+            "t50_fid": 2427412,
+            "name_ascii": "Tairua",
+            "macronated": "N",
+            "name": "Tairua",
+        }
+        repo = KartRepo(repo_path)
+        b1_commit = _apply_features(
+            repo,
+            ref="refs/heads/b1",
+            features=[{"-": FEATURE, "+": {**FEATURE, "name": "b1"}}],
+        )
+
+        # override the `git_user_config` fixture from conftest.py
+        # so that there's no `user.name` or `user.email` in the `.gitconfig` file
+        home = tmp_path_factory.mktemp("home")
+        monkeypatch.setenv("HOME", str(home))
+
+        # now merge the branch into main
+        monkeypatch.setenv("GIT_AUTHOR_NAME", "author")
+        monkeypatch.setenv("GIT_AUTHOR_EMAIL", "author@example.com")
+        monkeypatch.setenv("GIT_COMMITTER_NAME", "committer")
+        monkeypatch.setenv("GIT_COMMITTER_EMAIL", "committer@example.com")
+        r = cli_runner.invoke(
+            ["merge", "--output-format=json", "--no-ff", "b1", "--message=m"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        assert repo.head_commit.author.name == "author"
+        assert repo.head_commit.author.email == "author@example.com"
+        assert repo.head_commit.committer.name == "committer"
+        assert repo.head_commit.committer.email == "committer@example.com"

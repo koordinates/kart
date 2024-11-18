@@ -161,7 +161,6 @@ def do_merge(
         merge_tree_id = index.write_tree(repo, write_merged_index_flags(repo))
         L.debug(f"Merge tree: {merge_tree_id}")
 
-        user = repo.default_signature
         if not message:
             message = get_commit_message(
                 merge_context,
@@ -170,10 +169,11 @@ def do_merge(
                 launch_editor=launch_editor,
                 quiet=quiet,
             )
+
         merge_commit_id = repo.create_commit(
             ours.reference.name,
-            user,
-            user,
+            repo.author_signature(),
+            repo.committer_signature(),
             message,
             merge_tree_id,
             [ours.id, theirs.id],
