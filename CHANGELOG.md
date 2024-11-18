@@ -11,6 +11,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Upgrade to PDAL 2.7 [#1005](https://github.com/koordinates/kart/pull/1005)
 - Adds a `--drop-empty-geometry-features` option to `kart export`. [#1007](https://github.com/koordinates/kart/pull/1007)
 - Adds diagnostic output to Kart when `KART_DIAGNOSTICS=1` environment variable is set. [#1013](https://github.com/koordinates/kart/pull/1013)
+- In `kart merge --output-format=json`, the `message` field is now `null` if the merge is a no-op. [#1021](https://github.com/koordinates/kart/pull/1021)
 
 ## 0.15.3
 
