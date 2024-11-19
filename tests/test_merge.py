@@ -531,8 +531,25 @@ def test_merge_signatures_from_environment(
     data_archive, cli_runner, tmp_path_factory, monkeypatch
 ):
     with data_archive("points") as repo_path:
-        r = cli_runner.invoke(["branch", "b1", "main"])
+        r = cli_runner.invoke(["-vv", "branch", "b1", "main"])
         assert r.exit_code == 0, r.stderr
+
+        i = 0
+
+        def debug_things():
+            nonlocal i
+            i += 1
+            print(f"\n== i={i} ==")
+            z = pygit2.Repository(repo_path)
+            print("head", z.head.peel(pygit2.Commit).hex)
+            main = z.references["refs/heads/main"].peel(pygit2.Commit)
+            print("main", main.hex)
+            b1 = z.references["refs/heads/b1"].peel(pygit2.Commit)
+            print("main parents", main.parents)
+            print("b1", b1.hex)
+            print("b1 parents", b1.parents)
+
+        debug_things()
 
         # make a commit
         FEATURE = {
@@ -549,6 +566,7 @@ def test_merge_signatures_from_environment(
             ref="refs/heads/b1",
             features=[{"-": FEATURE, "+": {**FEATURE, "name": "b1"}}],
         )
+        debug_things()
 
         # override the `git_user_config` fixture from conftest.py
         # so that there's no `user.name` or `user.email` in the `.gitconfig` file
@@ -561,8 +579,9 @@ def test_merge_signatures_from_environment(
         monkeypatch.setenv("GIT_COMMITTER_NAME", "committer")
         monkeypatch.setenv("GIT_COMMITTER_EMAIL", "committer@example.com")
         r = cli_runner.invoke(
-            ["merge", "--output-format=json", "--no-ff", "b1", "--message=m"]
+            ["-vv", "merge", "--output-format=json", "--no-ff", "b1", "--message=m"]
         )
+        debug_things()
         assert r.exit_code == 0, r.stderr
 
         assert repo.head_commit.author.name == "author"
