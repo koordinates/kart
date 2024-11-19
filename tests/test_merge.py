@@ -582,6 +582,11 @@ def test_merge_signatures_from_environment(
             ["-vv", "merge", "--output-format=json", "--no-ff", "b1", "--message=m"]
         )
         debug_things()
+
+        print("== merge-base ==")
+        import subprocess
+
+        subprocess.check_call(["git", "-C", str(repo_path), "merge-base", "HEAD", "b1"])
         assert r.exit_code == 0, r.stderr
 
         assert repo.head_commit.author.name == "author"
