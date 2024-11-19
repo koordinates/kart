@@ -146,6 +146,11 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
             # used by test_clone_filter
             f"[uploadPack]\n"
             f"\tallowFilter = true\n"
+            # `git merge-base` doesn't appreciate the tar-unpacked repos from the test data,
+            # because their files might have the wrong uid.
+            # This doesn't matter in practice so we just tell it to ignore the problem.
+            "[safe]\n"
+            "\tdirectory = *\n"
         )
 
         if os.name == "posix":
