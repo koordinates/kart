@@ -1,6 +1,10 @@
 import io
 import json
+import os
 import pytest
+import shutil
+import subprocess
+from pathlib import Path
 from unittest.mock import ANY
 
 import pygit2
@@ -19,6 +23,36 @@ from kart.repo import KartRepo, KartRepoState
 
 
 H = pytest.helpers.helpers()
+
+
+@pytest.fixture
+def git_config_no_user(monkeypatch, tmp_path_factory):
+    """
+    Removes user.name and user.email from git config
+    """
+    new_home = tmp_path_factory.mktemp("home-git_config_no_user")
+
+    # get the old home directory. This is set by the `git_user_config` fixture in conftest.py
+    old_home = Path(os.environ["HOME"])
+
+    # copy the global git config file to the test home directory
+    shutil.copyfile(
+        old_home / ".gitconfig",
+        new_home / ".gitconfig",
+    )
+
+    # tell pygit2 and kart/git to use the test home directory
+    monkeypatch.setenv("HOME", str(new_home))
+    pygit2.option(
+        pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, str(new_home)
+    )
+    # remove the user.name and user.email config from the new file
+    subprocess.check_call(["git", "config", "--global", "--remove-section", "user"])
+
+    yield
+    pygit2.option(
+        pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, str(old_home)
+    )
 
 
 @pytest.mark.parametrize(
@@ -528,7 +562,7 @@ def test_merge_ancestor_json(data_archive, cli_runner):
 
 
 def test_merge_signatures_from_environment(
-    data_archive, cli_runner, tmp_path_factory, monkeypatch
+    data_archive, cli_runner, tmp_path_factory, monkeypatch, git_config_no_user
 ):
     with data_archive("points") as repo_path:
         r = cli_runner.invoke(["branch", "b1", "main"])
@@ -544,22 +578,17 @@ def test_merge_signatures_from_environment(
             "name": "Tairua",
         }
         repo = KartRepo(repo_path)
+        monkeypatch.setenv("GIT_AUTHOR_NAME", "author")
+        monkeypatch.setenv("GIT_AUTHOR_EMAIL", "author@example.com")
+        monkeypatch.setenv("GIT_COMMITTER_NAME", "committer")
+        monkeypatch.setenv("GIT_COMMITTER_EMAIL", "committer@example.com")
         b1_commit = _apply_features(
             repo,
             ref="refs/heads/b1",
             features=[{"-": FEATURE, "+": {**FEATURE, "name": "b1"}}],
         )
 
-        # override the `git_user_config` fixture from conftest.py
-        # so that there's no `user.name` or `user.email` in the `.gitconfig` file
-        home = tmp_path_factory.mktemp("home")
-        monkeypatch.setenv("HOME", str(home))
-
         # now merge the branch into main
-        monkeypatch.setenv("GIT_AUTHOR_NAME", "author")
-        monkeypatch.setenv("GIT_AUTHOR_EMAIL", "author@example.com")
-        monkeypatch.setenv("GIT_COMMITTER_NAME", "committer")
-        monkeypatch.setenv("GIT_COMMITTER_EMAIL", "committer@example.com")
         r = cli_runner.invoke(
             ["merge", "--output-format=json", "--no-ff", "b1", "--message=m"]
         )
