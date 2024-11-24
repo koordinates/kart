@@ -1,11 +1,11 @@
-GDAL/OGR Plugins
-================
+GDAL/OGR Plugin
+===============
 
-Experimental [GDAL/OGR](https://gdal.org) plugin drivers for Kart repositories. These are mostly to provide a proof of concept for discussion and to support future feature development in Kart.
+Experimental [GDAL/OGR](https://gdal.org) plugin driver for Kart repositories. This is mostly to provide a proof of concept for discussion and to support future feature development in Kart.
 
-They are implemented using the [OGR Python Drivers](https://gdal.org/development/rfc/rfc76_ogrpythondrivers.html#rfc-76-ogr-python-drivers) mechanism in GDAL which is fairly rough & inefficient. It also means the drivers are read-only.
+This is implemented using the [OGR Python Drivers](https://gdal.org/development/rfc/rfc76_ogrpythondrivers.html#rfc-76-ogr-python-drivers) mechanism in GDAL which is fairly rough & inefficient. It also means the driver is read-only.
 
-> **ℹ️** These plugins require GDAL v3.8.0 or newer.
+> **ℹ️** This plugin requires GDAL v3.8.0 or newer.
 
 CLI
 ---
@@ -71,28 +71,4 @@ You can use any commitish on either side of the range to refer to a commit. If o
 In-Process
 ----------
 
-The in-process plugin uses Kart internal Python APIs to find and expose features/layers. Since Kart uses GDAL and GDAL is calling Kart, you can only use the GDAL library, tools, and associated drivers bundled with Kart.
-
-### Usage
-
-This currently only works from a local build tree in `/path/to/kart/build/`. See [CONTRIBUTING](../../CONTRIBUTING.md) for details. GDAL v3.8.0 is built with Kart,
-but currently the `ogrinfo` and `ogr2ogr` GDAL tools are not - you will currently need to modify the build so that these tools are also bundled.
-
-```console
-# Configure paths
-$ source /path/to/kart/contrib/gdal/in_process/devenv.sh
-
-# KART should appear at the bottom of the list
-$ ogrinfo --formats
-
-# list datasets
-$ ogrinfo /path/to/kart/repo
-
-# list information about a dataset
-$ ogrinfo -so -al /path/to/kart/repo mydataset
-
-# convert the dataset to another OGR format
-$ ogr2ogr -f SHP mydataset.shp /path/to/kart/repo mydataset
-```
-
-Changesets as OGR layers aren't available for the in-process plugin, though the same approach as in the CLI plugin is possible to implement.
+There was previously an example of a Kart plugin that runs in the same process as GDAL, ie, the GDAL python driver imports and runs Kart python code rather that running a separate Kart subprocess. This worked if the calling GDAL was the same as the GDAL bundled with Kart - however it has been removed since the GDAL bundled with Kart is currently built with `GDAL_AUTOLOAD_PLUGINS=OFF` which prevents the loading of any python drivers.
