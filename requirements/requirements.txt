@@ -36,7 +36,7 @@ jmespath==1.0.1
     #   botocore
 jsonschema==4.17.3
     # via -r requirements.in
-msgpack==0.6.2
+msgspec==0.18.6
     # via -r requirements.in
 orjson==3.10.11
     # via -r requirements.in
