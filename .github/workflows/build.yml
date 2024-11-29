@@ -16,7 +16,7 @@ jobs:
     name: Run Type Checking
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: "3.11"
@@ -103,7 +103,7 @@ jobs:
           - 3306:3306
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -332,7 +332,7 @@ jobs:
         PATH: "/opt/python/cp311-cp311/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -623,7 +623,7 @@ jobs:
           command -v kart
           kart --version
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: e2e test (no helper)
         env:
@@ -662,7 +662,7 @@ jobs:
       PY_VER_ID: "cp311-cp311"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -799,7 +799,7 @@ jobs:
       PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.6/python-3.11.6-macos11.pkg"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -1059,7 +1059,7 @@ jobs:
       )
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
