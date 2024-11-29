@@ -1,4 +1,3 @@
-import orjson
 import logging
 import threading
 from datetime import datetime, timedelta, timezone
@@ -22,8 +21,9 @@ from kart.log import commit_obj_to_json
 from kart.output_util import (
     dump_json_output,
     resolve_output_path,
-    orjson_encode_default,
+    msgspec_json_encoder,
 )
+
 from kart.tabular.feature_output import feature_as_geojson, feature_as_json
 from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
@@ -239,19 +239,19 @@ class JsonLinesDiffWriter(BaseDiffWriter):
     def __init__(self, *args, diff_estimate_accuracy=None, delta_filter=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fp = resolve_output_path(self.output_path)
-        self.separators = (",", ":") if self.json_style == "extracompact" else None
+
         self._diff_estimate_accuracy = diff_estimate_accuracy
         self.delta_filter = delta_filter
         self._output_lock = threading.RLock()
+        # https://jcristharif.com/msgspec/perf-tips.html#reusing-an-output-buffer
+        self._output_buffer = bytearray()
 
     def dump(self, obj):
-        output: bytes = orjson.dumps(
-            obj,
-            default=orjson_encode_default,
-            option=orjson.OPT_APPEND_NEWLINE | orjson.OPT_NON_STR_KEYS,
-        )
+        # https://jcristharif.com/msgspec/perf-tips.html#line-delimited-json
+        msgspec_json_encoder.encode_into(obj, self._output_buffer)
+        self._output_buffer.extend(b"\n")
         with self._output_lock:
-            self.fp.buffer.write(output)
+            self.fp.buffer.write(self._output_buffer)
 
     def write_header(self):
         self.dump(
