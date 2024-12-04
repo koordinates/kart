@@ -40,6 +40,7 @@ YUM_DEPENDS=(
     rpm-build
     unixODBC
     zip
+    autoconf-archive
 )
 PY_DEPENDS=(
     # cmake
