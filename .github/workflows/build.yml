@@ -253,15 +253,15 @@ jobs:
       matrix:
         os:
           - base: ubuntu-22.04
-            label: centos7/amd64
-            image: quay.io/pypa/manylinux2014_x86_64
+            label: manylinux_2_28/amd64
+            image: quay.io/pypa/manylinux_2_28
             arch: amd64
             arch_triplet: x64-linux
             build_parallel: ""
 
           - base: buildjet-4vcpu-ubuntu-2204-arm
-            label: centos7/arm64
-            image: quay.io/pypa/manylinux2014_aarch64
+            label: manylinux_2_28/arm64
+            image: quay.io/pypa/manylinux_2_28
             arch: arm64
             arch_triplet: arm64-linux
             build_parallel: 1
@@ -309,8 +309,6 @@ jobs:
           - 3306:3306
 
     env:
-      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       KART_POSTGIS_URL: "postgresql://postgres:@postgis:5432/postgres"
       SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
       KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
@@ -340,7 +338,7 @@ jobs:
       # setup
       #
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
+        uses: lukka/get-cmake@v3
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -369,7 +367,7 @@ jobs:
           fi
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v11.1
+        uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
@@ -532,9 +530,6 @@ jobs:
           - label: "ubuntu-20.04"
             image: "public.ecr.aws/ubuntu/ubuntu:focal"
             type: "deb"
-          - label: "ubuntu-18.04"
-            image: "public.ecr.aws/ubuntu/ubuntu:bionic"
-            type: "deb"
           - label: "debian-stable"
             image: "public.ecr.aws/docker/library/debian:stable-slim"
             type: "deb"
@@ -557,10 +552,6 @@ jobs:
     runs-on: ${{ matrix.arch.runner }}
     name: "Install-check: ${{ matrix.os.label }}/${{ matrix.arch.label }}"
     continue-on-error: ${{ !!matrix.os.xfail }}
-
-    env:
-      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     container:
       image: ${{ matrix.os.image }}
