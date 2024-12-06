@@ -112,7 +112,7 @@ jobs:
       #
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -338,7 +338,7 @@ jobs:
       # setup
       #
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -669,7 +669,7 @@ jobs:
           cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
