@@ -169,6 +169,7 @@ elif PLATFORM == "Linux":
         "libgcc_s.so.1",
         "libm.so.6",
         "libpthread.so.0",
+        "libresolv.so.2",
         "librt.so.1",
         "libstdc++.so.6",
         # special: ODBC drivers link to it, so don't bundle our own
