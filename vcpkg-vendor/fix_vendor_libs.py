@@ -152,6 +152,7 @@ elif PLATFORM == "Darwin":
         "/usr/lib/libSystem.B.dylib",
         "/usr/lib/libc++.1.dylib",
         "/usr/lib/libcharset.1.dylib",
+        "/usr/lib/libffi.dylib",
         "/usr/lib/libiconv.2.dylib",
         "/usr/lib/libncurses.5.4.dylib",
         "/usr/lib/libobjc.A.dylib",
