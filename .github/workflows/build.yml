@@ -413,7 +413,7 @@ jobs:
           cmake --build --preset=ci-linux --verbose --parallel ${{ matrix.os.build_parallel }}
 
       - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vendor-linux-${{ env.ARCH }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
@@ -473,21 +473,21 @@ jobs:
           cpack --preset=ci-linux
 
       - name: "package: save TGZ"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-linux-${{ matrix.os.arch }}-tgz
           path: build/dist/Kart-*.tar.gz
           if-no-files-found: error
 
       - name: "package: save DEB"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-linux-${{ matrix.os.arch }}-deb
           path: build/dist/kart_*.deb
           if-no-files-found: error
 
       - name: "package: save RPM"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-linux-${{ matrix.os.arch }}-rpm
           path: build/dist/kart-*.rpm
@@ -580,7 +580,7 @@ jobs:
           esac
 
       - name: get kart installer
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: Kart-linux-${{ matrix.arch.label }}-${{ matrix.os.type }}
 
@@ -706,7 +706,7 @@ jobs:
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: get vendor archive"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: vendor-linux-amd64-py${{ env.PY_VER }}
 
@@ -907,7 +907,7 @@ jobs:
           buildPreset: ci-macos
 
       - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vendor-macos-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
@@ -994,14 +994,14 @@ jobs:
           cpack --preset=ci-macos
 
       - name: "package: save ZIP"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-macOS-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
           if-no-files-found: error
 
       - name: "package: save PKG"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-macOS-${{ runner.arch }}-installer
           path: build/dist/Kart-*.pkg
@@ -1138,7 +1138,7 @@ jobs:
           buildPreset: ci-windows
 
       - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vendor-windows-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.zip
@@ -1199,14 +1199,14 @@ jobs:
           fi
 
       - name: "package: save ZIP"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-windows-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
           if-no-files-found: error
 
       - name: "package: save MSI"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-windows-${{ runner.arch }}-installer
           path: build/dist/Kart-*.msi
