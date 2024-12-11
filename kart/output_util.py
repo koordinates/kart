@@ -8,7 +8,7 @@ import textwrap
 import types
 from pathlib import Path
 
-import orjson
+import msgspec.json
 import pygments
 from pygments.lexers import JsonLexer
 
@@ -16,15 +16,6 @@ from .wkt_lexer import WKTLexer
 
 _terminal_formatter = None
 
-# note: `json` and `orjson` libraries aren't quite interchangeable.
-#   * orjson is much faster, so we use it where we can
-#   * orjson doesn't support custom separators
-#   * orjson doesn't support iterencode(), so can't stream unbounded iterators to stdout :(
-ORJSON_OPTIONS = {
-    "compact": 0,  # orjson doesn't support custom separators, so extracompact and compact look identical
-    "extracompact": 0,
-    "pretty": orjson.OPT_INDENT_2,
-}
 JSON_PARAMS = {
     "compact": {},
     "extracompact": {"separators": (",", ":")},
@@ -47,9 +38,9 @@ class SerializableGenerator(list):
         return itertools.chain(self._head, *self[:1])
 
 
-def orjson_encode_default(obj):
+def msgspec_json_encode_default(obj):
     """
-    Hook to extend the default serialisation of `orjson.dumps()`
+    Hook to extend the default serialisation of `msgspec.json.dumps()`
     """
     if isinstance(obj, tuple):
         return list(obj)
@@ -57,7 +48,10 @@ def orjson_encode_default(obj):
     if hasattr(obj, "__json__"):
         return obj.__json__()
 
-    raise TypeError
+    raise NotImplementedError
+
+
+msgspec_json_encoder = msgspec.json.Encoder(enc_hook=msgspec_json_encode_default)
 
 
 class ExtendedJsonEncoder(json.JSONEncoder):
