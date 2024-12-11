@@ -543,7 +543,10 @@ else()
       "LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib"
       "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}"
       "EXTENSION_LIBS=-L${CURRENT_PACKAGES_DIR}/lib -lsqlite3 ${CXX_STD_LIB_LDFLAGS}"
-      "NO_PYTHON=1")
+      "NO_PYTHON=1"
+      "NO_PERL=1"
+      "NO_GITWEB=1"
+      "NO_TCLTK=1")
 
   ExternalProject_Add(
     git
