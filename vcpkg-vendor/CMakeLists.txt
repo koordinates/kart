@@ -537,21 +537,21 @@ else()
       "OPENSSLDIR=${OPENSSL_PREFIX}"
       "CURLDIR=${CURRENT_PACKAGES_DIR}"
       "CURL_LDFLAGS=-lcurl"
+      "NO_PYTHON=1"
+      "NO_PERL=1"
+      "NO_GITWEB=1"
+      "NO_TCLTK=1"
       # stuff for building the spatial partial clone filter extension
       "CXX=${CMAKE_CXX_COMPILER}"
       "LINK=${CMAKE_CXX_COMPILER}"
       "LDFLAGS=-L${CURRENT_PACKAGES_DIR}/lib"
       "FILTER_EXTENSIONS=${GIT_SPATIAL_FILTER_EXT}"
-      "EXTENSION_LIBS=-L${CURRENT_PACKAGES_DIR}/lib -lsqlite3 ${CXX_STD_LIB_LDFLAGS}"
-      "NO_PYTHON=1"
-      "NO_PERL=1"
-      "NO_GITWEB=1"
-      "NO_TCLTK=1")
+      "EXTENSION_LIBS=-L${CURRENT_PACKAGES_DIR}/lib -lsqlite3 ${CXX_STD_LIB_LDFLAGS}")
 
   ExternalProject_Add(
     git
     GIT_REPOSITORY https://github.com/koordinates/git
-    GIT_TAG kx-latest
+    GIT_TAG kart-v2.47.1
     GIT_SHALLOW ON
     BUILD_IN_SOURCE ON
     DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3 PCRE2::8BIT

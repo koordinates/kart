@@ -11,7 +11,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
     - Debian 10+
     - Ubuntu 18.10+
     - Fedora 29+
-    - CentOS/RHEL 8+
+    - RHEL/Rocky/AlmaLinux 8+
 - Much faster access to tabular/vector datasets (about 75% more features processed per second) by switching to [msgspec](https://jcristharif.com/msgspec/) - [#1025](https://github.com/koordinates/kart/pull/1025)
 - diff: Faster JSON-Lines output (also using msgspec)
 - Upgrade to PDAL 2.7 [#1005](https://github.com/koordinates/kart/pull/1005)
