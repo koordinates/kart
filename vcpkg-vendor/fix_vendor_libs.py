@@ -70,7 +70,6 @@ if PLATFORM == "Windows":
     VENDOR_ARCHIVE_NAME = "vendor-Windows.zip"
     RPATH_PREFIX = ""
     LIB_EXTENSIONS = [".lib", ".dll", ".pyd"]
-    SYSTEM_PREFIXES = []
     EXE_PATHS = ["env/scripts", "env/tools/gdal"]
     EXE_EXTENSION = ".exe"
     TOP_LEVEL_DIRECTORIES += ["git"]
@@ -80,7 +79,6 @@ elif PLATFORM == "Darwin":
     LOADER_PATH = "@loader_path"
     RPATH_PREFIX = "@rpath/"
     LIB_EXTENSIONS = [".dylib", ".so"]
-    SYSTEM_PREFIXES = ["/usr/lib/"]
     EXE_PATHS = ["env/bin", "env/libexec/git-core", "env/tools/gdal"]
     EXE_EXTENSION = ""
 elif PLATFORM == "Linux":
@@ -88,7 +86,6 @@ elif PLATFORM == "Linux":
     LOADER_PATH = "$ORIGIN"
     RPATH_PREFIX = ""
     LIB_EXTENSIONS = [".so", ".so.*"]
-    SYSTEM_PREFIXES = []
     EXE_PATHS = ["env/bin", "env/libexec/git-core", "env/tools/gdal"]
     EXE_EXTENSION = ""
 
@@ -736,13 +733,11 @@ class FindDepResult(Enum):
     VENDOR_DEP_FOUND = "vendor dep found"
     VENDOR_DEP_NOT_FOUND = "vendor dep not found"
     ALLOWED_SYSTEM_DEP = "allowed system dep"
-    UNEXPECTED_SYSTEM_DEP = "unexpected system dep"
 
 
 VENDOR_DEP_FOUND = FindDepResult.VENDOR_DEP_FOUND
 VENDOR_DEP_NOT_FOUND = FindDepResult.VENDOR_DEP_NOT_FOUND
 ALLOWED_SYSTEM_DEP = FindDepResult.ALLOWED_SYSTEM_DEP
-UNEXPECTED_SYSTEM_DEP = FindDepResult.UNEXPECTED_SYSTEM_DEP
 
 
 def resolve_lib_in_folder(folder, lib_name):
@@ -764,10 +759,6 @@ def find_dep(dep_str, search_paths):
 
     if PLATFORM == "Windows" and dep_str.lower() in SYSTEM_DEPS_ALLOW_SET:
         return ALLOWED_SYSTEM_DEP, None
-
-    for system_prefix in SYSTEM_PREFIXES:
-        if dep_str.startswith(system_prefix):
-            return UNEXPECTED_SYSTEM_DEP, None
 
     dep_path = Path(dep_str)
     if dep_path.is_absolute() and dep_path.is_file():
@@ -829,19 +820,6 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
             if found_path and found_path not in lib_paths_list:
                 lib_paths_list.append(found_path)
                 vendor_deps_found_outside.append(found_path)
-
-    if deps_by_result[UNEXPECTED_SYSTEM_DEP]:
-        detail = sorted_good_and_bad_deps(
-            deps_by_result[ALLOWED_SYSTEM_DEP],
-            deps_by_result[UNEXPECTED_SYSTEM_DEP],
-        )
-        count = len(deps_by_result[UNEXPECTED_SYSTEM_DEP])
-        L.error(
-            f"{ERR} Checking deps: Found %s system deps that have not been explicitly allowed.\n%s",
-            count,
-            detail,
-        )
-        sys.exit(1)
 
     if deps_by_result[VENDOR_DEP_NOT_FOUND]:
         detail = sorted_good_and_bad_deps(
