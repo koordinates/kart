@@ -728,7 +728,7 @@ def get_pattern_for_dep(dep):
 
 def lib_names_match(dep1, dep2):
     base1, ext1 = split_lib_ext(Path(dep1).name)
-    base2, ext2 = split_lib_ext(Path(dep1).name)
+    base2, ext2 = split_lib_ext(Path(dep2).name)
     return ext1 == ext2 and base1.startswith(base2) or base2.startswith(base1)
 
 
@@ -835,7 +835,7 @@ def fix_unsatisfied_deps(root_path, make_fatal=False, verbose=False):
             deps_by_result[ALLOWED_SYSTEM_DEP],
             deps_by_result[UNEXPECTED_SYSTEM_DEP],
         )
-        count = len(deps_by_result[ALLOWED_SYSTEM_DEP])
+        count = len(deps_by_result[UNEXPECTED_SYSTEM_DEP])
         L.error(
             f"{ERR} Checking deps: Found %s system deps that have not been explicitly allowed.\n%s",
             count,
