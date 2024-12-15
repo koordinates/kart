@@ -7,7 +7,13 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## Unreleased
 
-- diff: Use [orjson](https://github.com/ijl/orjson?tab=readme-ov-file#orjson) for faster JSON-Lines output. [#1019](https://github.com/koordinates/kart/pull/1019)
+- Linux builds now require glibc 2.28+ [#1027](https://github.com/koordinates/kart/pull/1027) - This means minimum distro versions are:
+    - Debian 10+
+    - Ubuntu 18.10+
+    - Fedora 29+
+    - RHEL/Rocky/AlmaLinux 8+
+- Much faster access to tabular/vector datasets (about 75% more features processed per second) by switching to [msgspec](https://jcristharif.com/msgspec/) - [#1025](https://github.com/koordinates/kart/pull/1025)
+- diff: Faster JSON-Lines output (also using msgspec)
 - Upgrade to PDAL 2.7 [#1005](https://github.com/koordinates/kart/pull/1005)
 - Adds a `--drop-empty-geometry-features` option to `kart export`. [#1007](https://github.com/koordinates/kart/pull/1007)
 - Adds diagnostic output to Kart when `KART_DIAGNOSTICS=1` environment variable is set. [#1013](https://github.com/koordinates/kart/pull/1013)

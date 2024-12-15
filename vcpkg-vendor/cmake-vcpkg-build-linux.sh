@@ -3,12 +3,12 @@ set -euo pipefail
 
 #
 # invoke via
-#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it quay.io/pypa/manylinux2014_x86_64
+#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it quay.io/pypa/manylinux_2_28_x86_64
 #   mycontainer $ vcpkg-vendor/cmake-vcpkg-build-linux.sh [--verbose]
 #
 # manylinux images are per-arch
-# - quay.io/pypa/manylinux2014_x86_64
-# - quay.io/pypa/manylinux2014_aarch64
+# - quay.io/pypa/manylinux_2_28_x86_64
+# - quay.io/pypa/manylinux_2_28_aarch64
 # should also work with most other OS images too (eg: ubuntu:jammy, ubuntu:focal)
 
 PYVER=3.11
@@ -40,6 +40,7 @@ YUM_DEPENDS=(
     rpm-build
     unixODBC
     zip
+    autoconf-archive
 )
 PY_DEPENDS=(
     # cmake
@@ -85,12 +86,6 @@ if [ "${ID_LIKE}" == "debian" ]; then
         $SUDO add-apt-repository -y ppa:deadsnakes/ppa
     fi
 
-    if [ "$UBUNTU_CODENAME" == "bionic" ]; then
-        APT_DEPENDS+=('gcc-8' 'g++-8')
-        export CC=gcc-8
-        export CXX=g++-8
-    fi
-
     if ! dpkg-query -f '${Package}\n' -W "${APT_DEPENDS[@]}" >/dev/null 2>&1; then
         echo "🌀  installing apt dependencies..."
         $SUDO apt-get update -q -y
@@ -129,12 +124,11 @@ gcc --version
 
 PYTHON=$(realpath "$(command -v "$PYTHON")")
 PYROOT=$(dirname "$(dirname "$PYTHON")")
+PYBIN=$("$PYTHON" -m sysconfig | grep "scripts =" | awk '{print $3}' | tr -d '"')
 PIP="${PYTHON} -m pip"
 IS_MANYLINUX=$(test -n "${AUDITWHEEL_ARCH-}" && echo true || echo false)
-if [ "$(dirname "$PYTHON")" != /usr/bin ]; then
-    PATH="$(dirname "$PYTHON"):${PATH}"
-    export PATH
-fi
+echo "🌀  Python $PYTHON, root $PYROOT, manylinux? $IS_MANYLINUX"
+export PATH="${PATH}:${PYBIN}"
 ln -sf python3 "$(dirname "$PYTHON")/python"
 ln -sf "$PYTHON" /usr/local/bin/python3
 ln -sf "$PYTHON" /usr/local/bin/python
@@ -145,10 +139,10 @@ echo "python=$(command -v python)"
 for P in "${PY_DEPENDS[@]}"; do
     if ! $PIP show --quiet "$P" >/dev/null 2>&1; then
         echo "🌀  installing python build tools..."
-        $SUDO $PIP install "${PY_DEPENDS[@]}"
+        $SUDO $PIP install --root-user-action=ignore "${PY_DEPENDS[@]}"
         # why are these needed? maybe if tmpfs is noexec?
-        $SUDO chmod +x /usr/local/lib/python3.*/dist-packages/cmake/data/bin/cmake || true
-        $SUDO chmod +x /usr/local/lib/python3.*/dist-packages/ninja/data/bin/ninja || true
+        $SUDO chmod +x "$PYBIN/cmake" || true
+        $SUDO chmod +x "$PYBIN/ninja" || true
         break
     fi
 done

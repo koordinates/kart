@@ -491,6 +491,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
   # Download a prebuilt Git with spatial-filter extension on Windows. TODO: Use a more recent tag
   # and build inline.
 
+  # FIXME: Update to a kx-latest build (ie based on 2.47.1) FIXME: Get the build process for this
+  # custom git build into CI somewhere? Either here or in koordinates/git
   ExternalProject_Add(
     git
     URL https://github.com/koordinates/git/releases/download/kart-v0.15.2-windows-mingit-build/MinGit-2.45.1.7.g5be46a8262-64-bit.zip
@@ -535,6 +537,10 @@ else()
       "OPENSSLDIR=${OPENSSL_PREFIX}"
       "CURLDIR=${CURRENT_PACKAGES_DIR}"
       "CURL_LDFLAGS=-lcurl"
+      "NO_PYTHON=1"
+      "NO_PERL=1"
+      "NO_GITWEB=1"
+      "NO_TCLTK=1"
       # stuff for building the spatial partial clone filter extension
       "CXX=${CMAKE_CXX_COMPILER}"
       "LINK=${CMAKE_CXX_COMPILER}"
@@ -545,7 +551,7 @@ else()
   ExternalProject_Add(
     git
     GIT_REPOSITORY https://github.com/koordinates/git
-    GIT_TAG kart-v0.15.2
+    GIT_TAG kart-v2.47.1
     GIT_SHALLOW ON
     BUILD_IN_SOURCE ON
     DEPENDS CURL::libcurl OpenSSL::SSL OpenSSL::Crypto unofficial::sqlite3::sqlite3 PCRE2::8BIT

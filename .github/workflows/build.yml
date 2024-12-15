@@ -16,7 +16,7 @@ jobs:
     name: Run Type Checking
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: "3.11"
@@ -103,7 +103,7 @@ jobs:
           - 3306:3306
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -112,7 +112,7 @@ jobs:
       #
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -253,15 +253,15 @@ jobs:
       matrix:
         os:
           - base: ubuntu-22.04
-            label: centos7/amd64
-            image: quay.io/pypa/manylinux2014_x86_64
+            label: manylinux_2_28/amd64
+            image: quay.io/pypa/manylinux_2_28_x86_64
             arch: amd64
             arch_triplet: x64-linux
             build_parallel: ""
 
           - base: buildjet-4vcpu-ubuntu-2204-arm
-            label: centos7/arm64
-            image: quay.io/pypa/manylinux2014_aarch64
+            label: manylinux_2_28/arm64
+            image: quay.io/pypa/manylinux_2_28_aarch64
             arch: arm64
             arch_triplet: arm64-linux
             build_parallel: 1
@@ -309,8 +309,6 @@ jobs:
           - 3306:3306
 
     env:
-      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       KART_POSTGIS_URL: "postgresql://postgres:@postgis:5432/postgres"
       SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
       KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
@@ -329,10 +327,10 @@ jobs:
       image: ${{ matrix.os.image }}
       env:
         ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
-        PATH: "/opt/python/cp311-cp311/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
+        PATH: "/opt/python/cp311-cp311/bin:/opt/rh/gcc-toolset-13/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -340,7 +338,7 @@ jobs:
       # setup
       #
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -358,18 +356,14 @@ jobs:
 
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
-          yum install -y autoconf-archive perl-IPC-Cmd rpm-build unixODBC zip
-
-          echo "installing golang..."
-          curl -qL "https://go.dev/dl/go1.19.2.linux-${ARCH}.tar.gz" | tar xz -C /usr/local/
-          ln -sf /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/
+          yum install -y autoconf-archive perl-IPC-Cmd rpm-build unixODBC zip rustc cargo golang
 
           if [ "${ARCH}" == "arm64" ]; then
             echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
           fi
 
       - name: "setup: vcpkg"
-        uses: lukka/run-vcpkg@v11.1
+        uses: lukka/run-vcpkg@v11
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
@@ -416,7 +410,7 @@ jobs:
           cmake --build --preset=ci-linux --verbose --parallel ${{ matrix.os.build_parallel }}
 
       - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vendor-linux-${{ env.ARCH }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
@@ -476,21 +470,21 @@ jobs:
           cpack --preset=ci-linux
 
       - name: "package: save TGZ"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-linux-${{ matrix.os.arch }}-tgz
           path: build/dist/Kart-*.tar.gz
           if-no-files-found: error
 
       - name: "package: save DEB"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-linux-${{ matrix.os.arch }}-deb
           path: build/dist/kart_*.deb
           if-no-files-found: error
 
       - name: "package: save RPM"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-linux-${{ matrix.os.arch }}-rpm
           path: build/dist/kart-*.rpm
@@ -532,9 +526,6 @@ jobs:
           - label: "ubuntu-20.04"
             image: "public.ecr.aws/ubuntu/ubuntu:focal"
             type: "deb"
-          - label: "ubuntu-18.04"
-            image: "public.ecr.aws/ubuntu/ubuntu:bionic"
-            type: "deb"
           - label: "debian-stable"
             image: "public.ecr.aws/docker/library/debian:stable-slim"
             type: "deb"
@@ -557,10 +548,6 @@ jobs:
     runs-on: ${{ matrix.arch.runner }}
     name: "Install-check: ${{ matrix.os.label }}/${{ matrix.arch.label }}"
     continue-on-error: ${{ !!matrix.os.xfail }}
-
-    env:
-      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     container:
       image: ${{ matrix.os.image }}
@@ -590,7 +577,7 @@ jobs:
           esac
 
       - name: get kart installer
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: Kart-linux-${{ matrix.arch.label }}-${{ matrix.os.type }}
 
@@ -623,7 +610,7 @@ jobs:
           command -v kart
           kart --version
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: e2e test (no helper)
         env:
@@ -662,7 +649,7 @@ jobs:
       PY_VER_ID: "cp311-cp311"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -678,7 +665,7 @@ jobs:
           cache-dependency-path: 'requirements/*.txt'
 
       - name: "setup: cmake & ninja"
-        uses: lukka/get-cmake@v3.25.2  # workaround for node 20 issue
+        uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
@@ -716,7 +703,7 @@ jobs:
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: get vendor archive"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: vendor-linux-amd64-py${{ env.PY_VER }}
 
@@ -799,7 +786,7 @@ jobs:
       PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.6/python-3.11.6-macos11.pkg"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -854,8 +841,9 @@ jobs:
       # The brew install command sometimes fails on the first try but succeeds on the second :-/
       - name: "setup: misc"
         run: |
-          PACKAGES="autoconf automake ccache libtool openssl pandoc pkg-config"
-          brew install -q $PACKAGES || brew install -q $PACKAGES
+          PACKAGES="autoconf automake ccache libtool openssl pandoc pkgconf"
+          brew update --quiet
+          brew install --quiet $PACKAGES || brew install --quiet $PACKAGES
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
@@ -916,7 +904,7 @@ jobs:
           buildPreset: ci-macos
 
       - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vendor-macos-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.tar.gz
@@ -1003,14 +991,14 @@ jobs:
           cpack --preset=ci-macos
 
       - name: "package: save ZIP"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-macOS-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
           if-no-files-found: error
 
       - name: "package: save PKG"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-macOS-${{ runner.arch }}-installer
           path: build/dist/Kart-*.pkg
@@ -1059,7 +1047,7 @@ jobs:
       )
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -1147,7 +1135,7 @@ jobs:
           buildPreset: ci-windows
 
       - name: "vendor: save archive"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vendor-windows-${{ runner.arch }}-py${{ env.PY_VER }}
           path: build/vcpkg-vendor/kart-vendor.*.zip
@@ -1208,14 +1196,14 @@ jobs:
           fi
 
       - name: "package: save ZIP"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-windows-${{ runner.arch }}-bundle
           path: build/dist/Kart-*.zip
           if-no-files-found: error
 
       - name: "package: save MSI"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Kart-windows-${{ runner.arch }}-installer
           path: build/dist/Kart-*.msi
