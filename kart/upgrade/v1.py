@@ -3,12 +3,11 @@ import functools
 import os
 import re
 
-import msgpack
 import pygit2
 
 from kart.geometry import Geometry, normalise_gpkg_geom
 from kart.meta_items import MetaItemDefinition, MetaItemFileType
-from kart.serialise_util import json_unpack, ensure_bytes
+from kart.serialise_util import json_unpack, ensure_bytes, msg_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.tabular.table_dataset import TableDataset
 from kart.utils import ungenerator
@@ -42,19 +41,10 @@ class TableV1(TableDataset):
     VERSION_PATH = "meta/version"
     VERSION_CONTENTS = {"version": "1.0"}
 
-    MSGPACK_EXT_GEOM = 71  # 'G'
-
     META_ITEMS = tuple(
         MetaItemDefinition(meta_item_path, MetaItemFileType.JSON)
         for meta_item_path in KartAdapter_GPKG.GPKG_META_ITEM_NAMES
     )
-
-    def _msgpack_unpack_ext(self, code, data):
-        if code == self.MSGPACK_EXT_GEOM:
-            return Geometry.of(data)  # bytes
-        else:
-            self.L.warning("Unexpected msgpack extension: %d", code)
-            return msgpack.ExtType(code, data)
 
     @functools.lru_cache()
     def get_meta_item(self, name, missing_ok=True):
@@ -122,17 +112,13 @@ class TableV1(TableDataset):
     @classmethod
     def decode_path_to_1pk(cls, path):
         encoded = os.path.basename(path)
-        return msgpack.unpackb(base64.urlsafe_b64decode(encoded), raw=False)
+        return msg_unpack(base64.urlsafe_b64decode(encoded))
 
     def get_feature(self, path, data):
         feature = {
             self.primary_key: self.decode_path_to_1pk(path),
         }
-        bin_feature = msgpack.unpackb(
-            data,
-            ext_hook=self._msgpack_unpack_ext,
-            raw=False,
-        )
+        bin_feature = msg_unpack(data)
         for colid, value in sorted(bin_feature.items()):
             field_name = self.cid_field_map[colid]
             feature[field_name] = value
