@@ -42,7 +42,7 @@ def print_diagnostics():
     other_info = {
         "now": str(datetime.now()),
         "ppid": os.getppid(),
-        "sid": os.getsid(0),
+        "sid": os.getsid(0) if hasattr(os, "getsid") else None,
         "kart_helper_pid": os.environ.get("KART_HELPER_PID"),
         "pid": os.getpid(),
     }

@@ -87,4 +87,16 @@ finally {
     Remove-Item -Force -Recurse "$TMP_PATH"
 }
 
+try {
+    $env:KART_DIAGNOSTICS = "1"
+    $output = Exec { kart --version } 2>&1
+}
+finally {
+    Remove-Item Env:\KART_DIAGNOSTICS
+}
+if ($output -notcontains "DIAGNOSTICS") {
+    throw "Expected some diagnostics output"
+}
+
+
 Write-Output ">>> E2E Success"

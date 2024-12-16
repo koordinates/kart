@@ -95,4 +95,11 @@ if kart ext-run "$HERE/ext-run-test.py" throw; then
     exit 1
 fi
 
+# Kart diagnostics.
+# TODO: Fix diagnostics to work with helper mode.
+if [ "${KART_USE_HELPER:-0}" != "1" ] && [ -z "$(KART_DIAGNOSTICS=1 kart --version 2>&1 | grep DIAGNOSTICS)" ]; then
+  echo "Expected some diagnostics output"
+  exit 1
+fi
+
 { echo -e "\n✅ E2E: Success"; } 2>/dev/null
