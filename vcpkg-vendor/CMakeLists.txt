@@ -105,7 +105,7 @@ endif()
 #
 # cffi wheel
 #
-find_package(libffi REQUIRED)
+find_package(unofficial-libffi CONFIG REQUIRED)
 
 file(
   GENERATE
@@ -124,7 +124,7 @@ ExternalProject_Add(
   URL_HASH SHA256=bcb3ef43e58665bbda2fb198698fcae6776483e0c4a631aa5647806c25e02cc0
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv libffi
+  DEPENDS wheelBuildEnv unofficial::libffi::libffi
   EXCLUDE_FROM_ALL ON
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
