@@ -105,7 +105,7 @@ endif()
 #
 # cffi wheel
 #
-find_package(libffi REQUIRED)
+find_package(unofficial-libffi CONFIG REQUIRED)
 
 file(
   GENERATE
@@ -124,7 +124,7 @@ ExternalProject_Add(
   URL_HASH SHA256=bcb3ef43e58665bbda2fb198698fcae6776483e0c4a631aa5647806c25e02cc0
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv libffi
+  DEPENDS wheelBuildEnv unofficial::libffi::libffi
   EXCLUDE_FROM_ALL ON
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
@@ -241,6 +241,8 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_W
 # pygit2 wheel
 #
 find_package(unofficial-git2 CONFIG REQUIRED)
+createvirtualenvironment(pygitWheelBuildEnv REQUIREMENTS wheel ${CFFI_WHEEL})
+add_dependencies(pygitWheelBuildEnv cffi)
 
 file(
   GENERATE
@@ -258,14 +260,14 @@ ExternalProject_Add(
   GIT_TAG kart-v0.14.1
   GIT_SHALLOW ON
   BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv unofficial::git2::libgit2package
+  DEPENDS pygitWheelBuildEnv unofficial::git2::libgit2package
   EXCLUDE_FROM_ALL ON
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl <TMP_DIR>/dist <SOURCE_DIR>/.eggs
-  COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${wheelBuildEnv_PYTHON} -m
-          build --wheel --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${pygitWheelBuildEnv_PYTHON} -m
+          build --wheel --no-isolation --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pygit2 INSTALL_DIR)
@@ -382,6 +384,9 @@ list(APPEND WHEEL_LIST
 # reflink wheel
 #
 
+createvirtualenvironment(reflinkWheelBuildEnv REQUIREMENTS wheel ${CFFI_WHEEL} pytest-runner)
+add_dependencies(reflinkWheelBuildEnv cffi)
+
 set(REFLINK_WHEEL_VER 0.2.2)
 ExternalProject_Add(
   reflink
@@ -389,12 +394,12 @@ ExternalProject_Add(
   URL_HASH SHA256=882375ee7319275ae5f6a6a1287406365dac1e9643b91ad10e5187d3f84253bd
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv
+  DEPENDS reflinkWheelBuildEnv
   EXCLUDE_FROM_ALL ON
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  COMMAND ${reflinkWheelBuildEnv_PYTHON} -m build --wheel --no-isolation --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/reflink-${REFLINK_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(reflink INSTALL_DIR)
