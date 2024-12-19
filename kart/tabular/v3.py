@@ -132,10 +132,12 @@ class TableV3(RichTableDataset):
         """
         return self.ensure_full_path(self.SCHEMA_PATH), schema.dumps()
 
-    def get_raw_feature_dict(self, pk_values=None, *, path=None, data=None):
+    def get_raw_feature_parts(
+        self, pk_values=None, *, path=None, data=None
+    ) -> tuple[str, tuple, tuple]:
         """
         Gets the feature with the given primary key(s) / at the given "full" path.
-        The result is a "raw" feature dict, values are keyed by column ID,
+        The result is a "raw" feature in three parts, (legend_hash, pk_values, pk_values)
         and contains exactly those values that are actually stored in the tree,
         which might not be the same values that are now in the schema.
         To get a feature consistent with the current schema, call get_feature.
@@ -164,16 +166,18 @@ class TableV3(RichTableDataset):
             data = memoryview(data)
 
         legend_hash, non_pk_values = msg_unpack(data)
-        legend = self.get_legend(legend_hash)
-        return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
+        return legend_hash, pk_values, non_pk_values
 
     def get_feature(self, pk_values=None, *, path=None, data=None):
         """
         Gets the feature with the given primary key(s) / at the given "full" path.
         The result is a dict of values keyed by column name.
         """
-        raw_dict = self.get_raw_feature_dict(pk_values=pk_values, path=path, data=data)
-        return self.schema.feature_from_raw_dict(raw_dict)
+        legend_hash, pk_values, non_pk_values = self.get_raw_feature_parts(
+            pk_values=pk_values, path=path, data=data
+        )
+        legend = self.get_legend(legend_hash)
+        return self.schema.feature_from_legend(legend, pk_values, non_pk_values)
 
     def feature_blobs(self):
         """

@@ -433,6 +433,50 @@ class Schema(tuple):
                 raw_dict[column.id] = value
         return raw_dict
 
+    @functools.lru_cache(maxsize=100)
+    def _get_legend_adaptor_function(self, other_legend):
+        """
+        Returns a mapping function, adapting features from the given legend so that they match this legend.
+        """
+        pk_indices = []
+        for c in self.pk_columns:
+            try:
+                pk_indices.append(other_legend.pk_columns.index(c.id))
+            except IndexError:
+                pk_indices.append(None)
+
+        non_pk_indices = []
+        for c in self.non_pk_columns:
+            try:
+                non_pk_indices.append(other_legend.non_pk_columns.index(c.id))
+            except IndexError:
+                non_pk_indices.append(None)
+
+        def adapt_feature_to_legend(pk_values, non_pk_values):
+            return tuple(
+                pk_values[x] if x is not None else None for x in pk_indices
+            ), tuple(
+                non_pk_values[x] if x is not None else None for x in non_pk_indices
+            )
+
+        return adapt_feature_to_legend
+
+    def feature_from_legend(
+        self, feature_legend, pk_values: tuple, non_pk_values: tuple
+    ):
+        """
+        Takes a tuple of pk values and a tuple of non-pk values.
+        Returns a dict of values keyed by column name.
+        """
+        adaptor = self._get_legend_adaptor_function(feature_legend)
+        pk_values, non_pk_values = adaptor(pk_values, non_pk_values)
+        result = {}
+        for c, value in zip(self.pk_columns, pk_values):
+            result[c.name] = value
+        for c, value in zip(self.non_pk_columns, non_pk_values):
+            result[c.name] = value
+        return result
+
     def encode_feature(self, feature, without_pk=False):
         """
         Given a feature, encode it in binary using this schema.
