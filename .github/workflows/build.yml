@@ -445,6 +445,11 @@ jobs:
         run: |
           ctest --preset=ci-linux
 
+      - name: "on failure: print last modified log file"
+        if: ${{ failure() }}
+        run: |
+          LOGFILE=$(find . -type f -name "/__w/kart/kart/vcpkg-vendor/vcpkg/buildtrees/*/*.log" -exec stat -f "%m %N" {} \; | sort -n | tail -n 1 | cut -d ' ' -f 2- ) && echo "Printing log file: $LOGFILE" && printf '%*s\n' 40 | tr ' ' '-' && cat $LOGFILE
+
       #
       # Packaging
       #
