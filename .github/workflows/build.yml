@@ -445,6 +445,11 @@ jobs:
         run: |
           ctest --preset=ci-linux
 
+      - name: "Print failure log"
+        if: ${{ failure() }}
+        run: |
+          cat /__w/kart/kart/vcpkg-vendor/vcpkg/buildtrees/pdal/install-x64-linux-rel-out.log
+
       #
       # Packaging
       #
