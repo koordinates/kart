@@ -9,6 +9,7 @@ from typing import Generator
 import click
 
 from kart import diff_util
+from kart.cli_util import exit_quickly
 from kart.diff_format import DiffFormat
 from kart.diff_structs import (
     FILES_KEY,
@@ -720,9 +721,9 @@ class BaseDiffWriter:
                 "write_diff must be called first to populate has_changes"
             )
         if self.has_changes:
-            sys.exit(1)
+            exit_quickly(1)
         else:
-            sys.exit(0)
+            exit_quickly(0)
 
     @functools.lru_cache()
     def _get_old_or_new_dataset(self, ds_path):

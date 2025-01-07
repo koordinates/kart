@@ -3,7 +3,7 @@ import sys
 import click
 
 from kart import diff_estimation
-from kart.cli_util import OutputFormatType, DeltaFilterType
+from kart.cli_util import OutputFormatType, DeltaFilterType, exit_quickly
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
 from kart.diff_format import DiffFormat
@@ -242,3 +242,5 @@ def diff(
 
     if exit_code or output_type == "quiet":
         diff_writer.exit_with_code()
+    else:
+        exit_quickly(0)

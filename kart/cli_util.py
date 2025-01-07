@@ -452,3 +452,13 @@ def forward_context_to_command(ctx, command):
     subctx = command.make_context(command.name, ctx.unparsed_args)
     subctx.obj = ctx.obj
     subctx.forward(command)
+
+
+def exit_quickly(code):
+    """
+    Exit without triggering any garbage collection.
+    *WAY* faster than sys.exit(), at least in a diff command with lots of diff structs.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
