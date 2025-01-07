@@ -61,7 +61,7 @@ class TextDiffWriter(BaseDiffWriter):
 
     def write_ds_diff(self, ds_path, ds_diff, diff_format=DiffFormat.FULL):
         if "meta" in ds_diff:
-            for key, delta in ds_diff["meta"].sorted_items():
+            for key, delta in self.iter_deltadiff_items(ds_diff["meta"]):
                 self.write_meta_delta(ds_path, key, delta)
         if diff_format != DiffFormat.NO_DATA_CHANGES:
             item_type = self._get_old_or_new_dataset(ds_path).ITEM_TYPE
@@ -313,7 +313,7 @@ class TextDiffWriter(BaseDiffWriter):
                 old_index += 1
 
     def write_file_diff(self, file_diff):
-        for key, delta in file_diff.sorted_items():
+        for key, delta in self.iter_deltadiff_items(file_diff):
             self.write_file_delta(key, delta)
         return bool(file_diff)
 

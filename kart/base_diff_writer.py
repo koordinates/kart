@@ -91,6 +91,7 @@ class BaseDiffWriter:
         diff_estimate_accuracy=None,
         # used by html diff only
         html_template=None,
+        sort_keys=True,
     ):
         self.repo = repo
         self.commit_spec = commit_spec
@@ -134,6 +135,7 @@ class BaseDiffWriter:
         self.commit = None
         self.do_convert_to_dataset_format = None
         self.do_full_file_diffs = False
+        self.sort_keys = sort_keys
 
     def include_target_commit_as_header(self):
         """
@@ -451,6 +453,11 @@ class BaseDiffWriter:
             repo_key_filter=self.repo_key_filter,
         )
 
+    def iter_deltadiff_items(self, deltas):
+        if self.sort_keys:
+            return deltas.sorted_items()
+        return deltas.items()
+
     def filtered_dataset_deltas(self, ds_path, ds_diff):
         """
         Yields the key, delta for only those deltas from the given dataset diff that match
@@ -462,7 +469,7 @@ class BaseDiffWriter:
         if not item_type or item_type not in ds_diff:
             return
 
-        unfiltered_deltas = ds_diff[item_type].sorted_items()
+        unfiltered_deltas = self.iter_deltadiff_items(ds_diff[item_type])
 
         if self.spatial_filter.match_all:
             yield from unfiltered_deltas

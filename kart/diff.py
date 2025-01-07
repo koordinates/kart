@@ -154,6 +154,12 @@ def feature_count_diff(
     help="Provide a user defined/specific html template for diff representation",
     type=click.Path(exists=True),
 )
+@click.option(
+    "--sort-keys/--no-sort-keys",
+    is_flag=True,
+    default=True,
+    help="Sort keys in the output. This is the default behaviour, but it can be disabled for a slight speed improvement.",
+)
 @click.argument(
     "args",
     metavar="[REVISIONS] [--] [FILTERS]",
@@ -175,6 +181,7 @@ def diff(
     diff_format,
     delta_filter,
     html_template,
+    sort_keys,
     args,
 ):
     """
@@ -235,6 +242,7 @@ def diff(
         target_crs=crs,
         diff_estimate_accuracy=add_feature_count_estimate,
         html_template=html_template,
+        sort_keys=sort_keys,
     )
     diff_writer.convert_to_dataset_format(convert_to_dataset_format)
     diff_writer.full_file_diffs(diff_files)
