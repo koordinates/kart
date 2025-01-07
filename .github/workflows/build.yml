@@ -327,7 +327,7 @@ jobs:
       image: ${{ matrix.os.image }}
       env:
         ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
-        PATH: "/opt/python/cp311-cp311/bin:/opt/rh/gcc-toolset-13/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
+        PATH: "/opt/python/cp311-cp311/bin:/opt/rh/gcc-toolset-14/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
 
     steps:
       - uses: actions/checkout@v4
