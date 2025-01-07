@@ -5,7 +5,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
 
-## Unreleased
+## 0.16.0
 
 - Much faster access to tabular/vector datasets (about 75% more features processed per second) by switching to [msgspec](https://jcristharif.com/msgspec/) - [#1025](https://github.com/koordinates/kart/pull/1025)
 - diff: Faster JSON-Lines output (also using msgspec)
