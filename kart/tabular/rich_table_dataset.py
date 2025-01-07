@@ -2,6 +2,7 @@ import functools
 import time
 
 import click
+import pygit2
 from kart.diff_format import DiffFormat
 from osgeo import osr
 
@@ -164,13 +165,12 @@ class RichTableDataset(TableDataset):
             key_filter=feature_filter,
             key_decoder_method="decode_path_to_1pk",
             key_encoder_method="encode_1pk_to_path",
-            value_decoder_method="get_feature_promise_from_path",
+            value_decoder_method="get_feature_promise_from_diff_file",
             reverse=reverse,
         )
 
-    def get_feature_promise_from_path(self, feature_path):
-        feature_blob = self.get_blob_at(feature_path)
-        return functools.partial(self.get_feature_from_blob, feature_blob)
+    def get_feature_promise_from_diff_file(self, feature_diff_file: pygit2.DiffFile):
+        return functools.partial(self.get_feature_from_diff_file, feature_diff_file)
 
     def apply_diff(
         self, dataset_diff, object_builder, *, resolve_missing_values_from_ds=None

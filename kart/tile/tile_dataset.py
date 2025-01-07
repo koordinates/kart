@@ -1,6 +1,9 @@
 import functools
 import os
 from typing import ClassVar
+
+import pygit2
+
 from kart.base_dataset import BaseDataset
 from kart.core import all_blobs_with_parent_in_tree
 from kart.decorators import allow_classmethod
@@ -222,10 +225,11 @@ class TileDataset(BaseDataset):
         raise NotImplementedError()
 
     @classmethod
-    def get_tile_summary_from_pointer_blob(cls, tile_pointer_blob):
-        result = pointer_file_bytes_to_dict(
-            tile_pointer_blob, {"name": tile_pointer_blob.name}
-        )
+    def get_tile_summary_from_pointer_blob(cls, tile_pointer_blob, tilename=None):
+        if not tilename:
+            tilename = tile_pointer_blob.name
+            assert tilename
+        result = pointer_file_bytes_to_dict(tile_pointer_blob, {"name": tilename})
         result["name"] = cls.set_tile_extension(
             result["name"], tile_format=result.get("format")
         )
@@ -251,7 +255,9 @@ class TileDataset(BaseDataset):
             pointer_blob = self.get_blob_at(path, missing_ok=missing_ok)
         if not pointer_blob:
             return None
-        return self.get_tile_summary_from_pointer_blob(pointer_blob)
+        if not tilename:
+            tilename = self.tilename_from_path(path)
+        return self.get_tile_summary_from_pointer_blob(pointer_blob, tilename=tilename)
 
     def get_tile_summary_promise(
         self, tilename=None, *, path=None, pointer_blob=None, missing_ok=False
@@ -266,10 +272,26 @@ class TileDataset(BaseDataset):
             pointer_blob = self.get_blob_at(path, missing_ok=missing_ok)
         if not pointer_blob:
             return None
-        return functools.partial(self.get_tile_summary_from_pointer_blob, pointer_blob)
+        if not tilename:
+            tilename = self.tilename_from_path(path)
+        return functools.partial(
+            self.get_tile_summary_from_pointer_blob, pointer_blob, tilename=tilename
+        )
 
-    def get_tile_summary_promise_from_blob_path(self, path, *, missing_ok=False):
-        return self.get_tile_summary_promise(path=path, missing_ok=missing_ok)
+    def get_tile_summary_promise_from_diff_file(
+        self, diff_file: pygit2.DiffFile, *, missing_ok=False
+    ):
+        try:
+            pointer_blob = self.repo.get(diff_file.id).peel(pygit2.Blob)
+        except KeyError:
+            if missing_ok:
+                return None
+            else:
+                raise
+
+        return self.get_tile_summary_promise(
+            path=f"{self.TILE_PATH}{diff_file.path}", pointer_blob=pointer_blob
+        )
 
     @property
     def path_in_workdir(self):
@@ -321,7 +343,7 @@ class TileDataset(BaseDataset):
                 "tile",
                 key_filter=tile_filter,
                 key_decoder_method="tilename_from_path",
-                value_decoder_method="get_tile_summary_promise_from_blob_path",
+                value_decoder_method="get_tile_summary_promise_from_diff_file",
                 reverse=reverse,
             )
         )

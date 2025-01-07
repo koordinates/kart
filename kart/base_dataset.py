@@ -13,7 +13,7 @@ from kart.diff_structs import DatasetDiff, DeltaDiff, Delta
 from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION, PATCH_DOES_NOT_APPLY
 from kart.key_filters import DatasetKeyFilter, MetaKeyFilter, UserStringKeyFilter
 from kart.meta_items import MetaItemFileType, MetaItemVisibility
-from kart.raw_diff_delta import RawDiffDelta
+from kart.raw_diff_delta import RawDiffDelta, RawDiffFile
 
 
 class BaseDatasetMetaClass(type):
@@ -257,9 +257,7 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
                 other, subtree_name, reverse=reverse
             )
             # NOTE - we could potentially call diff.find_similar() to detect renames here
-            deltas = self.wrap_deltas_from_raw_diff(
-                raw_diff, lambda path: f"{subtree_name}/{path}"
-            )
+            deltas = raw_diff.deltas
 
         def _no_dataset_error(method_name):
             raise RuntimeError(
@@ -356,18 +354,9 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
             ):
                 continue
             yield RawDiffDelta.of(
-                path if old_blob else None, path if new_blob else None
+                RawDiffFile(id=old_blob.oid, path=path) if old_blob else None,
+                RawDiffFile(id=new_blob.oid, path=path) if new_blob else None,
             )
-
-    def wrap_deltas_from_raw_diff(
-        self,
-        raw_diff: pygit2.Diff,
-        path_transform: Callable[[str], str],
-    ):
-        for delta in raw_diff.deltas:
-            old_path = path_transform(delta.old_file.path) if delta.old_file else None
-            new_path = path_transform(delta.new_file.path) if delta.new_file else None
-            yield RawDiffDelta(delta.status, delta.status_char(), old_path, new_path)
 
     def transform_raw_deltas(
         self,
@@ -375,9 +364,9 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
         key_filter: UserStringKeyFilter = UserStringKeyFilter.MATCH_ALL,
         *,
         old_key_transform: Callable[[str], str] = lambda x: x,
-        old_value_transform: Callable[[str], str] = lambda x: x,
+        old_value_transform: Callable[[pygit2.DiffFile], str] = lambda x: x,
         new_key_transform: Callable[[str], str] = lambda x: x,
-        new_value_transform: Callable[[str], str] = lambda x: x,
+        new_value_transform: Callable[[pygit2.DiffFile], str] = lambda x: x,
     ):
         """
         Given a list of RawDiffDeltas - inserts, updates, and deletes that happened at particular paths -
@@ -391,8 +380,11 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
 
         If any transform is not set, that transform defaults to returning the value it was input.
         """
+
         for d in deltas:
-            self.L.debug("diff(): %s %s %s", d.status_char, d.old_path, d.new_path)
+            old_path = d.old_file.path if d.old_file else None
+            new_path = d.new_file.path if d.new_file else None
+            self.L.debug("diff(): %s %s %s", d.status_char, old_path, new_path)
 
             if d.status not in self._INSERT_UPDATE_DELETE:
                 # RENAMED, COPIED, IGNORED, TYPECHANGE, UNMODIFIED, UNREADABLE
@@ -400,12 +392,14 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
                 raise NotImplementedError(f"Delta status: {d.status_char}")
 
             if d.status in self._UPDATE_DELETE:
-                old_key = old_key_transform(d.old_path)
+                assert old_path is not None
+                old_key = old_key_transform(old_path)
             else:
                 old_key = None
 
             if d.status in self._INSERT_UPDATE:
-                new_key = new_key_transform(d.new_path)
+                assert new_path is not None
+                new_key = new_key_transform(new_path)
             else:
                 new_key = None
 
@@ -413,25 +407,25 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
                 continue
 
             if d.status in self._INSERT_TYPES:
-                self.L.debug("diff(): insert %s (%s)", d.new_path, new_key)
+                self.L.debug("diff(): insert %s (%s)", new_path, new_key)
             elif d.status in self._UPDATE_TYPES:
                 self.L.debug(
                     "diff(): update %s %s -> %s %s",
-                    d.old_path,
+                    old_path,
                     old_key,
-                    d.new_path,
+                    new_path,
                     new_key,
                 )
             elif d.status in self._DELETE_TYPES:
-                self.L.debug("diff(): delete %s %s", d.old_path, old_key)
+                self.L.debug("diff(): delete %s %s", old_path, old_key)
 
             if d.status in self._UPDATE_DELETE:
-                old_half_delta = old_key, old_value_transform(d.old_path)
+                old_half_delta = old_key, old_value_transform(d.old_file)
             else:
                 old_half_delta = None
 
             if d.status in self._INSERT_UPDATE:
-                new_half_delta = new_key, new_value_transform(d.new_path)
+                new_half_delta = new_key, new_value_transform(d.new_file)
             else:
                 new_half_delta = None
 

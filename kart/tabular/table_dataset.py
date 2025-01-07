@@ -1,5 +1,7 @@
 import functools
 
+import pygit2
+
 from kart.base_dataset import BaseDataset
 from kart.spatial_filter import SpatialFilter
 from kart.working_copy import PartType
@@ -204,6 +206,12 @@ class TableDataset(BaseDataset, TableImportSource):
 
     def get_feature_from_blob(self, feature_blob):
         return self.get_feature(path=feature_blob.name, data=memoryview(feature_blob))
+
+    def get_feature_from_diff_file(self, feature_diff_file: pygit2.DiffFile):
+        feature_blob = self.repo.get(feature_diff_file.id).peel(pygit2.Blob)
+        return self.get_feature(
+            path=feature_diff_file.path.rsplit("/")[-1], data=memoryview(feature_blob)
+        )
 
 
 class IntegrityError(ValueError):

@@ -218,17 +218,24 @@ class RasterV1(TileDataset):
             pointer_blob = self.get_blob_at(path, missing_ok=missing_ok)
         if not pointer_blob:
             return None
+        if not tilename:
+            tilename = self.tilename_from_path(path)
         pam_path = path + PAM_SUFFIX
         pam_pointer_blob = self.get_blob_at(pam_path, missing_ok=True)
         return functools.partial(
-            self.get_tile_summary_from_pointer_blob, pointer_blob, pam_pointer_blob
+            self.get_tile_summary_from_pointer_blob,
+            pointer_blob,
+            pam_pointer_blob,
+            tilename=tilename,
         )
 
     @classmethod
     def get_tile_summary_from_pointer_blob(
-        cls, tile_pointer_blob, pam_pointer_blob=None
+        cls, tile_pointer_blob, pam_pointer_blob=None, tilename=None
     ):
-        result = super().get_tile_summary_from_pointer_blob(tile_pointer_blob)
+        result = super().get_tile_summary_from_pointer_blob(
+            tile_pointer_blob, tilename=tilename
+        )
         if pam_pointer_blob is not None:
             # PAM files deltas are output in the same delta as the tile they are attached to.
             pam_summary = super().get_tile_summary_from_pointer_blob(pam_pointer_blob)
