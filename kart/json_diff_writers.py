@@ -101,7 +101,7 @@ class JsonDiffWriter(BaseDiffWriter):
             if ds_path == FILES_KEY:
                 return {
                     key: self._postprocess_attachment_delta(value)
-                    for key, value in ds_diff[FILES_KEY].sorted_items()
+                    for key, value in self.iter_deltadiff_items(ds_diff[FILES_KEY])
                 }
 
             result = {}
@@ -348,7 +348,7 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             return
 
         obj = {"type": "meta", "dataset": ds_path, "key": None, "change": None}
-        for key, delta in ds_diff["meta"].sorted_items():
+        for key, delta in self.iter_deltadiff_items(ds_diff["meta"]):
             obj["key"] = key
             obj["change"] = delta.to_plus_minus_dict()
             self.dump(obj)
@@ -382,7 +382,7 @@ class JsonLinesDiffWriter(BaseDiffWriter):
         if not self.do_full_file_diffs:
             obj.pop("binary")
 
-        for key, delta in file_diff.sorted_items():
+        for key, delta in self.iter_deltadiff_items(file_diff):
             obj["path"] = key
             if self.do_full_file_diffs:
                 delta = self._full_file_delta(delta)
