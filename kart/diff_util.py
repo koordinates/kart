@@ -137,10 +137,10 @@ def get_dataset_diff(
 
     if include_wc_diff:
         # diff += target_ds<>working_copy
-        if workdir_diff_cache is None:
-            workdir_diff_cache = target_ds.repo.working_copy.workdir_diff_cache()
-
+        # note: target_ds may be None if the dataset as deleted between the base & target commits
         if target_ds is not None:
+            if workdir_diff_cache is None:
+                workdir_diff_cache = target_ds.repo.working_copy.workdir_diff_cache()
             target_wc_diff = target_ds.diff_to_working_copy(
                 workdir_diff_cache,
                 ds_filter=ds_filter,

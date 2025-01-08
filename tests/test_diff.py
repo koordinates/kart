@@ -1307,6 +1307,22 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
         }
 
 
+def test_diff_rev_wc_with_deleted_dataset(data_working_copy, cli_runner):
+    """
+    Diff the working copy against a commit, where a dataset has been deleted since the commit
+    """
+
+    with data_working_copy("points") as (repo_path, wc):
+        r = cli_runner.invoke(
+            ["data", "rm", "nz_pa_points_topo_150k", "--message=destroy"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["diff", "HEAD^"])
+        assert r.exit_code == 0, r.stderr
+        assert "--- nz_pa_points_topo_150k:meta:schema.json" in r.stdout
+
+
 @pytest.mark.parametrize("output_format", ["text", "json"])
 def test_3d_diff_wc(data_archive, cli_runner, tmp_path, output_format):
     with data_archive("gpkg-3d-points") as src:
