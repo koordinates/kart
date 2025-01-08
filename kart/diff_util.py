@@ -154,8 +154,9 @@ def get_dataset_diff(
     ds_diff = DatasetDiff.concatenated(
         base_target_diff, target_wc_diff, overwrite_original=True
     )
-    # Get rid of parts of the diff-structure that are "empty":
-    ds_diff.prune()
+    if include_wc_diff:
+        # Get rid of parts of the diff-structure that are "empty":
+        ds_diff.prune()
     return ds_diff
 
 

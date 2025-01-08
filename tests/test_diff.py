@@ -11,6 +11,7 @@ import pytest
 
 import kart
 from kart.tabular.v3 import TableV3
+from kart.base_dataset import BaseDataset
 from kart.diff_format import DiffFormat
 from kart.diff_structs import Delta, DeltaDiff
 from kart.html_diff_writer import HtmlDiffWriter
@@ -317,6 +318,45 @@ def test_diff_json_lines_with_feature_count_estimate(
                 "datasets": {"nz_pa_points_topo_150k": 2143},
             },
         ]
+
+
+def test_diff_doesnt_evaluate_all_deltas_up_front_if_you_dont_sort_keys(
+    data_archive_readonly, monkeypatch, cli_runner
+):
+    # Test that we can start outputting features before we have instantiated all the feature deltas.
+    # Otherwise, diffs containing millions of deltas will be slow to start, and will use a lot of memory
+    # to buffer the deltas in memory.
+    # We explicitly avoid doing that, when the users has asked for a `--no-sort-keys` diff.
+    with data_archive_readonly("points") as repo_path:
+        orig_delta_as_json = JsonLinesDiffWriter.delta_as_json
+        features_written = 0
+
+        def delta_as_json(self, *args, **kwargs):
+            nonlocal features_written
+            features_written += 1
+            return orig_delta_as_json(self, *args, **kwargs)
+
+        monkeypatch.setattr(JsonLinesDiffWriter, "delta_as_json", delta_as_json)
+        orig_wrap_deltas_from_raw_diff = BaseDataset.wrap_deltas_from_raw_diff
+
+        def wrap_deltas_from_raw_diff(self, *args, **kwargs):
+            yield from orig_wrap_deltas_from_raw_diff(self, *args, **kwargs)
+            if not features_written:
+                pytest.fail(
+                    "All deltas shouldn't be evaluated until some features are written"
+                )
+
+        monkeypatch.setattr(
+            BaseDataset, "wrap_deltas_from_raw_diff", wrap_deltas_from_raw_diff
+        )
+        r = cli_runner.invoke(
+            [
+                "diff",
+                f"--output-format=json-lines",
+                "--no-sort-keys",
+                "[EMPTY]...",
+            ]
+        )
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
