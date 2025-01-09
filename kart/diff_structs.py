@@ -451,65 +451,6 @@ class Diff(RichDict):
         return self
 
 
-class LazyDeltaDiff:
-    """
-    A LazyDeltaDiff is like a DeltaDiff containing an iterator of Deltas, which is lazily evaluated.
-    This is useful because there may be a lot of Deltas, and we don't want to store them in memory.
-
-    The only correct way to consume a LazyDeltaDiff populated by a generator is to call `items()`,
-    which will consume the iterator as it yields Deltas.
-    Calling that method will invalidate the LazyDeltaDiff, so it cannot be used again (doing so will throw an exception)
-
-    To consume the iterator into memory and turn the LazyDeltaDiff into a DeltaDiff, call `resolve()`
-    """
-
-    _wrapped_iter: Iterator[Delta]
-
-    def __init__(self, initial_contents: Iterable[Delta] = ()):
-        wrapped_iter = iter(initial_contents)
-        try:
-            first_item = next(wrapped_iter)
-        except StopIteration:
-            self._wrapped_iter = iter(())
-            self._bool = False
-        else:
-            self._wrapped_iter = chain((first_item,), wrapped_iter)
-            self._bool = True
-        self._consumed = False
-
-    def __bool__(self):
-        return self._bool
-
-    def __add__(self, other):
-        resolved = self.resolve()
-        resolved += other
-        return resolved
-
-    def _check_not_consumed(self):
-        if self._consumed:
-            raise ValueError("LazyDeltaDiff has already been consumed")
-
-    def items(self) -> Iterator[tuple[str, Delta]]:
-        """
-        Iterates over the items in the LazyDeltaDiff.
-
-        This method consumes the iterator without storing its contents.
-        It's not safe to call this method and then consume the DeltaDiff again.
-        """
-        self._check_not_consumed()
-        self._consumed = True
-        for delta in self._wrapped_iter:
-            yield (delta.key, delta)
-
-    def resolve(self):
-        """
-        Converts the LazyDeltaDiff into a DeltaDiff by consuming the wrapped iterator.
-        """
-        self._check_not_consumed()
-        self._consumed = True
-        return DeltaDiff(self._wrapped_iter)
-
-
 class DeltaDiff(Diff):
     """
     A DeltaDiff is the inner-most type of Diff, the one that actually contains Deltas.
@@ -601,6 +542,65 @@ class DeltaDiff(Diff):
     def resolve(self):
         # don't recurse; it'll be slow and DeltaDiff will never contain any lazy contents
         return self
+
+
+class LazyDeltaDiff:
+    """
+    A LazyDeltaDiff is like a DeltaDiff containing an iterator of Deltas, which is lazily evaluated.
+    This is useful because there may be a lot of Deltas, and we don't want to store them in memory.
+
+    The only correct way to consume a LazyDeltaDiff populated by a generator is to call `items()`,
+    which will consume the iterator as it yields Deltas.
+    Calling that method will invalidate the LazyDeltaDiff, so it cannot be used again (doing so will throw an exception)
+
+    To consume the iterator into memory and turn the LazyDeltaDiff into a DeltaDiff, call `resolve()`
+    """
+
+    _wrapped_iter: Iterator[Delta]
+
+    def __init__(self, initial_contents: Iterable[Delta] = ()):
+        wrapped_iter = iter(initial_contents)
+        try:
+            first_item = next(wrapped_iter)
+        except StopIteration:
+            self._wrapped_iter = iter(())
+            self._bool = False
+        else:
+            self._wrapped_iter = chain((first_item,), wrapped_iter)
+            self._bool = True
+        self._consumed = False
+
+    def __bool__(self):
+        return self._bool
+
+    def __add__(self, other):
+        resolved = self.resolve()
+        resolved += other
+        return resolved
+
+    def _check_not_consumed(self):
+        if self._consumed:
+            raise RuntimeError("LazyDeltaDiff has already been consumed")
+
+    def items(self) -> Iterator[tuple[str, Delta]]:
+        """
+        Iterates over the items in the LazyDeltaDiff.
+
+        This method consumes the iterator without storing its contents.
+        It's not safe to call this method and then consume the DeltaDiff again.
+        """
+        self._check_not_consumed()
+        self._consumed = True
+        for delta in self._wrapped_iter:
+            yield (delta.key, delta)
+
+    def resolve(self):
+        """
+        Converts the LazyDeltaDiff into a DeltaDiff by consuming the wrapped iterator.
+        """
+        self._check_not_consumed()
+        self._consumed = True
+        return DeltaDiff(self._wrapped_iter)
 
 
 class DatasetDiff(Diff):
