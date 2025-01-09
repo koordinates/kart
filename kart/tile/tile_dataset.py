@@ -306,7 +306,9 @@ class TileDataset(BaseDataset):
 
         # Else do a full diff.
         else:
-            ds_diff["tile"] = self.diff_tile(other, tile_filter, reverse=reverse)
+            ds_diff.set_if_nonempty(
+                "tile", self.diff_tile(other, tile_filter, reverse=reverse)
+            )
 
         return ds_diff
 

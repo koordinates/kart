@@ -1,6 +1,6 @@
 from collections import UserDict
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterator
 
 from .exceptions import InvalidOperation
 
@@ -325,6 +325,10 @@ class RichDict(UserDict):
         child = self.get(key)
         return child.recursive_in(keys) if child is not None else False
 
+    def set_if_nonempty(self, key, value):
+        if value:
+            self[key] = value
+
     def create_empty_child(self, key):
         child = self.child_type()
         self[key] = child
@@ -335,8 +339,7 @@ class RichDict(UserDict):
         Deletes any empty RichDicts that are children of self.
         If recurse is True, also deletes non-empty RichDicts, as long as they only contain empty RichDicts in the end.
         """
-        items = list(self.items())
-        for key, value in items:
+        for key, value in list(self.items()):
             if key == "data_changes" and value == False and len(self) == 1:
                 del self[key]
             if not isinstance(value, RichDict):
@@ -430,24 +433,116 @@ class Diff(RichDict):
         return {k: v for k, v in self.items()}
 
 
+class InvalidatedDeltaDiff(Exception):
+    pass
+
+
 class DeltaDiff(Diff):
     """
     A DeltaDiff is the inner-most type of Diff, the one that actually contains Deltas.
     Since Deltas know the keys at which they should be stored, a DeltaDiff makes sure to store Deltas at these keys.
+
+    === Using DeltaDiff with an iterator of Deltas ===
+    It is possible to pass in an iterator of Deltas (e.g. a generator) to the DeltaDiff constructor,
+    in which case the Deltas are NOT immediately stored in the DeltaDiff.
+    This is useful because there may be a lot of Deltas, and we don't want to store them in memory.
+
+    The only correct way to consume a DeltaDiff populated by a generator is to call `iter_items()`,
+    which will consume the iterator as it yields Deltas.
+    Calling that method will invalidate the DeltaDiff, so it cannot be used again (doing so will throw an exception)
+
+    Calling any other dict-like method (keys(), items(), len() etc) will consume the iterator and store its
+    contents in memory, which may be expensive.
     """
 
     child_type = Delta
 
     def __init__(self, initial_contents=()):
+        # An iterator over keys and Delta objects, which is consumed lazily
+        self._lazy_initial_contents: Iterator[tuple[str, Delta]] | None = None
         if isinstance(initial_contents, (dict, UserDict)):
             super().__init__(initial_contents)
         else:
+            if isinstance(initial_contents, Iterator):
+                self._lazy_initial_contents = (
+                    (delta.key, delta) for delta in initial_contents
+                )
+                initial_contents = ()
             super().__init__((delta.key, delta) for delta in initial_contents)
+
+    def __getitem__(self, key):
+        if key in self.data:
+            return self.data[key]
+        self._evaluate_lazy_initial_contents()
+        return self.data[key]
 
     def __setitem__(self, key, delta):
         if key != delta.key:
             raise ValueError("Delta must be added at the appropriate key")
         super().__setitem__(key, delta)
+
+    def _evaluate_lazy_initial_contents(self):
+        if self._lazy_initial_contents is None:
+            return
+        # Consume the generator to populate the DeltaDiff.
+        self.update(self._lazy_initial_contents)
+        self._lazy_initial_contents = None
+
+    def __bool__(self):
+        result = bool(self.data)
+        if (not result) and self._lazy_initial_contents:
+            # If the DeltaDiff is empty, but has lazy initial contents, evaluate the first item to check booleanness.
+            try:
+                k, v = next(self._lazy_initial_contents)
+            except StopIteration:
+                return False
+            else:
+                # remember this result
+                self.data[k] = v
+                return True
+        return result
+
+    def __len__(self):
+        self._evaluate_lazy_initial_contents()
+        return super().__len__()
+
+    def items(self):
+        self._evaluate_lazy_initial_contents()
+        return super().items()
+
+    def iter_items(self):
+        """
+        Iterates over the items in the DeltaDiff, including any lazy initial contents.
+
+        This method consumes the iterator without storing its contents.
+        It's not safe to call this method and then consume the DeltaDiff again.
+        """
+        yield from self.data.items()
+        if self._lazy_initial_contents:
+            for k, v in self._lazy_initial_contents:
+                yield (k, v)
+
+        # Invalidate this DeltaDiff; it's not safe to consume it again after this.
+        # `data` is the underlying contents of UserDict, which we inherit from.
+        # So overriding it to a non-dict will cause all dict methods to raise exceptions.
+        #    > TypeError: argument of type 'InvalidatedDeltaDiff' is not iterable
+        self.data = InvalidatedDeltaDiff(
+            "DeltaDiff can't be used after iter_items() has been called"
+        )
+
+    def keys(self):
+        """
+        Overrides the dict.keys() method to ensure we consume any lazy initial contents first
+        """
+        self._evaluate_lazy_initial_contents()
+        return super().keys()
+
+    def values(self):
+        """
+        Overrides the dict.values() method to ensure we consume any lazy initial contents first
+        """
+        self._evaluate_lazy_initial_contents()
+        return super().values()
 
     def add_delta(self, delta):
         """Add the given delta at the appropriate key."""

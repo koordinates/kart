@@ -139,7 +139,9 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
         """
         ds_diff = DatasetDiff()
         meta_filter = ds_filter.get("meta", ds_filter.child_type())
-        ds_diff["meta"] = self.diff_meta(other, meta_filter, reverse=reverse)
+        ds_diff.set_if_nonempty(
+            "meta", self.diff_meta(other, meta_filter, reverse=reverse)
+        )
         return ds_diff
 
     def diff_meta(

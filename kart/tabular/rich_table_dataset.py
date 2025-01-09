@@ -134,8 +134,9 @@ class RichTableDataset(TableDataset):
 
         # Else do a full diff.
         else:
-            ds_diff["feature"] = DeltaDiff(
-                self.diff_feature(other, feature_filter, reverse=reverse)
+            ds_diff.set_if_nonempty(
+                "feature",
+                DeltaDiff(self.diff_feature(other, feature_filter, reverse=reverse)),
             )
         return ds_diff
 
