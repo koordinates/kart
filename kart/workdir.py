@@ -429,7 +429,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     target_datasets,
                     ds_filter=ds_filter,
                 ),
-                overwrite_original=True,
             )
 
         tile_diff = ds_diff.get("tile")

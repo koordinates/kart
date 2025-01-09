@@ -380,6 +380,7 @@ def get_branch_status_message(repo):
 
 def get_diff_status_message(diff):
     """Given a diff.Diff, return a status message describing it."""
+    diff = diff.resolve()
     return diff_status_to_text(diff.type_counts())
 
 

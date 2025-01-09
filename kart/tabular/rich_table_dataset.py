@@ -6,7 +6,7 @@ from kart.diff_format import DiffFormat
 from osgeo import osr
 
 from kart import crs_util
-from kart.diff_structs import Delta, DeltaDiff, DatasetDiff
+from kart.diff_structs import Delta, DeltaDiff, DatasetDiff, LazyDeltaDiff
 from kart.exceptions import PATCH_DOES_NOT_APPLY, InvalidOperation, NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.promisor_utils import fetch_promised_blobs, object_is_promised
@@ -136,7 +136,9 @@ class RichTableDataset(TableDataset):
         else:
             ds_diff.set_if_nonempty(
                 "feature",
-                DeltaDiff(self.diff_feature(other, feature_filter, reverse=reverse)),
+                LazyDeltaDiff(
+                    self.diff_feature(other, feature_filter, reverse=reverse)
+                ),
             )
         return ds_diff
 

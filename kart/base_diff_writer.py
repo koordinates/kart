@@ -455,8 +455,8 @@ class BaseDiffWriter:
 
     def iter_deltadiff_items(self, deltas):
         if self.sort_keys:
-            return deltas.sorted_items()
-        return deltas.iter_items()
+            return deltas.resolve().sorted_items()
+        return deltas.items()
 
     def filtered_dataset_deltas(self, ds_path, ds_diff):
         """
