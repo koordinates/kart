@@ -419,6 +419,31 @@ def test_diff_reprojection(output_format, data_working_copy, cli_runner):
             _check_geojson(odata["nz_pa_points_topo_150k"])
 
 
+def test_diff_nontext_reprojection_no_sort_keys(data_archive, cli_runner):
+    """
+    Regression test.
+    Non-text diff writers need to lookup CRS when doing reprojection, and they do so by
+    checking whether the CRS has changed in the diff.
+
+    When --no-sort-keys is given, it's possible for the meta deltas to be lazy, and if so then
+    the diff writer will fail to find the CRS in the diff.
+    This was fixed by making the meta deltas non-lazy. This test checks that it doesn't regress.
+    """
+    with data_archive("points") as repo_path:
+        r = cli_runner.invoke(
+            [
+                "diff",
+                f"--output-format=json-lines",
+                "--output=-",
+                f"--crs=epsg:2193",
+                "--no-sort-keys",
+                "[EMPTY]...",
+            ]
+        )
+
+        assert r.exit_code == 0, r.stderr
+
+
 def test_show_crs_with_aspatial_dataset(data_archive, cli_runner):
     """
     --crs should be ignored when used with aspatial data
