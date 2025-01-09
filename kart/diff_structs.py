@@ -522,13 +522,13 @@ class DeltaDiff(Diff):
             for k, v in self._lazy_initial_contents:
                 yield (k, v)
 
-        # Invalidate this DeltaDiff; it's not safe to consume it again after this.
-        # `data` is the underlying contents of UserDict, which we inherit from.
-        # So overriding it to a non-dict will cause all dict methods to raise exceptions.
-        #    > TypeError: argument of type 'InvalidatedDeltaDiff' is not iterable
-        self.data = InvalidatedDeltaDiff(
-            "DeltaDiff can't be used after iter_items() has been called"
-        )
+            # Invalidate this DeltaDiff; it's not safe to consume it again after this.
+            # `data` is the underlying contents of UserDict, which we inherit from.
+            # So overriding it to a non-dict will cause all dict methods to raise exceptions.
+            #    > TypeError: argument of type 'InvalidatedDeltaDiff' is not iterable
+            self.data = InvalidatedDeltaDiff(
+                "DeltaDiff can't be used after iter_items() has been called"
+            )
 
     def keys(self):
         """
