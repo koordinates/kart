@@ -8,6 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 - diff: Much faster and much lower memory usage when using `--no-sort-keys` [#1032](https://github.com/koordinates/kart/pull/1032)
 - diff: Fix an error when diffing a commit against the working copy, where a dataset has been deleted since the commit. [#1033](https://github.com/koordinates/kart/issues/1033)
+- Custom CRS support in MSSQL server - OGR conventions are used to store custom CRSs in a `spatial_ref_sys` table. [#1036](https://github.com/koordinates/kart/pull/1036)
 
 ## 0.16.0
 

@@ -296,7 +296,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
                     break
             else:
                 # Couldn't find any info on the CRS - we don't even know exactly what it's called, but we know the srid.
-                yield column_name, f"NONE:{column_srid}", ""
+                yield column_name, f"CUSTOM:{column_srid}", ""
                 continue
 
             wkt = crs_util.normalise_wkt(
