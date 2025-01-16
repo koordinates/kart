@@ -219,20 +219,9 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         ]
 
         table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
-        ms_spatial_ref_sys = [
-            sess.execute(
-                f"""
-                SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS srid, SRS.*
-                FROM {table_identifier}
-                LEFT OUTER JOIN sys.spatial_reference_systems SRS
-                ON SRS.spatial_reference_id = {cls.quote(g)}.STSrid
-                WHERE {cls.quote(g)} IS NOT NULL;
-                """,
-                {"column_name": g},
-            ).fetchone()
-            for g in geom_cols
-        ]
-        ms_spatial_ref_sys = list(filter(None, ms_spatial_ref_sys))  # Remove nulls.
+        ogr_spatial_ref_sys_identifier = cls.quote_table(
+            db_schema=db_schema, table_name="spatial_ref_sys"
+        )
 
         has_ogr_spatial_ref_sys_identifier = bool(
             sess.scalar(
@@ -244,46 +233,79 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             )
         )
 
-        if has_ogr_spatial_ref_sys_identifier:
-            ogr_spatial_ref_sys_identifier = cls.quote_table(
-                db_schema=db_schema, table_name="spatial_ref_sys"
+        srs_table_joins = {
+            "MSSRS.*": (
+                "sys.spatial_reference_systems MSSRS",
+                "MSSRS.spatial_reference_id",
             )
-            ogr_spatial_ref_sys = [
+        }
+        if has_ogr_spatial_ref_sys_identifier:
+            srs_table_joins["OGRSRS.*"] = (
+                f"{ogr_spatial_ref_sys_identifier} OGRSRS",
+                "OGRSRS.srid",
+            )
+
+        ms_crs_info = list(
+            cls._parse_crs_rows(
                 sess.execute(
                     f"""
-                    SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS srid, SRS.*
-                    FROM {table_identifier}
-                    LEFT OUTER JOIN {ogr_spatial_ref_sys_identifier} SRS
-                    ON SRS.spatial_reference_id = {cls.quote(g)}.STSrid
-                    WHERE {cls.quote(g)} IS NOT NULL;
-                    """,
+                SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {', '.join(srs_table_joins.keys())}
+                FROM {table_identifier}
+                {chr(10).join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins.values())}
+                WHERE {cls.quote(g)} IS NOT NULL;
+                """,
                     {"column_name": g},
                 ).fetchone()
                 for g in geom_cols
-            ]
-            ogr_spatial_ref_sys = list(
-                filter(None, ms_spatial_ref_sys)
-            )  # Remove nulls.
-        else:
-            ogr_spatial_ref_sys = []
+            )
+        )
 
         schema = KartAdapter_SqlServer.sqlserver_to_v2_schema(
-            ms_table_info, ms_spatial_ref_sys, id_salt
+            ms_table_info, ms_crs_info, id_salt
         )
         yield "schema.json", schema
 
-        for crs_info in ms_spatial_ref_sys:
-            auth_name = crs_info["authority_name"]
-            auth_code = crs_info["authorized_spatial_reference_id"]
-            if not auth_name and not auth_code:
-                auth_name, auth_code = "CUSTOM", crs_info["srid"]
-            wkt = crs_info["well_known_text"] or ""
-            yield (
-                f"crs/{auth_name}:{auth_code}.wkt",
-                crs_util.normalise_wkt(
-                    crs_util.ensure_authority_specified(wkt, auth_name, auth_code)
-                ),
+        for column_name, crs_name, wkt in ms_crs_info:
+            yield f"crs/{crs_name}.wkt", wkt
+
+    @classmethod
+    def _parse_crs_rows(cls, crs_rows):
+        # Given an iterable of db rows that look like `column_name | column_srid | authority_name | authorized_spatial_reference_id | well_known_text`
+        # (plus some other uninteresting columns) where that information is sourced from sys.spatial_reference_systems,
+        # and possibly includes some extra columns `auth_name | auth_srid | srtext` (plus some other uninteresting columns)
+        # where the information is sourced from the OGR SRS table [schema].spatial_ref_sys...
+        # yields a 3-tuple `(column_name, crs_name, normalized_crs_wkt)` for each row.
+        for crs_row in crs_rows:
+            if not crs_row:
+                continue
+            column_name = crs_row["column_name"]
+            column_srid = crs_row["column_srid"]
+            if not column_srid:
+                continue
+
+            ms_cols = [
+                "authority_name",
+                "authorized_spatial_reference_id",
+                "well_known_text",
+            ]
+            ogr_cols = ["auth_name", "auth_srid", "srtext"]
+            for cols in (ms_cols, ogr_cols):
+                if all(col in crs_row for col in cols):
+                    auth_name, auth_code, wkt = (
+                        crs_row[cols[0]],
+                        crs_row[cols[1]],
+                        crs_row[cols[2]],
+                    )
+                    break
+            else:
+                # Couldn't find any info on the CRS - we don't even know exactly what it's called, but we know the srid.
+                yield column_name, f"CUSTOM:{column_srid}", ""
+                continue
+
+            wkt = crs_util.normalise_wkt(
+                crs_util.ensure_authority_specified(wkt, auth_name, auth_code)
             )
+            yield column_name, f"{auth_name}:{auth_code}", wkt
 
     @classmethod
     def _geometry_type_constraint(cls, col_name, geometry_type):
@@ -363,17 +385,13 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     def _ms_type_to_v2_geometry_type(cls, ms_col_info, ms_crs_info):
         extra_type_info = {"geometryType": "geometry"}
 
-        crs_row = next(
-            (r for r in ms_crs_info if r["column_name"] == ms_col_info["column_name"]),
+        crs_info = next(
+            (r for r in ms_crs_info if r[0] == ms_col_info["column_name"]),
             None,
         )
-        if crs_row and crs_row["srid"]:
-            auth_name = crs_row["authority_name"]
-            auth_code = crs_row["authorized_spatial_reference_id"]
-            if not auth_name and not auth_code:
-                auth_name, auth_code = "CUSTOM", crs_row["srid"]
-            geometry_crs = f"{auth_name}:{auth_code}"
-            extra_type_info["geometryCRS"] = geometry_crs
+        if crs_info:
+            column_name, crs_name, wkt = crs_info
+            extra_type_info["geometryCRS"] = crs_name
 
         return "geometry", extra_type_info
 
