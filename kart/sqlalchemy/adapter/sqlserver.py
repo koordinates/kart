@@ -12,6 +12,7 @@ from kart.utils import ungenerator
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import quoted_name  # type: ignore[attr-defined]
 from sqlalchemy.sql.functions import Function
+from osgeo.osr import SpatialReference
 
 
 # Adds all CURVE subtypes to GEOMETRY's subtypes since CURVE is a subtype of GEOMETRY, and so on.
@@ -42,7 +43,6 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     """
     Adapts a table in SQL Server (and the attached CRS, if there is one) to a V2 dataset.
     Or, does the reverse - adapts a V2 dataset to a SQL Server table.
-    Note that writing custom CRS to a SQL Server instance is not possible.
     """
 
     V2_TYPE_TO_SQL_TYPE = {
@@ -249,11 +249,11 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             cls._parse_crs_rows(
                 sess.execute(
                     f"""
-                SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {', '.join(srs_table_joins.keys())}
-                FROM {table_identifier}
-                {chr(10).join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins.values())}
-                WHERE {cls.quote(g)} IS NOT NULL;
-                """,
+                    SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {', '.join(srs_table_joins.keys())}
+                    FROM {table_identifier}
+                    {chr(10).join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins.values())}
+                    WHERE {cls.quote(g)} IS NOT NULL;
+                    """,
                     {"column_name": g},
                 ).fetchone()
                 for g in geom_cols
@@ -266,7 +266,8 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         yield "schema.json", schema
 
         for column_name, crs_name, wkt in ms_crs_info:
-            yield f"crs/{crs_name}.wkt", wkt
+            if wkt:
+                yield f"crs/{crs_name}.wkt", wkt
 
     @classmethod
     def _parse_crs_rows(cls, crs_rows):
@@ -290,16 +291,12 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             ]
             ogr_cols = ["auth_name", "auth_srid", "srtext"]
             for cols in (ms_cols, ogr_cols):
-                if all(col in crs_row for col in cols):
-                    auth_name, auth_code, wkt = (
-                        crs_row[cols[0]],
-                        crs_row[cols[1]],
-                        crs_row[cols[2]],
-                    )
+                if all(col in crs_row.keys() and crs_row[col] for col in cols):
+                    auth_name, auth_code, wkt = (crs_row[col] for col in cols)
                     break
             else:
                 # Couldn't find any info on the CRS - we don't even know exactly what it's called, but we know the srid.
-                yield column_name, f"CUSTOM:{column_srid}", ""
+                yield column_name, f"NONE:{column_srid}", ""
                 continue
 
             wkt = crs_util.normalise_wkt(
@@ -383,7 +380,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
 
     @classmethod
     def _ms_type_to_v2_geometry_type(cls, ms_col_info, ms_crs_info):
-        extra_type_info = {"geometryType": "geometry"}
+        extra_type_info = {"geometryType": "GEOMETRY"}
 
         crs_info = next(
             (r for r in ms_crs_info if r[0] == ms_col_info["column_name"]),
@@ -419,6 +416,65 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
             return None
+
+    @classmethod
+    def generate_ogr_tables(cls, dataset, db_name, schema_name, table_name):
+        yield (
+            "geometry_columns",
+            cls.generate_ogr_geometry_columns(
+                dataset, db_name, schema_name, table_name
+            ),
+        )
+        yield "spatial_ref_sys", cls.generate_ogr_spatial_ref_sys(dataset)
+
+    @classmethod
+    def generate_ogr_geometry_columns(cls, dataset, db_name, schema_name, table_name):
+        """Generate the contents of OGR table geometry_columns from a Kart dataset"""
+        result = []
+        for col in dataset.schema.geometry_columns:
+            crs_name = col.get("geometryCRS")
+            if not crs_name:
+                continue
+            srid = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
+            if not srid:
+                continue
+            geometry_type = col.get("geometryType", "GEOMETRY")
+            type_name, *zm = geometry_type.split(" ", 1)
+            zm = zm[0] if zm else ""
+            z = 1 if "Z" in zm else 0
+            m = 1 if "M" in zm else 0
+
+            result.append(
+                {
+                    "f_table_catalog": db_name,
+                    "f_table_schema": schema_name,
+                    "f_table_name": table_name,
+                    "f_geometry_column": col.name,
+                    "coord_dimension": 2 + z + m,
+                    "srid": srid,
+                    "geometry_type": geometry_type,
+                }
+            )
+        return result
+
+    @classmethod
+    def generate_ogr_spatial_ref_sys(cls, dataset):
+        """Generate the contents of OGR table spatial_ref_sys from a Kart dataset"""
+        result = []
+        for crs_name, definition in dataset.crs_definitions().items():
+            spatial_ref = SpatialReference(definition)
+            auth_name = spatial_ref.GetAuthorityName(None) or "NONE"
+            crs_id = crs_util.get_identifier_int(spatial_ref)
+            result.append(
+                {
+                    "srid": crs_id,
+                    "auth_name": auth_name,
+                    "auth_srid": crs_id,
+                    "srtext": definition,
+                    "proj4text": spatial_ref.ExportToProj4(),
+                }
+            )
+        return result
 
 
 class InstanceFunction(Function):

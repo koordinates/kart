@@ -5,12 +5,14 @@ import time
 from kart import crs_util
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
 from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
+from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.schema import Schema
+import sqlalchemy as sa
 from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer  # type: ignore[attr-defined]
 from sqlalchemy.orm import sessionmaker
 
 from .db_server import DatabaseServer_WorkingCopy
-from .table_defs import SqlServerKartTables
+from .table_defs import SqlServerKartTables, SqlServerOgrTables
 
 
 class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
@@ -47,6 +49,9 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         self.preparer = MSIdentifierPreparer(self.engine.dialect)
 
         self.kart_tables = SqlServerKartTables(self.db_schema, repo.is_kart_branded)
+        self.ogr_tables = SqlServerOgrTables(self.db_schema)
+
+        self._is_builtin_srid_cache = {}
 
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = self.adapter.v2_schema_to_sql_spec(dataset.schema, dataset)
@@ -63,8 +68,41 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         )
 
     def _write_meta(self, sess, dataset):
-        # There is no metadata stored anywhere except the table itself, so nothing to write.
-        pass
+        # If there are any CRSs that the dataset references that are not built into sys.spatial_reference_systems,
+        # we use the OGR conventions and write them to {self.db_schema}.spatial_ref_sys
+
+        ogr_tables = dict(
+            KartAdapter_SqlServer.generate_ogr_tables(
+                dataset, "", self.db_schema, dataset.table_name
+            )
+        )
+        geometry_columns = ogr_tables["geometry_columns"]
+        spatial_ref_sys = ogr_tables["spatial_ref_sys"]
+        if not geometry_columns and not spatial_ref_sys:
+            return
+
+        # Don't write any CRS definitions in the OGR tables if it's already defined as a builtin.
+        srids = set(row["srid"] for row in geometry_columns) | set(
+            row["srid"] for row in spatial_ref_sys
+        )
+        custom_srids = srids - set(self._keep_builtin_srids(srids))
+        if not custom_srids:
+            return
+
+        # We only create these tables if we have a plan to write to them:
+        self.ogr_tables.create_all(sess)
+
+        geometry_columns = [
+            row for row in geometry_columns if row["srid"] in custom_srids
+        ]
+        spatial_ref_sys = [
+            row for row in spatial_ref_sys if row["srid"] in custom_srids
+        ]
+
+        if geometry_columns:
+            sess.execute(upsert(self.ogr_tables.geometry_columns), geometry_columns)
+        if spatial_ref_sys:
+            sess.execute(upsert(self.ogr_tables.spatial_ref_sys), spatial_ref_sys)
 
     def _delete_meta(self, sess, dataset):
         # There is no metadata stored anywhere except the table itself, so nothing to delete.
@@ -251,44 +289,47 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         # Geometry type loses various extra type info when roundtripped through SQL Server.
         if old_type == new_type == "geometry":
             new_col_dict["geometryType"] = old_col_dict.get("geometryType")
-            new_geometry_crs = new_col_dict.get("geometryCRS", "")
-            # Custom CRS can't be stored in SQL Server - even the CRS authority can't be roundtripped:
-            if new_geometry_crs.startswith("CUSTOM:"):
-                suffix = new_geometry_crs[new_geometry_crs.index(":") :]
-                if old_col_dict.get("geometryCRS", "").endswith(suffix):
-                    new_col_dict["geometryCRS"] = old_col_dict["geometryCRS"]
 
         if old_type == new_type == "numeric":
             cls._remove_hidden_numeric_diffs(old_col_dict, new_col_dict, 18)
 
         return new_type == old_type
 
-    def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
-        super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
-
-        # Nowhere to put custom CRS in SQL Server, so remove custom CRS diffs.
-        # The working copy doesn't know the true authority name, so refers to them all as CUSTOM.
-        # Their original authority name could be anything.
-        for wc_key in list(wc_meta_items.keys()):
-            if not wc_key.startswith("crs/CUSTOM:"):
-                continue
-            del wc_meta_items[wc_key]
-            suffix = wc_key[wc_key.index(":") :]
-            matching_ds_keys = [
-                d
-                for d in ds_meta_items.keys()
-                if d.startswith("crs/") and d.endswith(suffix)
-            ]
-            if len(matching_ds_keys) == 1:
-                [ds_key] = matching_ds_keys
-                del ds_meta_items[ds_key]
-
     def _is_builtin_crs(self, crs_name, crs):
-        if crs_name.startswith("CUSTOM") and not crs:
-            # We don't know where this CRS is found, it is definitely not a built-in.
-            return False
         auth_name, auth_code = crs_util.parse_authority(crs)
-        return auth_name == "EPSG"
+        return auth_name in ("EPSG", "Microsoft") and self._is_builtin_srid(auth_code)
+
+    def _is_builtin_srid(self, srid):
+        if srid in self._is_builtin_srid_cache:
+            return self._is_builtin_srid_cache[srid]
+        return bool(self._keep_builtin_srids([srid]))
+
+    def _keep_builtin_srids(self, srids):
+        """Given a collection of SRIDs, returns those SRIDs from the list that are builtins, defined in sys.spatial_reference_systems"""
+        if not srids:
+            return srids
+        unknown_srids = set(srids) - self._is_builtin_srid_cache.keys()
+        if unknown_srids:
+            print(f"unknown_srid={unknown_srids}")
+            with self.session() as sess:
+                sql = """
+                    SELECT spatial_reference_id
+                    FROM sys.spatial_reference_systems
+                    WHERE spatial_reference_id IN :unknown_srids;
+                """
+                stmt = sa.text(sql).bindparams(
+                    sa.bindparam("unknown_srids", expanding=True)
+                )
+                builtin_srids = [
+                    row[0]
+                    for row in sess.execute(
+                        stmt, {"unknown_srids": list(unknown_srids)}
+                    )
+                ]
+            for srid in unknown_srids:
+                self._is_builtin_srid_cache[srid] = srid in builtin_srids
+
+        return [srid for srid in srids if self._is_builtin_srid_cache[srid]]
 
     def _is_schema_update_supported(self, schema_delta):
         if not schema_delta.old_value or not schema_delta.new_value:
