@@ -161,6 +161,15 @@ def separate_last_path_part(uri):
     return (modified_url, last_part)
 
 
+def get_path_part(uri, index):
+    """
+    Returns a specified part of the path for a URI by integer index
+    - ie, 0 for the first part, or -1 for the last part.
+    """
+    url = urlsplit(uri)
+    return PurePosixPath(url.path).relative_to("/").parts[index]
+
+
 def text_with_inlined_params(text, params):
     """
     Uses sqlalchemy feature bindparam(literal_execute=True)

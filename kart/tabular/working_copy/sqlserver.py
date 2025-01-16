@@ -3,7 +3,11 @@ import logging
 import time
 
 from kart import crs_util
-from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
+from kart.sqlalchemy import (
+    separate_last_path_part,
+    get_path_part,
+    text_with_inlined_params,
+)
 from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.schema import Schema
@@ -42,6 +46,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
         self.check_valid_location(self.uri, repo)
         self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
+        self.db_name = get_path_part(self.connect_uri, 0)
 
         self.adapter = KartAdapter_SqlServer
         self.engine = self.adapter.create_engine(self.connect_uri)
@@ -73,7 +78,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
         ogr_tables = dict(
             KartAdapter_SqlServer.generate_ogr_tables(
-                dataset, "", self.db_schema, dataset.table_name
+                dataset, self.db_name, self.db_schema, dataset.table_name
             )
         )
         geometry_columns = ogr_tables["geometry_columns"]
@@ -105,8 +110,28 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             sess.execute(upsert(self.ogr_tables.spatial_ref_sys), spatial_ref_sys)
 
     def _delete_meta(self, sess, dataset):
-        # There is no metadata stored anywhere except the table itself, so nothing to delete.
-        pass
+        ogr_geometry_columns_exists = sess.scalar(
+            """
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema=:table_schema AND table_name='geometry_columns';
+            """,
+            {"table_schema": self.db_schema},
+        )
+        if ogr_geometry_columns_exists:
+            sess.execute(
+                f"""
+                DELETE FROM {self.table_identifier("geometry_columns")}
+                WHERE f_table_schema = :table_schema AND f_table_name = :table_name
+                """,
+                {
+                    "table_schema": self.db_schema,
+                    "table_name": dataset.table_name,
+                },
+            )
+        # The other OGR convention table that we maintain is spatial_ref_sys.
+        # We could delete CRSs from this table if they're no longer referenced,
+        # but the cons (we might accidentally delete a CRS that the user wanted to keep)
+        # outweigh the pros (we'd be tidying up after ourselves).
 
     def _get_geom_extent(self, sess, dataset, default=None):
         """Returns the envelope around the entire dataset as (min_x, min_y, max_x, max_y)."""
@@ -297,7 +322,12 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
     def _is_builtin_crs(self, crs_name, crs):
         auth_name, auth_code = crs_util.parse_authority(crs)
-        return auth_name in ("EPSG", "Microsoft") and self._is_builtin_srid(auth_code)
+        return (
+            auth_name in ("EPSG", "Microsoft")
+            and auth_code
+            and auth_code.isdigit()
+            and self._is_builtin_srid(int(auth_code))
+        )
 
     def _is_builtin_srid(self, srid):
         if srid in self._is_builtin_srid_cache:
@@ -310,7 +340,6 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             return srids
         unknown_srids = set(srids) - self._is_builtin_srid_cache.keys()
         if unknown_srids:
-            print(f"unknown_srid={unknown_srids}")
             with self.session() as sess:
                 sql = """
                     SELECT spatial_reference_id
