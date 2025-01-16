@@ -306,3 +306,41 @@ class GpkgTables(TableSet):
 
 # Makes it so GPKG table definitions are also accessible at the GpkgTables class itself:
 GpkgTables.copy_tables_to_class()
+
+
+class SqlServerOgrTables(TableSet):
+    """
+    OGR tables for SQL Server - we follow the OGR convention when looking for custom CRSs,
+    and when writing custom CRSs (meaning, CRSs not found in sys.spatial_reference_systems).
+    See https://github.com/OSGeo/gdal/blob/master/ogr/ogrsf_frmts/mssqlspatial/ogrmssqlspatialdatasource.cpp#L1349-L1352
+    """
+
+    def __init__(self, db_schema=None):
+        self.sqlalchemy_metadata = MetaData()
+        self.db_schema = db_schema
+
+        self.geometry_columns = Table(
+            "geometry_columns",
+            self.sqlalchemy_metadata,
+            Column("f_table_catalog", VARCHAR(128), nullable=False, primary_key=True),
+            Column("f_table_schema", VARCHAR(128), nullable=False, primary_key=True),
+            Column("f_table_name", VARCHAR(256), nullable=False, primary_key=True),
+            Column("f_geometry_column", VARCHAR(256), nullable=False, primary_key=True),
+            Column("coord_dimension", Integer, nullable=False),
+            Column("srid", Integer, nullable=False),
+            Column("geometry_type", VARCHAR(30), nullable=False),
+            schema=self.db_schema,
+        )
+
+        self.spatial_ref_sys = Table(
+            "spatial_ref_sys",
+            self.sqlalchemy_metadata,
+            Column(
+                "srid", Integer, nullable=False, primary_key=True, autoincrement=False
+            ),
+            Column("auth_name", VARCHAR(256)),
+            Column("auth_srid", Integer),
+            Column("srtext", VARCHAR(2048)),
+            Column("proj4text", VARCHAR(2048)),
+            schema=self.db_schema,
+        )

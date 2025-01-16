@@ -397,7 +397,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
             wc_schema[index]["primaryKeyIndex"] = 0
             return Schema(wc_schema)
 
-    def _is_builtin_crs(self, crs):
+    def _is_builtin_crs(self, crs_name, crs):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name == "EPSG" and auth_code == "4326"
 

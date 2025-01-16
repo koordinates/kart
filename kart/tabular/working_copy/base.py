@@ -609,14 +609,15 @@ class TableWorkingCopy(WorkingCopyPart):
         for key in ds_meta_items.keys() & wc_meta_items.keys():
             if not key.startswith("crs/"):
                 continue
-            old_is_standard = self._is_builtin_crs(ds_meta_items[key])
-            new_is_standard = self._is_builtin_crs(wc_meta_items[key])
+            crs_name = key[4:]
+            old_is_standard = self._is_builtin_crs(crs_name, ds_meta_items[key])
+            new_is_standard = self._is_builtin_crs(crs_name, wc_meta_items[key])
             if old_is_standard and new_is_standard:
                 del ds_meta_items[key]
                 del wc_meta_items[key]
             # If either definition is custom, we keep the diff, since it could be important.
 
-    def _is_builtin_crs(self, crs):
+    def _is_builtin_crs(self, crs_name, crs):
         """
         Returns True if this WC implementation has (some definition of) the given CRS stored as a built-in.
         For instance, GPKG would return True if given a definition EPSG:4326, which is built into every GPKG.

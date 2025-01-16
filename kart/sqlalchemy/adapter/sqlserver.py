@@ -12,6 +12,7 @@ from kart.utils import ungenerator
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import quoted_name  # type: ignore[attr-defined]
 from sqlalchemy.sql.functions import Function
+from osgeo.osr import SpatialReference
 
 
 # Adds all CURVE subtypes to GEOMETRY's subtypes since CURVE is a subtype of GEOMETRY, and so on.
@@ -42,7 +43,6 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     """
     Adapts a table in SQL Server (and the attached CRS, if there is one) to a V2 dataset.
     Or, does the reverse - adapts a V2 dataset to a SQL Server table.
-    Note that writing custom CRS to a SQL Server instance is not possible.
     """
 
     V2_TYPE_TO_SQL_TYPE = {
@@ -219,38 +219,95 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         ]
 
         table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
-        ms_spatial_ref_sys = [
-            sess.execute(
-                f"""
-                SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS srid, SRS.*
-                FROM {table_identifier}
-                LEFT OUTER JOIN sys.spatial_reference_systems SRS
-                ON SRS.spatial_reference_id = {cls.quote(g)}.STSrid
-                WHERE {cls.quote(g)} IS NOT NULL;
+        ogr_spatial_ref_sys_identifier = cls.quote_table(
+            db_schema=db_schema, table_name="spatial_ref_sys"
+        )
+
+        has_ogr_spatial_ref_sys_identifier = bool(
+            sess.scalar(
+                """
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema=:table_schema AND table_name='spatial_ref_sys';
                 """,
-                {"column_name": g},
-            ).fetchone()
-            for g in geom_cols
+                {"table_schema": db_schema},
+            )
+        )
+
+        srs_table_selects = [
+            "MSSRS.authority_name AS ms_auth_name",
+            "MSSRS.authorized_spatial_reference_id AS ms_auth_srid",
+            "MSSRS.well_known_text AS ms_wkt",
         ]
-        ms_spatial_ref_sys = list(filter(None, ms_spatial_ref_sys))  # Remove nulls.
+        srs_table_joins = [
+            ("sys.spatial_reference_systems MSSRS", "MSSRS.spatial_reference_id")
+        ]
+
+        if has_ogr_spatial_ref_sys_identifier:
+            srs_table_selects += [
+                "OGRSRS.auth_name AS ogr_auth_name",
+                "OGRSRS.auth_srid AS ogr_auth_srid",
+                "OGRSRS.srtext AS ogr_wkt",
+            ]
+            srs_table_joins += [
+                (f"{ogr_spatial_ref_sys_identifier} OGRSRS", "OGRSRS.srid")
+            ]
+
+        srs_table_selects = ", ".join(srs_table_selects)
+
+        ms_crs_info = list(
+            cls._parse_crs_rows(
+                sess.execute(
+                    f"""
+                    SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {srs_table_selects}
+                    FROM {table_identifier}
+                    {" ".join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins)}
+                    WHERE {cls.quote(g)} IS NOT NULL;
+                    """,
+                    {"column_name": g},
+                ).fetchone()
+                for g in geom_cols
+            )
+        )
 
         schema = KartAdapter_SqlServer.sqlserver_to_v2_schema(
-            ms_table_info, ms_spatial_ref_sys, id_salt
+            ms_table_info, ms_crs_info, id_salt
         )
         yield "schema.json", schema
 
-        for crs_info in ms_spatial_ref_sys:
-            auth_name = crs_info["authority_name"]
-            auth_code = crs_info["authorized_spatial_reference_id"]
-            if not auth_name and not auth_code:
-                auth_name, auth_code = "CUSTOM", crs_info["srid"]
-            wkt = crs_info["well_known_text"] or ""
-            yield (
-                f"crs/{auth_name}:{auth_code}.wkt",
-                crs_util.normalise_wkt(
-                    crs_util.ensure_authority_specified(wkt, auth_name, auth_code)
-                ),
+        for column_name, crs_name, wkt in ms_crs_info:
+            if wkt:
+                yield f"crs/{crs_name}.wkt", wkt
+
+    @classmethod
+    def _parse_crs_rows(cls, crs_rows):
+        # Given an iterable of db rows that look like `column_name | column_srid | ms_auth_name | ms_auth_srid | ms_wkt`
+        # where that information is sourced from sys.spatial_reference_systems,
+        # and possibly includes some extra columns `ogr_auth_name | ogr_auth_srid | ogr_wkt`
+        # where the information is sourced from the OGR SRS table [schema].spatial_ref_sys...
+        # yields a 3-tuple `(column_name, crs_name, normalized_crs_wkt)` for each row.
+        for crs_row in crs_rows:
+            if not crs_row:
+                continue
+            column_name = crs_row["column_name"]
+            column_srid = crs_row["column_srid"]
+            if not column_srid:
+                continue
+
+            # Prefer to use the MS columns as the authoritative source, where they are populated.
+            for prefix in ("ms", "ogr"):
+                cols = (f"{prefix}_auth_name", f"{prefix}_auth_srid", f"{prefix}_wkt")
+                if all(col in crs_row.keys() and crs_row[col] for col in cols):
+                    auth_name, auth_code, wkt = (crs_row[col] for col in cols)
+                    break
+            else:
+                # Couldn't find any info on the CRS - we don't even know exactly what it's called, but we know the srid.
+                yield column_name, f"CUSTOM:{column_srid}", ""
+                continue
+
+            wkt = crs_util.normalise_wkt(
+                crs_util.ensure_authority_specified(wkt, auth_name, auth_code)
             )
+            yield column_name, f"{auth_name}:{auth_code}", wkt
 
     @classmethod
     def _geometry_type_constraint(cls, col_name, geometry_type):
@@ -328,19 +385,15 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
 
     @classmethod
     def _ms_type_to_v2_geometry_type(cls, ms_col_info, ms_crs_info):
-        extra_type_info = {"geometryType": "geometry"}
+        extra_type_info = {"geometryType": "GEOMETRY"}
 
-        crs_row = next(
-            (r for r in ms_crs_info if r["column_name"] == ms_col_info["column_name"]),
+        crs_info = next(
+            (r for r in ms_crs_info if r[0] == ms_col_info["column_name"]),
             None,
         )
-        if crs_row and crs_row["srid"]:
-            auth_name = crs_row["authority_name"]
-            auth_code = crs_row["authorized_spatial_reference_id"]
-            if not auth_name and not auth_code:
-                auth_name, auth_code = "CUSTOM", crs_row["srid"]
-            geometry_crs = f"{auth_name}:{auth_code}"
-            extra_type_info["geometryCRS"] = geometry_crs
+        if crs_info:
+            column_name, crs_name, wkt = crs_info
+            extra_type_info["geometryCRS"] = crs_name
 
         return "geometry", extra_type_info
 
@@ -368,6 +421,65 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
             return None
+
+    @classmethod
+    def generate_ogr_tables(cls, dataset, db_name, schema_name, table_name):
+        yield (
+            "geometry_columns",
+            cls.generate_ogr_geometry_columns(
+                dataset, db_name, schema_name, table_name
+            ),
+        )
+        yield "spatial_ref_sys", cls.generate_ogr_spatial_ref_sys(dataset)
+
+    @classmethod
+    def generate_ogr_geometry_columns(cls, dataset, db_name, schema_name, table_name):
+        """Generate the contents of OGR table geometry_columns from a Kart dataset"""
+        result = []
+        for col in dataset.schema.geometry_columns:
+            crs_name = col.get("geometryCRS")
+            if not crs_name:
+                continue
+            srid = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
+            if not srid:
+                continue
+            geometry_type = col.get("geometryType", "GEOMETRY")
+            type_name, *zm = geometry_type.split(" ", 1)
+            zm = zm[0] if zm else ""
+            z = 1 if "Z" in zm else 0
+            m = 1 if "M" in zm else 0
+
+            result.append(
+                {
+                    "f_table_catalog": db_name,
+                    "f_table_schema": schema_name,
+                    "f_table_name": table_name,
+                    "f_geometry_column": col.name,
+                    "coord_dimension": 2 + z + m,
+                    "srid": srid,
+                    "geometry_type": geometry_type,
+                }
+            )
+        return result
+
+    @classmethod
+    def generate_ogr_spatial_ref_sys(cls, dataset):
+        """Generate the contents of OGR table spatial_ref_sys from a Kart dataset"""
+        result = []
+        for crs_name, definition in dataset.crs_definitions().items():
+            spatial_ref = SpatialReference(definition)
+            auth_name = spatial_ref.GetAuthorityName(None) or "NONE"
+            crs_id = crs_util.get_identifier_int(spatial_ref)
+            result.append(
+                {
+                    "srid": crs_id,
+                    "auth_name": auth_name,
+                    "auth_srid": crs_id,
+                    "srtext": definition,
+                    "proj4text": spatial_ref.ExportToProj4(),
+                }
+            )
+        return result
 
 
 class InstanceFunction(Function):

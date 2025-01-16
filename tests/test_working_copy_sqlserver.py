@@ -543,18 +543,43 @@ def test_checkout_custom_crs(
             r = cli_runner.invoke(["checkout", "custom-crs"])
 
             # main branch has a custom CRS at HEAD. A diff here would mean we are not roundtripping it properly.
-            # In fact we *cannot* roundtrip it properly since MSSQL cannot store custom CRS, but we should at least not
-            # get a spurious diff when the user has not made any edits - the diff should be hidden.
+            # The way we roundtrip custom CRSs (one's not found in sys.spatial_reference_systems) in sqlserver
+            # is to store it in a table called spatial_ref_sys that follows the OGR convention.
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r.stdout
 
-            # Even though SQL Server cannot store the custom CRS, it can still store the CRS ID in the geometries:
             table_wc = repo.working_copy.tabular
             with table_wc.session() as sess:
                 srid = sess.scalar(
                     f"SELECT TOP 1 geom.STSrid FROM {sqlserver_schema}.{H.POINTS.LAYER};"
                 )
                 assert srid == 100002
+                geometry_columns = sess.execute(
+                    f"SELECT f_table_schema, f_table_name, f_geometry_column, coord_dimension, srid, geometry_type FROM {sqlserver_schema}.geometry_columns;"
+                ).fetchone()
+                assert geometry_columns == (
+                    sqlserver_schema,
+                    H.POINTS.LAYER,
+                    "geom",
+                    2,
+                    100002,
+                    "POINT",
+                )
+
+                spatial_ref_sys = sess.execute(
+                    f"SELECT srid, auth_name, auth_srid, srtext, proj4text FROM {sqlserver_schema}.spatial_ref_sys;"
+                ).fetchone()
+                expected_wkt = repo.datasets()[H.POINTS.LAYER].get_crs_definition(
+                    "koordinates.com:100002"
+                )
+                expected_proj4 = "+proj=lcc +lat_0=29.6666666666667 +lon_0=-100.333333333333 +lat_1=31.8833333333333 +lat_2=30.1166666666667 +x_0=2296583.333333 +y_0=9842500 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
+                assert spatial_ref_sys == (
+                    100002,
+                    "koordinates.com",
+                    100002,
+                    expected_wkt,
+                    expected_proj4,
+                )
 
             # We should be able to checkout the previous revision, which has a different (standard) CRS.
             r = cli_runner.invoke(["checkout", "epsg-4326"])
@@ -570,8 +595,92 @@ def test_checkout_custom_crs(
             # Restore the contents of custom-crs to the WC so we can make sure WC diff is working:
             dodgy_restore(repo, "custom-crs")
 
-            # We can detect that the CRS ID has changed to 100002, but SQL server can't actually store
-            # the custom definition, so we don't know what it is.
+            r = cli_runner.invoke(["diff"])
+            assert r.stdout.splitlines() == [
+                "--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt",
+                '- GEOGCS["WGS 84",',
+                '-     DATUM["WGS_1984",',
+                '-         SPHEROID["WGS 84", 6378137, 298.257223563,',
+                '-             AUTHORITY["EPSG", "7030"]],',
+                '-         AUTHORITY["EPSG", "6326"]],',
+                '-     PRIMEM["Greenwich", 0,',
+                '-         AUTHORITY["EPSG", "8901"]],',
+                '-     UNIT["degree", 0.0174532925199433,',
+                '-         AUTHORITY["EPSG", "9122"]],',
+                '-     AUTHORITY["EPSG", "4326"]]',
+                "- ",
+                "+++ nz_pa_points_topo_150k:meta:crs/koordinates.com:100002.wkt",
+                '+ PROJCS["NAD83 / Austin",',
+                '+     GEOGCS["NAD83",',
+                '+         DATUM["North_American_Datum_1983",',
+                '+             SPHEROID["GRS 1980", 6378137.0, 298.257222101],',
+                "+             TOWGS84[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],",
+                '+         PRIMEM["Greenwich", 0.0],',
+                '+         UNIT["degree", 0.017453292519943295],',
+                '+         AXIS["Lon", EAST],',
+                '+         AXIS["Lat", NORTH]],',
+                '+     PROJECTION["Lambert_Conformal_Conic_2SP"],',
+                '+     PARAMETER["central_meridian", -100.333333333333],',
+                '+     PARAMETER["latitude_of_origin", 29.6666666666667],',
+                '+     PARAMETER["standard_parallel_1", 31.883333333333297],',
+                '+     PARAMETER["false_easting", 2296583.333333],',
+                '+     PARAMETER["false_northing", 9842500.0],',
+                '+     PARAMETER["standard_parallel_2", 30.1166666666667],',
+                '+     UNIT["m", 1.0],',
+                '+     AXIS["x", EAST],',
+                '+     AXIS["y", NORTH],',
+                '+     AUTHORITY["koordinates.com", "100002"]]',
+                "+ ",
+                "--- nz_pa_points_topo_150k:meta:schema.json",
+                "+++ nz_pa_points_topo_150k:meta:schema.json",
+                "  [",
+                "    {",
+                '      "id": "e97b4015-2765-3a33-b174-2ece5c33343b",',
+                '      "name": "fid",',
+                '      "dataType": "integer",',
+                '      "primaryKeyIndex": 0,',
+                '      "size": 64',
+                "    },",
+                "    {",
+                '      "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",',
+                '      "name": "geom",',
+                '      "dataType": "geometry",',
+                '      "geometryType": "POINT",',
+                '-     "geometryCRS": "EPSG:4326",',
+                '+     "geometryCRS": "koordinates.com:100002",',
+                "    },",
+                "    {",
+                '      "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",',
+                '      "name": "t50_fid",',
+                '      "dataType": "integer",',
+                '      "size": 32',
+                "    },",
+                "    {",
+                '      "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",',
+                '      "name": "name_ascii",',
+                '      "dataType": "text",',
+                '      "length": 75',
+                "    },",
+                "    {",
+                '      "id": "c3389414-a511-5385-7dcd-891c4ead1663",',
+                '      "name": "macronated",',
+                '      "dataType": "text",',
+                '      "length": 1',
+                "    },",
+                "    {",
+                '      "id": "45b00eaa-5700-662d-8a21-9614e40c437b",',
+                '      "name": "name",',
+                '      "dataType": "text",',
+                '      "length": 75',
+                "    },",
+                "  ]",
+            ]
+
+            # If the spatial_ref_sys table is removed, we still know the CRS is changed, but now we don't know to what -
+            # we don't know the name or the WKT of the custom CRS.
+            with table_wc.session() as sess:
+                sess.execute(f"DROP TABLE {sqlserver_schema}.spatial_ref_sys;")
+
             r = cli_runner.invoke(["diff"])
             assert r.stdout.splitlines() == [
                 "--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt",
