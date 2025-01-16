@@ -1,3 +1,4 @@
+import re
 from osgeo import osr
 
 from .cli_util import StringFromFile
@@ -197,7 +198,15 @@ def get_identifier_int_from_dataset(dataset, crs_name=None):
         return None
 
     definition = dataset.get_crs_definition(crs_name)
-    return get_identifier_int(definition)
+    if definition:
+        return get_identifier_int(definition)
+
+    # No CRS is actually attached to the dataset - all we have is the CRS name/number, we don't know where to find it.
+    match = re.fullmatch(r"[^:]+:(\d+)", crs_name)
+    if match:
+        return int(match.group(1))
+
+    return None
 
 
 def wkt_equal(wkt1, wkt2):

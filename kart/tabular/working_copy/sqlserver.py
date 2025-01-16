@@ -283,7 +283,10 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
                 [ds_key] = matching_ds_keys
                 del ds_meta_items[ds_key]
 
-    def _is_builtin_crs(self, crs):
+    def _is_builtin_crs(self, crs_name, crs):
+        if crs_name.startswith("CUSTOM") and not crs:
+            # We don't know where this CRS is found, it is definitely not a built-in.
+            return False
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name == "EPSG"
 

@@ -276,7 +276,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
         return new_type == old_type
 
-    def _is_builtin_crs(self, crs):
+    def _is_builtin_crs(self, crs_name, crs):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name in ("EPSG", "ESRI") or auth_code == "900913"  # GOOGLE
 

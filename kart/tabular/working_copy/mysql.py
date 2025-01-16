@@ -241,7 +241,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
                 del ds_meta_items[key]
                 del wc_meta_items[key]
 
-    def _is_builtin_crs(self, crs):
+    def _is_builtin_crs(self, crs_name, crs):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name == "EPSG"
 

@@ -234,6 +234,39 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         ]
         ms_spatial_ref_sys = list(filter(None, ms_spatial_ref_sys))  # Remove nulls.
 
+        has_ogr_spatial_ref_sys_identifier = bool(
+            sess.scalar(
+                """
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema=:table_schema AND table_name='spatial_ref_sys';
+                """,
+                {"table_schema": db_schema},
+            )
+        )
+
+        if has_ogr_spatial_ref_sys_identifier:
+            ogr_spatial_ref_sys_identifier = cls.quote_table(
+                db_schema=db_schema, table_name="spatial_ref_sys"
+            )
+            ogr_spatial_ref_sys = [
+                sess.execute(
+                    f"""
+                    SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS srid, SRS.*
+                    FROM {table_identifier}
+                    LEFT OUTER JOIN {ogr_spatial_ref_sys_identifier} SRS
+                    ON SRS.spatial_reference_id = {cls.quote(g)}.STSrid
+                    WHERE {cls.quote(g)} IS NOT NULL;
+                    """,
+                    {"column_name": g},
+                ).fetchone()
+                for g in geom_cols
+            ]
+            ogr_spatial_ref_sys = list(
+                filter(None, ms_spatial_ref_sys)
+            )  # Remove nulls.
+        else:
+            ogr_spatial_ref_sys = []
+
         schema = KartAdapter_SqlServer.sqlserver_to_v2_schema(
             ms_table_info, ms_spatial_ref_sys, id_salt
         )
