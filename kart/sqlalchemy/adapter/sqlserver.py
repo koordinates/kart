@@ -233,25 +233,34 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             )
         )
 
-        srs_table_joins = {
-            "MSSRS.*": (
-                "sys.spatial_reference_systems MSSRS",
-                "MSSRS.spatial_reference_id",
-            )
-        }
+        srs_table_selects = [
+            "MSSRS.authority_name AS ms_auth_name",
+            "MSSRS.authorized_spatial_reference_id AS ms_auth_srid",
+            "MSSRS.well_known_text AS ms_wkt",
+        ]
+        srs_table_joins = [
+            ("sys.spatial_reference_systems MSSRS", "MSSRS.spatial_reference_id")
+        ]
+
         if has_ogr_spatial_ref_sys_identifier:
-            srs_table_joins["OGRSRS.*"] = (
-                f"{ogr_spatial_ref_sys_identifier} OGRSRS",
-                "OGRSRS.srid",
-            )
+            srs_table_selects += [
+                "OGRSRS.auth_name AS ogr_auth_name",
+                "OGRSRS.auth_srid AS ogr_auth_srid",
+                "OGRSRS.srtext AS ogr_wkt",
+            ]
+            srs_table_joins += [
+                (f"{ogr_spatial_ref_sys_identifier} OGRSRS", "OGRSRS.srid")
+            ]
+
+        srs_table_selects = ", ".join(srs_table_selects)
 
         ms_crs_info = list(
             cls._parse_crs_rows(
                 sess.execute(
                     f"""
-                    SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {', '.join(srs_table_joins.keys())}
+                    SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {srs_table_selects}
                     FROM {table_identifier}
-                    {chr(10).join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins.values())}
+                    {" ".join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins)}
                     WHERE {cls.quote(g)} IS NOT NULL;
                     """,
                     {"column_name": g},
@@ -271,9 +280,9 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
 
     @classmethod
     def _parse_crs_rows(cls, crs_rows):
-        # Given an iterable of db rows that look like `column_name | column_srid | authority_name | authorized_spatial_reference_id | well_known_text`
-        # (plus some other uninteresting columns) where that information is sourced from sys.spatial_reference_systems,
-        # and possibly includes some extra columns `auth_name | auth_srid | srtext` (plus some other uninteresting columns)
+        # Given an iterable of db rows that look like `column_name | column_srid | ms_auth_name | ms_auth_srid | ms_wkt`
+        # where that information is sourced from sys.spatial_reference_systems,
+        # and possibly includes some extra columns `ogr_auth_name | ogr_auth_srid | ogr_wkt`
         # where the information is sourced from the OGR SRS table [schema].spatial_ref_sys...
         # yields a 3-tuple `(column_name, crs_name, normalized_crs_wkt)` for each row.
         for crs_row in crs_rows:
@@ -284,13 +293,9 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             if not column_srid:
                 continue
 
-            ms_cols = [
-                "authority_name",
-                "authorized_spatial_reference_id",
-                "well_known_text",
-            ]
-            ogr_cols = ["auth_name", "auth_srid", "srtext"]
-            for cols in (ms_cols, ogr_cols):
+            # Prefer to use the MS columns as the authoritative source, where they are populated.
+            for prefix in ("ms", "ogr"):
+                cols = (f"{prefix}_auth_name", f"{prefix}_auth_srid", f"{prefix}_wkt")
                 if all(col in crs_row.keys() and crs_row[col] for col in cols):
                     auth_name, auth_code, wkt = (crs_row[col] for col in cols)
                     break
