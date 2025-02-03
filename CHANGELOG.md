@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## Unreleased
+
+- show: Added `--no-sort-keys` option to disable sorting of features by name/PK. Previously added to `diff` only
+
 ## 0.16.1
 
 - diff: Much faster and much lower memory usage when using `--no-sort-keys` [#1032](https://github.com/koordinates/kart/pull/1032)
