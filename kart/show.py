@@ -66,6 +66,16 @@ from kart.repo import KartRepoState
     ),
 )
 @click.option(
+    "--add-feature-count-estimate",
+    default=None,
+    type=click.Choice(diff_estimation.ACCURACY_CHOICES),
+    help=(
+        "Adds a feature count estimate to this diff (used with `--output-format json-lines` only.) "
+        "The estimate will be calculated while the diff is being generated, and will be added to "
+        "the stream when it is ready. If the estimate is not ready before the process exits, it will not be added."
+    ),
+)
+@click.option(
     "--diff-files",
     is_flag=True,
     help="Show changes to file contents (instead of just showing the object IDs of changed files)",
@@ -109,6 +119,7 @@ def show(
     output_path,
     exit_code,
     only_feature_count,
+    add_feature_count_estimate,
     diff_files,
     args,
     diff_format=DiffFormat.FULL,
@@ -161,6 +172,7 @@ def show(
         delta_filter=delta_filter,
         target_crs=crs,
         sort_keys=sort_keys,
+        diff_estimate_accuracy=add_feature_count_estimate,
     )
     diff_writer.full_file_diffs(diff_files)
     diff_writer.include_target_commit_as_header()
