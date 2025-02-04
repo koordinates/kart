@@ -3,6 +3,7 @@ import itertools
 import os
 from pathlib import Path
 import platform
+from typing import BinaryIO, Iterator
 
 
 def ungenerator(cast_function):
@@ -40,6 +41,34 @@ def chunk(iterable, size, strict=False):
         if strict and len(chunk) != size:
             raise ValueError("chunk(): incomplete batch")
         yield chunk
+
+
+def iter_records_from_file(
+    file_: BinaryIO, separator: bytes, chunk_size: int = 4096
+) -> Iterator[bytes]:
+    """
+    Split a (binary) file into records, using a separator. Yields records as bytes.
+
+    Oddly, there's no easy stdlib way to do this.
+    See fairly-stale discussion at https://bugs.python.org/issue1152248
+    """
+    partial_record = None
+    while True:
+        chunk = file_.read(chunk_size)
+        if not chunk:
+            break
+        pieces = chunk.split(separator)
+        if partial_record is None:
+            partial_record = pieces[0]
+        else:
+            partial_record += pieces[0]
+        if len(pieces) > 1:
+            yield partial_record
+            for i in range(1, len(pieces) - 1):
+                yield pieces[i]
+            partial_record = pieces[-1]
+    if partial_record is not None:
+        yield partial_record
 
 
 def get_num_available_cores():

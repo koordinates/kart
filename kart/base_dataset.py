@@ -2,6 +2,7 @@ import functools
 import logging
 import sys
 from collections.abc import Iterable
+from itertools import chain
 from typing import Callable, Optional, Protocol, TYPE_CHECKING, ClassVar, Iterator
 
 import click
@@ -15,7 +16,7 @@ from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION, PATCH_DOES_NO
 from kart.key_filters import DatasetKeyFilter, MetaKeyFilter, UserStringKeyFilter
 from kart.meta_items import MetaItemFileType, MetaItemVisibility
 from kart.raw_diff_delta import RawDiffDelta
-from kart.utils import chunk
+from kart.utils import chunk, iter_records_from_file
 
 
 class BaseDatasetMetaClass(type):
@@ -205,8 +206,7 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
         if reverse:
             self_subtree, other_subtree = other_subtree, self_subtree
 
-        # TODO: iterate over 0-terminated 'lines' of output rather than using check_output. Efficiently. How?
-        output = subprocess_util.check_output(
+        p = subprocess_util.Popen(
             [
                 "git",
                 "diff-tree",
@@ -215,19 +215,26 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
                 "--name-status",
                 str(self_subtree.id),
                 str(other_subtree.id),
-            ]
+            ],
+            stdout=subprocess_util.PIPE,
         )
-        if not output:
+
+        # Split on null bytes and decode each part as utf-8, filtering out empty strings.
+        pieces = iter_records_from_file(p.stdout, b"\0")
+        pairs = chunk(pieces, 2)
+        try:
+            pair0 = next(pairs)
+        except StopIteration:
             # empty diff
             return
 
-        pieces = output.split(b"\0")
-        # diff-tree adds an extra \0 on the end of the output; trim it off
-        assert len(pieces) % 2 == 1
-        pieces.pop()
-
-        # Split on null bytes and decode each part as utf-8, filtering out empty strings
-        for status_char, path in chunk(pieces, 2, strict=True):
+        for pair in chain([pair0], pairs):
+            if len(pair) == 1:
+                # diff-tree adds an extra \0 on the end of the output [except if the diff is empty?]
+                assert pair[0] == b""
+                assert next(pairs, None) is None
+                break
+            status_char, path = pair
             status_char = status_char.decode("utf8")
             path = path.decode("utf8")
             if path_transform:
