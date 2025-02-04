@@ -15,6 +15,12 @@ class RawDiffDelta:
 
     __slots__ = ["status", "status_char", "old_path", "new_path"]
 
+    _GIT_STATUS_TO_PYGIT2 = {
+        "A": pygit2.GIT_DELTA_ADDED,
+        "D": pygit2.GIT_DELTA_DELETED,
+        "M": pygit2.GIT_DELTA_MODIFIED,
+    }
+
     def __init__(self, status, status_char, old_path, new_path):
         self.status = status
         self.status_char = status_char
@@ -32,3 +38,14 @@ class RawDiffDelta:
             return RawDiffDelta(pygit2.GIT_DELTA_DELETED, "D", old_path, new_path)
         else:
             return RawDiffDelta(pygit2.GIT_DELTA_MODIFIED, "M", old_path, new_path)
+
+    @classmethod
+    def from_git_name_status(cls, status_char, path):
+        status = cls._GIT_STATUS_TO_PYGIT2[status_char]
+        old_path = None
+        new_path = None
+        if status_char in "AM":
+            new_path = path
+        if status_char in "MD":
+            old_path = path
+        return RawDiffDelta(status, status_char, old_path, new_path)

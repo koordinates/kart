@@ -2,11 +2,13 @@ import functools
 import logging
 import sys
 from collections.abc import Iterable
-from typing import Callable, Optional, Protocol, TYPE_CHECKING, ClassVar
+from itertools import chain
+from typing import Callable, Optional, Protocol, TYPE_CHECKING, ClassVar, Iterator
 
 import click
 import pygit2
 
+from kart import subprocess_util
 from kart.core import all_blobs_in_tree, all_blobs_with_paths_in_tree
 from kart.diff_format import DiffFormat
 from kart.diff_structs import DatasetDiff, DeltaDiff, Delta
@@ -14,6 +16,7 @@ from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION, PATCH_DOES_NO
 from kart.key_filters import DatasetKeyFilter, MetaKeyFilter, UserStringKeyFilter
 from kart.meta_items import MetaItemFileType, MetaItemVisibility
 from kart.raw_diff_delta import RawDiffDelta
+from kart.utils import chunk, iter_records_from_file
 
 
 class BaseDatasetMetaClass(type):
@@ -189,12 +192,63 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
         # Subclasses to override.
         pass
 
+    def get_deltas_from_git_diff_for_subtree(
+        self,
+        other: Optional["BaseDataset"],
+        subtree_name: str,
+        *,
+        reverse: bool = False,
+        path_transform: Callable[[str], str] | None = None,
+    ) -> Iterator[RawDiffDelta]:
+        self_subtree = self.get_subtree(subtree_name)
+        other_subtree = other.get_subtree(subtree_name) if other else self._empty_tree
+
+        if reverse:
+            self_subtree, other_subtree = other_subtree, self_subtree
+
+        p = subprocess_util.Popen(
+            [
+                "git",
+                "-C",
+                self.repo.path,
+                "diff-tree",
+                "-r",
+                "-z",
+                "--name-status",
+                str(self_subtree.id),
+                str(other_subtree.id),
+            ],
+            stdout=subprocess_util.PIPE,
+        )
+
+        # Split on null bytes and decode each part as utf-8, filtering out empty strings.
+        pieces = iter_records_from_file(p.stdout, b"\0")
+        pairs = chunk(pieces, 2)
+        try:
+            pair0 = next(pairs)
+        except StopIteration:
+            # empty diff
+            return
+
+        for pair in chain([pair0], pairs):
+            if len(pair) == 1:
+                # diff-tree adds an extra \0 on the end of the output [except if the diff is empty?]
+                assert pair[0] == b""
+                assert next(pairs, None) is None
+                break
+            status_char, path = pair
+            status_char = status_char.decode("utf8")
+            path = path.decode("utf8")
+            if path_transform:
+                path = path_transform(path)
+            yield RawDiffDelta.from_git_name_status(status_char, path)
+
     def get_raw_diff_for_subtree(
         self,
         other: Optional["BaseDataset"],
         subtree_name: str,
         reverse: bool = False,
-    ):
+    ) -> pygit2.Diff:
         """
         Get a pygit2.Diff of the diff between some subtree of this dataset, and the same subtree of another dataset
         (typically actually the "same" dataset, but at a different revision).
@@ -255,12 +309,11 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
                 other, key_encoder_method, key_filter, reverse=reverse
             )
         else:
-            raw_diff = self.get_raw_diff_for_subtree(
-                other, subtree_name, reverse=reverse
-            )
-            # NOTE - we could potentially call diff.find_similar() to detect renames here
-            deltas = self.wrap_deltas_from_raw_diff(
-                raw_diff, lambda path: f"{subtree_name}/{path}"
+            deltas = self.get_deltas_from_git_diff_for_subtree(
+                other,
+                subtree_name,
+                reverse=reverse,
+                path_transform=lambda path: f"{subtree_name}/{path}",
             )
 
         def _no_dataset_error(method_name):
@@ -365,7 +418,7 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
         self,
         raw_diff: pygit2.Diff,
         path_transform: Callable[[str], str],
-    ):
+    ) -> Iterator[RawDiffDelta]:
         for delta in raw_diff.deltas:
             old_path = path_transform(delta.old_file.path) if delta.old_file else None
             new_path = path_transform(delta.new_file.path) if delta.new_file else None
