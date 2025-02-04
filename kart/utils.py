@@ -29,13 +29,16 @@ def ungenerator(cast_function):
     return decorator
 
 
-def chunk(iterable, size):
+def chunk(iterable, size, strict=False):
     """Generator. Yield successive chunks from iterable of length <size>."""
+    # TODO: replace this chunk() function with itertools.batched() (Python 3.12+)
     it = iter(iterable)
     while True:
         chunk = tuple(itertools.islice(it, size))
         if not chunk:
             return
+        if strict and len(chunk) != size:
+            raise ValueError("chunk(): incomplete batch")
         yield chunk
 
 
