@@ -95,6 +95,12 @@ from kart.repo import KartRepoState
     "size of the diff if some types of values are not required. "
     "As a final example, --delta-filter=all is equivalent to --delta-filter=--,-,+,++",
 )
+@click.option(
+    "--sort-keys/--no-sort-keys",
+    is_flag=True,
+    default=True,
+    help="Sort keys in the output. This is the default behaviour, but it can be disabled for a slight speed improvement.",
+)
 def show(
     ctx,
     *,
@@ -107,6 +113,7 @@ def show(
     args,
     diff_format=DiffFormat.FULL,
     delta_filter,
+    sort_keys,
 ):
     """
     Shows the given REVISION, or HEAD if none is specified.
@@ -153,6 +160,7 @@ def show(
         json_style=fmt,
         delta_filter=delta_filter,
         target_crs=crs,
+        sort_keys=sort_keys,
     )
     diff_writer.full_file_diffs(diff_files)
     diff_writer.include_target_commit_as_header()
