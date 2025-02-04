@@ -209,6 +209,8 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
         p = subprocess_util.Popen(
             [
                 "git",
+                "-C",
+                self.repo.path,
                 "diff-tree",
                 "-r",
                 "-z",
