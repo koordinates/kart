@@ -247,10 +247,10 @@ class JsonLinesDiffWriter(BaseDiffWriter):
         self._output_buffer = bytearray()
 
     def dump(self, obj):
-        # https://jcristharif.com/msgspec/perf-tips.html#line-delimited-json
-        msgspec_json_encoder.encode_into(obj, self._output_buffer)
-        self._output_buffer.extend(b"\n")
         with self._output_lock:
+            # https://jcristharif.com/msgspec/perf-tips.html#line-delimited-json
+            msgspec_json_encoder.encode_into(obj, self._output_buffer)
+            self._output_buffer.extend(b"\n")
             self.fp.buffer.write(self._output_buffer)
 
     def write_header(self):
