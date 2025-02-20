@@ -1200,6 +1200,15 @@ class TableWorkingCopy(WorkingCopyPart):
             # Check if the dataset is spatial, and if so, if the WC has any necessary spatial extension installed.
             self._check_for_unsupported_ds_types(sess, target_datasets)
 
+            import os
+
+            if os.environ.get("NO_DROP_AND_RECREATE", None):
+                # Don't drop and recreate any tables - try and treat them as updates instead.
+                drop_and_recreate = ds_inserts & ds_deletes
+                ds_updates = ds_updates | drop_and_recreate
+                ds_inserts = ds_inserts - drop_and_recreate
+                ds_deletes = ds_deletes - drop_and_recreate
+
             # Delete old tables
             if ds_deletes:
                 self.drop_tables(target_commit, *[base_datasets[d] for d in ds_deletes])
@@ -1246,14 +1255,22 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         feature_filter = ds_filter.get("feature", ds_filter.child_type())
 
-        self._apply_meta_diff(
-            sess, base_ds, ~self.diff_dataset_to_working_copy_meta(base_ds)
-        )
+        import os
+
+        if os.environ.get("NO_APPLY_SCHEMA_CHANGES", None):
+            pass
+        else:
+            self._apply_meta_diff(
+                sess, base_ds, ~self.diff_dataset_to_working_copy_meta(base_ds)
+            )
         # WC now has base_ds structure and so we can write base_ds features to WC.
         self._reset_dirty_rows(sess, base_ds, feature_filter)
 
         if target_ds != base_ds:
-            self._apply_meta_diff(sess, target_ds, base_ds.diff_meta(target_ds))
+            if os.environ.get("NO_APPLY_SCHEMA_CHANGES", None):
+                pass
+            else:
+                self._apply_meta_diff(sess, target_ds, base_ds.diff_meta(target_ds))
             # WC now has target_ds structure and so we can write target_ds features to WC.
             self._apply_feature_diff(
                 sess, base_ds, target_ds, feature_filter, track_changes_as_dirty
