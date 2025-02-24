@@ -379,7 +379,7 @@ def test_resolve_schema_conflict(data_working_copy, cli_runner):
             ["show", "HEAD", "--", "nz_waca_adjustments:feature:9999999"]
         )
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines()[4:] == [
+        assert r.stdout.splitlines()[5:] == [
             "    Merge with 'theirs_branch'",
             "",
             "--- nz_waca_adjustments:feature:9999999",

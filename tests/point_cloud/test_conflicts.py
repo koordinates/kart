@@ -168,7 +168,7 @@ def test_resolve_conflict_with_workingcopy(cli_runner, data_archive, requires_pd
 
         r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines()[4:] == [
+        assert r.stdout.splitlines()[5:] == [
             '    Merge with "theirs_branch"',
             "",
             "--- auckland:tile:auckland_0_0",
@@ -226,7 +226,7 @@ def test_resolve_conflict_with_file(cli_runner, data_archive, requires_pdal, tmp
 
         r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0"])
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines()[4:] == [
+        assert r.stdout.splitlines()[5:] == [
             '    Merge with "theirs_branch"',
             "",
             "--- auckland:tile:auckland_0_0",

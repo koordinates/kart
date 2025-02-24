@@ -8,6 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 - diff: Fixed garbled json-lines output sometimes when using `--add-feature-count-estimate` [#1040](https://github.com/koordinates/kart/issues/1040)
 - diff/show: Faster output for some large repositories (varies wildly) [#1038](https://github.com/koordinates/kart/issues/1038)
+- show: Text output now displays a 'Merge: {parentIDs}' line when showing a merge commit (consistent with `git show`) [#1043](https://github.com/koordinates/kart/issues/1043)
 - show: Added `--no-sort-keys` option to disable sorting of features by name/PK. Previously added to `diff` only
 - show: Added `--add-feature-count-estimate` option to add a feature count estimate to `json-lines` output. Previously added to `diff` only
 

@@ -49,6 +49,10 @@ class TextDiffWriter(BaseDiffWriter):
         author_time_in_author_timezone = author_time_utc.astimezone(author_timezone)
 
         click.secho(f"commit {self.commit.hex}", fg="yellow", **self.pecho)
+        if len(self.commit.parent_ids) > 1:
+            parents = self.commit.parents
+            parent_ids_s = " ".join(str(x.short_id) for x in parents)
+            click.secho(f"Merge: {parent_ids_s}", **self.pecho)
         click.secho(f"Author: {author.name} <{author.email}>", **self.pecho)
         click.secho(
             f'Date:   {author_time_in_author_timezone.strftime("%c %z")}',
