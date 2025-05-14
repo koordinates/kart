@@ -549,16 +549,25 @@ def test_merge_ancestor_text(data_archive, cli_runner):
         assert repo.head.target.hex == H.POINTS.HEAD_SHA
 
 
-def test_merge_ancestor_json(data_archive, cli_runner):
+@pytest.mark.parametrize(
+    "dry_run",
+    [pytest.param(False, id=""), pytest.param(True, id="dryrun")],
+)
+def test_merge_ancestor_json(data_archive, cli_runner, dry_run):
     with data_archive("points") as repo_path:
         repo = KartRepo(repo_path)
         # new branch
-        r = cli_runner.invoke(["merge", "--output-format=json", "HEAD^"])
+        args = ["merge", "--output-format=json", "HEAD^"]
+        if dry_run:
+            args.append("--dry-run")
+        r = cli_runner.invoke(args)
         assert r.exit_code == 0, r
         output = json.loads(r.stdout)["kart.merge/v1"]
 
         assert output["noOp"]
+        assert output.get("dryRun", False) == dry_run
         assert output["message"] is None
+        assert output["fastForward"]
 
 
 def test_merge_signatures_from_environment(
