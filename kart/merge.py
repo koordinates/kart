@@ -99,12 +99,6 @@ def do_merge(
         "conflicts": None,
     }
 
-    # We're up-to-date if we're trying to merge our own common ancestor.
-    if ancestor_id == theirs.id:
-        merge_jdict["noOp"] = True
-        merge_jdict["message"] = None
-        return merge_jdict
-
     # "dryRun": True means we didn't actually do this
     # "dryRun": False means we *did* actually do this
     merge_jdict["dryRun"] = dry_run
@@ -116,6 +110,14 @@ def do_merge(
         raise InvalidOperation(
             "Can't resolve as a fast-forward merge and --ff-only specified"
         )
+
+    # We're up-to-date if we're trying to merge our own common ancestor.
+    if ancestor_id == theirs.id:
+        merge_jdict["noOp"] = True
+        merge_jdict["message"] = None
+        # all noops are fast-forwards
+        merge_jdict["fastForward"] = True
+        return merge_jdict
 
     if can_ff and ff:
         # do fast-forward merge
