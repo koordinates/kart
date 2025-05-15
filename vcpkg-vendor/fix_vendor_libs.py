@@ -11,6 +11,7 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import zipfile
 from enum import Enum
 from pathlib import Path
 
@@ -270,29 +271,15 @@ def wheel_paths(root_path):
 
 def unpack_wheel(path_to_wheel, root_path):
     wheel_name = path_to_wheel.name
+    wheel_contents_path = root_path / f"{wheel_name}-contents"
 
     print(f"Unpacking {wheel_name} ...")
-    subprocess.check_output(
-        [
-            sys.executable,
-            "-m",
-            "wheel",
-            "unpack",
-            "--dest",
-            root_path,
-            path_to_wheel,
-        ]
-    )
+    with zipfile.ZipFile(path_to_wheel, "r") as zip_ref:
+        zip_ref.extractall(wheel_contents_path)
 
-    parts = wheel_name.split("-")
-    wheel_id = f"{parts[0]}-{parts[1]}"
-
-    wheel_contents_path = root_path / wheel_id
     if not wheel_contents_path.is_dir():
         L.error(f"{ERR} Unpacking {wheel_name} didn't work as expected")
         sys.exit(1)
-
-    wheel_contents_path.rename(root_path / f"{wheel_name}-contents")
 
 
 def pack_wheel(path_to_wheel, root_path):
