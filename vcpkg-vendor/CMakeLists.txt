@@ -191,9 +191,9 @@ ExternalProject_Add(
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
-                  <TMP_DIR>/dist/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
+                  <TMP_DIR>/dist/gdal-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/gdal-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl)
 
 #
 # psycopg2 wheel
