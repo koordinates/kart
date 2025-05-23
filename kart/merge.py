@@ -69,12 +69,10 @@ def do_merge(
         raise click.BadParameter(
             "Conflicting parameters: --no-ff & --ff-only", param_hint="--ff-only"
         )
-    if message:
-        if ff_only:
-            raise click.BadParameter(
-                "Conflicting parameters: --message & --ff-only", param_hint="--ff-only"
-            )
-        ff = False
+    if message and ff_only:
+        raise click.BadParameter(
+            "Conflicting parameters: --message & --ff-only", param_hint="--ff-only"
+        )
 
     # accept ref-ish things (refspec, branch, commit)
     theirs = CommitWithReference.resolve(repo, commit)
