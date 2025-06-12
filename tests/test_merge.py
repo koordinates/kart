@@ -86,7 +86,8 @@ def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request)
         assert r.exit_code == 0, r
         assert repo.head.target.hex != commit_id
 
-        r = cli_runner.invoke(["merge", "--ff-only", "changes"])
+        # message option is allowed but happens to get ignored since a fastforward is possible
+        r = cli_runner.invoke(["merge", "-m", "custom message", "changes"])
         assert r.exit_code == 0, r
 
         H.git_graph(request, "post-merge")
@@ -106,9 +107,7 @@ def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request)
         pytest.param(H.TABLE, id="table"),
     ],
 )
-@pytest.mark.parametrize("no_ff_method", ["--no-ff", "--message=custom message"])
 def test_merge_fastforward_noff(
-    no_ff_method,
     data,
     data_working_copy,
     cli_runner,
@@ -139,7 +138,7 @@ def test_merge_fastforward_noff(
         assert repo.head.target.hex != commit_id
 
         # force creation of a merge commit
-        r = cli_runner.invoke(["merge", "changes", no_ff_method, "-o", "json"])
+        r = cli_runner.invoke(["merge", "changes", "--no-ff", "-o", "json"])
         assert r.exit_code == 0, r
 
         H.git_graph(request, "post-merge")
@@ -152,10 +151,7 @@ def test_merge_fastforward_noff(
         assert len(c.parents) == 2
         assert c.parents[0].hex == h
         assert c.parents[1].hex == commit_id
-        if no_ff_method == "--no-ff":
-            assert c.message == 'Merge branch "changes" into main'
-        else:
-            assert c.message == "custom message"
+        assert c.message == 'Merge branch "changes" into main'
 
 
 @pytest.mark.parametrize(
