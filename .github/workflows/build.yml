@@ -341,6 +341,7 @@ jobs:
         uses: lukka/get-cmake@latest
         with:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
+          ninjaVersion: "1.12.1"
 
       - name: "setup: rust"
         run: |
