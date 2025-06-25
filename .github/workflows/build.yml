@@ -573,6 +573,8 @@ jobs:
 
             rpm)
               yum install -y sqlite tar
+              # fedora needs this package; other yumlikes don't even have this package :/
+              yum install -y awk || true
               ;;
 
             *)
