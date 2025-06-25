@@ -355,6 +355,9 @@ jobs:
         run: |
           echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
 
+          # cmake 4 is installed in the container already, but we want to use the cmake from the get-cmake action (3.x)
+          rm -f /usr/local/bin/cmake
+
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
           yum install -y autoconf-archive perl-IPC-Cmd rpm-build unixODBC zip rustc cargo golang
