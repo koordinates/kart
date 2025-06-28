@@ -7,7 +7,7 @@ import re
 
 from osgeo import osr
 
-from kart.crs_util import normalise_wkt, wkt_equal
+from kart.crs_util import normalise_wkt, wkt_equal, make_crs
 from kart.exceptions import (
     InvalidOperation,
     INVALID_FILE_FORMAT,
@@ -49,7 +49,7 @@ class RewriteMetadata(IntFlag):
 
 
 def rewrite_and_merge_metadata(
-    tile_metadata_list, rewrite_metadata=RewriteMetadata.NO_REWRITE
+    tile_metadata_list, rewrite_metadata=RewriteMetadata.NO_REWRITE, override_crs=None
 ):
     """
     Given a list of tile metadata, merges the parts we expect to be homogenous into a single piece of tile metadata in
@@ -59,8 +59,16 @@ def rewrite_and_merge_metadata(
     drop those parts of the metadata in accordance with the rewrite_metadata option. This means a) the merge will happen
     cleanly in spite of possible differences and b) we won't store any metadata that can't describe every tile in the
     dataset (ie, we won't store anything about whether tiles are COPC if we're going to allow a mix of both COPC and not).
+
+    If override_crs is provided, it will be used to override the CRS of all tiles, setting the dataset CRS.
     """
     result = {}
+    # Normalize override CRS if provided
+    normalized_override_crs = None
+    if override_crs:
+        crs_obj = make_crs(override_crs)
+        normalized_override_crs = normalise_wkt(crs_obj.ExportToWkt())
+
     for tile_metadata in tile_metadata_list:
         _merge_metadata_field(
             result, "format.json", rewrite_format(tile_metadata, rewrite_metadata)
@@ -68,9 +76,15 @@ def rewrite_and_merge_metadata(
         _merge_metadata_field(
             result, "schema.json", rewrite_schema(tile_metadata, rewrite_metadata)
         )
-        _merge_metadata_field(
-            result, "crs.wkt", tile_metadata["crs.wkt"], eq_func=wkt_equal
-        )
+
+        # Handle CRS with potential override
+        if override_crs:
+            # Override CRS for all tiles if specified
+            tile_crs = normalized_override_crs
+        else:
+            tile_crs = tile_metadata["crs.wkt"]
+
+        _merge_metadata_field(result, "crs.wkt", tile_crs, eq_func=wkt_equal)
         # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
     return result
 
@@ -157,7 +171,7 @@ def get_native_extent(info):
     )
 
 
-def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
+def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None, override_crs=None):
     """
     Use pdal to get any and all point-cloud metadata we can make use of in Kart.
     This includes metadata that must be dataset-homogenous and would be stored in the dataset's /meta/ folder,
@@ -178,6 +192,7 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
 
     pc_tile_path - a pathlib.Path or a string containing the path to a file or an S3 url.
     oid_and_size - a tuple (sha256_oid, filesize) if already known, to avoid repeated work.
+    override_crs - if provided, override the CRS of the tile with this CRS.
     """
     pc_tile_path = str(pc_tile_path)
 
@@ -241,10 +256,16 @@ def extract_pc_tile_metadata(pc_tile_path, oid_and_size=None):
         "size": size,
     }
 
+    # Use override CRS if provided, otherwise use the CRS from the file
+    final_crs = compound_crs or horizontal_crs
+    if override_crs:
+        crs_obj = make_crs(override_crs)
+        final_crs = crs_obj.ExportToWkt()
+
     result = {
         "format.json": format_json,
         "schema.json": schema_json,
-        "crs.wkt": normalise_wkt(compound_crs or horizontal_crs),
+        "crs.wkt": normalise_wkt(final_crs),
         "tile": _remove_nones(tile_info),
     }
 

@@ -7,6 +7,7 @@ from kart.cli_util import (
     MutexOption,
     KartCommand,
 )
+from kart.crs_util import CoordinateReferenceString
 from kart.completion_shared import file_path_completer
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
 from kart.lfs_util import prefix_sha256
@@ -112,6 +113,14 @@ L = logging.getLogger(__name__)
         "the authoritative source for the given data and data is fetched from there if needed."
     ),
 )
+@click.option(
+    "--override-crs",
+    type=CoordinateReferenceString(keep_as_string=True),
+    help=(
+        "Override the CRS of all source tiles and set the dataset CRS. "
+        "Can be specified as EPSG code (e.g., EPSG:4326) or as a WKT file (e.g., @myfile.wkt)."
+    ),
+)
 @click.argument(
     "args",
     nargs=-1,
@@ -131,6 +140,7 @@ def point_cloud_import(
     num_workers,
     dataset_path,
     do_link,
+    override_crs,
     args,
 ):
     """
@@ -162,6 +172,7 @@ def point_cloud_import(
         num_workers=num_workers,
         do_link=do_link,
         sources=sources,
+        override_crs=override_crs,
     ).import_tiles()
 
 
@@ -170,6 +181,12 @@ class PointCloudImporter(TileImporter):
 
     CLOUD_OPTIMIZED_VARIANT = "Cloud-Optimized Point Cloud"
     CLOUD_OPTIMIZED_VARIANT_ACRONYM = "COPC"
+
+    def extract_tile_metadata(self, tile_path, **kwargs):
+        """Override to pass override_crs parameter to point cloud metadata extraction."""
+        if self.override_crs:
+            kwargs["override_crs"] = self.override_crs
+        return self.DATASET_CLASS.extract_tile_metadata(tile_path, **kwargs)
 
     def get_default_message(self):
         return f"Importing {len(self.sources)} LAZ tiles as {self.dataset_path}"
@@ -199,7 +216,9 @@ class PointCloudImporter(TileImporter):
         else:
             rewrite_metadata = RewriteMetadata.DROP_OPTIMIZATION
 
-        return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
+        return rewrite_and_merge_metadata(
+            all_metadata, rewrite_metadata, override_crs=self.override_crs
+        )
 
     def get_predicted_merged_metadata(self, all_metadata):
         if self.convert_to_cloud_optimized:
@@ -215,7 +234,9 @@ class PointCloudImporter(TileImporter):
             # For --preserve-format we allow both COPC and non-COPC tiles, so we don't need to check or store this information.
             rewrite_metadata = RewriteMetadata.DROP_OPTIMIZATION
 
-        return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
+        return rewrite_and_merge_metadata(
+            all_metadata, rewrite_metadata, override_crs=self.override_crs
+        )
 
     def get_actual_merged_metadata(self, all_metadata):
         rewrite_metadata = (
@@ -224,7 +245,9 @@ class PointCloudImporter(TileImporter):
             else RewriteMetadata.DROP_OPTIMIZATION
         )
 
-        return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
+        return rewrite_and_merge_metadata(
+            all_metadata, rewrite_metadata, override_crs=self.override_crs
+        )
 
     def get_conversion_func(self, tile_source):
         if self.convert_to_cloud_optimized and not is_copc(tile_source.metadata):
