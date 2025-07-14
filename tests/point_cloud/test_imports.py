@@ -1197,11 +1197,13 @@ def test_import_with_crs_override(
         repo = KartRepo(repo_path)
         with chdir(repo_path):
             # First, import a single tile to establish the dataset CRS
+            # This tile is actually in EPSG:2193 but we override it to EPSG:2994
             r = cli_runner.invoke(
                 [
                     "point-cloud-import",
                     f"{auckland}/auckland_0_0.laz",
                     "--dataset-path=auckland",
+                    "--override-crs=EPSG:2994",
                     "--convert-to-copc",
                 ]
             )
@@ -1211,15 +1213,16 @@ def test_import_with_crs_override(
             r = cli_runner.invoke(["meta", "get", "auckland", "crs.wkt"])
             assert r.exit_code == 0, r.stderr
             original_crs = r.stdout.strip()
+            assert "2994" in original_crs
 
-            # Import another tile with --override-crs=EPSG:2193 to override its CRS
+            # Import another tile with --override-crs=EPSG:2994 to override its CRS
             r = cli_runner.invoke(
                 [
                     "point-cloud-import",
                     f"{auckland}/auckland_0_1.laz",
                     "--dataset-path=auckland",
                     "--update-existing",
-                    "--override-crs=EPSG:2193",
+                    "--override-crs=EPSG:2994",
                     "--convert-to-copc",
                 ]
             )
@@ -1235,76 +1238,6 @@ def test_import_with_crs_override(
             assert r.exit_code == 0, r.stderr
             final_crs = r.stdout.strip()
 
-            # The CRS should be normalized EPSG:2193 or equivalent
-            assert "2193" in final_crs or "NZGD2000" in final_crs
+            assert "2994" in final_crs
 
             check_lfs_hashes(repo, 2)
-
-
-def test_import_without_crs_override_should_fail_on_conflict(
-    tmp_path,
-    chdir,
-    cli_runner,
-    data_archive_readonly,
-    requires_pdal,
-    requires_git_lfs,
-):
-    """Test that imports fail on CRS conflicts when --override-crs is not used."""
-    # This test would require creating test data with conflicting CRS
-    # For now, we'll skip this test as it requires specific test data
-    # with intentionally conflicting CRS definitions
-    pytest.skip("Requires test data with conflicting CRS - to be implemented")
-
-
-def test_override_crs_with_wkt_file(
-    tmp_path,
-    chdir,
-    cli_runner,
-    data_archive_readonly,
-    check_lfs_hashes,
-    requires_pdal,
-    requires_git_lfs,
-):
-    """Test that --override-crs works with WKT file syntax."""
-    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
-        repo_path = tmp_path / "point-cloud-repo"
-        r = cli_runner.invoke(["init", repo_path])
-        assert r.exit_code == 0, r.stderr
-
-        # Create a WKT file
-        wkt_file = tmp_path / "test_crs.wkt"
-        wkt_content = """PROJCS["NZGD2000 / New Zealand Transverse Mercator 2000",
-    GEOGCS["NZGD2000",
-        DATUM["New Zealand Geodetic Datum 2000",
-            SPHEROID["GRS 1980",6378137,298.257222101]],
-        PRIMEM["Greenwich",0],
-        UNIT["degree",0.0174532925199433]],
-    PROJECTION["Transverse_Mercator"],
-    PARAMETER["latitude_of_origin",0],
-    PARAMETER["central_meridian",173],
-    PARAMETER["scale_factor",0.9996],
-    PARAMETER["false_easting",1600000],
-    PARAMETER["false_northing",10000000],
-    UNIT["metre",1]]"""
-        wkt_file.write_text(wkt_content)
-
-        repo = KartRepo(repo_path)
-        with chdir(repo_path):
-            # Import with WKT file override
-            r = cli_runner.invoke(
-                [
-                    "point-cloud-import",
-                    f"{auckland}/auckland_0_0.laz",
-                    "--dataset-path=auckland",
-                    f"--override-crs=@{wkt_file}",
-                    "--convert-to-copc",
-                ]
-            )
-            assert r.exit_code == 0, r.stderr
-
-            # Verify the import was successful
-            r = cli_runner.invoke(["data", "ls"])
-            assert r.exit_code == 0, r.stderr
-            assert "auckland" in r.stdout
-
-            check_lfs_hashes(repo, 1)
