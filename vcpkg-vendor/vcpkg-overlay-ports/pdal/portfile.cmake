@@ -1,72 +1,83 @@
 vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 
 vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO PDAL/PDAL
-    REF "${VERSION}"
-    SHA512 953cb0bc3ab79797352a3f8f4abb25b106d29f4057d7097b536c5b8b75a460da0066038e333581754239848cc9407d5e11c05678fe645b2115a02ea203b5be57
-    HEAD_REF master
-    PATCHES
-        fix-dependency.patch
-        fix-find-library-suffix.patch
-        no-pkgconfig-requires.patch
-        no-rpath.patch
-        install-dimbuilder.patch
-        arbiter-aws-virtual-hosting-var.patch  # https://github.com/connormanning/arbiter/pull/57
+  OUT_SOURCE_PATH
+  SOURCE_PATH
+  REPO
+  PDAL/PDAL
+  REF
+  "${VERSION}"
+  #[[
+        Attention: pdal-dimbuilder must be updated together with pdal
+    #]]
+  SHA512
+  85aaab726d172ef46b8cf05bd72772da72cf5615db549cd262acc4d468f631f1093577b9866ca598b7bef72507f7774e599e66a6cbbf589bd1b5b85bb8107642
+  HEAD_REF
+  master
+  PATCHES
+  dependencies.diff
+  external-dimbuilder.diff
+  find-library-suffix.diff
+  no-rpath.patch
+  spz-zlib.diff # https://github.com/PDAL/PDAL/issues/4745
+  arbiter-aws-virtual-hosting-var.patch # https://github.com/connormanning/arbiter/pull/57
 )
-
-# Prefer pristine CMake find modules + wrappers and config files from vcpkg.
-foreach(package IN ITEMS Curl GeoTIFF ICONV ZSTD)
-    file(REMOVE "${SOURCE_PATH}/cmake/modules/Find${package}.cmake")
-endforeach()
-
-# De-vendoring
-file(REMOVE_RECURSE
-    "${SOURCE_PATH}/vendor/nanoflann"
-    "${SOURCE_PATH}/vendor/nlohmann"
-    "${SOURCE_PATH}/pdal/JsonFwd.hpp"
-)
-file(INSTALL "${CURRENT_INSTALLED_DIR}/include/nanoflann.hpp" DESTINATION "${SOURCE_PATH}/vendor/nanoflann")
-file(INSTALL "${CURRENT_INSTALLED_DIR}/include/nlohmann/json.hpp" DESTINATION "${SOURCE_PATH}/vendor/nlohmann/nlohmann")
-file(APPEND "${SOURCE_PATH}/vendor/nlohmann/nlohmann/json.hpp" "namespace NL = nlohmann;\n")
-file(INSTALL "${CURRENT_INSTALLED_DIR}/include/nlohmann/json_fwd.hpp" DESTINATION "${SOURCE_PATH}/pdal")
-file(RENAME "${SOURCE_PATH}/pdal/json_fwd.hpp" "${SOURCE_PATH}/pdal/JsonFwd.hpp")
-file(APPEND "${SOURCE_PATH}/pdal/JsonFwd.hpp" "namespace NL = nlohmann;\n")
+file(
+  REMOVE_RECURSE
+  "${SOURCE_PATH}/cmake/modules/FindCurl.cmake"
+  "${SOURCE_PATH}/cmake/modules/FindGeoTIFF.cmake"
+  "${SOURCE_PATH}/cmake/modules/FindICONV.cmake"
+  "${SOURCE_PATH}/cmake/modules/FindZSTD.cmake"
+  "${SOURCE_PATH}/vendor/eigen"
+  "${SOURCE_PATH}/vendor/h3"
+  "${SOURCE_PATH}/vendor/nanoflann"
+  "${SOURCE_PATH}/vendor/nlohmann"
+  "${SOURCE_PATH}/vendor/schema-validator"
+  "${SOURCE_PATH}/vendor/utfcpp")
+# PDAL includes "h3api.h", and some calls are decorated with PDALH3
+file(COPY "${CURRENT_PORT_DIR}/h3api.h" DESTINATION "${SOURCE_PATH}")
+# PDAL uses namespace 'NL' for nlohmann
+file(COPY "${CURRENT_INSTALLED_DIR}/include/nlohmann" DESTINATION "${SOURCE_PATH}/vendor/nlohmann/")
+file(APPEND "${SOURCE_PATH}/vendor/nlohmann/nlohmann/json.hpp" "\nnamespace NL = nlohmann;\n")
+file(APPEND "${SOURCE_PATH}/vendor/nlohmann/nlohmann/json_fwd.hpp" "\nnamespace NL = nlohmann;\n")
+file(WRITE "${SOURCE_PATH}/pdal/JsonFwd.hpp"
+     "/* vcpkg redacted */\n#include <nlohmann/json_fwd.hpp>\nnamespace NL = nlohmann;\n")
+file(MAKE_DIRECTORY "${SOURCE_PATH}/vendor/nlohmann/schema-validator")
+file(WRITE "${SOURCE_PATH}/vendor/nlohmann/schema-validator/json-schema.hpp"
+     "/* vcpkg redacted */\n#include <nlohmann/json-schema.hpp>\n")
 
 unset(ENV{OSGEO4W_HOME})
 
-vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
-    FEATURES
-        draco       BUILD_PLUGIN_DRACO
-        e57         BUILD_PLUGIN_E57
-        hdf5        BUILD_PLUGIN_HDF
-        i3s         BUILD_PLUGIN_I3S
-        lzma        WITH_LZMA
-        pgpointcloud BUILD_PLUGIN_PGPOINTCLOUD
-        zstd        WITH_ZSTD
-)
+vcpkg_check_features(
+  OUT_FEATURE_OPTIONS
+  FEATURE_OPTIONS
+  FEATURES
+  draco
+  BUILD_PLUGIN_DRACO
+  e57
+  BUILD_PLUGIN_E57
+  hdf5
+  BUILD_PLUGIN_HDF
+  lzma
+  WITH_LZMA
+  pgpointcloud
+  BUILD_PLUGIN_PGPOINTCLOUD
+  zstd
+  WITH_ZSTD)
 
-if(VCPKG_CROSSCOMPILING)
-    set(DIMBUILDER_EXECUTABLE "-DDIMBUILDER_EXECUTABLE=${CURRENT_HOST_INSTALLED_DIR}/tools/pdal/dimbuilder${VCPKG_HOST_EXECUTABLE_SUFFIX}")
-endif()
-
-vcpkg_find_acquire_program(PKGCONFIG)
 vcpkg_cmake_configure(
-    SOURCE_PATH "${SOURCE_PATH}"
-    OPTIONS
-        "-DCMAKE_PROJECT_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/cmake-project-include.cmake"
-        -DPDAL_PLUGIN_INSTALL_PATH=.
-        "-DPKG_CONFIG_EXECUTABLE=${PKGCONFIG}"
-        -DWITH_TESTS:BOOL=OFF
-        -DWITH_COMPLETION:BOOL=OFF
-        -DCMAKE_DISABLE_FIND_PACKAGE_Libexecinfo:BOOL=ON
-        -DCMAKE_DISABLE_FIND_PACKAGE_Libunwind:BOOL=ON
-        -DCMAKE_FIND_FRAMEWORK="NEVER"
-        ${FEATURE_OPTIONS}
-        ${DIMBUILDER_EXECUTABLE}
-    MAYBE_UNUSED_VARIABLES
-        PKG_CONFIG_EXECUTABLE
-)
+  SOURCE_PATH
+  "${SOURCE_PATH}"
+  OPTIONS
+  "-DCMAKE_PROJECT_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/cmake-project-include.cmake"
+  "-DDIMBUILDER_EXECUTABLE=${CURRENT_HOST_INSTALLED_DIR}/manual-tools/pdal-dimbuilder/dimbuilder${VCPKG_HOST_EXECUTABLE_SUFFIX}"
+  -DPDAL_PLUGIN_INSTALL_PATH=.
+  -DWITH_TESTS:BOOL=OFF
+  -DWITH_COMPLETION:BOOL=OFF
+  -DCMAKE_DISABLE_FIND_PACKAGE_Libexecinfo:BOOL=ON
+  -DCMAKE_DISABLE_FIND_PACKAGE_Libunwind:BOOL=ON
+  -DCMAKE_FIND_FRAMEWORK="NEVER"
+  ${FEATURE_OPTIONS})
 
 vcpkg_cmake_install()
 vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/PDAL)
@@ -74,57 +85,51 @@ vcpkg_fixup_pkgconfig()
 vcpkg_copy_pdbs()
 
 # Install and cleanup executables
-file(GLOB pdal_unsupported
-    "${CURRENT_PACKAGES_DIR}/bin/*.bat"
-    "${CURRENT_PACKAGES_DIR}/bin/pdal-config"
-    "${CURRENT_PACKAGES_DIR}/debug/bin/*.bat"
-    "${CURRENT_PACKAGES_DIR}/debug/bin/*.exe"
-    "${CURRENT_PACKAGES_DIR}/debug/bin/pdal-config"
-)
+file(
+  GLOB
+  pdal_unsupported
+  "${CURRENT_PACKAGES_DIR}/bin/*.bat"
+  "${CURRENT_PACKAGES_DIR}/bin/pdal-config"
+  "${CURRENT_PACKAGES_DIR}/debug/bin/*.bat"
+  "${CURRENT_PACKAGES_DIR}/debug/bin/*.exe"
+  "${CURRENT_PACKAGES_DIR}/debug/bin/pdal-config")
 file(REMOVE ${pdal_unsupported})
-vcpkg_copy_tools(TOOL_NAMES pdal dimbuilder AUTO_CLEAN)
+vcpkg_copy_tools(TOOL_NAMES pdal AUTO_CLEAN)
 
 # Post-install clean-up
-file(REMOVE_RECURSE
-    "${CURRENT_PACKAGES_DIR}/include/pdal/filters/private/csf"
-    "${CURRENT_PACKAGES_DIR}/include/pdal/filters/private/miniball"
-    "${CURRENT_PACKAGES_DIR}/debug/include"
-    "${CURRENT_PACKAGES_DIR}/debug/share"
-)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/include/pdal/filters/private/csf"
+     "${CURRENT_PACKAGES_DIR}/include/pdal/filters/private/miniball"
+     "${CURRENT_PACKAGES_DIR}/debug/include" "${CURRENT_PACKAGES_DIR}/debug/share")
 
 file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
 
-file(READ "${SOURCE_PATH}/LICENSE.txt" pdal_license)
-file(READ "${SOURCE_PATH}/vendor/arbiter/LICENSE" arbiter_license)
-file(READ "${SOURCE_PATH}/vendor/kazhdan/PoissonRecon.h" kazhdan_license)
-string(REGEX REPLACE "^/\\*\n|\\*/.*\$" "" kazhdan_license "${kazhdan_license}")
-file(READ "${SOURCE_PATH}/vendor/lazperf/lazperf.hpp" lazperf_license)
-string(REGEX REPLACE "^/\\*\n|\\*/.*\$" "" lazperf_license "${lazperf_license}")
-file(WRITE "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright"
-"${pdal_license}
----
+set(arbiter_license "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/arbiter LICENSE")
+file(COPY_FILE "${SOURCE_PATH}/vendor/arbiter/LICENSE" "${arbiter_license}")
 
-Files in vendor/arbiter/:
+set(kazhdan_license
+    "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/kazhdan license (PoissonRecon.h)")
+file(READ "${SOURCE_PATH}/vendor/kazhdan/PoissonRecon.h" license)
+string(REGEX REPLACE "^/\\*\n|\\*/.*\$" "" license "${license}")
+file(WRITE "${kazhdan_license}" "${license}")
 
-${arbiter_license}
----
+set(lazperf_license "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/lazperf license (lazperf.hpp)")
+file(READ "${SOURCE_PATH}/vendor/lazperf/lazperf.hpp" license)
+string(REGEX REPLACE "^/\\*\n|\\*/.*\$" "" license "${license}")
+file(WRITE "${lazperf_license}" "${license}")
 
-Files in vendor/kazhdan/:
+set(lepcc_license "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/LEPCC license (LEPCC.h)")
+file(READ "${SOURCE_PATH}/vendor/lepcc/src/LEPCC.h" license)
+string(REGEX REPLACE "^/\\*\n|\\*/.*\$" "" license "${license}")
+file(WRITE "${lepcc_license}" "${license}")
 
-${kazhdan_license}
----
+set(spz_license "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/spz LICENSE")
+file(COPY_FILE "${SOURCE_PATH}/vendor/spz/LICENSE" "${spz_license}")
 
-Files in vendor/lazperf/:
-
-${lazperf_license}
----
-
-Files in vendor/eigen:
-
-Most Eigen source code is subject to the terms of the Mozilla Public License
-v. 2.0. You can obtain a copy the MPL 2.0 at http://mozilla.org/MPL/2.0/.
-
-Some files included in Eigen are under one of the following licenses:
- - Apache License, Version 2.0 
- - BSD 3-Clause \"New\" or \"Revised\" License
-")
+vcpkg_install_copyright(
+  FILE_LIST
+  "${SOURCE_PATH}/LICENSE.txt"
+  "${arbiter_license}"
+  "${kazhdan_license}"
+  "${lazperf_license}"
+  "${lepcc_license}"
+  "${spz_license}")
