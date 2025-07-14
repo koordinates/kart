@@ -1,14 +1,12 @@
 diff --git a/cmake/libraries.cmake b/cmake/libraries.cmake
-index afac96030..c4819402c 100644
+index 6847cf6..47e9748 100644
 --- a/cmake/libraries.cmake
 +++ b/cmake/libraries.cmake
-@@ -1,9 +1,6 @@
- # Build shared libraries by default.
+@@ -2,7 +2,6 @@
  
  set(PDAL_LIB_TYPE "SHARED")
--if (WIN32)
+ if (WIN32)
 -    set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_IMPORT_LIBRARY_SUFFIX})
--endif()
+ endif()
  
  
- # Must be changed if there is an ABI change.  This builds the SONAME
