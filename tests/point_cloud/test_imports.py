@@ -1177,3 +1177,67 @@ def test_point_cloud_import_from_s3__convert(
                 check_tile_is_reflinked(
                     repo_path / "auckland" / f"auckland_{x}_{y}.copc.laz", repo
                 )
+
+
+def test_import_with_crs_override(
+    tmp_path,
+    chdir,
+    cli_runner,
+    data_archive_readonly,
+    check_lfs_hashes,
+    requires_pdal,
+    requires_git_lfs,
+):
+    """Test that --override-crs option overrides the CRS of all imported tiles."""
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0, r.stderr
+
+        repo = KartRepo(repo_path)
+        with chdir(repo_path):
+            # First, import a single tile to establish the dataset CRS
+            # This tile is actually in EPSG:2193 but we override it to EPSG:2994
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    f"{auckland}/auckland_0_0.laz",
+                    "--dataset-path=auckland",
+                    "--override-crs=EPSG:2994",
+                    "--convert-to-copc",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Get the original CRS from the dataset
+            r = cli_runner.invoke(["meta", "get", "auckland", "crs.wkt"])
+            assert r.exit_code == 0, r.stderr
+            original_crs = r.stdout.strip()
+            assert "2994" in original_crs
+
+            # Import another tile with --override-crs=EPSG:2994 to override its CRS
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    f"{auckland}/auckland_0_1.laz",
+                    "--dataset-path=auckland",
+                    "--update-existing",
+                    "--override-crs=EPSG:2994",
+                    "--convert-to-copc",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Verify that both tiles were imported successfully
+            r = cli_runner.invoke(["data", "ls"])
+            assert r.exit_code == 0, r.stderr
+            assert "auckland" in r.stdout
+
+            # Check that the CRS is still consistent in the dataset
+            r = cli_runner.invoke(["meta", "get", "auckland", "crs.wkt"])
+            assert r.exit_code == 0, r.stderr
+            final_crs = r.stdout.strip()
+
+            assert "2994" in final_crs
+
+            check_lfs_hashes(repo, 2)

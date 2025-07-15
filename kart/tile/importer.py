@@ -76,6 +76,7 @@ class TileImporter:
         num_workers,
         do_link,
         sources,
+        override_crs=None,
     ):
         """
         repo - the Kart repo from the context.
@@ -95,6 +96,7 @@ class TileImporter:
         allow_empty - if True, the import commit will be created even if the dataset is not changed.
         num_workers - specify the number of workers to use, or set to None to use the number of detected cores.
         sources - paths to tiles to import.
+        override_crs - if specified, override the CRS of all source tiles and set the dataset CRS.
         """
         self.repo = repo
         self.ctx = ctx
@@ -111,6 +113,7 @@ class TileImporter:
         self.num_workers = num_workers
         self.do_link = do_link
         self.sources = sources
+        self.override_crs = override_crs
 
         need_to_store_tiles = not self.do_link
         need_tiles_for_wc = self.do_checkout and not self.repo.is_bare
