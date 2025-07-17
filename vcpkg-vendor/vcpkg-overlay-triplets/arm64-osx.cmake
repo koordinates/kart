@@ -15,3 +15,8 @@ set(ENV{LDFLAGS} -Wl,-rpath,${CURRENT_INSTALLED_DIR}/lib/)
 set(VCPKG_C_FLAGS "-mmacosx-version-min=13.0")
 set(VCPKG_CXX_FLAGS "-mmacosx-version-min=13.0")
 set(ENV{MACOSX_DEPLOYMENT_TARGET} "13.0")
+
+# Our use of install_name_tool is not reliable unless we make sure that the header is padded with
+# plenty of room.
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-headerpad_max_install_names")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-headerpad_max_install_names")
