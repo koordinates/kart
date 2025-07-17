@@ -33,6 +33,11 @@ if(ENABLE_RTTOPO)
     list(APPEND pkg_config_modules rttopo)
 endif()
 
+if(VCPKG_TARGET_IS_OSX)
+    # Our use of install_name_tool is not reliable unless we make sure that the header is padded.
+    set(ENV{LDFLAGS} "$ENV{LDFLAGS} -Wl,-headerpad_max_install_names")
+endif()
+
 if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
     set(CL_FLAGS "")
     if(NOT ENABLE_FREEXL)

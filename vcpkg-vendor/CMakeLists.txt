@@ -11,6 +11,13 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/)
 set(CURRENT_PACKAGES_DIR "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  # Ensure the .so files produced can be patched with install_name_tool later
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-headerpad_max_install_names")
+  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-headerpad_max_install_names")
+
+  # Set LDFLAGS for Python wheel builds to ensure sufficient header padding
+  set(WHEEL_LDFLAGS "-Wl,-headerpad_max_install_names")
+
   execute_process(
     COMMAND brew --prefix
     RESULT_VARIABLE BREW_PREFIX_RETURN
@@ -24,6 +31,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   if(NOT PKG_CONFIG_FOUND)
     set(PKG_CONFIG_EXECUTABLE "${BREW_PREFIX}/pkg-config")
   endif()
+else()
+  set(WHEEL_LDFLAGS "")
 endif()
 find_package(PkgConfig REQUIRED)
 
@@ -130,7 +139,8 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/cffi-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env LDFLAGS=${WHEEL_LDFLAGS} -- ${wheelBuildEnv_PYTHON} -m build
+          --wheel --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/cffi-${CFFI_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(cffi INSTALL_DIR)
@@ -189,7 +199,8 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/gdal_py-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env LDFLAGS=${WHEEL_LDFLAGS} -- ${wheelBuildEnv_PYTHON} -m build
+          --wheel --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/gdal-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
@@ -230,7 +241,8 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/psycopg2-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env LDFLAGS=${WHEEL_LDFLAGS} -- ${wheelBuildEnv_PYTHON} -m build
+          --wheel --outdir <TMP_DIR>/dist
   INSTALL_COMMAND
     ${CMAKE_COMMAND} -E copy <TMP_DIR>/dist/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl
     <INSTALL_DIR>)
@@ -266,8 +278,8 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pygit2-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl <TMP_DIR>/dist <SOURCE_DIR>/.eggs
-  COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} -- ${pygitWheelBuildEnv_PYTHON} -m
-          build --wheel --no-isolation --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env LIBGIT2=${CURRENT_PACKAGES_DIR} LDFLAGS=${WHEEL_LDFLAGS} --
+          ${pygitWheelBuildEnv_PYTHON} -m build --wheel --no-isolation --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pygit2 INSTALL_DIR)
@@ -305,8 +317,9 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pyodbc-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${ODBC_CONFIG_DIR} --
-          ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  COMMAND
+    ${CMAKE_COMMAND} -E env --modify PATH=path_list_prepend:${ODBC_CONFIG_DIR}
+    LDFLAGS=${WHEEL_LDFLAGS} -- ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
@@ -327,6 +340,7 @@ library_dirs=${BUILD_WHEEL_LIBRARY_DIRS}
 ")
 
 set(PYSQLITE3_WHEEL_VER 0.5.2)
+
 ExternalProject_Add(
   pysqlite3
   GIT_REPOSITORY https://github.com/coleifer/pysqlite3.git
@@ -338,7 +352,8 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/pysqlite3-prefix/setup.cfg
                     <SOURCE_DIR>
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${wheelBuildEnv_PYTHON} -m build --wheel --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env LDFLAGS=${WHEEL_LDFLAGS} -- ${wheelBuildEnv_PYTHON} -m build
+          --wheel --outdir <TMP_DIR>/dist
   INSTALL_COMMAND
     ${CMAKE_COMMAND} -E copy
     <TMP_DIR>/dist/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
@@ -370,9 +385,10 @@ ExternalProject_Add(
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
   COMMAND
     ${CMAKE_COMMAND} -E env OPENSSL_LIB_DIR=${CURRENT_PACKAGES_DIR}/lib
-    OPENSSL_INCLUDE_DIR=${CURRENT_PACKAGES_DIR}/include --modify PATH=path_list_prepend:${RUST_DIR}
-    -- ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all: --no-build-isolation --no-deps
-    --no-index --wheel-dir <TMP_DIR>/dist .
+    OPENSSL_INCLUDE_DIR=${CURRENT_PACKAGES_DIR}/include LDFLAGS=${WHEEL_LDFLAGS}
+    RUSTFLAGS=-C\ link-arg=-Wl,-headerpad_max_install_names --modify
+    PATH=path_list_prepend:${RUST_DIR} -- ${cryptographyWheelBuildEnv_PIP} wheel --no-binary :all:
+    --no-build-isolation --no-deps --no-index --wheel-dir <TMP_DIR>/dist .
   INSTALL_COMMAND
     ${CMAKE_COMMAND} -E copy
     <TMP_DIR>/dist/cryptography-${CRYPTOGRAPHY_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
@@ -388,6 +404,7 @@ createvirtualenvironment(reflinkWheelBuildEnv REQUIREMENTS wheel ${CFFI_WHEEL} p
 add_dependencies(reflinkWheelBuildEnv cffi)
 
 set(REFLINK_WHEEL_VER 0.2.2)
+
 ExternalProject_Add(
   reflink
   URL https://files.pythonhosted.org/packages/63/47/b503f286378336aa6d2fd3caad10633bb79f3bc6256f1f2f9102dacb3c98/reflink-0.2.2.tar.gz
@@ -399,7 +416,8 @@ ExternalProject_Add(
   BUILD_BYPRODUCTS "<SOURCE_DIR>/build"
   CONFIGURE_COMMAND ""
   BUILD_COMMAND ${CMAKE_COMMAND} -E rm -rf <INSTALL_DIR>/*.whl
-  COMMAND ${reflinkWheelBuildEnv_PYTHON} -m build --wheel --no-isolation --outdir <TMP_DIR>/dist
+  COMMAND ${CMAKE_COMMAND} -E env LDFLAGS=${WHEEL_LDFLAGS} -- ${reflinkWheelBuildEnv_PYTHON} -m
+          build --wheel --no-isolation --outdir <TMP_DIR>/dist
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy
                   <TMP_DIR>/dist/reflink-${REFLINK_WHEEL_VER}-${Python3_WHEEL_ID}.whl <INSTALL_DIR>)
 ExternalProject_Get_Property(reflink INSTALL_DIR)
