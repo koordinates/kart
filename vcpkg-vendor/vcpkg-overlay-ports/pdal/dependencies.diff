@@ -16,9 +16,9 @@ index dc65543..5bccbce 100644
  add_subdirectory(tools)
  add_subdirectory(apps)
 @@ -220,12 +217,13 @@ add_library(PDAL::PDAL ALIAS ${PDAL_LIB_NAME})
-
-
-
+ 
+ 
+ 
 +find_package(Eigen3 CONFIG REQUIRED)
 +target_link_libraries(${PDAL_LIB_NAME} PRIVATE Eigen3::Eigen)
  target_include_directories(${PDAL_LIB_NAME}
@@ -37,17 +37,17 @@ index dc65543..5bccbce 100644
  )
 +find_package(nanoflann CONFIG REQUIRED)
 +target_link_libraries(${PDAL_LIB_NAME} PRIVATE nanoflann::nanoflann)
-
+ 
  if (ZSTD_FOUND)
      target_link_libraries(${PDAL_LIB_NAME}
 @@ -307,9 +307,6 @@ target_include_directories(${PDAL_LIB_NAME}
      INTERFACE
          $<INSTALL_INTERFACE:include>)
-
+ 
 -target_compile_definitions(${PDAL_LIB_NAME}
 -    PRIVATE
 -    H3_PREFIX=PDALH3)
-
+ 
  if(WIN32)
      target_compile_definitions(${PDAL_LIB_NAME}
 diff --git a/cmake/gdal.cmake b/cmake/gdal.cmake
@@ -57,7 +57,7 @@ index 5f68579..a407c60 100644
 @@ -12,7 +12,8 @@ function(gdal_find_version _version)
      set(${_version} ${MAJOR}.${MINOR}.${REV} PARENT_SCOPE)
  endfunction(gdal_find_version)
-
+ 
 -find_package(GDAL 3.4 REQUIRED)
 +find_package(GDAL CONFIG REQUIRED)
 +set(GDAL_LIBRARY GDAL::GDAL)
@@ -71,11 +71,11 @@ index 398ad6d..fb3c9ad 100644
 @@ -2,5 +2,6 @@
  # H3 configuration.
  #
-
+ 
 -set(PDAL_H3_LIB_NAME pdal_h3)
 +find_package(h3 CONFIG REQUIRED)
 +set(PDAL_H3_LIB_NAME h3::h3)
-
+ 
 diff --git a/cmake/schema-validator.cmake b/cmake/schema-validator.cmake
 index 1f9f996..aeb598c 100644
 --- a/cmake/schema-validator.cmake
@@ -100,7 +100,7 @@ index 6543ff6..dc6fac8 100644
 +find_package(utf8cpp CONFIG REQUIRED)
 +set(UTFCPP_INCLUDE_DIR "")
  set(UTFCPP_LIB_NAME utf8::cpp)
-
+ 
 diff --git a/pdal/JsonFwd.hpp b/pdal/JsonFwd.hpp
 index f764961..f64dcc6 100644
 --- a/pdal/JsonFwd.hpp
@@ -109,19 +109,19 @@ index f764961..f64dcc6 100644
 +#include <nlohmann/json_fwd.hpp>
  #ifndef INCLUDE_NLOHMANN_JSON_FWD_HPP_
  #define INCLUDE_NLOHMANN_JSON_FWD_HPP_
-
+ 
 diff --git a/pdal/private/KDImpl.hpp b/pdal/private/KDImpl.hpp
 index 473ffba..a69431f 100644
 --- a/pdal/private/KDImpl.hpp
 +++ b/pdal/private/KDImpl.hpp
 @@ -34,7 +34,8 @@
-
+ 
  #pragma once
-
+ 
 -#include <nanoflann/nanoflann.hpp>
 +#include <nanoflann.hpp>
 +#define SearchParams SearchParameters
-
+ 
  namespace pdal
  {
 @@ -116,7 +117,7 @@ public:
@@ -132,7 +132,7 @@ index 473ffba..a69431f 100644
 +        std::vector<nanoflann::ResultItem<std::size_t, double>> ret_matches;
          nanoflann::SearchParams params;
          params.sorted = true;
-
+ 
 @@ -247,7 +248,7 @@ public:
      PointIdList radius(double x, double y, double z, double r) const
      {
@@ -141,7 +141,7 @@ index 473ffba..a69431f 100644
 +        std::vector<nanoflann::ResultItem<std::size_t, double>> ret_matches;
          nanoflann::SearchParams params;
          params.sorted = true;
-
+ 
 @@ -330,7 +331,7 @@ public:
      PointIdList radius(PointId idx, double r) const
      {
@@ -150,14 +150,14 @@ index 473ffba..a69431f 100644
 +        std::vector<nanoflann::ResultItem<std::size_t, double>> ret_matches;
          nanoflann::SearchParams params;
          params.sorted = true;
-
+ 
 diff --git a/tools/lasdump/CMakeLists.txt b/tools/lasdump/CMakeLists.txt
 index b15d595..a452d14 100644
 --- a/tools/lasdump/CMakeLists.txt
 +++ b/tools/lasdump/CMakeLists.txt
 @@ -10,6 +10,7 @@ add_executable(lasdump
  )
-
+ 
  target_link_libraries(lasdump PRIVATE
 +    ${UTFCPP_LIB_NAME}
      ${PDAL_LAZPERF_LIB_NAME}
