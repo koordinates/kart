@@ -366,6 +366,10 @@ jobs:
             echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
           fi
 
+          # Ensure system curl directory is always first in PATH
+          CURL_DIR=$(dirname "$(which curl)")
+          echo "$CURL_DIR" >> $GITHUB_PATH
+
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
         with:
