@@ -366,6 +366,20 @@ jobs:
             echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
           fi
 
+          # Create a wrapper script for system curl that preserves the original library environment
+          mkdir -p ${GITHUB_WORKSPACE}/systemcurl
+          echo '#!/bin/bash' > ${GITHUB_WORKSPACE}/systemcurl/curl
+          echo "LD_LIBRARY_PATH='${LD_LIBRARY_PATH}' exec /usr/bin/curl \"\$@\"" >> ${GITHUB_WORKSPACE}/systemcurl/curl
+          chmod +x ${GITHUB_WORKSPACE}/systemcurl/curl
+          echo "${GITHUB_WORKSPACE}/systemcurl" >> $GITHUB_PATH
+
+          # Diagnostics for curl
+          echo "=== Curl diagnostics at setup ==="
+          which curl
+          curl -V
+          echo "PATH=$PATH"
+          echo "=========================="
+
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
         with:
