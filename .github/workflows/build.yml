@@ -370,6 +370,14 @@ jobs:
           CURL_DIR=$(dirname "$(which curl)")
           echo "$CURL_DIR" >> $GITHUB_PATH
 
+          # Diagnostics for curl
+          echo "=== Curl diagnostics at setup ==="
+          which curl
+          curl -V
+          echo "PATH=$PATH"
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+          echo "=========================="
+
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
         with:
@@ -497,6 +505,18 @@ jobs:
           name: Kart-linux-${{ matrix.os.arch }}-rpm
           path: build/dist/kart-*.rpm
           if-no-files-found: error
+
+      - name: "debug: curl diagnostics on failure"
+        if: failure()
+        shell: bash
+        run: |
+          echo "=== Curl diagnostics after failure ==="
+          which curl || echo "which curl failed"
+          curl -V || echo "curl -V failed"
+          echo "PATH=$PATH"
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+          ldd $(which curl) 2>&1 || echo "ldd failed"
+          echo "=========================="
 
       - name: "release"
         uses: softprops/action-gh-release@v1
