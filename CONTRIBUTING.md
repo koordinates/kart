@@ -23,7 +23,7 @@ Requirements:
 
 On Ubuntu:
 ```console
-$ apt-get install autoconf build-essential curl git golang libtool patchelf python3-pip python3-venv tar unzip zip
+$ apt-get install autoconf build-essential curl flex git golang libtool patchelf python3-pip python3-venv tar unzip zip
 ```
 On macOS (with [Homebrew](https://brew.sh)):
 ```console
