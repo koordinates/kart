@@ -366,16 +366,18 @@ jobs:
             echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
           fi
 
-          # Ensure system curl directory is always first in PATH
-          CURL_DIR=$(dirname "$(which curl)")
-          echo "$CURL_DIR" >> $GITHUB_PATH
+          # Create a wrapper script for system curl that preserves the original library environment
+          mkdir -p ${GITHUB_WORKSPACE}/systemcurl
+          echo '#!/bin/bash' > ${GITHUB_WORKSPACE}/systemcurl/curl
+          echo "LD_LIBRARY_PATH='${LD_LIBRARY_PATH}' exec /usr/bin/curl \"\$@\"" >> ${GITHUB_WORKSPACE}/systemcurl/curl
+          chmod +x ${GITHUB_WORKSPACE}/systemcurl/curl
+          echo "${GITHUB_WORKSPACE}/systemcurl" >> $GITHUB_PATH
 
           # Diagnostics for curl
           echo "=== Curl diagnostics at setup ==="
           which curl
           curl -V
           echo "PATH=$PATH"
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
           echo "=========================="
 
       - name: "setup: vcpkg"
@@ -514,8 +516,6 @@ jobs:
           which curl || echo "which curl failed"
           curl -V || echo "curl -V failed"
           echo "PATH=$PATH"
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-          ldd $(which curl) 2>&1 || echo "ldd failed"
           echo "=========================="
 
       - name: "release"
