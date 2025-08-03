@@ -9,19 +9,17 @@ vcpkg_extract_source_archive(
     ARCHIVE "${ARCHIVE}"
     PATCHES
         fix-makefiles.patch
-        fix-makefile-mod.patch
         fix-linux-configure.patch
         gaiaconfig-msvc.patch
         fix-mingw.patch
         fix-utf8-source.patch
-        ok-load-permanently.patch
+        android-builtin-iconv.diff
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS unused
     FEATURES
         freexl          ENABLE_FREEXL
         gcp             ENABLE_GCP
-        geocallbacks    ENABLE_GEOCALLBACKS
         rttopo          ENABLE_RTTOPO
 )
 
@@ -33,11 +31,6 @@ if(ENABLE_RTTOPO)
     list(APPEND pkg_config_modules rttopo)
 endif()
 
-if(VCPKG_TARGET_IS_OSX)
-    # Our use of install_name_tool is not reliable unless we make sure that the header is padded.
-    set(ENV{LDFLAGS} "$ENV{LDFLAGS} -Wl,-headerpad_max_install_names")
-endif()
-
 if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
     set(CL_FLAGS "")
     if(NOT ENABLE_FREEXL)
@@ -45,9 +38,6 @@ if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
     endif()
     if(ENABLE_GCP)
         string(APPEND CL_FLAGS " /DENABLE_GCP")
-    endif()
-    if(NOT ENABLE_GEOCALLBACKS)
-        string(APPEND CL_FLAGS " /DOMIT_GEOCALLBACKS")
     endif()
     if(ENABLE_RTTOPO)
         string(APPEND CL_FLAGS " /DENABLE_RTTOPO")
@@ -89,22 +79,6 @@ if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
     endif()
     vcpkg_install_nmake(
         SOURCE_PATH "${SOURCE_PATH}"
-        PREFER_JOM
-        CL_LANGUAGE C
-        OPTIONS_RELEASE
-            "CL_FLAGS=${CL_FLAGS_RELEASE}"
-            "INST_DIR=${INST_DIR}"
-            "LIBS_ALL=${LIBS_ALL_RELEASE}"
-        OPTIONS_DEBUG
-            "CL_FLAGS=${CL_FLAGS_DEBUG}"
-            "INST_DIR=${INST_DIR}\\debug"
-            "LIBS_ALL=${LIBS_ALL_DEBUG}"
-            "LINK_FLAGS=/debug"
-    )
-
-    vcpkg_install_nmake(
-        SOURCE_PATH "${SOURCE_PATH}"
-        PROJECT_NAME makefile_mod.vc
         PREFER_JOM
         CL_LANGUAGE C
         OPTIONS_RELEASE
@@ -186,6 +160,8 @@ else()
     if(VCPKG_TARGET_IS_MINGW)
         # Avoid system libs (as detected by cmake) in exported pc files
         set(SYSTEM_LIBS "")
+    elseif(VCPKG_TARGET_IS_ANDROID)
+        set(SYSTEM_LIBS "\$LIBS -llog")
     else()
         set(SYSTEM_LIBS "\$LIBS")
     endif()
@@ -207,11 +183,10 @@ else()
             ${TARGET_ALIAS}
             ${FREEXL_OPTION}
             ${GCP_OPTION}
-            ${GEOCALLBACKS_OPTION}
             ${RTTOPO_OPTION}
             "--disable-examples"
             "--disable-minizip"
-            "--disable-proj"
+            "cross_compiling=yes" # avoid conftest rpath trouble
         OPTIONS_DEBUG
             "LIBS=${PKGCONFIG_LIBS_DEBUG} ${SYSTEM_LIBS}"
         OPTIONS_RELEASE
@@ -225,7 +200,7 @@ else()
         "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/Makefile"
     )
     foreach(makefile IN LISTS makefiles)
-        vcpkg_replace_string("${makefile}" " -I$(top_builddir)/./src/headers/spatialite" " -I$(top_builddir)/./src/headers")
+        vcpkg_replace_string("${makefile}" " -I$(top_builddir)/./src/headers/spatialite" " -I$(top_builddir)/./src/headers" IGNORE_UNCHANGED)
     endforeach()
 
     vcpkg_install_make()
