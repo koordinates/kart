@@ -10,11 +10,11 @@ index 5246779..590ddcc 100644
 +            [](OGRDSPtr::element_type *p){ if (p) ::OGR_DS_Destroy(p); });
      if (!m_ds)
          throwError("Unable to open data source '" + m_datasource + "'");
-
+ 
 @@ -114,7 +114,7 @@ void OverlayFilter::ready(PointTableRef table)
          OGR_L_SetSpatialFilter(m_lyr, g.getOGRHandle());
      }
-
+ 
 -    auto featureDeleter = [](void *p)
 +    auto featureDeleter = [](OGRFeaturePtr::element_type *p)
      {
@@ -29,13 +29,13 @@ index c9995d7..141bf51 100644
  #include <memory>
  #include <string>
 +#include <type_traits>
-
+ 
  // Get GDAL's forward decls if available
  // otherwise make our own
 @@ -58,9 +59,13 @@ namespace gdal
      class ErrorHandler;
  }
-
+ 
 +#if __has_include(<gdal_fwd.h>)
 +typedef std::shared_ptr<std::remove_pointer<OGRDataSourceH>::type> OGRDSPtr;
 +typedef std::shared_ptr<std::remove_pointer<OGRFeatureH>::type> OGRFeaturePtr;
@@ -44,13 +44,13 @@ index c9995d7..141bf51 100644
  typedef std::shared_ptr<void> OGRFeaturePtr;
 -typedef std::shared_ptr<void> OGRGeometryPtr;
 +#endif
-
+ 
  class Arg;
-
+ 
 @@ -90,8 +95,6 @@ private:
      OverlayFilter& operator=(const OverlayFilter&) = delete;
      OverlayFilter(const OverlayFilter&) = delete;
-
+ 
 -    typedef std::shared_ptr<void> OGRDSPtr;
 -
      OGRDSPtr m_ds;
@@ -63,10 +63,10 @@ index 0d9c4ca..551b3ea 100644
 @@ -89,7 +89,7 @@ TIndexReader::FieldIndexes TIndexReader::getFields()
  {
      FieldIndexes indexes;
-
+ 
 -    void *fDefn = OGR_L_GetLayerDefn(m_layer);
 +    OGRFeatureDefnH fDefn = OGR_L_GetLayerDefn(m_layer);
-
+ 
      indexes.m_filename = OGR_FD_GetFieldIndex(fDefn,
          m_args->m_tileIndexColumnName.c_str());
 diff --git a/io/TIndexReader.hpp b/io/TIndexReader.hpp
@@ -74,9 +74,9 @@ index 1188a1c..ccedfb6 100644
 --- a/io/TIndexReader.hpp
 +++ b/io/TIndexReader.hpp
 @@ -41,6 +41,15 @@
-
+ 
  #include <pdal/JsonFwd.hpp>
-
+ 
 +// Get GDAL's forward decls if available
 +// otherwise make our own
 +#if __has_include(<gdal_fwd.h>)
@@ -88,16 +88,16 @@ index 1188a1c..ccedfb6 100644
 +
  namespace pdal
  {
-
+ 
 @@ -88,8 +97,8 @@ private:
-
+ 
      std::unique_ptr<Args> m_args;
      std::unique_ptr<gdal::SpatialRef> m_out_ref;
 -    void *m_dataset;
 -    void *m_layer;
 +    OGRDataSourceH m_dataset;
 +    OGRLayerH m_layer;
-
+ 
      StageFactory m_factory;
      MergeFilter m_merge;
 diff --git a/kernels/TIndexKernel.cpp b/kernels/TIndexKernel.cpp
@@ -107,10 +107,10 @@ index 1f43c75..82d6c81 100644
 @@ -723,7 +723,7 @@ TIndexKernel::FieldIndexes TIndexKernel::getFields()
  {
      FieldIndexes indexes;
-
+ 
 -    void *fDefn = OGR_L_GetLayerDefn(m_layer);
 +    OGRFeatureDefnH fDefn = OGR_L_GetLayerDefn(m_layer);
-
+ 
      indexes.m_filename = OGR_FD_GetFieldIndex(fDefn,
          m_tileIndexColumnName.c_str());
 diff --git a/kernels/TIndexKernel.hpp b/kernels/TIndexKernel.hpp
@@ -120,7 +120,7 @@ index a6d8930..72849f7 100644
 @@ -40,6 +40,15 @@
  #include <pdal/SubcommandKernel.hpp>
  #include <pdal/util/FileUtils.hpp>
-
+ 
 +// Get GDAL's forward decls if available
 +// otherwise make our own
 +#if __has_include(<gdal_fwd.h>)
@@ -136,7 +136,7 @@ index a6d8930..72849f7 100644
 @@ -118,8 +127,8 @@ private:
      BOX2D m_bounds;
      bool m_absPath;
-
+ 
 -    void *m_dataset;
 -    void *m_layer;
 +    OGRDataSourceH m_dataset;
@@ -149,9 +149,9 @@ index 243a67a..f61ad4e 100644
 --- a/kernels/private/density/OGR.hpp
 +++ b/kernels/private/density/OGR.hpp
 @@ -35,6 +35,15 @@
-
+ 
  #include <string>
-
+ 
 +// Get GDAL's forward decls if available
 +// otherwise make our own
 +#if __has_include(<gdal_fwd.h>)
@@ -165,7 +165,7 @@ index 243a67a..f61ad4e 100644
  {
      class HexGrid;
 @@ -45,9 +54,6 @@ namespace pdal
-
+ 
  class OGR
  {
 -    using OGRDataSourceH = void *;
@@ -181,16 +181,16 @@ index c598e66..fec6107 100644
 @@ -275,11 +275,11 @@ Geometry Geometry::getRing() const
  {
      throwNoGeos();
-
+ 
 -    int count = OGR_G_GetGeometryCount(m_geom.get());
 +    int count = OGR_G_GetGeometryCount(gdal::toHandle(m_geom.get()));
      if (count)
      {
-
+ 
 -        OGRGeometryH ring = OGR_G_Clone(OGR_G_GetGeometryRef(m_geom.get(), 0));
 +        OGRGeometryH ring = OGR_G_Clone(OGR_G_GetGeometryRef(gdal::toHandle(m_geom.get()), 0));
          OGRGeometryH linestring = OGR_G_ForceToLineString(ring);
-
+ 
          return Geometry(linestring, getSpatialReference());
 diff --git a/pdal/SpatialReference.cpp b/pdal/SpatialReference.cpp
 index cf7abaa..7aec1b6 100644
@@ -199,7 +199,7 @@ index cf7abaa..7aec1b6 100644
 @@ -53,22 +53,13 @@
  namespace
  {
-
+ 
 -struct OGRDeleter
 -{
 -    void operator()(OGRSpatialReference* o)
@@ -211,7 +211,7 @@ index cf7abaa..7aec1b6 100644
  using OGRScopedSpatialReference =
 -    std::unique_ptr<OGRSpatialReference, OGRDeleter>;
 +    std::unique_ptr<OGRSpatialReference>;
-
+ 
  OGRScopedSpatialReference ogrCreateSrs(std::string s = "", double epoch=0.0)
  {
      OGRScopedSpatialReference r(
@@ -224,69 +224,69 @@ index cf7abaa..7aec1b6 100644
 @@ -129,7 +120,7 @@ bool SpatialReference::valid() const
  {
      OGRSpatialReference current(m_wkt.data());
-
+ 
 -    return OSRValidate(&current) == OGRERR_NONE;
 +    return current.Validate() == OGRERR_NONE;
  }
-
-
+ 
+ 
 @@ -367,7 +358,7 @@ bool SpatialReference::equals(const SpatialReference& input) const
      if (!current || !other)
          return false;
-
+ 
 -    int output = OSRIsSame(current.get(), other.get());
 +    int output = current.get()->IsSame(other.get());
-
+ 
      return (output == 1);
  }
 @@ -398,7 +389,7 @@ bool SpatialReference::isGeographic() const
      if (!current)
          return false;
-
+ 
 -    bool output = OSRIsGeographic(current.get());
 +    bool output = current.get()->IsGeographic();
      return output;
  }
-
+ 
 @@ -409,7 +400,7 @@ bool SpatialReference::isGeocentric() const
      if (!current)
          return false;
-
+ 
 -    bool output = OSRIsGeocentric(current.get());
 +    bool output = current.get()->IsGeocentric();
      return output;
  }
-
+ 
 @@ -420,7 +411,7 @@ bool SpatialReference::isProjected() const
      if (!current)
          return false;
-
+ 
 -    bool output = OSRIsProjected(current.get());
 +    bool output = current.get()->IsProjected();
      return output;
  }
-
+ 
 @@ -573,7 +564,7 @@ int SpatialReference::getUTMZone() const
          throw pdal_error("Could not fetch current SRS");
-
+ 
      int north(0);
 -    int zone = OSRGetUTMZone(current.get(), &north);
 +    int zone = current.get()->GetUTMZone(&north);
      return (north ? 1 : -1) * zone;
  }
-
+ 
 diff --git a/pdal/private/gdal/GDALUtils.cpp b/pdal/private/gdal/GDALUtils.cpp
 index b9d295c..04b7c17 100644
 --- a/pdal/private/gdal/GDALUtils.cpp
 +++ b/pdal/private/gdal/GDALUtils.cpp
 @@ -357,7 +357,7 @@ std::vector<Polygon> getPolygons(const OGRSpecOptions& ogr)
                  throw pdal_error("Unable to execute OGR SQL query.");
-
+ 
              SpatialRef sref;
 -            sref.setFromLayer(poLayer);
 +            sref.setFromLayer(reinterpret_cast<OGRLayerH>(poLayer));
              ds->ReleaseResultSet(poLayer);
-
+ 
              poly.update(options.at("geometry").get<std::string>());
 @@ -380,7 +380,7 @@ std::vector<Polygon> getPolygons(const OGRSpecOptions& ogr)
      std::vector<Polygon> polys;
@@ -296,7 +296,7 @@ index b9d295c..04b7c17 100644
 +        polys.emplace_back(reinterpret_cast<OGRGeometryH>(poFeature->GetGeometryRef()));
          OGRFeature::DestroyFeature( poFeature );
      }
-
+ 
 diff --git a/pdal/private/gdal/SpatialRef.cpp b/pdal/private/gdal/SpatialRef.cpp
 index 049867e..63bba9e 100644
 --- a/pdal/private/gdal/SpatialRef.cpp
@@ -304,14 +304,14 @@ index 049867e..63bba9e 100644
 @@ -106,9 +106,9 @@ bool SpatialRef::empty() const
      return wkt().empty();
  }
-
+ 
 -void SpatialRef::newRef(void *v)
 +void SpatialRef::newRef(OGRSpatialReferenceH v)
  {
 -    m_ref = RefPtr(v, [](void* t){ OSRDestroySpatialReference(t); } );
 +    m_ref = RefPtr(v, [](OGRSpatialReferenceH t){ OSRDestroySpatialReference(t); } );
  }
-
+ 
  } // namespace gdal
 diff --git a/pdal/private/gdal/SpatialRef.hpp b/pdal/private/gdal/SpatialRef.hpp
 index 4d2b34d..80a114c 100644
@@ -319,10 +319,10 @@ index 4d2b34d..80a114c 100644
 +++ b/pdal/private/gdal/SpatialRef.hpp
 @@ -35,6 +35,7 @@
  #pragma once
-
+ 
  #include <memory>
 +#include <type_traits>
-
+ 
  // Get GDAL's forward decls if available
  // otherwise make our own
 @@ -42,6 +43,7 @@
@@ -331,10 +331,10 @@ index 4d2b34d..80a114c 100644
      using OGRLayerH = void *;
 +    using OGRSpatialReferenceH = void *;
  #endif
-
-
+ 
+ 
 @@ -53,7 +55,7 @@ namespace gdal
-
+ 
  class SpatialRef
  {
 -    typedef std::shared_ptr<void> RefPtr;
@@ -344,10 +344,10 @@ index 4d2b34d..80a114c 100644
      SpatialRef(const std::string& srs);
 @@ -65,7 +67,7 @@ public:
      bool empty() const;
-
+ 
  private:
 -    void newRef(void *v);
 +    void newRef(OGRSpatialReferenceH v);
-
+ 
      RefPtr m_ref;
  };
