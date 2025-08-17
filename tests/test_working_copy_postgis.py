@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 import json
 import pytest
 
@@ -460,11 +462,19 @@ def test_edit_schema_primary_key(
             # Make sure that applying a patch to make the same change also works:
             r = cli_runner.invoke(["create-patch", "HEAD", "--output=patch"])
             assert r.exit_code == 0, r.stderr
+            assert Path("patch").is_file(), "patch not written"
+            try:
+                json.loads(Path("patch").read_text())
+            except:
+                assert False, Path("patch").read_text()
+
             r = cli_runner.invoke(["reset", "HEAD^"])
             assert r.exit_code == 0, r.stderr
 
             r = cli_runner.invoke(["apply", "patch"])
-            assert r.exit_code == 0, r.stderr
+            assert r.exit_code == 0, (
+                r.stderr + f" cwd={os.getcwd()} patch={Path('patch').resolve()}"
+            )
             r = cli_runner.invoke(["show", "--output-format=json"])
             assert r.exit_code == 0, r.stderr
             committed_ds_diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
