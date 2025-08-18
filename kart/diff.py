@@ -247,6 +247,7 @@ def diff(
     diff_writer.convert_to_dataset_format(convert_to_dataset_format)
     diff_writer.full_file_diffs(diff_files)
     diff_writer.write_diff(diff_format=diff_format)
+    diff_writer.flush()
 
     if exit_code or output_type == "quiet":
         diff_writer.exit_with_code()
