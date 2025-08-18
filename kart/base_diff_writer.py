@@ -731,6 +731,13 @@ class BaseDiffWriter:
         else:
             sys.exit(0)
 
+    def flush(self):
+        """Close the output file if it exists."""
+        if hasattr(self, "fp"):
+            from kart.output_util import maybe_flush
+
+            maybe_flush(self.fp)
+
     @functools.lru_cache()
     def _get_old_or_new_dataset(self, ds_path):
         """

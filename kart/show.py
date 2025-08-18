@@ -177,6 +177,7 @@ def show(
     diff_writer.full_file_diffs(diff_files)
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff(diff_format=diff_format)
+    diff_writer.flush()
 
     if exit_code or output_type == "quiet":
         diff_writer.exit_with_code()
@@ -241,3 +242,4 @@ def create_patch(
     diff_writer.full_file_diffs(True)
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff(diff_format=diff_format)
+    diff_writer.flush()

@@ -192,6 +192,12 @@ def _buffer_json_keys(chunk_generator):
         yield buf
 
 
+def maybe_flush(fp):
+    """Flush a file object if it's flushable."""
+    if hasattr(fp, "flush"):
+        fp.flush()
+
+
 def dump_json_output(
     output,
     output_path,
@@ -206,23 +212,27 @@ def dump_json_output(
 
     fp = resolve_output_path(output_path)
 
-    highlit = can_output_colour(fp)
-    json_encoder = encoder_class(**JSON_PARAMS[json_style], **encoder_kwargs)
-    if highlit:
-        json_lexer = JsonLexer()
-        for chunk in _buffer_json_keys(json_encoder.iterencode(output)):
-            token_generator = (
-                (token_type, value)
-                for (index, token_type, value) in json_lexer.get_tokens_unprocessed(
-                    chunk
+    try:
+        highlit = can_output_colour(fp)
+        json_encoder = encoder_class(**JSON_PARAMS[json_style], **encoder_kwargs)
+        if highlit:
+            json_lexer = JsonLexer()
+            for chunk in _buffer_json_keys(json_encoder.iterencode(output)):
+                token_generator = (
+                    (token_type, value)
+                    for (index, token_type, value) in json_lexer.get_tokens_unprocessed(
+                        chunk
+                    )
                 )
-            )
-            fp.write(pygments.format(token_generator, get_terminal_formatter()))
+                fp.write(pygments.format(token_generator, get_terminal_formatter()))
 
-    else:
-        for chunk in json_encoder.iterencode(output):
-            fp.write(chunk)
-    fp.write("\n")
+        else:
+            for chunk in json_encoder.iterencode(output):
+                fp.write(chunk)
+        fp.write("\n")
+        fp.flush()
+    finally:
+        maybe_flush(fp)
 
 
 def _maybe_legacy_style_output(output):
