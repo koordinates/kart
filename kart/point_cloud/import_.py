@@ -17,7 +17,10 @@ from kart.point_cloud.metadata_util import (
     rewrite_and_merge_metadata,
     is_copc,
 )
-from kart.point_cloud.pdal_convert import convert_tile_to_copc
+from kart.point_cloud.pdal_convert import (
+    convert_tile_to_copc,
+    convert_tile_with_crs_override,
+)
 from kart.tile.importer import TileImporter
 from kart.point_cloud.v1 import PointCloudV1
 
@@ -182,12 +185,6 @@ class PointCloudImporter(TileImporter):
     CLOUD_OPTIMIZED_VARIANT = "Cloud-Optimized Point Cloud"
     CLOUD_OPTIMIZED_VARIANT_ACRONYM = "COPC"
 
-    def extract_tile_metadata(self, tile_path, **kwargs):
-        """Override to pass override_crs parameter to point cloud metadata extraction."""
-        if self.override_crs:
-            kwargs["override_crs"] = self.override_crs
-        return self.DATASET_CLASS.extract_tile_metadata(tile_path, **kwargs)
-
     def get_default_message(self):
         return f"Importing {len(self.sources)} LAZ tiles as {self.dataset_path}"
 
@@ -250,12 +247,30 @@ class PointCloudImporter(TileImporter):
         )
 
     def get_conversion_func(self, tile_source):
-        if self.convert_to_cloud_optimized and not is_copc(tile_source.metadata):
+        if self.override_crs:
+            # When override_crs is specified, we always need to convert
+            if self.convert_to_cloud_optimized:
+                # Convert to COPC (or maintain COPC) with CRS override
+                return lambda source, dest: convert_tile_to_copc(
+                    source, dest, override_srs=self.override_crs
+                )
+            else:
+                # Convert with CRS override, preserving original format
+                return lambda source, dest: convert_tile_with_crs_override(
+                    source, dest, override_srs=self.override_crs
+                )
+        elif self.convert_to_cloud_optimized and not is_copc(tile_source.metadata):
+            # Convert to COPC without CRS override
             return convert_tile_to_copc
         return None
 
     def existing_tile_matches_source(self, source_oid, existing_summary):
         """Check if the existing tile can be reused instead of reimporting."""
+        # If override_crs is specified, we need to rewrite the CRS in the files,
+        # so we can't reuse existing tiles
+        if self.override_crs:
+            return False
+
         source_oid = prefix_sha256(source_oid)
 
         if existing_summary.get("oid") == source_oid:

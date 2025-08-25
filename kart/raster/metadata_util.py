@@ -7,7 +7,7 @@ from xml.dom.minidom import Node
 
 from botocore.exceptions import ClientError
 
-from kart.crs_util import normalise_wkt
+from kart.crs_util import make_crs, normalise_wkt
 from kart.geometry import ring_as_wkt
 from kart.list_of_conflicts import ListOfConflicts
 from kart.lfs_util import get_oid_and_size_of_file, prefix_sha256
@@ -36,11 +36,13 @@ class RewriteMetadata(IntFlag):
 
 
 def rewrite_and_merge_metadata(
-    tile_metadata_list, rewrite_metadata=RewriteMetadata.NO_REWRITE
+    tile_metadata_list, rewrite_metadata=RewriteMetadata.NO_REWRITE, override_crs=None
 ):
     """
     Given a list of tile metadata, merges the parts we expect to be homogenous into a single piece of tile metadata in
     the same format that describes the whole list.
+
+    If override_crs is provided, it will be used to override the CRS of all tiles, setting the dataset CRS.
     """
     result = {}
     all_keys = set()
@@ -49,10 +51,23 @@ def rewrite_and_merge_metadata(
     # Don't copy anything from "tile" to the result - these fields are tile specific and needn't be merged.
     all_keys.discard("tile")
 
+    # Normalize override CRS if provided
+    normalized_override_crs = None
+    if override_crs:
+        crs_obj = make_crs(override_crs)
+        normalized_override_crs = normalise_wkt(crs_obj.ExportToWkt())
+
     for tile_metadata in tile_metadata_list:
         for key in all_keys:
+            # Handle CRS with potential override
+            if key == "crs.wkt" and override_crs:
+                # Override CRS for all tiles if specified
+                tile_value = normalized_override_crs
+            else:
+                tile_value = tile_metadata.get(key)
+
             result[key] = _merge_meta_item(
-                key, result.get(key), tile_metadata.get(key), rewrite_metadata
+                key, result.get(key), tile_value, rewrite_metadata
             )
     return result
 
@@ -114,7 +129,11 @@ def _rewrite_format(format_json, rewrite_metadata):
 
 
 def extract_raster_tile_metadata(
-    raster_tile_path, oid_and_size=None, pam_path=None, search_for_pam=True
+    raster_tile_path,
+    oid_and_size=None,
+    pam_path=None,
+    search_for_pam=True,
+    override_crs=None,
 ):
     """
     Use gdalinfo to get any and all raster metadata we can make use of in Kart.
@@ -126,7 +145,7 @@ def extract_raster_tile_metadata(
         "format": - Information about file format, as stored at meta/format.json (or some subset thereof).
         "tile":   - Tile-specific (non-homogenous) information, as stored in individual tile pointer files.
         "schema": - PDRF schema, as stored in meta/schema.json
-        "crs":    - CRS as stored at meta/crs.wkt
+        "crs":    - CRS as stored at meta/crs.wkt (or overridden by override_crs)
     }
 
     Although any two raster tiles can differ in any way imaginable, we specifically constrain tiles in the
@@ -186,7 +205,7 @@ def extract_raster_tile_metadata(
     result = {
         "format.json": format_json,
         "schema.json": schema_json,
-        "crs.wkt": normalise_wkt(crs_wkt),
+        "crs.wkt": normalise_wkt(override_crs or crs_wkt),
         "tile": tile_info,
     }
 

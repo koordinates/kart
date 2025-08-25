@@ -7,10 +7,11 @@ from kart.cli_util import (
     MutexOption,
     KartCommand,
 )
+from kart.crs_util import CoordinateReferenceString
 from kart.completion_shared import file_path_completer
 from kart.lfs_util import prefix_sha256
 from kart.parse_args import parse_import_sources_and_datasets
-from kart.raster.gdal_convert import convert_tile_to_cog
+from kart.raster.gdal_convert import convert_tile_to_cog, convert_tile_with_crs_override
 from kart.raster.metadata_util import (
     rewrite_and_merge_metadata,
     is_cog,
@@ -111,6 +112,14 @@ L = logging.getLogger(__name__)
         "the authoritative source for the given data and data is fetched from there if needed."
     ),
 )
+@click.option(
+    "--override-crs",
+    type=CoordinateReferenceString(keep_as_string=True),
+    help=(
+        "Override the CRS of all source tiles and set the dataset CRS. "
+        "Can be specified as EPSG code (e.g., EPSG:4326) or as a WKT file (e.g., @myfile.wkt)."
+    ),
+)
 @click.argument(
     "args",
     nargs=-1,
@@ -130,6 +139,7 @@ def raster_import(
     num_workers,
     dataset_path,
     do_link,
+    override_crs,
     args,
 ):
     """
@@ -161,6 +171,7 @@ def raster_import(
         num_workers=num_workers,
         do_link=do_link,
         sources=sources,
+        override_crs=override_crs,
     ).import_tiles()
 
 
@@ -182,7 +193,9 @@ class RasterImporter(TileImporter):
         pass
 
     def get_merged_source_metadata(self, all_metadata):
-        return rewrite_and_merge_metadata(all_metadata, RewriteMetadata.DROP_PROFILE)
+        return rewrite_and_merge_metadata(
+            all_metadata, RewriteMetadata.DROP_PROFILE, override_crs=self.override_crs
+        )
 
     def get_predicted_merged_metadata(self, all_metadata):
         rewrite_metadata = (
@@ -190,7 +203,9 @@ class RasterImporter(TileImporter):
             if self.convert_to_cloud_optimized
             else RewriteMetadata.DROP_PROFILE
         )
-        return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
+        return rewrite_and_merge_metadata(
+            all_metadata, rewrite_metadata, override_crs=self.override_crs
+        )
 
     def get_actual_merged_metadata(self, all_metadata):
         rewrite_metadata = (
@@ -198,15 +213,35 @@ class RasterImporter(TileImporter):
             if self.convert_to_cloud_optimized
             else RewriteMetadata.DROP_PROFILE
         )
-        return rewrite_and_merge_metadata(all_metadata, rewrite_metadata)
+        return rewrite_and_merge_metadata(
+            all_metadata, rewrite_metadata, override_crs=self.override_crs
+        )
 
     def get_conversion_func(self, tile_source):
-        if self.convert_to_cloud_optimized and not is_cog(tile_source.metadata):
+        if self.override_crs:
+            # When override_crs is specified, we always need to convert
+            if self.convert_to_cloud_optimized:
+                # Convert to COG (or maintain COG) with CRS override
+                return lambda source, dest: convert_tile_to_cog(
+                    source, dest, override_srs=self.override_crs
+                )
+            else:
+                # Convert with CRS override, preserving original format
+                return lambda source, dest: convert_tile_with_crs_override(
+                    source, dest, override_srs=self.override_crs
+                )
+        elif self.convert_to_cloud_optimized and not is_cog(tile_source.metadata):
+            # Convert to COG without CRS override
             return convert_tile_to_cog
         return None
 
     def existing_tile_matches_source(self, source_oid, existing_summary):
         """Check if the existing tile can be reused instead of reimporting."""
+        # If override_crs is specified, we need to rewrite the CRS in the files,
+        # so we can't reuse existing tiles
+        if self.override_crs:
+            return False
+
         source_oid = prefix_sha256(source_oid)
 
         if existing_summary.get("oid") == source_oid:
@@ -219,8 +254,8 @@ class RasterImporter(TileImporter):
 
         # NOTE: this logic would be more complicated if we supported more than one type of conversion.
         if existing_summary.get("sourceOid") == source_oid:
-            # The import source we were given has already been imported, but converted to COPC.
-            # Return True if we were going to convert it to COPC too.
+            # The import source we were given has already been imported, but converted to COG.
+            # Return True if we were going to convert it to COG too.
             return self.convert_to_cloud_optimized and is_cog(existing_summary)
 
         return False
