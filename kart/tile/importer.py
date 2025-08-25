@@ -492,6 +492,8 @@ class TileImporter:
                 yield future.result()
 
     def extract_tile_metadata(self, tile_path, **kwargs):
+        if self.override_crs:
+            kwargs["override_crs"] = self.override_crs
         return self.DATASET_CLASS.extract_tile_metadata(tile_path, **kwargs)
 
     def check_metadata_pre_convert(self):
