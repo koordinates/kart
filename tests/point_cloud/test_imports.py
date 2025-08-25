@@ -1241,3 +1241,60 @@ def test_import_with_crs_override(
             assert "2994" in final_crs
 
             check_lfs_hashes(repo, 2)
+
+
+def test_override_crs_rewrites_files(
+    tmp_path,
+    chdir,
+    cli_runner,
+    data_archive_readonly,
+    requires_pdal,
+    requires_git_lfs,
+):
+    """Test that --override-crs actually rewrites the CRS in the imported LAZ files."""
+    import subprocess
+    import json
+
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0, r.stderr
+
+        with chdir(repo_path):
+            # Import a tile with CRS override
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    f"{auckland}/auckland_0_0.laz",
+                    "--dataset-path=auckland",
+                    "--override-crs=EPSG:4326",
+                    "--convert-to-copc",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Check out the working copy to get the actual file
+            r = cli_runner.invoke(["checkout"])
+            assert r.exit_code == 0, r.stderr
+
+            # Use pdal info to check the CRS in the actual LAZ file
+            laz_files = list((repo_path / "auckland").glob("*.laz"))
+            assert len(laz_files) == 1
+
+            # Run pdal info to get the CRS from the file
+            result = subprocess.run(
+                ["pdal", "info", str(laz_files[0]), "--metadata"],
+                capture_output=True,
+                text=True,
+            )
+            assert result.returncode == 0
+
+            metadata = json.loads(result.stdout)
+            # Check that the CRS in the file is EPSG:4326
+            srs = metadata.get("metadata", {}).get("srs", {})
+            wkt = srs.get("wkt", "")
+
+            # EPSG:4326 should appear in the WKT
+            assert (
+                "4326" in wkt or "WGS 84" in wkt or "WGS_1984" in wkt
+            ), f"CRS not overridden in file. WKT: {wkt}"
