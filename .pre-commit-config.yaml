@@ -6,6 +6,7 @@ repos:
     rev: v2.5.0
     hooks:
       - id: trailing-whitespace
+        exclude: "\\.diff$"
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
