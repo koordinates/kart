@@ -802,7 +802,7 @@ jobs:
       MACOS_NOTARIZE_KEYCHAIN_FILENAME: "signing_temp"
       MACOS_NOTARIZE_KEYCHAIN: "~/Library/Keychains/signing_temp.keychain-db"
       # X.Y version needs to match PY_VER:
-      PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.6/python-3.11.6-macos11.pkg"
+      PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg"
 
     steps:
       - uses: actions/checkout@v4
