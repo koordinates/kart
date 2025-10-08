@@ -769,13 +769,25 @@ jobs:
   # macOS
   #
   macOS:
-    # We want to run on external PRs, but not on our own internal PRs as they'll be run
-    # by the push to the branch.
+    # macOS builds are expensive, so only run them when:
+    # - Pushing a tag/release (always build releases)
+    # - Pushing a commit with 'ci-build-all' in the message
+    # - External PR with 'ci-build-all' label
+    # We skip internal PRs since they'll be run by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
     if: >
       (
-        github.event_name == 'push'
-        || github.event.pull_request.head.repo.full_name != github.repository
+        (
+          github.event_name == 'push'
+          && (
+            github.ref_type == 'tag'
+            || contains(join(github.event.commits.*.message, ' '), 'ci-build-all')
+          )
+        )
+        || (
+          github.event.pull_request.head.repo.full_name != github.repository
+          && contains(github.event.pull_request.labels.*.name, 'ci-build-all')
+        )
       )
     strategy:
       fail-fast: false
@@ -1056,13 +1068,25 @@ jobs:
       NINJA_VERSION: "~1.10.2"  # workaround for python logging output buffering noise
       SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
 
-    # We want to run on external PRs, but not on our own internal PRs as they'll be run
-    # by the push to the branch.
+    # Windows builds are expensive, so only run them when:
+    # - Pushing a tag/release (always build releases)
+    # - Pushing a commit with 'ci-build-all' in the message
+    # - External PR with 'ci-build-all' label
+    # We skip internal PRs since they'll be run by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
     if: >
       (
-        github.event_name == 'push'
-        || github.event.pull_request.head.repo.full_name != github.repository
+        (
+          github.event_name == 'push'
+          && (
+            github.ref_type == 'tag'
+            || contains(join(github.event.commits.*.message, ' '), 'ci-build-all')
+          )
+        )
+        || (
+          github.event.pull_request.head.repo.full_name != github.repository
+          && contains(github.event.pull_request.labels.*.name, 'ci-build-all')
+        )
       )
 
     steps:
