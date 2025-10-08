@@ -181,6 +181,19 @@ $ .\build\venv\Scripts\pytest.exe -v
 
 Continuous integration builds apps, tests, and installers for every commit on supported platforms. Artifacts are published to Github Actions, including vendor library bundles, test results, and unsigned installers.
 
+### Triggering macOS and Windows builds
+
+To conserve CI resources, macOS and Windows builds only run in these cases:
+- Tag/release builds (always run all platforms)
+- Commits with `ci-build-all` in the commit message
+- Pull requests with the `ci-build-all` label
+
+Linux builds always run for all commits and PRs.
+
+To force a macOS/Windows build:
+- For a commit: Include `ci-build-all` anywhere in your commit message
+- For a PR: Add the `ci-build-all` label to the pull request
+
 ## Code formatting
 
 We use [Ruff](https://docs.astral.sh/ruff/) to ensure consistent code formatting. We recommend integrating Ruff with your editor - [see instructions here](https://docs.astral.sh/ruff/editors/setup/)
