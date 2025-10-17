@@ -40,7 +40,7 @@ The ``kart.patch/v1`` section contains commit metadata:
 - **authorTime** (required): ISO 8601 UTC timestamp when the patch was created
 - **authorTimeOffset** (required): Timezone offset in ISO 8601 format (e.g., "+12:00")
 - **message** (required): Commit message describing the changes
-- **base** (optional): Git commit hash that this patch is based on. When present, enables partial feature updates (see below)
+- **base** (optional): Git commit hash that this patch is based on. When present, enables updates of existing features without a `-` key. Also allows patches to omit unchanged fields from feature diffs.
 
 Diff Data (kart.diff/v1+hexwkb)
 -------------------------------
@@ -218,6 +218,81 @@ Binary Fields
 -------------
 
 Binary/blob fields are encoded as hexadecimal strings. A ``null`` value for a binary field is represented as JSON ``null``.
+
+Reprojected Patches
+-------------------
+
+Patches can include geometries in a different coordinate reference system (CRS) than the target dataset. This allows you to create patches in a convenient CRS (like EPSG:4326/WGS84) and apply them to datasets in any CRS.
+
+Creating Reprojected Patches
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use the ``--crs`` option when creating a patch:
+
+.. code-block:: bash
+
+    kart create-patch HEAD --crs=EPSG:4326 > my-changes.kartpatch
+
+The patch will include a ``crs`` field in the metadata:
+
+.. code-block:: json
+
+    {
+      "kart.patch/v1": {
+        "base": "abc123...",
+        "crs": "EPSG:4326",
+        "message": "Update features in WGS84",
+        ...
+      },
+      "kart.diff/v1+hexwkb": {
+        ...
+      }
+    }
+
+Applying Reprojected Patches
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When applying a patch with a ``crs`` field, Kart automatically transforms geometries from the patch CRS to the dataset's CRS:
+
+.. code-block:: bash
+
+    kart apply my-changes.kartpatch
+
+**Important limitations for reprojected patches:**
+
+- A ``base`` commit is **required** (for conflict resolution)
+- Feature **updates cannot include both** ``-`` **and** ``+`` **keys**
+
+  - Updates with both old and new values would require comparing the ``-`` geometry with the dataset geometry for conflict detection, but CRS transformations are not reliably reversible
+  - Instead, use only the ``+`` key to replace/update an existing feature's geometry
+
+- **Inserts and deletes work normally** using ``+`` or ``-`` keys
+- **Partial updates work** - specify only ``+`` with the fields you want to change
+
+Example of a valid reprojected update:
+
+.. code-block:: json
+
+    {
+      "kart.patch/v1": {
+        "base": "abc123...",
+        "crs": "EPSG:4326"
+      },
+      "kart.diff/v1+hexwkb": {
+        "my-dataset": {
+          "feature": [
+            {
+              "+": {
+                "fid": 123,
+                "geom": "0101000000..."
+              }
+            }
+          ]
+        }
+      }
+    }
+
+This updates the geometry (and any other specified fields) of the feature with ``fid=123``, transforming the geometry from EPSG:4326 to the dataset's CRS.
 
 Creating Patches
 ----------------

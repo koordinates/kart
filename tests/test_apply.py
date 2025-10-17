@@ -778,3 +778,369 @@ def test_apply_delete_feature_with_only_pk(data_archive, cli_runner):
         head_ds = repo.structure("HEAD").datasets()["nz_pa_points_topo_150k"]
         with pytest.raises(KeyError):
             head_ds.get_feature(1182)
+
+
+def test_apply_with_crs_transform(data_archive, cli_runner):
+    """Test applying a patch where geometries are in a different CRS than the dataset."""
+    # Dataset is in EPSG:4326 (WGS84)
+    # Patch has geometries in EPSG:3857 (Web Mercator)
+    # The patch should transform geometries from EPSG:3857 to EPSG:4326 before applying
+
+    with data_archive("points") as repo_dir:
+        repo = KartRepo(repo_dir)
+        base_commit = repo.head_commit.hex
+
+        # Using Web Mercator (EPSG:3857) coordinates for a point in New Zealand
+        # Coordinates: 19455506, -4405350 in EPSG:3857
+        # which should transform to approximately 174.7, -36.8 in EPSG:4326
+        patch_file = json.dumps(
+            {
+                "kart.diff/v1+hexwkb": {
+                    "nz_pa_points_topo_150k": {
+                        "feature": [
+                            {
+                                "+": {
+                                    "fid": 99999,
+                                    "geom": "01010000003E22A64BEFD32841666666666627B5C0",
+                                    "macronated": None,
+                                    "name": "Test Feature",
+                                    "name_ascii": "Test Feature",
+                                    "t50_fid": None,
+                                }
+                            }
+                        ]
+                    }
+                },
+                "kart.patch/v1": {
+                    "authorEmail": "test@example.com",
+                    "authorName": "Test User",
+                    "authorTime": "2020-05-01T12:00:00Z",
+                    "authorTimeOffset": "+12:00",
+                    "message": "Add feature with EPSG:3857 geometry",
+                    "crs": "EPSG:3857",
+                    "base": base_commit,
+                },
+            }
+        )
+
+        r = cli_runner.invoke(["apply", "-"], input=patch_file)
+        assert r.exit_code == 0, r.stderr
+
+        # Verify the feature was added with transformed geometry
+        dataset = repo.datasets()["nz_pa_points_topo_150k"]
+
+        # Get the feature we just added
+        feature = dataset.get_feature(99999)
+        assert feature is not None
+        assert feature["name"] == "Test Feature"
+
+        # The geometry should have been transformed from EPSG:3857 to EPSG:4326
+        from kart.geometry import gpkg_geom_to_ogr
+
+        geom = gpkg_geom_to_ogr(feature["geom"])
+        x, y = geom.GetX(), geom.GetY()
+
+        # Check that coordinates are in WGS84 range (not EPSG:3857 range)
+        # WGS84 has longitude -180 to 180, latitude -90 to 90
+        # EPSG:3857 would have coordinates in the tens of millions
+        assert -180 <= x <= 180, f"Longitude {x} not in WGS84 range"
+        assert -90 <= y <= 90, f"Latitude {y} not in WGS84 range"
+
+        # The key test: coordinates should NOT be the huge EPSG:3857 values (millions)
+        # If no transformation happened, x would be ~19455506
+        assert x < 1000, f"X coordinate {x} suggests no transformation from EPSG:3857"
+
+
+def test_apply_with_crs_requires_base(data_archive, cli_runner):
+    """Test that patches with CRS transformation require a base commit."""
+    patch_file = json.dumps(
+        {
+            "kart.diff/v1+hexwkb": {
+                "nz_pa_points_topo_150k": {
+                    "feature": [
+                        {
+                            "+": {
+                                "fid": 99999,
+                                "geom": "01010000003E22A64BEFD32841666666666627B5C0",
+                                "macronated": None,
+                                "name": "Test Feature",
+                                "name_ascii": "Test Feature",
+                                "t50_fid": None,
+                            }
+                        }
+                    ]
+                }
+            },
+            "kart.patch/v1": {
+                "authorEmail": "test@example.com",
+                "authorName": "Test User",
+                "authorTime": "2020-05-01T12:00:00Z",
+                "authorTimeOffset": "+12:00",
+                "message": "Add feature with EPSG:3857 geometry",
+                "crs": "EPSG:3857",
+                # Note: no "base" key
+            },
+        }
+    )
+
+    with data_archive("points"):
+        r = cli_runner.invoke(["apply", "-"], input=patch_file)
+        assert r.exit_code != 0
+        assert (
+            "Patches with CRS transformation require a 'base' commit reference"
+            in r.stderr
+        )
+
+
+def test_apply_with_crs_rejects_updates(data_archive, cli_runner):
+    """Test that patches with CRS transformation cannot include update operations (with old values)."""
+    with data_archive("points") as repo_dir:
+        repo = KartRepo(repo_dir)
+        base_commit = repo.head_commit.hex
+
+        patch_file = json.dumps(
+            {
+                "kart.diff/v1+hexwkb": {
+                    "nz_pa_points_topo_150k": {
+                        "feature": [
+                            {
+                                "-": {
+                                    "fid": 1,
+                                    "geom": "0101000000CCCCCCCCCC4C65405C8FC2F528DC42C0",
+                                    "macronated": None,
+                                    "name": "Old Name",
+                                    "name_ascii": "Old Name",
+                                    "t50_fid": 123,
+                                },
+                                "+": {
+                                    "fid": 1,
+                                    "geom": "01010000003E22A64BEFD32841666666666627B5C0",
+                                    "macronated": None,
+                                    "name": "New Name",
+                                    "name_ascii": "New Name",
+                                    "t50_fid": 123,
+                                },
+                            }
+                        ]
+                    }
+                },
+                "kart.patch/v1": {
+                    "authorEmail": "test@example.com",
+                    "authorName": "Test User",
+                    "authorTime": "2020-05-01T12:00:00Z",
+                    "authorTimeOffset": "+12:00",
+                    "message": "Update feature with EPSG:3857 geometry",
+                    "crs": "EPSG:3857",
+                    "base": base_commit,
+                },
+            }
+        )
+
+        r = cli_runner.invoke(["apply", "-"], input=patch_file)
+        assert r.exit_code != 0
+        assert (
+            "Error: Patches with CRS transformation must not include '-' values in edits"
+            in r.stderr
+        )
+
+
+def test_apply_update_geometry_without_crs(data_archive, cli_runner):
+    """Test applying a patch that updates a feature's geometry (without CRS transformation)."""
+    with data_archive("points") as repo_dir:
+        repo = KartRepo(repo_dir)
+        # Use the specific base commit to avoid conflicts with other tests
+        base_commit = "1582725544d9122251acd4b3fc75b5c88ac3fd17"
+        base_tree = repo[base_commit].peel(pygit2.Tree)
+        base_ds = repo.structure(base_tree).datasets()["nz_pa_points_topo_150k"]
+
+        # Use feature 1241 which exists in base commit
+        original_feature = base_ds.get_feature(1241)
+        original_geom = original_feature["geom"]
+
+        # Create a patch that updates the geometry to a new location
+        # Use both - and + keys (standard update format)
+        patch_file = json.dumps(
+            {
+                "kart.diff/v1+hexwkb": {
+                    "nz_pa_points_topo_150k": {
+                        "feature": [
+                            {
+                                "-": {
+                                    "fid": 1241,
+                                    "geom": "0101000000492A45C30AEB6540551507C3663C42C0",
+                                },
+                                "+": {
+                                    "fid": 1241,
+                                    "geom": "0101000000000000000000664000000000008042C0",
+                                },
+                            }
+                        ]
+                    }
+                },
+                "kart.patch/v1": {
+                    "authorEmail": "test@example.com",
+                    "authorName": "Test User",
+                    "authorTime": "2020-05-01T12:00:00Z",
+                    "authorTimeOffset": "+12:00",
+                    "message": "Update feature geometry",
+                    "base": base_commit,
+                },
+            }
+        )
+
+        r = cli_runner.invoke(["apply", "-"], input=patch_file)
+        assert r.exit_code == 0, r.stderr
+
+        # Verify the feature was updated with new geometry
+        repo = KartRepo(repo_dir)
+        head_ds = repo.structure("HEAD").datasets()["nz_pa_points_topo_150k"]
+        updated_feature = head_ds.get_feature(1241)
+        updated_geom = updated_feature["geom"]
+
+        # Geometry should have changed
+        assert updated_geom != original_geom
+
+        # Verify the new geometry coordinates
+        from kart.geometry import gpkg_geom_to_ogr
+
+        geom = gpkg_geom_to_ogr(updated_geom)
+        x, y = geom.GetX(), geom.GetY()
+
+        assert x == pytest.approx(176.0)
+        assert y == pytest.approx(-37.0)
+
+
+def test_apply_update_geometry_with_crs(data_archive, cli_runner):
+    """Test applying a patch that updates a feature's geometry with CRS transformation.
+
+    When CRS transformation is enabled, you can update an existing feature using only
+    the + key (without a - key). This replaces the feature entirely.
+    """
+    with data_archive("points") as repo_dir:
+        repo = KartRepo(repo_dir)
+        # Use the specific base commit to avoid conflicts with other tests
+        base_commit = "1582725544d9122251acd4b3fc75b5c88ac3fd17"
+        base_tree = repo[base_commit].peel(pygit2.Tree)
+        base_ds = repo.structure(base_tree).datasets()["nz_pa_points_topo_150k"]
+
+        # Use feature 1241 which exists in base commit
+        original_feature = base_ds.get_feature(1241)
+        original_geom = original_feature["geom"]
+
+        # Create a patch that updates the feature using only + key (with CRS transform)
+        # EPSG:3857 coordinates: 19447515, -4411265
+        # Should transform to approximately 174.7, -36.8 in EPSG:4326
+        patch_file = json.dumps(
+            {
+                "kart.diff/v1+hexwkb": {
+                    "nz_pa_points_topo_150k": {
+                        "feature": [
+                            {
+                                "+": {
+                                    "fid": 1241,
+                                    "geom": "0101000000000000B0ED8B724100000040E0D350C1",
+                                    "name_ascii": "Reprojected",
+                                }
+                            }
+                        ]
+                    }
+                },
+                "kart.patch/v1": {
+                    "authorEmail": "test@example.com",
+                    "authorName": "Test User",
+                    "authorTime": "2020-05-01T12:00:00Z",
+                    "authorTimeOffset": "+12:00",
+                    "message": "Update feature geometry with CRS transform",
+                    "crs": "EPSG:3857",
+                    "base": base_commit,
+                },
+            }
+        )
+
+        r = cli_runner.invoke(["apply", "-"], input=patch_file)
+        assert r.exit_code == 0, r.stderr
+
+        # Verify the feature was updated with transformed geometry
+        repo = KartRepo(repo_dir)
+        head_ds = repo.structure("HEAD").datasets()["nz_pa_points_topo_150k"]
+        updated_feature = head_ds.get_feature(1241)
+        updated_geom = updated_feature["geom"]
+
+        # Geometry should have changed
+        assert updated_geom != original_geom
+
+        # Verify name_ascii was updated
+        assert updated_feature["name_ascii"] == "Reprojected"
+
+        # Verify the geometry was transformed to WGS84
+        from kart.geometry import gpkg_geom_to_ogr
+
+        geom = gpkg_geom_to_ogr(updated_geom)
+        x, y = geom.GetX(), geom.GetY()
+
+        # Coordinates are in the dataset's CRS (WGS84)
+        assert x == pytest.approx(174.7)
+        assert y == pytest.approx(-36.8)
+
+
+def test_apply_partial_feature_update(data_archive, cli_runner):
+    """Test applying a patch with partial features (not all fields present in - and + blobs).
+
+    This tests that when a patch contains an update with only some fields in the - and +
+    blobs, we correctly resolve the missing fields from the base commit.
+    """
+    with data_archive("points") as repo_dir:
+        repo = KartRepo(repo_dir)
+        base_commit = "1582725544d9122251acd4b3fc75b5c88ac3fd17"
+        base_tree = repo[base_commit].peel(pygit2.Tree)
+        base_ds = repo.structure(base_tree).datasets()["nz_pa_points_topo_150k"]
+
+        # Use feature 1241 which exists in base commit
+        original_feature = base_ds.get_feature(1241)
+
+        # Create a patch that updates only name_ascii field
+        # The - and + blobs only contain fid and name_ascii (not all fields)
+        patch_file = json.dumps(
+            {
+                "kart.diff/v1+hexwkb": {
+                    "nz_pa_points_topo_150k": {
+                        "feature": [
+                            {
+                                "-": {
+                                    "fid": 1241,
+                                    "name_ascii": original_feature["name_ascii"],
+                                },
+                                "+": {
+                                    "fid": 1241,
+                                    "name_ascii": "Updated Name",
+                                },
+                            }
+                        ]
+                    }
+                },
+                "kart.patch/v1": {
+                    "authorEmail": "test@example.com",
+                    "authorName": "Test User",
+                    "authorTime": "2020-05-01T12:00:00Z",
+                    "authorTimeOffset": "+12:00",
+                    "message": "Update feature name",
+                    "base": base_commit,
+                },
+            }
+        )
+
+        r = cli_runner.invoke(["apply", "-"], input=patch_file)
+        assert r.exit_code == 0, r.stderr
+
+        # Verify the feature was updated
+        repo = KartRepo(repo_dir)
+        head_ds = repo.structure("HEAD").datasets()["nz_pa_points_topo_150k"]
+        updated_feature = head_ds.get_feature(1241)
+
+        # name_ascii should have changed
+        assert updated_feature["name_ascii"] == "Updated Name"
+
+        # All other fields should remain unchanged
+        for key in original_feature.keys():
+            if key != "name_ascii":
+                assert updated_feature[key] == original_feature[key]

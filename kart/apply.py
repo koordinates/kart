@@ -5,10 +5,12 @@ from enum import Enum, auto
 
 import click
 import pygit2
+from osgeo import osr
 
 from kart.completion_shared import ref_completer
 from kart.core import check_git_user
 from kart.cli_util import KartCommand
+from kart.crs_util import make_crs
 from kart.diff_structs import (
     FILES_KEY,
     KeyValue,
@@ -24,7 +26,7 @@ from kart.exceptions import (
     NotFound,
     NotYetImplemented,
 )
-from kart.geometry import hex_wkb_to_gpkg_geom
+from kart.geometry import hex_wkb_to_gpkg_geom, gpkg_geom_to_ogr, ogr_to_gpkg_geom
 from kart.schema import Schema
 from kart.serialise_util import b64decode_str, ensure_bytes
 from kart.timestamps import iso8601_tz_to_timedelta, iso8601_utc_to_datetime
@@ -98,17 +100,23 @@ def check_change_supported(
 class KeyValueParser:
     """Parses JSON for an individual feature object into a KeyValue object."""
 
-    def __init__(self, schema):
+    def __init__(self, schema, transform=None):
         self.pk_name = schema.pk_columns[0].name
         self.geom_names = [c.name for c in schema.geometry_columns]
         self.bytes_names = [c.name for c in schema.columns if c.data_type == "blob"]
+        self.transform = transform
 
     def parse(self, f):
         if f is None:
             return None
         for g in self.geom_names:
             if g in f:
-                f[g] = hex_wkb_to_gpkg_geom(f[g])
+                geom = hex_wkb_to_gpkg_geom(f[g])
+                if self.transform and geom:
+                    ogr_geom = gpkg_geom_to_ogr(geom)
+                    ogr_geom.Transform(self.transform)
+                    geom = ogr_to_gpkg_geom(ogr_geom)
+                f[g] = geom
         for b in self.bytes_names:
             if b in f:
                 f[b] = unhexlify(f[b]) if f[b] is not None else None
@@ -140,28 +148,59 @@ class NullSchemaParser:
 class FeatureDeltaParser:
     """Parses JSON for a delta - ie {"-": old-value, "+": new-value} - into a Delta object."""
 
-    def __init__(self, old_schema, new_schema):
+    def __init__(self, old_schema, new_schema, transform=None):
+        # Only new values are transformed from patch CRS to dataset CRS
+        # Old values are not transformed - they're resolved from the base commit when needed
         self.old_parser = (
             KeyValueParser(old_schema) if old_schema else NullSchemaParser("old")
         )
         self.new_parser = (
-            KeyValueParser(new_schema) if new_schema else NullSchemaParser("new")
+            KeyValueParser(new_schema, transform=transform)
+            if new_schema
+            else NullSchemaParser("new")
         )
+        self.transform = transform
 
     def parse(self, change):
         if "*" in change:
             raise NotYetImplemented(
                 "Sorry, minimal patches with * values are no longer supported."
             )
-        if "--" in change:
-            return Delta.delete(self.old_parser.parse(change["--"]))
-        elif "++" in change:
-            return Delta.insert(self.new_parser.parse(change["++"]))
-        else:
+
+        has_old = "-" in change
+        has_new = "+" in change
+
+        if has_old and has_new:
+            # Update: has both - and +
+            if self.transform:
+                # Supporting updates with CRS transformation would be problematic, because we would
+                # need to compare the '-' geometry with the corresponding geometry in the dataset
+                # for conflict resolution, but we cannot reliably roundtrip CRS transformations
+                # losslessly (so transforming the '-' geometry back to the dataset CRS is likely to
+                # result in spurious conflicts)
+                # We *could* transform the other way (from dataset geometry to the patch CRS),
+                # and it would normally work (because the '-' geometry in the patch was probably
+                # transformed using the same code in kart)
+                # but there are a few reasons why that's not ideal either:
+                #   - it makes patches less portable - transformations on different architectures may
+                #     produce slightly different results
+                #   - different versions of kart may contain different Proj versions and thus produce
+                #     slightly different results
+                raise InvalidOperation(
+                    "Patches with CRS transformation must not include '-' values in edits"
+                )
             return Delta(
-                self.old_parser.parse(change.get("-")),
-                self.new_parser.parse(change.get("+")),
+                self.old_parser.parse(change["-"]),
+                self.new_parser.parse(change["+"]),
             )
+        elif has_new:
+            # Insert: only has +
+            return Delta.insert(self.new_parser.parse(change["+"]))
+        elif has_old:
+            # Delete: only has -
+            return Delta.delete(self.old_parser.parse(change["-"]))
+        else:
+            raise InvalidOperation("Patch feature change must have '+' and/or '-' keys")
 
 
 def _build_signature(patch_metadata, person, repo):
@@ -220,7 +259,7 @@ def parse_meta_diff(meta_diff_input):
     )
 
 
-def parse_feature_diff(feature_diff_input, dataset, meta_diff):
+def parse_feature_diff(feature_diff_input, dataset, meta_diff, patch_crs=None):
     old_schema = new_schema = None
     if dataset is not None:
         old_schema = new_schema = dataset.schema
@@ -231,7 +270,22 @@ def parse_feature_diff(feature_diff_input, dataset, meta_diff):
     if schema_delta and schema_delta.new_value:
         new_schema = schema_delta.new_value
 
-    delta_parser = FeatureDeltaParser(old_schema, new_schema)
+    # Create coordinate transformation if patch has a CRS
+    transform = None
+    if patch_crs and dataset is not None and new_schema is not None:
+        # Get the CRS from the first geometry column
+        geom_columns = new_schema.geometry_columns
+        if geom_columns:
+            crs_name = geom_columns[0].get("geometryCRS")
+            if crs_name:
+                dataset_crs_def = dataset.get_crs_definition(crs_name)
+                if dataset_crs_def:
+                    dataset_crs = make_crs(dataset_crs_def)
+                    patch_srs = make_crs(patch_crs)
+                    # Transform from patch CRS to dataset CRS for both old and new geometries
+                    transform = osr.CoordinateTransformation(patch_srs, dataset_crs)
+
+    delta_parser = FeatureDeltaParser(old_schema, new_schema, transform)
     return DeltaDiff((delta_parser.parse(change) for change in feature_diff_input))
 
 
@@ -304,6 +358,13 @@ def apply_patch(
 
     repo.working_copy.check_not_dirty()
 
+    # Extract patch CRS if present
+    patch_crs = metadata.get("crs")
+    if patch_crs and not metadata.get("base"):
+        raise InvalidOperation(
+            "Patches with CRS transformation require a 'base' commit reference"
+        )
+
     repo_diff = RepoDiff()
     for ds_path, ds_diff_input in diff_input.items():
         if ds_path == FILES_KEY:
@@ -326,7 +387,9 @@ def apply_patch(
 
         feature_diff_input = ds_diff_input.get("feature", [])
         if feature_diff_input:
-            feature_diff = parse_feature_diff(feature_diff_input, dataset, meta_diff)
+            feature_diff = parse_feature_diff(
+                feature_diff_input, dataset, meta_diff, patch_crs
+            )
             repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 
     if do_commit:
