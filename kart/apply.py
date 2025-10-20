@@ -107,9 +107,15 @@ class KeyValueParser:
         if f is None:
             return None
         for g in self.geom_names:
-            f[g] = hex_wkb_to_gpkg_geom(f[g])
+            if g in f:
+                f[g] = hex_wkb_to_gpkg_geom(f[g])
         for b in self.bytes_names:
-            f[b] = unhexlify(f[b]) if f[b] is not None else None
+            if b in f:
+                f[b] = unhexlify(f[b]) if f[b] is not None else None
+        if self.pk_name not in f:
+            raise InvalidOperation(
+                f"Patch feature is missing required primary key field {self.pk_name!r}: {f}"
+            )
         pk = f[self.pk_name]
         return KeyValue.of((pk, f))
 
