@@ -189,7 +189,7 @@ endif()
 
 ExternalProject_Add(
   gdal_py
-  URL https://pypi.org/packages/source/G/GDAL/GDAL-${GDAL_VERSION}.tar.gz
+  URL https://pypi.org/packages/source/g/gdal/gdal-${GDAL_VERSION}.tar.gz
   DOWNLOAD_NO_PROGRESS ON
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv GDAL::GDAL
