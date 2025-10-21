@@ -2,6 +2,7 @@ import json
 from contextlib import contextmanager
 from pathlib import Path
 
+import pygit2
 import pytest
 from kart.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY, NOT_YET_IMPLEMENTED
 from kart.repo import KartRepo
@@ -613,3 +614,167 @@ def test_apply_attach_files(data_working_copy, cli_runner):
             "+++ logo.png",
             "+ (binary file f8555b6)",
         ]
+
+
+def test_apply_partial_feature_with_attribute_changes(data_archive, cli_runner):
+    """Test that patches can contain partial features (some fields missing, and no geometry)"""
+    with data_archive("points") as repo_dir:
+        # Get the original feature from base commit
+        repo = KartRepo(repo_dir)
+        base_commit = "1582725544d9122251acd4b3fc75b5c88ac3fd17"
+        base_tree = repo[base_commit].peel(pygit2.Tree)
+        base_ds = repo.structure(base_tree).datasets()["nz_pa_points_topo_150k"]
+        original_feature = base_ds.get_feature(1182)
+
+        # Verify original has geometry and other fields
+        assert original_feature["geom"] is not None
+        original_geom = original_feature["geom"]
+        original_macronated = original_feature["macronated"]
+        original_t50_fid = original_feature["t50_fid"]
+
+        patch = {
+            "kart.patch/v1": {
+                "base": base_commit,
+                "message": "Partial feature edit",
+                "authorName": "Test",
+                "authorEmail": "test@example.com",
+                "authorTime": "2025-10-20T02:42:58.665Z",
+            },
+            "kart.diff/v1+hexwkb": {
+                "nz_pa_points_topo_150k": {
+                    "feature": [
+                        {
+                            "+": {
+                                "fid": 1182,
+                                "name_ascii": "Updated Name",
+                            }
+                        }
+                    ]
+                }
+            },
+        }
+
+        r = cli_runner.invoke(["apply", "-"], input=json.dumps(patch))
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["show", "-o", "json", "HEAD"])
+        assert r.exit_code == 0
+        show = json.loads(r.stdout)
+        features = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
+        assert len(features) == 1
+        assert features[0]["+"]["fid"] == 1182
+        assert features[0]["+"]["name_ascii"] == "Updated Name"
+
+        # Verify the complete feature was written with all fields preserved (except the one we changed)
+        repo = KartRepo(repo_dir)
+        head_ds = repo.structure("HEAD").datasets()["nz_pa_points_topo_150k"]
+        updated_feature = head_ds.get_feature(1182)
+        assert updated_feature["name_ascii"] == "Updated Name"
+        assert updated_feature["geom"] == original_geom
+        assert updated_feature["macronated"] == original_macronated
+        assert updated_feature["t50_fid"] == original_t50_fid
+
+
+def test_apply_partial_feature_missing_pk_field(data_archive, cli_runner):
+    """Test that missing PK field raises clear error."""
+    patch = {
+        "kart.patch/v1": {
+            "base": "1582725544d9122251acd4b3fc75b5c88ac3fd17",
+            "message": "Invalid patch",
+            "authorName": "Test",
+            "authorEmail": "test@example.com",
+            "authorTime": "2025-10-20T02:42:58.665Z",
+        },
+        "kart.diff/v1+hexwkb": {
+            "nz_pa_points_topo_150k": {
+                "feature": [
+                    {
+                        "+": {
+                            "name_ascii": "No PK Here",
+                        }
+                    }
+                ]
+            }
+        },
+    }
+
+    with data_archive("points"):
+        r = cli_runner.invoke(["apply", "-"], input=json.dumps(patch))
+        assert r.exit_code != 0
+        assert "missing required primary key field" in r.stderr
+        assert "'fid'" in r.stderr
+
+
+def test_apply_partial_feature_insert_with_missing_fields(data_archive, cli_runner):
+    """Test that inserting a new feature with missing fields fails with clear error."""
+    patch = {
+        "kart.patch/v1": {
+            "base": "1582725544d9122251acd4b3fc75b5c88ac3fd17",
+            "message": "Insert partial feature",
+            "authorName": "Test",
+            "authorEmail": "test@example.com",
+            "authorTime": "2025-10-20T02:42:58.665Z",
+        },
+        "kart.diff/v1+hexwkb": {
+            "nz_pa_points_topo_150k": {
+                "feature": [
+                    {
+                        "+": {
+                            "fid": 999999,
+                            "name_ascii": "New Feature",
+                        }
+                    }
+                ]
+            }
+        },
+    }
+
+    with data_archive("points"):
+        r = cli_runner.invoke(["apply", "-"], input=json.dumps(patch))
+        assert r.exit_code != 0
+        assert "Cannot insert new feature" in r.stderr
+        assert "999999" in r.stderr
+        assert "missing fields" in r.stderr
+
+
+def test_apply_delete_feature_with_only_pk(data_archive, cli_runner):
+    """Test that deleting a feature requires only the PK field."""
+    with data_archive("points") as repo_dir:
+        # Verify feature 1182 exists before deletion
+        repo = KartRepo(repo_dir)
+        base_commit = "1582725544d9122251acd4b3fc75b5c88ac3fd17"
+        base_tree = repo[base_commit].peel(pygit2.Tree)
+        base_ds = repo.structure(base_tree).datasets()["nz_pa_points_topo_150k"]
+        original_feature = base_ds.get_feature(1182)
+        assert original_feature is not None
+
+        # Delete with only PK field specified
+        patch = {
+            "kart.patch/v1": {
+                "base": base_commit,
+                "message": "Delete feature",
+                "authorName": "Test",
+                "authorEmail": "test@example.com",
+                "authorTime": "2025-10-20T02:42:58.665Z",
+            },
+            "kart.diff/v1+hexwkb": {
+                "nz_pa_points_topo_150k": {
+                    "feature": [
+                        {
+                            "-": {
+                                "fid": 1182,
+                            }
+                        }
+                    ]
+                }
+            },
+        }
+
+        r = cli_runner.invoke(["apply", "-"], input=json.dumps(patch))
+        assert r.exit_code == 0, r.stderr
+
+        # Verify feature was deleted
+        repo = KartRepo(repo_dir)
+        head_ds = repo.structure("HEAD").datasets()["nz_pa_points_topo_150k"]
+        with pytest.raises(KeyError):
+            head_ds.get_feature(1182)

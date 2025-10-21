@@ -366,8 +366,35 @@ class RichTableDataset(TableDataset):
                 if old_path and old_path != new_path:
                     object_builder.remove(old_path)
                 if delta.new_value:
+                    feature_to_encode = delta.new.value
+                    # For partial features (when resolve_missing_values_from_ds exists),
+                    # merge with the old feature to get complete values
+                    if (
+                        resolve_missing_values_from_ds is not None
+                        and delta.type == "insert"
+                    ):
+                        # Check if this is a partial feature by seeing if any columns are missing
+                        current_schema = schema or self.schema
+                        all_column_names = {c.name for c in current_schema}
+                        present_fields = set(delta.new.value.keys())
+                        if not all_column_names.issubset(present_fields):
+                            # Partial feature - try to merge with old
+                            try:
+                                old_feature = (
+                                    resolve_missing_values_from_ds.get_feature(
+                                        path=new_path
+                                    )
+                                )
+                                feature_to_encode = dict(old_feature)
+                                feature_to_encode.update(delta.new.value)
+                            except KeyError:
+                                # Feature doesn't exist in base - can't insert partial feature
+                                missing_fields = all_column_names - present_fields
+                                raise InvalidOperation(
+                                    f"{self.path}: Cannot insert new feature {new_key} with missing fields: {', '.join(sorted(missing_fields))}"
+                                )
                     path, data = self.encode_feature(
-                        delta.new.value, relative=True, **encode_kwargs
+                        feature_to_encode, relative=True, **encode_kwargs
                     )
                     object_builder.insert(path, data)
 

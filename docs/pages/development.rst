@@ -13,5 +13,6 @@ Development
    development/table_v2
    development/annotations
    development/approximated_types
+   development/patch_format
    development/building_git_for_kart
    development/helper
