@@ -361,9 +361,15 @@ def open_dataset_for_export(
         if "OVERWRITE=YES" in layer_creation_options:
             layer_creation_options.remove("OVERWRITE=YES")
 
-    result = driver.Open(destination, update=True)
-    if result is not None:
-        click.echo(f"Opening existing dataset {destination} for update...")
+    try:
+        result = driver.Open(destination, update=True)
+    except RuntimeError as e:
+        if "No such file" in str(e):
+            pass
+        else:
+            raise
+    else:
+        click.echo(f"Opened existing dataset {destination} for update.", err=True)
         if dataset_creation_options:
             click.echo(
                 f"Dataset creation options are ignored since {destination} already exists.",
@@ -379,7 +385,7 @@ def open_dataset_for_export(
             except RuntimeError:
                 pass
         return result
-    click.echo(f"Creating new dataset {destination}")
+    click.echo(f"Creating new dataset {destination}", err=True)
     return driver.CreateDataSource(destination, options=dataset_creation_options)
 
 

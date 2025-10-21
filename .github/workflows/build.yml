@@ -125,7 +125,7 @@ jobs:
       - name: "setup: misc"
         run: |
           sudo apt-get update -q -y
-          sudo apt-get install -q -y --no-install-recommends autoconf-archive ccache
+          sudo apt-get install -q -y --no-install-recommends autoconf-archive ccache perl
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "/usr/lib/ccache" >> $GITHUB_PATH
 
@@ -360,7 +360,7 @@ jobs:
 
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
-          yum install -y autoconf-archive perl-IPC-Cmd rpm-build unixODBC zip rustc cargo golang flex
+          yum install -y autoconf-archive perl-IPC-Cmd perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex
 
           if [ "${ARCH}" == "arm64" ]; then
             echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
@@ -781,12 +781,12 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - id: macos-13
-            label: "13/x86_64"
+          - id: macos-14
+            label: "14/x86_64"
             arch_triplet: x64-osx
-          - id: "ghcr.io/cirruslabs/macos-ventura-xcode:14.3.1"
-            label: "13/arm64"
-            arch_triplet: arm64-osx
+          # - id: "ghcr.io/cirruslabs/macos-ventura-xcode:14.3.1"
+          #   label: "13/arm64"
+          #   arch_triplet: arm64-osx
     runs-on: ${{ matrix.os.id }}
     name: macOS ${{ matrix.os.label }}
 
@@ -802,7 +802,7 @@ jobs:
       MACOS_NOTARIZE_KEYCHAIN_FILENAME: "signing_temp"
       MACOS_NOTARIZE_KEYCHAIN: "~/Library/Keychains/signing_temp.keychain-db"
       # X.Y version needs to match PY_VER:
-      PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.6/python-3.11.6-macos11.pkg"
+      PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg"
 
     steps:
       - uses: actions/checkout@v4

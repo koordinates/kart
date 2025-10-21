@@ -6,6 +6,7 @@ repos:
     rev: v2.5.0
     hooks:
       - id: trailing-whitespace
+        exclude: "\\.diff$|vcpkg-vendor/vcpkg-overlay-ports"
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
@@ -25,6 +26,7 @@ repos:
     rev: v0.6.13
     hooks:
       - id: cmake-format
+        exclude: "vcpkg-vendor/vcpkg-overlay-ports"
       - id: cmake-lint
         args:
           - --suppress-decorations

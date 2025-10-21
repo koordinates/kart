@@ -15,13 +15,16 @@ vcpkg_extract_source_archive(
         fix-mingw.patch
         fix-utf8-source.patch
         ok-load-permanently.patch
+        android-builtin-iconv.diff
+        # https://groups.google.com/g/spatialite-users/c/FLBqJNIDkNQ
+        # https://groups.google.com/g/spatialite-users/c/nyT4iAJbttY
+        libxml2-no-http.diff
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS unused
     FEATURES
         freexl          ENABLE_FREEXL
         gcp             ENABLE_GCP
-        geocallbacks    ENABLE_GEOCALLBACKS
         rttopo          ENABLE_RTTOPO
 )
 
@@ -46,9 +49,6 @@ if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
     if(ENABLE_GCP)
         string(APPEND CL_FLAGS " /DENABLE_GCP")
     endif()
-    if(NOT ENABLE_GEOCALLBACKS)
-        string(APPEND CL_FLAGS " /DOMIT_GEOCALLBACKS")
-    endif()
     if(ENABLE_RTTOPO)
         string(APPEND CL_FLAGS " /DENABLE_RTTOPO")
     endif()
@@ -64,29 +64,13 @@ if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
     set(CL_FLAGS_DEBUG "${CL_FLAGS} ${PKGCONFIG_CFLAGS_DEBUG}")
 
     # vcpkg_build_nmake doesn't supply cmake's implicit link libraries
-    if(PKGCONFIG_LIBS_DEBUG MATCHES "libcrypto")
-        string(APPEND PKGCONFIG_LIBS_DEBUG " user32.lib")
-    endif()
     if(PKGCONFIG_LIBS_RELEASE MATCHES "libcrypto")
         string(APPEND PKGCONFIG_LIBS_RELEASE " user32.lib")
+        string(APPEND PKGCONFIG_LIBS_DEBUG " user32.lib")
     endif()
 
-    string(JOIN " " LIBS_ALL_DEBUG
-        "/LIBPATH:${CURRENT_INSTALLED_DIR}/debug/lib"
-        "${PKGCONFIG_LIBS_DEBUG}"
-        iconv.lib charset.lib
-    )
-    string(JOIN " " LIBS_ALL_RELEASE
-        "/LIBPATH:${CURRENT_INSTALLED_DIR}/lib"
-        "${PKGCONFIG_LIBS_RELEASE}"
-        iconv.lib charset.lib
-    )
+    file(TO_NATIVE_PATH "${CURRENT_PACKAGES_DIR}" INST_DIR)
 
-    string(REPLACE "/" "\\\\" INST_DIR "${CURRENT_PACKAGES_DIR}")
-
-    if(ENABLE_RTTOPO)
-        list(APPEND pkg_config_modules rttopo)
-    endif()
     vcpkg_install_nmake(
         SOURCE_PATH "${SOURCE_PATH}"
         PREFER_JOM
@@ -94,30 +78,13 @@ if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
         OPTIONS_RELEASE
             "CL_FLAGS=${CL_FLAGS_RELEASE}"
             "INST_DIR=${INST_DIR}"
-            "LIBS_ALL=${LIBS_ALL_RELEASE}"
+            "LIBS_ALL=${PKGCONFIG_LIBS_RELEASE} iconv.lib charset.lib"
         OPTIONS_DEBUG
             "CL_FLAGS=${CL_FLAGS_DEBUG}"
             "INST_DIR=${INST_DIR}\\debug"
-            "LIBS_ALL=${LIBS_ALL_DEBUG}"
+            "LIBS_ALL=${PKGCONFIG_LIBS_DEBUG} iconv.lib charset.lib"
             "LINK_FLAGS=/debug"
     )
-
-    vcpkg_install_nmake(
-        SOURCE_PATH "${SOURCE_PATH}"
-        PROJECT_NAME makefile_mod.vc
-        PREFER_JOM
-        CL_LANGUAGE C
-        OPTIONS_RELEASE
-            "CL_FLAGS=${CL_FLAGS_RELEASE}"
-            "INST_DIR=${INST_DIR}"
-            "LIBS_ALL=${LIBS_ALL_RELEASE}"
-        OPTIONS_DEBUG
-            "CL_FLAGS=${CL_FLAGS_DEBUG}"
-            "INST_DIR=${INST_DIR}\\debug"
-            "LIBS_ALL=${LIBS_ALL_DEBUG}"
-            "LINK_FLAGS=/debug"
-    )
-
     vcpkg_copy_pdbs()
 
     file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
@@ -186,6 +153,8 @@ else()
     if(VCPKG_TARGET_IS_MINGW)
         # Avoid system libs (as detected by cmake) in exported pc files
         set(SYSTEM_LIBS "")
+    elseif(VCPKG_TARGET_IS_ANDROID)
+        set(SYSTEM_LIBS "\$LIBS -llog")
     else()
         set(SYSTEM_LIBS "\$LIBS")
     endif()
@@ -199,19 +168,18 @@ else()
     else()
         set(TARGET_ALIAS "")
     endif()
-    vcpkg_configure_make(
+    vcpkg_make_configure(
         SOURCE_PATH "${SOURCE_PATH}"
-        AUTOCONFIG
-        DETERMINE_BUILD_TRIPLET
+        AUTORECONF
         OPTIONS
             ${TARGET_ALIAS}
             ${FREEXL_OPTION}
             ${GCP_OPTION}
-            ${GEOCALLBACKS_OPTION}
             ${RTTOPO_OPTION}
             "--disable-examples"
             "--disable-minizip"
             "--disable-proj"
+            "cross_compiling=yes" # avoid conftest rpath trouble
         OPTIONS_DEBUG
             "LIBS=${PKGCONFIG_LIBS_DEBUG} ${SYSTEM_LIBS}"
         OPTIONS_RELEASE
@@ -225,10 +193,10 @@ else()
         "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/Makefile"
     )
     foreach(makefile IN LISTS makefiles)
-        vcpkg_replace_string("${makefile}" " -I$(top_builddir)/./src/headers/spatialite" " -I$(top_builddir)/./src/headers")
+        vcpkg_replace_string("${makefile}" " -I$(top_builddir)/./src/headers/spatialite" " -I$(top_builddir)/./src/headers" IGNORE_UNCHANGED)
     endforeach()
 
-    vcpkg_install_make()
+    vcpkg_make_install()
 
     if(VCPKG_TARGET_IS_MINGW AND VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
         if(NOT DEFINED VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
