@@ -203,6 +203,12 @@ def show(
     default="full",
     help="Choose the diff format",
 )
+@click.option(
+    "--crs",
+    "crs_str",
+    type=CoordinateReferenceString(encoding="utf-8", keep_as_string=True),
+    help="Reproject geometries into the given coordinate reference system. Accepts: 'EPSG:<code>'; proj text; OGC WKT; OGC URN; PROJJSON.)",
+)
 # NOTE: this is *required* for now.
 # A future version might create patches from working-copy changes.
 @click.argument(
@@ -215,6 +221,7 @@ def create_patch(
     refish,
     json_style,
     output_path,
+    crs_str,
     diff_format=DiffFormat.FULL,
     **kwargs,
 ):
@@ -222,6 +229,7 @@ def create_patch(
     Creates a JSON patch from the given ref.
     The patch can be applied with `kart apply`.
     """
+    from kart.crs_util import make_crs
     from .json_diff_writers import PatchWriter
 
     if ".." in refish:
@@ -231,6 +239,9 @@ def create_patch(
         )
     commit_spec = f"{refish}^?...{refish}"
 
+    # Parse the CRS string to a SpatialReference object if provided
+    target_crs = make_crs(crs_str) if crs_str else None
+
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     diff_writer = PatchWriter(
         repo,
@@ -238,6 +249,8 @@ def create_patch(
         [],
         output_path,
         json_style=json_style,
+        target_crs=target_crs,
+        target_crs_str=crs_str,
     )
     diff_writer.full_file_diffs(True)
     diff_writer.include_target_commit_as_header()

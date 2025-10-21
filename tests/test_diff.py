@@ -1903,6 +1903,36 @@ def test_create_patch(data_archive_readonly, cli_runner):
         }
 
 
+def test_create_patch_with_crs(data_archive_readonly, cli_runner):
+    """
+    Test that create-patch --crs includes the CRS in metadata and excludes '-' keys for updates.
+    """
+    with data_archive_readonly("points"):
+        r = cli_runner.invoke(["create-patch", "HEAD", "--crs=EPSG:3857"])
+        assert r.exit_code == 0, r.stderr
+
+        j = json.loads(r.stdout)
+
+        # Check CRS is in patch metadata
+        assert "kart.patch/v1" in j
+        assert j["kart.patch/v1"]["crs"] == "EPSG:3857"
+
+        # Check that features have been transformed
+        assert "kart.diff/v1+hexwkb" in j
+        dataset_diff = j["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]
+        assert "feature" in dataset_diff
+
+        # Check that updates only have '+' key, not '-' key (for reprojected patches)
+        for change in dataset_diff["feature"]:
+            if "+" in change:
+                # All changes should have a '+' key (inserts, updates, or deletes have '-')
+                if "-" in change:
+                    # Updates should NOT have both '+' and '-' when CRS is set
+                    pytest.fail(
+                        f"Update has both '+' and '-' keys when CRS is set: {change}"
+                    )
+
+
 def test_show_shallow_clone(data_archive_readonly, cli_runner, tmp_path, chdir):
     # just checking you can 'show' the first commit of a shallow clone
     with data_archive_readonly("points") as original_path:
