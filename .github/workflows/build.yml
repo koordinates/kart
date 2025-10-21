@@ -268,6 +268,11 @@ jobs:
         shell: bash
         run: |
           ctest --preset=ci-linux
+      # breakpoint on failure
+
+      - name: "Setup tmate session"
+        if: ${{ failure() }}
+        uses: craigds/action-tmate@master
 
       #
       # Packaging
