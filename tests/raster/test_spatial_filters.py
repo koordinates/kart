@@ -45,11 +45,11 @@ def test_spatial_filtered_checkout__pam_files(
         assert files == []
 
         # Only tiles matching the spatial filter are shown in commit<>commit diffs:
-        r = cli_runner.invoke(["show"])
+        r = cli_runner.invoke(["show", "HEAD^"])
         tile_lines = [l for l in r.stdout.splitlines() if "erorisk_si:tile" in l]
         assert tile_lines == []
 
-        r = cli_runner.invoke(["checkout", "--spatial-filter=none"])
+        r = cli_runner.invoke(["checkout", "--spatial-filter=none", "HEAD^"])
         assert r.exit_code == 0, r.stderr
 
         # Both tile and PAM are now checked out.

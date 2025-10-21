@@ -193,8 +193,8 @@ def test_add_stats_to_existing_pam(
         pam_path = repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml"
 
         orig_oid_and_size = (
-            "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
-            36908,
+            "80333729c4a2664261f352883fff548212add0b92dd19e966d1d7632d3c155c0",
+            37175,
         )
         assert get_oid_and_size_of_file(pam_path) == orig_oid_and_size
 

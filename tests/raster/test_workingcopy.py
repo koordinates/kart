@@ -172,10 +172,10 @@ def test_working_copy_edit_rat(
             "+ }",
             "--- erorisk_si:tile:erorisk_silcdb4",
             "+++ erorisk_si:tile:erorisk_silcdb4",
-            "-                                   pamOid = sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
-            "+                                   pamOid = sha256:1829b97c9fb5d8cc574a41b7af729da794ba0b4880182f820cdbf416f0a328f5",
-            "-                                  pamSize = 36908",
-            "+                                  pamSize = 36943",
+            "-                                   pamOid = sha256:80333729c4a2664261f352883fff548212add0b92dd19e966d1d7632d3c155c0",
+            "+                                   pamOid = sha256:6f6d9a9f27896cd840dd6843a9ecd10febcf0b8867c2235d562569865271897a",
+            "-                                  pamSize = 37175",
+            "+                                  pamSize = 37210",
         ]
         precommit_expected_diff = list(EXPECTED_DIFF)
         if pam_filename != "erorisk_silcdb4.tif.aux.xml":
@@ -196,16 +196,16 @@ def test_working_copy_edit_rat(
 
         pam_path = repo_path / "erorisk_si/erorisk_silcdb4.tif.aux.xml"
         assert get_oid_and_size_of_file(pam_path) == (
-            "1829b97c9fb5d8cc574a41b7af729da794ba0b4880182f820cdbf416f0a328f5",
-            36943,
+            "6f6d9a9f27896cd840dd6843a9ecd10febcf0b8867c2235d562569865271897a",
+            37210,
         )
 
         r = cli_runner.invoke(["reset", "HEAD^"])
         assert r.exit_code == 0
 
         assert get_oid_and_size_of_file(pam_path) == (
-            "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
-            36908,
+            "80333729c4a2664261f352883fff548212add0b92dd19e966d1d7632d3c155c0",
+            37175,
         )
 
 
@@ -254,41 +254,41 @@ def test_working_copy_add_or_remove_rat(
             '- <GDALRasterAttributeTable Row0Min="0" BinSize="1" tableType="thematic">',
             '-     <FieldDefn index="0">',
             "-         <Name>Histogram</Name>",
-            "-         <Type>1</Type>",
-            "-         <Usage>1</Usage>",
+            '-         <Type typeAsString="Real">1</Type>',
+            '-         <Usage usageAsString="PixelCount">1</Usage>',
             "-     </FieldDefn>",
             '-     <FieldDefn index="1">',
             "-         <Name>Class_Names</Name>",
-            "-         <Type>2</Type>",
-            "-         <Usage>2</Usage>",
+            '-         <Type typeAsString="String">2</Type>',
+            '-         <Usage usageAsString="Name">2</Usage>',
             "-     </FieldDefn>",
             '-     <FieldDefn index="2">',
             "-         <Name>Red</Name>",
-            "-         <Type>0</Type>",
-            "-         <Usage>6</Usage>",
+            '-         <Type typeAsString="Integer">0</Type>',
+            '-         <Usage usageAsString="Red">6</Usage>',
             "-     </FieldDefn>",
             '-     <FieldDefn index="3">',
             "-         <Name>Green</Name>",
-            "-         <Type>0</Type>",
-            "-         <Usage>7</Usage>",
+            '-         <Type typeAsString="Integer">0</Type>',
+            '-         <Usage usageAsString="Green">7</Usage>',
             "-     </FieldDefn>",
             '-     <FieldDefn index="4">',
             "-         <Name>Blue</Name>",
-            "-         <Type>0</Type>",
-            "-         <Usage>8</Usage>",
+            '-         <Type typeAsString="Integer">0</Type>',
+            '-         <Usage usageAsString="Blue">8</Usage>',
             "-     </FieldDefn>",
             '-     <FieldDefn index="5">',
             "-         <Name>Opacity</Name>",
-            "-         <Type>0</Type>",
-            "-         <Usage>9</Usage>",
+            '-         <Type typeAsString="Integer">0</Type>',
+            '-         <Usage usageAsString="Alpha">9</Usage>',
             "-     </FieldDefn>",
             "- </GDALRasterAttributeTable>",
             "- ",
             "--- erorisk_si:tile:erorisk_silcdb4",
             "+++ erorisk_si:tile:erorisk_silcdb4",
             "-                                  pamName = erorisk_silcdb4.tif.aux.xml",
-            "-                                   pamOid = sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
-            "-                                  pamSize = 36908",
+            "-                                   pamOid = sha256:80333729c4a2664261f352883fff548212add0b92dd19e966d1d7632d3c155c0",
+            "-                                  pamSize = 37175",
         ]
         assert r.stdout.splitlines() == EXPECTED_DIFF
 
@@ -336,41 +336,41 @@ def test_working_copy_add_or_remove_rat(
             '+ <GDALRasterAttributeTable Row0Min="0" BinSize="1" tableType="thematic">',
             '+     <FieldDefn index="0">',
             "+         <Name>Histogram</Name>",
-            "+         <Type>1</Type>",
-            "+         <Usage>1</Usage>",
+            '+         <Type typeAsString="Real">1</Type>',
+            '+         <Usage usageAsString="PixelCount">1</Usage>',
             "+     </FieldDefn>",
             '+     <FieldDefn index="1">',
             "+         <Name>Class_Names</Name>",
-            "+         <Type>2</Type>",
-            "+         <Usage>2</Usage>",
+            '+         <Type typeAsString="String">2</Type>',
+            '+         <Usage usageAsString="Name">2</Usage>',
             "+     </FieldDefn>",
             '+     <FieldDefn index="2">',
             "+         <Name>Red</Name>",
-            "+         <Type>0</Type>",
-            "+         <Usage>6</Usage>",
+            '+         <Type typeAsString="Integer">0</Type>',
+            '+         <Usage usageAsString="Red">6</Usage>',
             "+     </FieldDefn>",
             '+     <FieldDefn index="3">',
             "+         <Name>Green</Name>",
-            "+         <Type>0</Type>",
-            "+         <Usage>7</Usage>",
+            '+         <Type typeAsString="Integer">0</Type>',
+            '+         <Usage usageAsString="Green">7</Usage>',
             "+     </FieldDefn>",
             '+     <FieldDefn index="4">',
             "+         <Name>Blue</Name>",
-            "+         <Type>0</Type>",
-            "+         <Usage>8</Usage>",
+            '+         <Type typeAsString="Integer">0</Type>',
+            '+         <Usage usageAsString="Blue">8</Usage>',
             "+     </FieldDefn>",
             '+     <FieldDefn index="5">',
             "+         <Name>Opacity</Name>",
-            "+         <Type>0</Type>",
-            "+         <Usage>9</Usage>",
+            '+         <Type typeAsString="Integer">0</Type>',
+            '+         <Usage usageAsString="Alpha">9</Usage>',
             "+     </FieldDefn>",
             "+ </GDALRasterAttributeTable>",
             "+ ",
             "--- erorisk_si:tile:erorisk_silcdb4",
             "+++ erorisk_si:tile:erorisk_silcdb4",
             "+                                  pamName = erorisk_silcdb4.tif.aux.xml",
-            "+                                   pamOid = sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
-            "+                                  pamSize = 36908",
+            "+                                   pamOid = sha256:80333729c4a2664261f352883fff548212add0b92dd19e966d1d7632d3c155c0",
+            "+                                  pamSize = 37175",
         ]
         assert r.stdout.splitlines() == EXPECTED_DIFF
 
@@ -386,8 +386,8 @@ def test_working_copy_add_or_remove_rat(
 
         pam_path = repo_path / "erorisk_si/erorisk_silcdb4.tif.aux.xml"
         assert get_oid_and_size_of_file(pam_path) == (
-            "d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
-            36908,
+            "80333729c4a2664261f352883fff548212add0b92dd19e966d1d7632d3c155c0",
+            37175,
         )
 
 
@@ -418,8 +418,8 @@ def test_working_copy_add_similar_rat(
             "+                                      oid = sha256:c4bbea4d7cfd54f4cdbca887a1b358a81710e820a6aed97cdf3337fd3e14f5aa",
             "+                                     size = 604652",
             "+                                  pamName = erorisk_silcdb5.tif.aux.xml",
-            "+                                   pamOid = sha256:d8f514e654a81bdcd7428886a15e300c56b5a5ff92898315d16757562d2968ca",
-            "+                                  pamSize = 36908",
+            "+                                   pamOid = sha256:80333729c4a2664261f352883fff548212add0b92dd19e966d1d7632d3c155c0",
+            "+                                  pamSize = 37175",
         ]
         assert r.stdout.splitlines() == EXPECTED_TILE_DIFF
 
