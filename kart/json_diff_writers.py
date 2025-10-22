@@ -147,12 +147,19 @@ class PatchWriter(JsonDiffWriter):
     PatchWriter is the same as JsonDiffWriter except for how the commit object is serialised -
     - it only has information that will be kept when the patch is reapplied (ie, authorName, but not committerName).
     - it is at the key "kart.patch/v1" instead of "kart.show/v1"
+
+    PatchWriter always uses the "advanced" delta format with unambiguous keys:
+    - "++" for inserts
+    - "--" for deletes
+    - "+" and "-" for updates
     """
 
     # Avoid any ambiguity in file-patches.
     TEXT_PREFIX = "text:"
 
     def __init__(self, *args, target_crs_str=None, **kwargs):
+        # Don't set delta_filter in __init__ - we'll handle it per-context
+        # (features use advanced format, metadata uses simple format)
         super().__init__(*args, **kwargs)
         self.target_crs_str = target_crs_str
         self.nonmatching_item_counts = {p: 0 for p in self.all_ds_paths}
@@ -184,11 +191,15 @@ class PatchWriter(JsonDiffWriter):
 
     def delta_as_json(self, delta, old_transform, new_transform):
         """
-        Override to exclude '-' keys for updates when target_crs is set.
+        Override to use advanced format (++/--/-/+) for features and to exclude '-' keys
+        for updates when target_crs is set.
         Per the docs, reprojected patches must not include both '-' and '+' for updates.
         """
+        from .key_filters import DeltaFilter
+
         result = {}
-        plus_minus_dict = delta.to_plus_minus_dict(self.delta_filter)
+        # Always use advanced format for features (++/-- for insert/delete, -/+ for update)
+        plus_minus_dict = delta.to_plus_minus_dict(DeltaFilter.MATCH_ALL)
 
         # If target_crs is set and this is an update (has both old and new), exclude the '-' key
         if (
@@ -205,7 +216,7 @@ class PatchWriter(JsonDiffWriter):
                 else None
             )
         else:
-            # Normal behavior for inserts, deletes, or updates without CRS transformation
+            # Normal behavior: inserts (++), deletes (--), or updates (+/-)
             for json_key, feature in plus_minus_dict.items():
                 pk_value = delta.old_key if "-" in json_key else delta.new_key
                 transform = old_transform if "-" in json_key else new_transform

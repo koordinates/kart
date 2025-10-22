@@ -60,14 +60,14 @@ The ``kart.diff/v1+hexwkb`` section contains the actual changes:
           },
           "feature": [
             {
-              "+": {
+              "++": {
                 "fid": 1,
                 "name": "New Feature",
                 "geom": "0101000000..."
               }
             },
             {
-              "-": {
+              "--": {
                 "fid": 2
               }
             },
@@ -93,15 +93,19 @@ Feature Changes
 
 Features are specified in the ``feature`` array. Each element represents a change:
 
+- ``++`` for inserts (new features)
+- ``--`` for deletes (removed features)
+- ``-`` and ``+`` for updates (modified features)
+
 Insert a new feature
 ^^^^^^^^^^^^^^^^^^^^
 
-To insert a new feature, use the ``+`` key with all required fields:
+To insert a new feature, use the ``++`` key with all required fields:
 
 .. code-block:: json
 
     {
-      "+": {
+      "++": {
         "fid": 123,
         "name": "New Feature",
         "geom": "0101000000...",
@@ -112,12 +116,12 @@ To insert a new feature, use the ``+`` key with all required fields:
 Delete a feature
 ^^^^^^^^^^^^^^^^
 
-To delete a feature, use the ``-`` key with at minimum the primary key field:
+To delete a feature, use the ``--`` key with at minimum the primary key field:
 
 .. code-block:: json
 
     {
-      "-": {
+      "--": {
         "fid": 123
       }
     }
@@ -145,7 +149,7 @@ To update a feature, include both ``-`` (old values) and ``+`` (new values):
 Partial Feature Updates
 ------------------------
 
-When a patch includes a ``base`` commit hash, feature updates can be **partial** - they don't need to include all fields. Missing fields are automatically resolved from the base commit.
+When a patch includes a ``base`` commit hash, feature updates can be **partial** - they don't need to include all fields in the ``-`` and ``+`` values. Missing fields are automatically resolved from the base commit.
 
 This is useful for:
 
@@ -167,6 +171,10 @@ Example of a partial update:
         "my-dataset": {
           "feature": [
             {
+              "-": {
+                "fid": 123,
+                "name": "Old Name"
+              },
               "+": {
                 "fid": 123,
                 "name": "Updated Name"
@@ -177,7 +185,9 @@ Example of a partial update:
       }
     }
 
-In this example, only the ``name`` field is specified. The ``geom`` and other fields will be preserved from the feature with ``fid=123`` in the base commit.
+In this example, only the ``fid`` and ``name`` fields are specified in the ``-`` and ``+`` values. The ``geom`` and other fields will be preserved from the feature with ``fid=123`` in the base commit.
+
+**Note:** For convenience, when a ``base`` commit is present, you may omit the ``-`` key entirely for updates (specifying only ``+``), and the old values will be resolved from the base commit. However, including both ``-`` and ``+`` is preferred as it makes the patch self-documenting and easier to review.
 
 **Important limitations:**
 
@@ -241,7 +251,6 @@ The patch will include a ``crs`` field in the metadata:
       "kart.patch/v1": {
         "base": "abc123...",
         "crs": "EPSG:4326",
-        "message": "Update features in WGS84",
         ...
       },
       "kart.diff/v1+hexwkb": {
@@ -266,7 +275,7 @@ When applying a patch with a ``crs`` field, Kart automatically transforms geomet
   - Updates with both old and new values would require comparing the ``-`` geometry with the dataset geometry for conflict detection, but CRS transformations are not reliably reversible
   - Instead, use only the ``+`` key to replace/update an existing feature's geometry
 
-- **Inserts and deletes work normally** using ``+`` or ``-`` keys
+- **Inserts and deletes work normally** using ``++`` or ``--`` keys
 - **Partial updates work** - specify only ``+`` with the fields you want to change
 
 Example of a valid reprojected update:
