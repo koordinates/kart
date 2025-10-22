@@ -6,7 +6,9 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## Unreleased
 
-- Patch format (apply/create-patch): Partial feature updates are now supported. [#1065](https://github.com/koordinates/kart/pull/1065)
+- Patches (apply/create-patch) now supports:
+    - Partial feature updates (updated features don't need to include unchanged fields) [#1065](https://github.com/koordinates/kart/pull/1065)
+    - Reprojected patches (patch CRS is specified via `crs` in the patch metadata) [#1066](https://github.com/koordinates/kart/pull/1066)
 - merge: `--message`/`-m` option no longer implies `--no-ff`. The message will now be used if the command can't do a fast-forward. [#1051](https://github.com/koordinates/kart/issues/1051)
 - diff: Fixed garbled json-lines output sometimes when using `--add-feature-count-estimate` [#1040](https://github.com/koordinates/kart/issues/1040)
 - diff/show: Faster output for some large repositories (varies wildly) [#1038](https://github.com/koordinates/kart/issues/1038)

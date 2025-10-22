@@ -152,8 +152,9 @@ class PatchWriter(JsonDiffWriter):
     # Avoid any ambiguity in file-patches.
     TEXT_PREFIX = "text:"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, target_crs_str=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.target_crs_str = target_crs_str
         self.nonmatching_item_counts = {p: 0 for p in self.all_ds_paths}
 
     def add_json_header(self, obj):
@@ -177,6 +178,41 @@ class PatchWriter(JsonDiffWriter):
             }
             if not original_parent:
                 del obj["kart.patch/v1"]["base"]
+
+            if self.target_crs_str is not None:
+                obj["kart.patch/v1"]["crs"] = self.target_crs_str
+
+    def delta_as_json(self, delta, old_transform, new_transform):
+        """
+        Override to exclude '-' keys for updates when target_crs is set.
+        Per the docs, reprojected patches must not include both '-' and '+' for updates.
+        """
+        result = {}
+        plus_minus_dict = delta.to_plus_minus_dict(self.delta_filter)
+
+        # If target_crs is set and this is an update (has both old and new), exclude the '-' key
+        if (
+            self.target_crs is not None
+            and "-" in plus_minus_dict
+            and "+" in plus_minus_dict
+        ):
+            # This is an update with CRS transformation - only include the '+' key
+            pk_value = delta.new_key
+            transform = new_transform
+            result["+"] = (
+                feature_as_json(plus_minus_dict["+"], pk_value, transform)
+                if plus_minus_dict["+"]
+                else None
+            )
+        else:
+            # Normal behavior for inserts, deletes, or updates without CRS transformation
+            for json_key, feature in plus_minus_dict.items():
+                pk_value = delta.old_key if "-" in json_key else delta.new_key
+                transform = old_transform if "-" in json_key else new_transform
+                result[json_key] = (
+                    feature_as_json(feature, pk_value, transform) if feature else None
+                )
+        return result
 
     def record_spatial_filter_stat(
         self, ds_path, item_type, key, delta, old_match_result, new_match_result
