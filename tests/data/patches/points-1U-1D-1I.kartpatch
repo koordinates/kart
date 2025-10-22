@@ -3,7 +3,7 @@
     "nz_pa_points_topo_150k": {
       "feature": [
         {
-          "+": {
+          "++": {
             "fid": 9999,
             "geom": "01010000005788C5255BEA6540CB85AC5AC54242C0",
             "macronated": null,
@@ -13,7 +13,7 @@
           }
         },
         {
-          "-": {
+          "--": {
             "fid": 1241,
             "geom": "0101000000492A45C30AEB6540551507C3663C42C0",
             "macronated": "N",

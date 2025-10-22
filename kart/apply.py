@@ -146,7 +146,13 @@ class NullSchemaParser:
 
 
 class FeatureDeltaParser:
-    """Parses JSON for a delta - ie {"-": old-value, "+": new-value} - into a Delta object."""
+    """
+    Parses JSON for a delta into a Delta object.
+
+    Supports both legacy and current patch formats:
+    - Legacy: {"-": old, "+": new} for all operations
+    - Current: {"--": old} for deletes, {"++": new} for inserts, {"-": old, "+": new} for updates
+    """
 
     def __init__(self, old_schema, new_schema, transform=None):
         # Only new values are transformed from patch CRS to dataset CRS
@@ -167,10 +173,26 @@ class FeatureDeltaParser:
                 "Sorry, minimal patches with * values are no longer supported."
             )
 
+        # Check for current format keys (unambiguous)
+        has_insert = "++" in change
+        has_delete = "--" in change
+
+        # Check for legacy/update format keys
         has_old = "-" in change
         has_new = "+" in change
 
-        if has_old and has_new:
+        if has_insert and has_delete:
+            raise InvalidOperation(
+                "Patch feature change cannot have both '++' and '--' keys"
+            )
+
+        if has_insert:
+            # Insert: only has ++
+            return Delta.insert(self.new_parser.parse(change["++"]))
+        elif has_delete:
+            # Delete: only has --
+            return Delta.delete(self.old_parser.parse(change["--"]))
+        elif has_old and has_new:
             # Update: has both - and +
             if self.transform:
                 # Supporting updates with CRS transformation would be problematic, because we would
@@ -194,13 +216,15 @@ class FeatureDeltaParser:
                 self.new_parser.parse(change["+"]),
             )
         elif has_new:
-            # Insert: only has +
+            # Legacy insert format OR partial update: only has +
             return Delta.insert(self.new_parser.parse(change["+"]))
         elif has_old:
-            # Delete: only has -
+            # Legacy delete format: only has -
             return Delta.delete(self.old_parser.parse(change["-"]))
         else:
-            raise InvalidOperation("Patch feature change must have '+' and/or '-' keys")
+            raise InvalidOperation(
+                "Patch feature change must have delta keys ('+', '-', '++', or '--')"
+            )
 
 
 def _build_signature(patch_metadata, person, repo):

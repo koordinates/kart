@@ -6,7 +6,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## Unreleased
 
-- Patches (apply/create-patch) now supports:
+- Patches (apply/create-patch):
+    - **Breaking change**: Patch format now uses unambiguous keys for feature changes - `++` for inserts, `--` for deletes, and `+`/`-` for updates. This matches the delta-filter format used in diffs.
     - Partial feature updates (updated features don't need to include unchanged fields) [#1065](https://github.com/koordinates/kart/pull/1065)
     - Reprojected patches (patch CRS is specified via `crs` in the patch metadata) [#1066](https://github.com/koordinates/kart/pull/1066)
 - merge: `--message`/`-m` option no longer implies `--no-ff`. The message will now be used if the command can't do a fast-forward. [#1051](https://github.com/koordinates/kart/issues/1051)
