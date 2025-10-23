@@ -535,14 +535,14 @@ jobs:
           - label: arm64
             runner: buildjet-2vcpu-ubuntu-2204-arm
         os:
-          - label: "tgz-ubuntu-22.04"
-            image: "public.ecr.aws/ubuntu/ubuntu:jammy"
+          - label: "tgz-ubuntu-24.04"
+            image: "public.ecr.aws/ubuntu/ubuntu:noble"
             type: "tgz"
+          - label: "ubuntu-24.04"
+            image: "public.ecr.aws/ubuntu/ubuntu:noble"
+            type: "deb"
           - label: "ubuntu-22.04"
             image: "public.ecr.aws/ubuntu/ubuntu:jammy"
-            type: "deb"
-          - label: "ubuntu-20.04"
-            image: "public.ecr.aws/ubuntu/ubuntu:focal"
             type: "deb"
           - label: "debian-stable"
             image: "public.ecr.aws/docker/library/debian:stable-slim"
@@ -559,8 +559,8 @@ jobs:
           - label: "almalinux-9"
             image: "public.ecr.aws/docker/library/almalinux:9"
             type: "rpm"
-          - label: "almalinux-8"
-            image: "public.ecr.aws/docker/library/almalinux:8"
+          - label: "almalinux-10"
+            image: "public.ecr.aws/docker/library/almalinux:10"
             type: "rpm"
 
     runs-on: ${{ matrix.arch.runner }}
