@@ -310,7 +310,7 @@ jobs:
 
     env:
       KART_POSTGIS_URL: "postgresql://postgres:@postgis:5432/postgres"
-      SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
+      KART_SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
       KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
       ARCH: "${{ matrix.os.arch }}"
       ARCH_TRIPLET: "${{ matrix.os.arch_triplet }}"
