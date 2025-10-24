@@ -21,10 +21,12 @@ class Db_SqlServer(BaseDb):
     preparer = MSIdentifierPreparer(MSDialect())
 
     @classmethod
-    def create_engine(cls, msurl):
-        url = urlsplit(msurl)
+    def create_engine(cls, spec):
+        url = urlsplit(spec)
         if url.scheme != cls.CANONICAL_SCHEME:
-            raise ValueError("Expecting mssql://")
+            raise ValueError(
+                f"Expecting '{cls.CANONICAL_SCHEME}://' - got {url.scheme!r}"
+            )
 
         url_query = cls._append_to_query(
             url.query,
