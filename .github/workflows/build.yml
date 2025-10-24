@@ -186,18 +186,34 @@ jobs:
           echo "PATH=$PATH"
           echo "=========================="
 
+      - name: "setup: restore vcpkg cache"
+        uses: actions/cache/restore@v4
+        with:
+          path: vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
+          restore-keys: |
+            vcpkg-${{ matrix.os.arch_triplet }}-
+
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          doNotCache: false  # do-cache
+          doNotCache: true
 
       - name: "setup: pkgconf"
         working-directory: /__w/_temp
         shell: bash
         run: |
           ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf
+
+      - name: "setup: save vcpkg cache"
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       #
       # App Build
@@ -221,7 +237,7 @@ jobs:
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         env:
           LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
         with:
@@ -496,7 +512,7 @@ jobs:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       - name: "setup: ccache"
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-ubuntu-22.04-cmake-vcpkg
@@ -658,7 +674,7 @@ jobs:
 
       - name: "setup: homebrew cache"
         id: cache-brew
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .cache/brew
           key: brew-cmake-${{ matrix.os.id }}-vcpkg
@@ -669,7 +685,7 @@ jobs:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
 
       - name: "setup: ccache"
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
@@ -684,12 +700,22 @@ jobs:
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
+      - name: "setup: restore vcpkg cache"
+        uses: actions/cache/restore@v4
+        with:
+          path: vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
+          restore-keys: |
+            vcpkg-${{ matrix.os.arch_triplet }}-
+
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          doNotCache: false  # do-cache
+          doNotCache: true
 
       #
       # App Build
@@ -730,15 +756,21 @@ jobs:
           fi
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-macos
 
       - name: "app: build"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-macos
           buildPreset: ci-macos
+
+      - name: "setup: save vcpkg cache"
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v4
@@ -764,7 +796,7 @@ jobs:
           sudo mv clone_checker /usr/local/bin/
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-macos
           testPreset: ci-macos
@@ -797,7 +829,7 @@ jobs:
               --keychain "$MACOS_NOTARIZE_KEYCHAIN"
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-macos
           buildPreset: ci-bundle-macos
@@ -808,7 +840,7 @@ jobs:
           ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-macos
           testPreset: ci-e2e-macos
@@ -930,12 +962,22 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'requirements/*.txt'
 
+      - name: "setup: restore vcpkg cache"
+        uses: actions/cache/restore@v4
+        with:
+          path: vcpkg_cache
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*') }}
+          restore-keys: |
+            vcpkg-x64-windows-
+
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
-          doNotCache: false  # do-cache
+          doNotCache: true
 
       - name: "setup: misc"
         shell: pwsh
@@ -973,15 +1015,21 @@ jobs:
           fi
 
       - name: "app: configuration & vendor dependencies"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-windows
 
       - name: "app: build"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-windows
           buildPreset: ci-windows
+
+      - name: "setup: save vcpkg cache"
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg_cache
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*') }}
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v4
@@ -1000,7 +1048,7 @@ jobs:
           ./build/kart.cmd --version
 
       - name: "test: unit tests"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-windows
           testPreset: ci-windows
@@ -1010,7 +1058,7 @@ jobs:
       #
 
       - name: "bundle: assemble"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         env:
           SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
           SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
@@ -1026,7 +1074,7 @@ jobs:
           ./build/pyinstaller/dist/kart/kart.exe --version
 
       - name: "bundle: e2e tests"
-        uses: lukka/run-cmake@v10.6
+        uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-windows
           testPreset: ci-e2e-windows
