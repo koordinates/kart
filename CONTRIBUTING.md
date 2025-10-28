@@ -38,11 +38,11 @@ $ git submodule update --init --recursive
 
 ### Setting Python3
 
-Python 3.11 is now used (as of Kart v0.15) to build official Kart releases.
+Python 3.12 is now used (as of Kart v0.15) to build official Kart releases.
 CMake will try to automatically find a Python3 install on your system with which to build Kart.
 However, to avoid any issues caused by different Python implementations, it is recommended to force CMake
-to use Python 3.11 , by supplying the flag `-DPython3_EXECUTABLE` - for example:
-`-DPython3_EXECUTABLE=$(command -v python3.11)`
+to use Python 3.12 , by supplying the flag `-DPython3_EXECUTABLE` - for example:
+`-DPython3_EXECUTABLE=$(command -v python3.12)`
 
 When using CI artifacts to build this is not just recommended, but required.
 
@@ -50,7 +50,7 @@ When using CI artifacts to build this is not just recommended, but required.
 
 Then configure Kart:
 ```console
-$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python3.11 -DUSE_VCPKG=ON
+$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python3.12 -DUSE_VCPKG=ON
 ```
 
 Configuration builds all the dependencies using [VCPKG](https://github.com/microsoft/vcpkg)
@@ -78,7 +78,7 @@ Kart with `-DCLI_HELPER=ON`.
 
 ### Downloading vendor dependencies from CI
 
-If you're having issues with VCPKG in the above, you can download a recent master-branch vendor CI artifact for your platform (eg: `vendor-macos-X64-py3.11.zip`).
+If you're having issues with VCPKG in the above, you can download a recent master-branch vendor CI artifact for your platform (eg: `vendor-macos-X64-py3.12.zip`).
 To do this, take the following steps:
 1. Start at the list of recent [successful builds on master](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess).
 1. Select a commit - ideally the commit that you have checked out locally, but if you don't see it, just choosing the top one will generally work.
@@ -89,12 +89,12 @@ To do this, take the following steps:
 Then:
 
 ```console
-$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python3.11 -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-{os}-{arch}-py3.11.zip -DUSE_VCPKG=OFF
+$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python3.12 -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-{os}-{arch}-py3.12.zip -DUSE_VCPKG=OFF
 $ cmake --build build
 $ build/kart --version
 ```
 
-Note you'll need to have the same version of Python that Kart CI currently uses (Python 3.11).
+Note you'll need to have the same version of Python that Kart CI currently uses (Python 3.12).
 
 ### Running the tests
 
@@ -120,11 +120,11 @@ Clone Kart from Github:
 
 ### Setting Python3
 
-Python 3.11 is now used (as of Kart v0.15) to build official Kart releases.
+Python 3.12 is now used to build official Kart releases.
 CMake will try to automatically find a Python3 install on your system with which to build Kart.
 However, to avoid any issues caused by different Python implementations, it is recommended to force CMake
-to use Python 3.11, by supplying the flag `-DPython3_EXECUTABLE` - for example:
-`-DPython3_EXECUTABLE="C:\Program Files\Python311\python.exe"`
+to use Python 3.12, by supplying the flag `-DPython3_EXECUTABLE` - for example:
+`-DPython3_EXECUTABLE="C:\Program Files\Python312\python.exe"`
 
 When using CI artifacts to build this is not just recommended, but required.
 
@@ -153,7 +153,7 @@ $ build\pyinstaller\dist\kart\kart.exe --version
 
 ### Downloading vendor dependencies from CI
 
-If you're having issues with VCPKG in the above, you can download a recent master-branch vendor CI artifact for your platform (eg: `vendor-windows-X64-py3.11.zip`).
+If you're having issues with VCPKG in the above, you can download a recent master-branch vendor CI artifact for your platform (eg: `vendor-windows-X64-py3.12.zip`).
 To do this, take the following steps:
 1. Start at the list of recent [successful builds on master](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess).
 1. Select a commit - ideally the commit that you have checked out locally, but if you don't see it, just choosing the top one will generally work.
@@ -164,12 +164,12 @@ To do this, take the following steps:
 Then:
 
 ```console
-> cmake -B build -S . -DPython3_EXECUTABLE=C:\path\to\python310.exe -DVENDOR_ARCHIVE=D:\path\to\downloaded\vendor-windows-X64-py3.11.zip -DUSE_VCPKG=OFF
+> cmake -B build -S . -DPython3_EXECUTABLE=C:\path\to\python310.exe -DVENDOR_ARCHIVE=D:\path\to\downloaded\vendor-windows-X64-py3.12.zip -DUSE_VCPKG=OFF
 > cmake --build build
 > .\build\venv\Scripts\kart.exe --version
 ```
 
-Note you'll need to have the same version of Python that Kart CI currently uses (Python 3.11).
+Note you'll need to have the same version of Python that Kart CI currently uses (Python 3.12).
 
 ### Running the tests
 
