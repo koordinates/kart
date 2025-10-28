@@ -90,8 +90,8 @@ def helper(ctx, socket_filename, timeout, args):
 
     sock.listen()
 
-    # ignore SIGCHLD so zombies don't remain when the child is complete
-    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    # Don't use SIG_IGN - it prevents us from reaping grandchildren properly.
+    # Instead, we'll explicitly reap children in the accept loop below.
 
     # import modules that are deferred loaded in normal kart execution
     from .tabular.working_copy.gpkg import WorkingCopy_GPKG
@@ -114,7 +114,18 @@ def helper(ctx, socket_filename, timeout, args):
             client, info = sock.accept()
             _helper_log("pre-fork messaged received")
             if os.fork() != 0:
-                # parent
+                # parent - reap any exited children to prevent zombies
+                # Use WNOHANG so we don't block if no children have exited
+                while True:
+                    try:
+                        pid, status = os.waitpid(-1, os.WNOHANG)
+                        if pid == 0:
+                            # No more children to reap
+                            break
+                        _helper_log(f"reaped child: pid={pid}, status={status}")
+                    except ChildProcessError:
+                        # No child processes
+                        break
                 continue
             else:
                 # child

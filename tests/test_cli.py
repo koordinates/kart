@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 import signal
+import subprocess
 import sys
 from time import sleep
 
@@ -137,11 +138,7 @@ def main(ctx, args):
 """
 
 
-@pytest.mark.skipif(is_windows, reason="No SIGINT on windows")
-@pytest.mark.parametrize("use_helper", [False, True])
-def test_sigint_handling_unix(use_helper, tmp_path):
-    import subprocess
-
+def find_kart_exe(use_helper: bool) -> Path:
     kart_bin_dir = Path(sys.executable).parent
     kart_exe = kart_bin_dir / "kart"
     kart_cli_exe = kart_bin_dir / "kart_cli"
@@ -154,6 +151,13 @@ def test_sigint_handling_unix(use_helper, tmp_path):
 
     kart_to_use = kart_with_helper_mode if use_helper else kart_without_helper
     assert kart_to_use.is_file(), "Couldn't find kart"
+    return kart_to_use
+
+
+@pytest.mark.skipif(is_windows, reason="No SIGINT on windows")
+@pytest.mark.parametrize("use_helper", [False, True])
+def test_sigint_handling_unix(use_helper, tmp_path):
+    import subprocess
 
     # working example
     test_sigint_py_path = tmp_path / "test_sigint.py"
@@ -165,6 +169,8 @@ def test_sigint_handling_unix(use_helper, tmp_path):
     env = os.environ.copy()
     env.pop("_KART_PGID_SET", None)
     env.pop("NO_CONFIGURE_PROCESS_CLEANUP", None)
+
+    kart_to_use = find_kart_exe(use_helper)
 
     p = subprocess.Popen(
         [
@@ -202,3 +208,80 @@ def test_sigint_handling_unix(use_helper, tmp_path):
     sleep(1)
     output_size_4 = subprocess_output_path.stat().st_size
     assert output_size_3 == output_size_4
+
+
+def list_zombie_children(pid: int) -> list[str]:
+    # Check for zombie children using ps
+    ps_output = subprocess.run(
+        [
+            "ps",
+            "-o",
+            "pid,ppid,stat,command",
+            "-p",
+            str(pid),
+            "-g",
+            str(pid),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return [
+        line
+        for line in ps_output.stdout.splitlines()
+        if len(line.split()) >= 3 and "Z" in line.split()[2]
+    ]
+
+
+@pytest.mark.skipif(is_windows, reason="No helper on windows")
+@pytest.mark.parametrize("use_helper", [True])
+def test_helper_no_zombie_processes(use_helper, tmp_path, data_archive):
+    """
+    Test that kart helper doesn't accumulate zombie processes.
+
+    When the helper forks children that spawn subprocesses, those grandchildren
+    can become zombies if they outlive their parent. This test verifies the
+    helper properly reaps all child processes.
+    """
+    import subprocess
+
+    with data_archive("points") as repo_path:
+        # Start helper in background
+
+        kart_helper = find_kart_exe(use_helper=False)
+        socket_path = tmp_path / "helper.socket"
+        helper = subprocess.Popen(
+            [str(kart_helper), "helper", "--socket", str(socket_path)],
+            env={**os.environ, "KART_USE_HELPER": "1"},
+        )
+
+        try:
+            # Wait for helper to start
+            sleep(0.5)
+            zombie_children = list_zombie_children(helper.pid)
+            assert len(zombie_children) == 0, (
+                f"Found {len(zombie_children)} zombie processes:\n"
+                + "\n".join(zombie_children)
+            )
+
+            # Run multiple commands through the helper
+            # These will spawn git subprocesses
+            for _ in range(5):
+                subprocess.run(
+                    [str(kart_helper), "diff", "HEAD~1..HEAD"],
+                    cwd=repo_path,
+                    env={**os.environ, "KART_USE_HELPER": "1"},
+                    capture_output=True,
+                )
+
+            # Give processes time to complete
+            sleep(1)
+
+            zombie_children = list_zombie_children(helper.pid)
+            assert len(zombie_children) == 0, (
+                f"Found {len(zombie_children)} zombie processes:\n"
+                + "\n".join(zombie_children)
+            )
+
+        finally:
+            helper.terminate()
+            helper.wait(timeout=5)
