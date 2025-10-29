@@ -151,7 +151,7 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
         if os.name == "posix":
             if os.geteuid() == 0:
                 # running as root (container) - disable git ownership checks
-                f.write("[safe]\n" "\tdirectory = *\n")
+                f.write("[safe]\n\tdirectory = *\n")
 
     L.debug("Temporary HOME for git config: %s", home)
 
@@ -1074,7 +1074,7 @@ def sqlserver_db():
         docker run -it --rm -d -p 11433:1433 -e ACCEPT_EULA=Y -e 'SA_PASSWORD=PassWord1' mcr.microsoft.com/mssql/server
         KART_SQLSERVER_URL='mssql://sa:PassWord1@127.0.0.1:11433/master' pytest -k sqlserver --pdb -vvs
     """
-    if "KART_SQLSERVER_URL" not in os.environ:
+    if not os.environ.get("KART_SQLSERVER_URL"):
         raise pytest.skip(
             "SQL Server tests require configuration - read docstring at conftest.sqlserver_db"
         )
