@@ -614,12 +614,10 @@ jobs:
       fail-fast: false
       matrix:
         os:
+          # TODO: switch to a cheaper third-party runner
           - id: macos-14
-            label: "14/x86_64"
-            arch_triplet: x64-osx
-          # - id: "ghcr.io/cirruslabs/macos-ventura-xcode:14.3.1"
-          #   label: "13/arm64"
-          #   arch_triplet: arm64-osx
+            label: "14/arm64"
+            arch_triplet: arm64-osx
     runs-on: ${{ matrix.os.id }}
     name: macOS ${{ matrix.os.label }}
 
