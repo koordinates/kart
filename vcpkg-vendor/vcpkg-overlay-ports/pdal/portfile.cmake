@@ -1,4 +1,3 @@
-# cmake-lint: disable=E1126
 vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
 
 vcpkg_from_github(
