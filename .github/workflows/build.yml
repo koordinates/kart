@@ -804,7 +804,7 @@ jobs:
 
       - name: "bundle: setup app signing certificate"
         id: keychain
-        uses: apple-actions/import-codesign-certs@v1
+        uses: apple-actions/import-codesign-certs@v5
         if: env.MACOS_SIGN_BUNDLE == 'ON'
         with:
           # This action auto generates the keychain password (only works if the keychain name is "signing_temp").
