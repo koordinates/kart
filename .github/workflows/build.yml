@@ -631,7 +631,7 @@ jobs:
       MACOS_PKGSIGN_ID: ${{ secrets.MACOS_PKGSIGN_ID }}
       MACOS_NOTARIZE_KEYCHAIN_PROFILE: "NOTARIZE_AUTH"
       MACOS_NOTARIZE_KEYCHAIN_FILENAME: "signing_temp"
-      MACOS_NOTARIZE_KEYCHAIN: "~/Library/Keychains/signing_temp.keychain-db"
+      MACOS_NOTARIZE_KEYCHAIN: "/Users/runner/Library/Keychains/signing_temp.keychain-db"
       # X.Y version needs to match PY_VER:
       PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg"
 
