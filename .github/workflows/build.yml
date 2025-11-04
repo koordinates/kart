@@ -189,7 +189,7 @@ jobs:
       - name: "setup: restore vcpkg cache"
         uses: actions/cache/restore@v4
         with:
-          path: vcpkg_cache
+          path: ${{ github.workspace }}/vcpkg_cache
           key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
           restore-keys: |
             vcpkg-${{ matrix.os.arch_triplet }}-
@@ -212,7 +212,7 @@ jobs:
       - name: "setup: save vcpkg cache"
         uses: actions/cache/save@v4
         with:
-          path: vcpkg_cache
+          path: ${{ github.workspace }}/vcpkg_cache
           key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       #
@@ -700,7 +700,7 @@ jobs:
       - name: "setup: restore vcpkg cache"
         uses: actions/cache/restore@v4
         with:
-          path: vcpkg_cache
+          path: ${{ github.workspace }}/vcpkg_cache
           key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
           restore-keys: |
             vcpkg-${{ matrix.os.arch_triplet }}-
@@ -766,7 +766,7 @@ jobs:
       - name: "setup: save vcpkg cache"
         uses: actions/cache/save@v4
         with:
-          path: vcpkg_cache
+          path: ${{ github.workspace }}/vcpkg_cache
           key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       - name: "vendor: save archive"
@@ -961,7 +961,7 @@ jobs:
       - name: "setup: restore vcpkg cache"
         uses: actions/cache/restore@v4
         with:
-          path: vcpkg_cache
+          path: ${{ github.workspace }}/vcpkg_cache
           key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*') }}
           restore-keys: |
             vcpkg-x64-windows-
@@ -1024,7 +1024,7 @@ jobs:
       - name: "setup: save vcpkg cache"
         uses: actions/cache/save@v4
         with:
-          path: vcpkg_cache
+          path: ${{ github.workspace }}/vcpkg_cache
           key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*') }}
 
       - name: "vendor: save archive"
