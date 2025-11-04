@@ -1,0 +1,53 @@
+---
+name: Common Build Jobs
+
+on:
+  workflow_call:
+    outputs:
+      ecr_registry:
+        description: "ECR registry URL"
+        value: ${{ jobs.amazon-ecr-auth.outputs.registry }}
+      ecr_username:
+        description: "ECR username"
+        value: ${{ jobs.amazon-ecr-auth.outputs.docker_username }}
+      ecr_password:
+        description: "ECR password"
+        value: ${{ jobs.amazon-ecr-auth.outputs.docker_password }}
+
+jobs:
+  type-checking:
+    name: Run Type Checking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+          cache: 'pip' # caching pip dependencies
+      - run: pip install -r requirements/requirements.txt -r requirements/test.txt -r requirements/dev.txt
+      - name: Run mypy
+        run: mypy
+
+  # Increase rate limits for public registry
+  amazon-ecr-auth:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: 'arn:aws:iam::276514628126:role/ci-kart'
+          aws-region: us-east-1
+          mask-aws-account-id: 'false'
+          role-session-name: kart-ci-gha
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+          mask-password: 'false'
+    outputs:
+      registry: ${{ steps.login-ecr.outputs.registry }}
+      docker_username: ${{ steps.login-ecr.outputs.docker_username_public_ecr_aws }}
+      docker_password: ${{ steps.login-ecr.outputs.docker_password_public_ecr_aws }}
