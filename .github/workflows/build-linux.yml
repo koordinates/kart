@@ -1,0 +1,576 @@
+---
+name: Linux Build
+
+on:
+  workflow_call:
+    inputs:
+      py_ver:
+        required: true
+        type: string
+      cmake_version:
+        required: true
+        type: string
+      force_color:
+        required: true
+        type: string
+      kart_s3_test_data_point_cloud:
+        required: true
+        type: string
+      kart_s3_test_data_raster:
+        required: true
+        type: string
+      aws_no_sign_request:
+        required: true
+        type: string
+      ecr_username:
+        required: true
+        type: string
+      ecr_password:
+        required: true
+        type: string
+
+jobs:
+  #
+  # Linux build for installers
+  # Runs on centos 7 for maximum compatibility
+  #
+  Linux-Package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - base: ubuntu-22.04
+            label: manylinux_2_28/amd64
+            image: quay.io/pypa/manylinux_2_28_x86_64
+            arch: amd64
+            arch_triplet: x64-linux
+            build_parallel: ""
+
+          - base: buildjet-4vcpu-ubuntu-2204-arm
+            label: manylinux_2_28/arm64
+            image: quay.io/pypa/manylinux_2_28_aarch64
+            arch: arm64
+            arch_triplet: arm64-linux
+            build_parallel: 1
+
+    name: Linux ${{ matrix.os.arch }}
+    runs-on: ${{ matrix.os.base }}
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      )
+
+    services:
+      postgis:
+        # https://github.com/postgis/docker-postgis/issues/216
+        image: ghcr.io/baosystems/postgis:15
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 5
+          -e POSTGRES_HOST_AUTH_METHOD=trust
+        ports:
+          - 5432:5432
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server
+        options: >-
+          -e ACCEPT_EULA=Y
+          -e SA_PASSWORD=PassWord1
+        ports:
+          - 1433:1433
+      mysql:
+        image: public.ecr.aws/docker/library/mysql:latest
+        credentials:
+          username: ${{ inputs.ecr_username }}
+          password: ${{ inputs.ecr_password }}
+        options: >-
+          -e MYSQL_ROOT_PASSWORD=PassWord1
+        ports:
+          - 3306:3306
+
+    env:
+      PY_VER: ${{ inputs.py_ver }}
+      CMAKE_VERSION: ${{ inputs.cmake_version }}
+      FORCE_COLOR: ${{ inputs.force_color }}
+      KART_S3_TEST_DATA_POINT_CLOUD: ${{ inputs.kart_s3_test_data_point_cloud }}
+      KART_S3_TEST_DATA_RASTER: ${{ inputs.kart_s3_test_data_raster }}
+      AWS_NO_SIGN_REQUEST: ${{ inputs.aws_no_sign_request }}
+      KART_POSTGIS_URL: "postgresql://postgres:@postgis:5432/postgres"
+      SQLSERVER_URL: "mssql://sa:PassWord1@sqlserver:1433/master?TrustServerCertificate=yes"
+      KART_MYSQL_URL: "mysql://root:PassWord1@mysql:3306"
+      ARCH: "${{ matrix.os.arch }}"
+      ARCH_TRIPLET: "${{ matrix.os.arch_triplet }}"
+      GITHUB_WORKSPACE: "/__w/kart/kart"  # FIXME?
+      PKG_CONFIG: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf"
+      PKG_CONFIG_PATH: "/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/lib/pkgconfig"
+      OPTIONS_FOR_CMAKE: >-
+        [
+        '-DPKG_CONFIG_EXECUTABLE=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf',
+        '-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=${{ matrix.os.arch }}'
+        ]
+
+    container:
+      image: ${{ matrix.os.image }}
+      env:
+        ACLOCAL_PATH: "/usr/local/share/aclocal:/usr/share/aclocal"
+        PATH: "/opt/python/${PY_VER_ID}/bin:/opt/rh/gcc-toolset-14/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/github/home/.cargo/bin:/opt/mssql-tools/bin"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      #
+      # setup
+      #
+      - name: "setup: cmake & ninja"
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
+          ninjaVersion: "1.12.1"
+
+      - name: "setup: rust"
+        run: |
+          curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh -s -- -y
+          . "$HOME/.cargo/env"
+          rustc --version
+
+
+      - name: "setup: misc"
+        shell: bash
+        run: |
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+
+          # cmake 4 is installed in the container already, but we want to use the cmake from the get-cmake action (3.x)
+          rm -f /usr/local/bin/cmake
+
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
+
+          yum install -y autoconf-archive perl-IPC-Cmd perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex
+
+          if [ "${ARCH}" == "arm64" ]; then
+            echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> $GITHUB_ENV
+          fi
+
+          # Create a wrapper script for system curl that preserves the original library environment
+          mkdir -p ${GITHUB_WORKSPACE}/systemcurl
+          echo '#!/bin/bash' > ${GITHUB_WORKSPACE}/systemcurl/curl
+          echo "LD_LIBRARY_PATH='${LD_LIBRARY_PATH}' exec /usr/bin/curl \"\$@\"" >> ${GITHUB_WORKSPACE}/systemcurl/curl
+          chmod +x ${GITHUB_WORKSPACE}/systemcurl/curl
+          echo "${GITHUB_WORKSPACE}/systemcurl" >> $GITHUB_PATH
+
+          # Diagnostics for curl
+          echo "=== Curl diagnostics at setup ==="
+          which curl
+          curl -V
+          echo "PATH=$PATH"
+          echo "=========================="
+
+      - name: "setup: restore vcpkg cache"
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
+          restore-keys: |
+            vcpkg-${{ matrix.os.arch_triplet }}-
+
+      - name: "setup: vcpkg"
+        uses: lukka/run-vcpkg@v11
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
+        with:
+          vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
+          vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
+          doNotCache: true
+
+      - name: "setup: pkgconf"
+        working-directory: /__w/_temp
+        shell: bash
+        run: |
+          ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf
+
+      - name: "setup: save vcpkg cache"
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
+
+      #
+      # App Build
+      #
+
+      - name: "app: version"
+        id: version
+        shell: bash
+        run: |
+          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "KART_VERSION=$VER" >> $GITHUB_ENV
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+
+      - name: "app: configuration & vendor dependencies"
+        uses: lukka/run-cmake@v10.8
+        env:
+          LD_LIBRARY_PATH: "${{ env.LD_LIBRARY_PATH }}:${{ env.GITHUB_WORKSPACE }}/build/vcpkg_installed/${{ env.ARCH_TRIPLET }}/lib"
+        with:
+          configurePreset: ci-linux
+          configurePresetAdditionalArgs: ${{ env.OPTIONS_FOR_CMAKE }}
+
+      - name: "app: build"
+        shell: bash
+        run: |
+          cmake --build --preset=ci-linux --verbose --parallel ${{ matrix.os.build_parallel }}
+
+      - name: "vendor: save archive"
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendor-linux-${{ env.ARCH }}-py${{ env.PY_VER }}
+          path: build/vcpkg-vendor/kart-vendor.*.tar.gz
+          if-no-files-found: error
+
+      #
+      # App tests & checks
+      #
+
+      - name: "test: smoke test"
+        shell: bash
+        run: |
+          ./build/kart --version
+
+      - name: "test: create no_postgis environment for tests"
+        shell: bash
+        run: |
+          yum install -y postgresql
+          psql postgresql://postgres:@postgis:5432/postgres -c 'CREATE DATABASE no_postgis;'
+          echo "KART_NO_POSTGIS_URL=postgresql://postgres:@postgis:5432/no_postgis" >> $GITHUB_ENV
+
+      - name: "test: install MSSQL database drivers for tests"
+        if: matrix.os.arch != 'arm64'
+        shell: bash
+        run: |
+          curl https://packages.microsoft.com/config/rhel/7/prod.repo > /etc/yum.repos.d/mssql-release.repo
+          ACCEPT_EULA=Y yum install -y msodbcsql18 mssql-tools
+          echo "KART_SQLSERVER_URL=${SQLSERVER_URL}" >> $GITHUB_ENV
+
+      - name: "test: unit tests"
+        shell: bash
+        run: |
+          ctest --preset=ci-linux
+
+      #
+      # Packaging
+      #
+
+      - name: "bundle: assemble"
+        shell: bash
+        run: |
+          cmake --build --preset=ci-bundle-linux --verbose
+
+      - name: "bundle: smoke test"
+        shell: bash
+        run: |
+          ./build/pyinstaller/dist/kart/kart --version
+
+      - name: "bundle: e2e tests"
+        shell: bash
+        run: |
+          ctest --preset=ci-e2e-linux
+
+      - name: "package: TGZ & DEB & RPM"
+        shell: bash
+        run: |
+          cpack --preset=ci-linux
+
+      - name: "package: save TGZ"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kart-linux-${{ matrix.os.arch }}-tgz
+          path: build/dist/Kart-*.tar.gz
+          if-no-files-found: error
+
+      - name: "package: save DEB"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kart-linux-${{ matrix.os.arch }}-deb
+          path: build/dist/kart_*.deb
+          if-no-files-found: error
+
+      - name: "package: save RPM"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kart-linux-${{ matrix.os.arch }}-rpm
+          path: build/dist/kart-*.rpm
+          if-no-files-found: error
+
+      - name: "release"
+        uses: softprops/action-gh-release@v1
+        if: "steps.version.outputs.is_release == 1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: |
+            build/dist/Kart-*.tar.gz
+            build/dist/kart_*.deb
+            build/dist/kart-*.rpm
+
+  #
+  # Linux Package tests
+  # Install on a wide variety of Linux distributions and run E2E tests
+  #
+  Linux-Package-Tests:
+    needs: [Linux-Package]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - label: amd64
+            runner: ubuntu-22.04
+          - label: arm64
+            runner: buildjet-2vcpu-ubuntu-2204-arm
+        os:
+          - label: "tgz-ubuntu-24.04"
+            image: "public.ecr.aws/ubuntu/ubuntu:noble"
+            type: "tgz"
+          - label: "ubuntu-24.04"
+            image: "public.ecr.aws/ubuntu/ubuntu:noble"
+            type: "deb"
+          - label: "ubuntu-22.04"
+            image: "public.ecr.aws/ubuntu/ubuntu:jammy"
+            type: "deb"
+          - label: "debian-stable"
+            image: "public.ecr.aws/docker/library/debian:stable-slim"
+            type: "deb"
+          - label: "debian-oldstable"
+            image: "public.ecr.aws/docker/library/debian:oldstable-slim"
+            type: "deb"
+          - label: "amazonlinux-2023"
+            image: "public.ecr.aws/amazonlinux/amazonlinux:2023"
+            type: "rpm"
+          - label: "fedora-latest"
+            image: "public.ecr.aws/docker/library/fedora:latest"
+            type: "rpm"
+          - label: "almalinux-9"
+            image: "public.ecr.aws/docker/library/almalinux:9"
+            type: "rpm"
+          - label: "almalinux-10"
+            image: "public.ecr.aws/docker/library/almalinux:10"
+            type: "rpm"
+
+    runs-on: ${{ matrix.arch.runner }}
+    name: "Install-check: ${{ matrix.os.label }}/${{ matrix.arch.label }}"
+    continue-on-error: ${{ !!matrix.os.xfail }}
+
+    container:
+      image: ${{ matrix.os.image }}
+      credentials:
+        username: ${{ inputs.ecr_username }}
+        password: ${{ inputs.ecr_password }}
+      env:
+        DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: setup
+        shell: bash
+        run: |
+          case "${{ matrix.os.type }}" in
+            deb | tgz)
+              apt update -q
+              apt install -q -y --no-install-recommends sqlite3
+              ;;
+
+            rpm)
+              yum install -y sqlite tar
+              # fedora needs this package; other yumlikes don't even have this package :/
+              yum install -y awk || true
+              ;;
+
+            *)
+              exit 1
+              ;;
+          esac
+
+      - name: get kart installer
+        uses: actions/download-artifact@v4
+        with:
+          name: Kart-linux-${{ matrix.arch.label }}-${{ matrix.os.type }}
+
+      - name: install kart
+        shell: bash
+        run: |
+          case "${{ matrix.os.type }}" in
+            deb)
+              apt install -y ./kart_*.deb
+              ;;
+
+            rpm)
+              yum install -y ./kart-*.rpm
+              ;;
+
+            tgz)
+              tar -xz -C /opt --strip-components=1 -f ./Kart-*.tar.gz
+              ln -sf /opt/kart/kart /usr/local/bin/kart
+              ;;
+
+            *)
+              exit 1
+              ;;
+          esac
+
+      - name: smoke test
+        shell: bash
+        run: |
+          /opt/kart/kart --version
+          command -v kart
+          kart --version
+
+      - uses: actions/checkout@v4
+
+      - name: e2e test (no helper)
+        env:
+          KART_USE_HELPER: "0"
+        shell: bash
+        run: |
+          time tests/scripts/e2e-1.sh
+
+      - name: e2e test (helper)
+        env:
+          KART_USE_HELPER: "1"
+        shell: bash
+        run: |
+          time tests/scripts/e2e-1.sh
+
+  #
+  # Linux development build using vendor archive & host python
+  #
+  Linux-dev-vendor:
+    name: "Linux dev+vendor"
+    needs: ["Linux-Package"]
+    runs-on: ubuntu-22.04
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      )
+
+    env:
+      PY_VER: ${{ inputs.py_ver }}
+      CMAKE_VERSION: ${{ inputs.cmake_version }}
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_COMPRESS: "1"
+      PY_VER_ID: "cp312-cp312"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      #
+      # setup
+      #
+
+      - name: "setup: python"
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PY_VER }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements/*.txt'
+
+      - name: "setup: cmake & ninja"
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "${{ env.CMAKE_VERSION }}"
+
+      - name: "setup: ccache"
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: vendor-ccache-ubuntu-22.04-cmake-vcpkg
+
+      - name: "setup: misc"
+        run: |
+          sudo apt-get update -q -y
+          sudo apt-get install -q -y --no-install-recommends autoconf-archive ccache unixodbc file sqlite3
+          mkdir -p ${{ env.CCACHE_DIR }}
+          echo "/usr/lib/ccache" >> $GITHUB_PATH
+
+      #
+      # App Build
+      #
+
+      - name: "app: version"
+        id: version
+        run: |
+          if [[ '${{ github.ref_type }}' == 'tag' ]] && [[ '${{ github.ref_name }}' =~ ^v(.*) ]]; then
+            VER=$(echo ${{ github.ref_name }} | sed 's/^v//')
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "value=$VER" >> $GITHUB_OUTPUT
+          echo "KART_VERSION=$VER" >> $GITHUB_ENV
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+
+      - name: "app: get vendor archive"
+        uses: actions/download-artifact@v4
+        with:
+          name: vendor-linux-amd64-py${{ env.PY_VER }}
+
+      - name: "app: configuration & vendor dependencies"
+        shell: bash
+        run: |
+          cmake -B ./build -S . \
+          -DUSE_VCPKG=NO \
+          -DVENDOR_ARCHIVE=./kart-vendor.${PY_VER_ID}-linux_x86_64.tar.gz \
+          -DBUILD_TESTING=YES
+
+      - name: "app: build"
+        shell: bash
+        run: |
+          cmake --build ./build --verbose
+
+      #
+      # App tests & checks
+      #
+
+      - name: "test: smoke test"
+        shell: bash
+        run: |
+          ./build/kart --version
+
+      - name: "bundle: assemble"
+        shell: bash
+        run: |
+          cmake --build ./build --target bundle --verbose
+
+      - name: "bundle: smoke test"
+        shell: bash
+        run: |
+          ./build/pyinstaller/dist/kart/kart --version
+
+      - name: "bundle: e2e tests"
+        shell: bash
+        working-directory: ./build
+        run: |
+          ctest -V -L e2e
