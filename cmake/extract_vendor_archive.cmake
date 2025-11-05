@@ -1,5 +1,3 @@
-# cmake-lint: disable=E1126
-
 #
 # Extracts a vendor archive into the Kart virtualenv
 #

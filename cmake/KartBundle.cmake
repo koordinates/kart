@@ -76,9 +76,10 @@ elseif(MACOS AND MACOS_SIGN_BUNDLE)
     OUTPUT pyinstaller/codesign.stamp
     DEPENDS ${BUNDLE_EXE}
     COMMAND
-      ${XCODE_CODESIGN} --sign "$ENV{MACOS_CODESIGN_ID}" --verbose=3 --deep --timestamp --force
-      --strict --entitlements ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/entitlements.plist -o
-      runtime pyinstaller/dist/Kart.app
+      ${XCODE_CODESIGN} --keychain "$ENV{MACOS_NOTARIZE_KEYCHAIN}" --sign "$ENV{MACOS_CODESIGN_ID}"
+      --verbose=3 --deep --timestamp --force --strict --entitlements
+      ${CMAKE_CURRENT_SOURCE_DIR}/platforms/macos/entitlements.plist -o runtime
+      pyinstaller/dist/Kart.app
     COMMAND ${XCODE_CODESIGN} --display --verbose pyinstaller/dist/Kart.app
     # codesign --verify --strict=all would be better but it is broken in recent XCode versions: an
     # arg-parsing / arg-forwarding bug means it fails with 'file not found'
@@ -97,10 +98,10 @@ elseif(MACOS AND MACOS_SIGN_BUNDLE)
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/dist
       COMMAND ${XCODE_DITTO} -c -k --sequesterRsrc --keepParent "Kart.app"
               "kart-bundle-notarize.zip"
-      COMMAND ${XCODE_XCRUN} notarytool submit kart-bundle-notarize.zip
-              --keychain-profile "$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}"
-              --keychain "$ENV{MACOS_NOTARIZE_KEYCHAIN}"
-              --wait --timeout ${MACOS_NOTARIZE_TIMEOUT}
+      COMMAND
+        ${XCODE_XCRUN} notarytool submit kart-bundle-notarize.zip --keychain-profile
+        "$ENV{MACOS_NOTARIZE_KEYCHAIN_PROFILE}" --keychain "$ENV{MACOS_NOTARIZE_KEYCHAIN}" --wait
+        --timeout ${MACOS_NOTARIZE_TIMEOUT}
       COMMAND ${XCODE_XCRUN} stapler staple Kart.app
       COMMAND ${XCODE_SPCTL} --assess -t execute -vvv Kart.app
       COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/notarize.stamp
