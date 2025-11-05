@@ -182,8 +182,6 @@ pyi_analysis = Analysis(
     runtime_hooks=[],
     excludes=[
         "_kart_env",
-        "IPython",
-        "ipdb",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -195,6 +193,38 @@ if is_linux or is_darwin:
     pyi_analysis.exclude_system_libraries(
         list_of_exceptions=['libffi*', 'libreadline*']
     )
+
+# Post-process to remove dev/test dependencies and their submodules
+# The excludes list only handles top-level imports, this catches submodules too
+DEV_TEST_PREFIXES = (
+    'pytest', '_pytest',  # pytest and internal modules
+    'coverage',
+    'IPython',
+    'ipdb',
+    'mypy', 'mypyc',
+    'sphinx', 'sphinxcontrib',
+    'html5lib',
+    'execnet',
+    'aspectlib',
+    'sqlalchemy_stubs',
+    'types_',  # All type stub packages
+    'gprof2dot',
+)
+
+def should_exclude_module(module_name):
+    """Check if a module is a dev/test dependency that should be excluded."""
+    return module_name.startswith(DEV_TEST_PREFIXES)
+
+print(f"🔍 Filtering dev/test dependencies from PyInstaller bundle...", file=sys.stderr)
+original_pure_count = len(pyi_analysis.pure)
+original_binaries_count = len(pyi_analysis.binaries)
+
+pyi_analysis.pure = [item for item in pyi_analysis.pure if not should_exclude_module(item[0])]
+pyi_analysis.binaries = [item for item in pyi_analysis.binaries if not should_exclude_module(item[0])]
+
+removed_pure = original_pure_count - len(pyi_analysis.pure)
+removed_binaries = original_binaries_count - len(pyi_analysis.binaries)
+print(f"✂️  Removed {removed_pure} pure modules and {removed_binaries} binaries", file=sys.stderr)
 
 pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
