@@ -185,19 +185,12 @@ Continuous integration builds apps, tests, and installers for every commit on su
 
 To conserve CI resources, macOS and Windows builds only run in these cases:
 - Tag/release builds (always run all platforms)
-- Commits with `ci-build-all` in the commit message
-- Pull requests with the `ci-build-all` label
-
-Linux builds always run for all commits and PRs.
-
-To force a macOS/Windows build:
-- For a commit: Include `ci-build-all` anywhere in your commit message
-- For a PR: Add the `ci-build-all` label to the pull request
+- Pull requests with the `ci-build-all` label (draft PRs are okay)
 
 ## Code formatting
 
 We use [Ruff](https://docs.astral.sh/ruff/) to ensure consistent code formatting. We recommend integrating Ruff with your editor - [see instructions here](https://docs.astral.sh/ruff/editors/setup/)
 
-We use the default settings, and target python 3.10+.
+We use the default settings, and target python 3.12+.
 
 One easy solution is to install [pre-commit](https://pre-commit.com), run `pre-commit install --install-hooks` and it'll automatically validate your changes as a git pre-commit hook.

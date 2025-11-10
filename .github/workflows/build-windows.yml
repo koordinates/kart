@@ -57,22 +57,14 @@ jobs:
 
     # Windows builds are expensive, so only run them when:
     # - Pushing a tag/release (always build releases)
-    # - Pushing a commit with 'ci-build-all' in the message
     # - External PR with 'ci-build-all' label
-    # We skip internal PRs since they'll be run by the push to the branch.
-    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
     if: >
       (
         (
           github.event_name == 'push'
-          && (
-            github.ref_type == 'tag'
-            || contains(join(github.event.commits.*.message, ' '), 'ci-build-all')
-          )
+          && github.ref_type == 'tag'
         )
-        || (
-          contains(github.event.pull_request.labels.*.name, 'ci-build-all')
-        )
+        || contains(github.event.pull_request.labels.*.name, 'ci-build-all')
       )
 
     steps:
