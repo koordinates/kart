@@ -93,11 +93,11 @@ if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
         OPTIONS_RELEASE
             "CL_FLAGS=${CL_FLAGS_RELEASE}"
             "INST_DIR=${INST_DIR}"
-            "LIBS_ALL=${LIBS_ALL_RELEASE}"
+            "LIBS_ALL=${PKGCONFIG_LIBS_RELEASE} iconv.lib charset.lib"
         OPTIONS_DEBUG
             "CL_FLAGS=${CL_FLAGS_DEBUG}"
             "INST_DIR=${INST_DIR}\\debug"
-            "LIBS_ALL=${LIBS_ALL_DEBUG}"
+            "LIBS_ALL=${PKGCONFIG_LIBS_DEBUG} iconv.lib charset.lib"
             "LINK_FLAGS=/debug"
     )
 
