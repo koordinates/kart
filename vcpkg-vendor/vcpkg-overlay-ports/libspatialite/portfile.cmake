@@ -85,6 +85,22 @@ if(VCPKG_TARGET_IS_WINDOWS AND NOT VCPKG_TARGET_IS_MINGW)
             "LIBS_ALL=${PKGCONFIG_LIBS_DEBUG} iconv.lib charset.lib"
             "LINK_FLAGS=/debug"
     )
+    vcpkg_install_nmake(
+        SOURCE_PATH "${SOURCE_PATH}"
+        PROJECT_NAME makefile_mod.vc
+        PREFER_JOM
+        CL_LANGUAGE C
+        OPTIONS_RELEASE
+            "CL_FLAGS=${CL_FLAGS_RELEASE}"
+            "INST_DIR=${INST_DIR}"
+            "LIBS_ALL=${PKGCONFIG_LIBS_RELEASE} iconv.lib charset.lib"
+        OPTIONS_DEBUG
+            "CL_FLAGS=${CL_FLAGS_DEBUG}"
+            "INST_DIR=${INST_DIR}\\debug"
+            "LIBS_ALL=${PKGCONFIG_LIBS_DEBUG} iconv.lib charset.lib"
+            "LINK_FLAGS=/debug"
+    )
+
     vcpkg_copy_pdbs()
 
     file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
