@@ -9,6 +9,7 @@ from pathlib import Path
 import click
 
 import kart
+from kart.crs_util import make_crs
 from kart.diff_format import DiffFormat
 from .base_diff_writer import BaseDiffWriter
 from .json_diff_writers import GeojsonDiffWriter
@@ -20,6 +21,11 @@ class HtmlDiffWriter(BaseDiffWriter):
     Writes a file usually called DIFF.html (the default name), which contains both a GeoJSON viewer, and the diff itself
     in GeoJSON. Automatically opens the created file using webbrowser if the created file is not stdout.
     """
+
+    def __init__(self, *args, target_crs=None, **kwargs):
+        if target_crs is None:
+            target_crs = make_crs("EPSG:4326")
+        super().__init__(*args, target_crs=target_crs, **kwargs)
 
     @classmethod
     def _check_output_path(cls, repo, output_path):
@@ -56,6 +62,7 @@ class HtmlDiffWriter(BaseDiffWriter):
                 "features": self.filtered_dataset_deltas_as_geojson(ds_path, ds_diff),
             }
             for ds_path, ds_diff in repo_diff.items()
+            if ds_path != "<files>"
         }
 
         fo = resolve_output_path(self.output_path)
