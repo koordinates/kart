@@ -5,7 +5,7 @@ from .cli_util import StringFromFile
 from .commit import (
     commit_obj_to_json,
     commit_json_to_text,
-    get_commit_message,
+    get_commit_message_from_diff,
     CommitDiffWriter,
 )
 from .output_util import dump_json_output
@@ -98,7 +98,7 @@ def commit_table(
     if message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
     elif launch_editor:
-        commit_msg = get_commit_message(repo, table_diff, quiet=do_json)
+        commit_msg = get_commit_message_from_diff(repo, table_diff, quiet=do_json)
 
     if not commit_msg:
         raise click.UsageError("Aborting commit due to empty commit message.")

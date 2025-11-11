@@ -44,7 +44,7 @@ def get_commit_message(
         head = repo.structure("HEAD")
         merged = repo.structure(merge_tree_id)
         diff = get_repo_diff(head, merged)
-        message = commit.get_commit_message(
+        message = commit.get_commit_message_from_diff(
             repo, diff, draft_message=message, quiet=quiet
         )
     if not message:

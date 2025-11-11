@@ -3,7 +3,11 @@ import sys
 import click
 
 from .cli_util import KartGroup, StringFromFile, add_help_subcommand
-from .commit import commit_json_to_text, commit_obj_to_json, get_commit_message
+from .commit import (
+    commit_json_to_text,
+    commit_obj_to_json,
+    get_commit_message_from_diff,
+)
 from .diff_structs import DatasetDiff, Delta, DeltaDiff, RepoDiff
 from .exceptions import NO_TABLE, NotFound
 from .output_util import dump_json_output
@@ -122,7 +126,7 @@ def data_rm(ctx, message, output_format, datasets):
     if message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
     else:
-        commit_msg = get_commit_message(repo, repo_diff, quiet=do_json)
+        commit_msg = get_commit_message_from_diff(repo, repo_diff, quiet=do_json)
 
     if not commit_msg:
         raise click.UsageError("Aborting commit due to empty commit message.")
