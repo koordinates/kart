@@ -10,14 +10,16 @@ from kart.cli_util import (
 from kart.crs_util import CoordinateReferenceString
 from kart.completion_shared import file_path_completer
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
-from kart.lfs_util import prefix_sha256
 from kart.parse_args import parse_import_sources_and_datasets
 from kart.point_cloud.metadata_util import (
     RewriteMetadata,
     rewrite_and_merge_metadata,
     is_copc,
 )
-from kart.point_cloud.pdal_convert import convert_tile_to_copc
+from kart.point_cloud.pdal_convert import (
+    convert_tile_to_copc,
+    convert_tile_with_crs_override,
+)
 from kart.tile.importer import TileImporter
 from kart.point_cloud.v1 import PointCloudV1
 
@@ -182,12 +184,6 @@ class PointCloudImporter(TileImporter):
     CLOUD_OPTIMIZED_VARIANT = "Cloud-Optimized Point Cloud"
     CLOUD_OPTIMIZED_VARIANT_ACRONYM = "COPC"
 
-    def extract_tile_metadata(self, tile_path, **kwargs):
-        """Override to pass override_crs parameter to point cloud metadata extraction."""
-        if self.override_crs:
-            kwargs["override_crs"] = self.override_crs
-        return self.DATASET_CLASS.extract_tile_metadata(tile_path, **kwargs)
-
     def get_default_message(self):
         return f"Importing {len(self.sources)} LAZ tiles as {self.dataset_path}"
 
@@ -250,26 +246,22 @@ class PointCloudImporter(TileImporter):
         )
 
     def get_conversion_func(self, tile_source):
-        if self.convert_to_cloud_optimized and not is_copc(tile_source.metadata):
+        if self.override_crs:
+            # When override_crs is specified, we always need to convert
+            if self.convert_to_cloud_optimized:
+                # Convert to COPC (or maintain COPC) with CRS override
+                return lambda source, dest: convert_tile_to_copc(
+                    source, dest, override_srs=self.override_crs
+                )
+            else:
+                # Convert with CRS override, preserving original format
+                return lambda source, dest: convert_tile_with_crs_override(
+                    source, dest, override_srs=self.override_crs
+                )
+        elif self.convert_to_cloud_optimized and not is_copc(tile_source.metadata):
+            # Convert to COPC without CRS override
             return convert_tile_to_copc
         return None
 
-    def existing_tile_matches_source(self, source_oid, existing_summary):
-        """Check if the existing tile can be reused instead of reimporting."""
-        source_oid = prefix_sha256(source_oid)
-
-        if existing_summary.get("oid") == source_oid:
-            # The import source we were given has already been imported in its native format.
-            # Return True if that's what we would do anyway.
-            if self.convert_to_cloud_optimized:
-                return is_copc(existing_summary)
-            else:
-                return True
-
-        # NOTE: this logic would be more complicated if we supported more than one type of conversion.
-        if existing_summary.get("sourceOid") == source_oid:
-            # The import source we were given has already been imported, but converted to COPC.
-            # Return True if we were going to convert it to COPC too.
-            return self.convert_to_cloud_optimized and is_copc(existing_summary)
-
-        return False
+    def _is_cloud_optimized(self, tile_summary):
+        return is_copc(tile_summary)
