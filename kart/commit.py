@@ -178,7 +178,7 @@ def commit(
     if message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
     elif launch_editor:
-        commit_msg = get_commit_message(repo, wc_diff, quiet=do_json)
+        commit_msg = get_commit_message_from_diff(repo, diff=wc_diff, quiet=do_json)
 
     if not commit_msg:
         raise click.UsageError("Aborting commit due to empty commit message.")
@@ -203,15 +203,27 @@ def commit(
     repo.gc("--auto")
 
 
-def get_commit_message(repo, diff, draft_message="", quiet=False):
-    """Launches the system editor to get a commit message"""
-    initial_message = [
+def compose_draft_message(repo, draft_message="") -> list[str]:
+    """
+    Adds basic commentary to an initial draft commit message, including the branch status.
+    """
+    return [
         draft_message,
         "# Please enter the commit message for your changes. Lines starting",
         "# with '#' will be ignored, and an empty message aborts the commit.",
         "#",
         re.sub(r"^", "# ", get_branch_status_message(repo), flags=re.MULTILINE),
         "#",
+    ]
+
+
+def get_commit_message_from_diff(repo, diff, *, draft_message="", quiet=False) -> str:
+    """
+    Launches the system editor to get a commit message.
+    Populates the editor with a message draft as well as the (commented) changes from the diff
+    """
+    initial_message = [
+        *compose_draft_message(repo, draft_message),
         "# Changes to be committed:",
         "#",
         re.sub(
@@ -222,6 +234,14 @@ def get_commit_message(repo, diff, draft_message="", quiet=False):
         ),
         "#",
     ]
+    return get_commit_message(repo, initial_message=initial_message, quiet=quiet)
+
+
+def get_commit_message(repo, initial_message: list[str], quiet=False):
+    """
+    Launches the system editor to get a commit message.
+    The initial message is provided as a list of lines.
+    """
 
     commit_editmsg_file = repo.gitdir_file(KartRepoFiles.COMMIT_EDITMSG)
     commit_editmsg_file.write_text("\n".join(initial_message) + "\n", encoding="utf-8")

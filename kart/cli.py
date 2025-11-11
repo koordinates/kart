@@ -45,6 +45,7 @@ MODULE_COMMANDS = {
     "log": {"log"},
     "merge": {"merge"},
     "meta": {"commit-files", "meta"},
+    "mv": {"mv"},
     "pull": {"pull"},
     "raster.import_": {"raster-import"},
     "resolve": {"resolve"},

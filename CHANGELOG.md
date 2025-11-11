@@ -12,16 +12,18 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ### Other changes
 
+- New `kart mv` command to rename dataset paths. [#1067](https://github.com/koordinates/kart/pull/1067)
 - Patches (`apply`/`create-patch`):
     - Partial feature updates (updated features don't need to include unchanged fields) [#1065](https://github.com/koordinates/kart/pull/1065)
     - Reprojected patches (patch CRS is specified via `crs` in the patch metadata) [#1066](https://github.com/koordinates/kart/pull/1066)
 - merge: `--message`/`-m` option no longer implies `--no-ff`. The message will now be used if the command can't do a fast-forward. [#1051](https://github.com/koordinates/kart/issues/1051)
-- diff: Fixed garbled json-lines output sometimes when using `--add-feature-count-estimate` [#1040](https://github.com/koordinates/kart/issues/1040)
-- diff/show: Faster output for some large repositories (varies wildly) [#1038](https://github.com/koordinates/kart/issues/1038)
-- show: Text output now displays a 'Merge: {parentIDs}' line when showing a merge commit (consistent with `git show`) [#1043](https://github.com/koordinates/kart/issues/1043)
-- show: Added `--no-sort-keys` option to disable sorting of features by name/PK. Previously added to `diff` only
-- show: Added `--add-feature-count-estimate` option to add a feature count estimate to `json-lines` output. Previously added to `diff` only
-- diff/show: Fixed some issues with the built-in visual HTML diff ie `kart show -ohtml`
+- `diff`/`show`:
+    - Fixed garbled json-lines output sometimes when using `--add-feature-count-estimate` [#1040](https://github.com/koordinates/kart/issues/1040)
+    - Faster output for some large repositories (varies wildly) [#1038](https://github.com/koordinates/kart/issues/1038)
+    - Text output now consistently displays a 'Merge: {parentIDs}' line when showing a merge commit [#1043](https://github.com/koordinates/kart/issues/1043)
+    - show: Added `--no-sort-keys` option to disable sorting of features by name/PK. Previously added to `diff` only
+    - show: Added `--add-feature-count-estimate` option to add a feature count estimate to `json-lines` output. Previously added to `diff` only
+    - Fixed some issues with the built-in visual HTML diff ie `kart show -ohtml`
 
 ## 0.16.1
 
