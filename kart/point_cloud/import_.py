@@ -10,7 +10,6 @@ from kart.cli_util import (
 from kart.crs_util import CoordinateReferenceString
 from kart.completion_shared import file_path_completer
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
-from kart.lfs_util import prefix_sha256
 from kart.parse_args import parse_import_sources_and_datasets
 from kart.point_cloud.metadata_util import (
     RewriteMetadata,
@@ -264,27 +263,5 @@ class PointCloudImporter(TileImporter):
             return convert_tile_to_copc
         return None
 
-    def existing_tile_matches_source(self, source_oid, existing_summary):
-        """Check if the existing tile can be reused instead of reimporting."""
-        # If override_crs is specified, we need to rewrite the CRS in the files,
-        # so we can't reuse existing tiles
-        if self.override_crs:
-            return False
-
-        source_oid = prefix_sha256(source_oid)
-
-        if existing_summary.get("oid") == source_oid:
-            # The import source we were given has already been imported in its native format.
-            # Return True if that's what we would do anyway.
-            if self.convert_to_cloud_optimized:
-                return is_copc(existing_summary)
-            else:
-                return True
-
-        # NOTE: this logic would be more complicated if we supported more than one type of conversion.
-        if existing_summary.get("sourceOid") == source_oid:
-            # The import source we were given has already been imported, but converted to COPC.
-            # Return True if we were going to convert it to COPC too.
-            return self.convert_to_cloud_optimized and is_copc(existing_summary)
-
-        return False
+    def _is_cloud_optimized(self, tile_summary):
+        return is_copc(tile_summary)

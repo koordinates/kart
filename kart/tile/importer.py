@@ -12,6 +12,7 @@ import click
 import pygit2
 
 from kart.cli_util import find_param
+from kart.crs_util import normalise_wkt, wkt_equal
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
     InvalidOperation,
@@ -29,9 +30,11 @@ from kart.fast_import import (
     write_blobs_to_stream,
 )
 from kart.key_filters import RepoKeyFilter
+
 from kart.lfs_util import (
     install_lfs_hooks,
     dict_to_pointer_file_bytes,
+    prefix_sha256,
 )
 from kart.list_of_conflicts import ListOfConflicts
 from kart.meta_items import MetaItemFileType
@@ -631,7 +634,7 @@ class TileImporter:
                     if not existing_summary:
                         continue
                     if not self.existing_tile_matches_source(
-                        source.oid, existing_summary
+                        self.existing_dataset, source, existing_summary
                     ):
                         continue
                     # This tile has already been imported before. Reuse it rather than re-importing it.
@@ -783,3 +786,30 @@ class TileImporter:
         return click.confirm(
             f"Import these tiles into a {acronym}-only dataset, converting them to {acronym} files where needed?",
         )
+
+    def _is_cloud_optimized(self, tile_summary):
+        raise NotImplementedError()
+
+    def existing_tile_matches_source(self, existing_dataset, source, existing_summary):
+        """Check if the existing tile can be reused instead of reimporting."""
+
+        source_oid = prefix_sha256(source.oid)
+
+        if (
+            existing_summary.get("oid") == source_oid
+            or existing_summary.get("sourceOid") == source_oid
+        ):
+            # The import source we were given has already been imported from the same file.
+            # Return True if (after applying any conversions we would do) the result would be the same.
+            will_be_cloud_optimized = (
+                self.convert_to_cloud_optimized
+                or self._is_cloud_optimized(source.metadata)
+            )
+            if will_be_cloud_optimized == self._is_cloud_optimized(existing_summary):
+                existing_crs = normalise_wkt(existing_dataset.get_meta_item("crs.wkt"))
+                crs_to_import = normalise_wkt(
+                    self.override_crs or source.metadata["crs.wkt"]
+                )
+
+                return wkt_equal(existing_crs, crs_to_import)
+        return False

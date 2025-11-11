@@ -9,7 +9,6 @@ from kart.cli_util import (
 )
 from kart.crs_util import CoordinateReferenceString
 from kart.completion_shared import file_path_completer
-from kart.lfs_util import prefix_sha256
 from kart.parse_args import parse_import_sources_and_datasets
 from kart.raster.gdal_convert import convert_tile_to_cog, convert_tile_with_crs_override
 from kart.raster.metadata_util import (
@@ -235,27 +234,5 @@ class RasterImporter(TileImporter):
             return convert_tile_to_cog
         return None
 
-    def existing_tile_matches_source(self, source_oid, existing_summary):
-        """Check if the existing tile can be reused instead of reimporting."""
-        # If override_crs is specified, we need to rewrite the CRS in the files,
-        # so we can't reuse existing tiles
-        if self.override_crs:
-            return False
-
-        source_oid = prefix_sha256(source_oid)
-
-        if existing_summary.get("oid") == source_oid:
-            # The import source we were given has already been imported in its native format.
-            # Return True if that's what we would do anyway.
-            if self.convert_to_cloud_optimized:
-                return is_cog(existing_summary)
-            else:
-                return True
-
-        # NOTE: this logic would be more complicated if we supported more than one type of conversion.
-        if existing_summary.get("sourceOid") == source_oid:
-            # The import source we were given has already been imported, but converted to COG.
-            # Return True if we were going to convert it to COG too.
-            return self.convert_to_cloud_optimized and is_cog(existing_summary)
-
-        return False
+    def _is_cloud_optimized(self, tile_summary):
+        return is_cog(tile_summary)
