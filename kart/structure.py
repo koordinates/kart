@@ -200,6 +200,8 @@ class RepoStructure:
 
     @property
     def short_id(self):
+        if self.ref == "[EMPTY]":
+            return self.ref
         obj = self.commit or self.tree
         return obj.short_id if obj is not None else None
 
