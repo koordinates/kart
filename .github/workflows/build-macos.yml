@@ -303,7 +303,7 @@ jobs:
           testPreset: ci-e2e-macos
 
       - name: "package: setup installer signing certificate"
-        uses: apple-actions/import-codesign-certs@v1
+        uses: apple-actions/import-codesign-certs@v5
         if: env.MACOS_SIGN_PKG == 'ON'
         with:
           create-keychain: false
