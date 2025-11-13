@@ -2311,6 +2311,7 @@ def test_diff_format_no_data_changes_json(cli_runner, data_archive):
         r = cli_runner.invoke(
             ["diff", "--diff-format=no-data-changes", "-o", "json", "HEAD^...HEAD"]
         )
+        assert r.exit_code == 0, r.stderr
         output = json.loads(r.stdout)
         assert output["kart.diff/v1+hexwkb"] == {
             "nz_pa_points_topo_150k": {"data_changes": True}

@@ -1,13 +1,15 @@
 boto3>=1.29.1
 certifi
-click~=8.1.7
+# 8.2.x breaks --diff-format somehow (?)
+# 8.3.0 fixes that but breaks Context.invoke (https://github.com/pallets/click/pull/3068)
+click==8.1.7
 docutils<0.18
 msgspec~=0.18.6
 Pygments
 pymysql
 rst2txt
 shellingham
-sqlalchemy
+sqlalchemy~=1.4
 tqdm
 jsonschema>=4.3
 
