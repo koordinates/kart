@@ -1,8 +1,9 @@
 import os
-import pytest
 import re
 import subprocess
+from pathlib import Path
 
+import pytest
 from sqlalchemy.orm import sessionmaker
 
 from kart import prefix, is_frozen, is_windows
@@ -62,6 +63,26 @@ def test_export_datasets(archive, layer, geometry, data_archive, cli_runner):
                 continue
 
             assert field_name[0:10] in output
+
+
+@pytest.mark.parametrize("use_absolute_path", [True, False])
+@pytest.mark.parametrize("use_format_specifier", [True, False])
+def test_export_path_styles(
+    use_absolute_path, use_format_specifier, data_archive, cli_runner
+):
+    with data_archive("points") as repo_dir:
+        if use_absolute_path:
+            path = (Path(".") / "output.gpkg").resolve()
+        else:
+            path = "output.gpkg"
+        if use_format_specifier:
+            format_specifier = "GPKG:"
+        else:
+            format_specifier = ""
+
+        r = cli_runner.invoke(["export", H.POINTS.LAYER, f"{format_specifier}{path}"])
+        assert r.exit_code == 0, r.stderr
+        assert (repo_dir / "output.gpkg").exists()
 
 
 @pytest.mark.parametrize("epsg", [4326, 27200])

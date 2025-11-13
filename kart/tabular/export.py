@@ -65,7 +65,7 @@ def get_driver(destination_spec):
     Given a destination like target.gpkg, GPKG:target.gpkg, postgresql://x/y/z,
     returns the driver to use and the target that the driver should write to.
     """
-    match = re.match(r"([^:]+)://", destination_spec)
+    match = re.match(r"([^:]{2,})://", destination_spec)
     if match:
         return get_driver_by_shortname(match.group(1)), destination_spec
     if ":" in destination_spec:
