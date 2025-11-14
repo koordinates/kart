@@ -65,24 +65,29 @@ def test_export_datasets(archive, layer, geometry, data_archive, cli_runner):
             assert field_name[0:10] in output
 
 
-@pytest.mark.parametrize("use_absolute_path", [True, False])
-@pytest.mark.parametrize("use_format_specifier", [True, False])
-def test_export_path_styles(
-    use_absolute_path, use_format_specifier, data_archive, cli_runner
-):
-    with data_archive("points") as repo_dir:
-        if use_absolute_path:
-            path = (Path(".") / "output.gpkg").resolve()
-        else:
-            path = "output.gpkg"
-        if use_format_specifier:
-            format_specifier = "GPKG:"
-        else:
-            format_specifier = ""
+@pytest.mark.parametrize(
+    "spec,driver,destination",
+    [
+        ("output.gpkg", "GPKG", "output.gpkg"),
+        ("GPKG:output.gpkg", "GPKG", "output.gpkg"),
+        ("output.shp", "ESRI Shapefile", "output.shp"),
+        ("ESRI Shapefile:output.shp", "ESRI Shapefile", "output.shp"),
+        (r"/abs/path/to/output.gpkg", "GPKG", r"/abs/path/to/output.gpkg"),
+        (r"C:\Users\me\output.gpkg", "GPKG", r"C:\Users\me\output.gpkg"),
+        (r"GPKG:C:\Users\me\output.gpkg", "GPKG", r"C:\Users\me\output.gpkg"),
+        (
+            "postgresql://user:password@localhost:5432/database",
+            "PostgreSQL",
+            "postgresql://user:password@localhost:5432/database",
+        ),
+    ],
+)
+def test_export_path_styles(spec, driver, destination, data_archive, cli_runner):
+    from kart.tabular.export import get_driver
 
-        r = cli_runner.invoke(["export", H.POINTS.LAYER, f"{format_specifier}{path}"])
-        assert r.exit_code == 0, r.stderr
-        assert (repo_dir / "output.gpkg").exists()
+    actual_driver, actual_destination = get_driver(spec)
+    assert actual_driver.GetName() == driver
+    assert actual_destination == destination
 
 
 @pytest.mark.parametrize("epsg", [4326, 27200])
