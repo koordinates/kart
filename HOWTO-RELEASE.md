@@ -62,6 +62,6 @@ This process only supports a single release branch (master). It'll need to be ex
 
 15. Update `kart/VERSION` to the next [development Python version](https://www.python.org/dev/peps/pep-0440/#developmental-releases) eg: `1.2.4.dev0`. If it's an alpha/beta/rc release, then it should be set to the next _release version_ with `.dev0` appended.
 
-16. Update the `project()` statement in `CMakeLists.txt` to the next patch release eg: `1.2.4`. If it's an alpha/beta/rc release, then it should be set to the next _release version_.
+16. Update the `project()` statement in `CMakeLists.txt` to the next patch release eg: `1.2.4`
 
 17. Commit with a message like "Set development version as v1.2.4.dev0" and push
