@@ -15,6 +15,9 @@ Download the .pkg installer from the `release page <releases_>`_.
 Or use Homebrew to install:
 ``brew install koordinates/kart/kart --cask``
 
+.. note::
+
+   Kart is no longer built for Intel-based Macs. The last version supporting Intel Macs is `v0.16.1 <https://github.com/koordinates/kart/releases/v0.16.1>`_.
 
 **Linux**
 
