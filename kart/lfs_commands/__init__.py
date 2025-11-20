@@ -15,6 +15,7 @@ from kart.lfs_util import (
     get_hash_from_pointer_file,
     get_local_path_from_lfs_oid,
 )
+from kart.lfs_commands.url_redirector import UrlRedirector
 from kart.object_builder import ObjectBuilder
 from kart.rev_list_objects import rev_list_tile_pointer_files
 from kart.repo import KartRepoState
@@ -276,29 +277,32 @@ def fetch_lfs_blobs_for_commits(
         repo.spatial_filter if do_spatial_filter else SpatialFilter.MATCH_ALL
     )
 
-    pointer_file_oids = set()
+    dataset_to_pointer_file_oids = {}
     for commit in commits:
         for dataset in repo.datasets(
             commit, filter_dataset_type=ALL_TILE_DATASET_TYPES
         ):
-            pointer_file_oids.update(
-                blob.hex
-                for blob in dataset.tile_pointer_blobs(spatial_filter=spatial_filter)
+            pointer_file_oids = dataset_to_pointer_file_oids.setdefault(
+                dataset.path, set()
             )
+            for blob in dataset.tile_pointer_blobs(spatial_filter=spatial_filter):
+                pointer_file_oids.add(blob.hex)
 
     fetch_lfs_blobs_for_pointer_files(
-        repo, pointer_file_oids, dry_run=dry_run, quiet=quiet
+        repo, dataset_to_pointer_file_oids, dry_run=dry_run, quiet=quiet
     )
 
 
 def fetch_lfs_blobs_for_pointer_files(
-    repo, pointer_files, *, remote_name=None, dry_run=False, quiet=False
+    repo, dataset_to_pointer_file_oids, *, remote_name=None, dry_run=False, quiet=False
 ):
     """
-    Given a list of pointer files (or OIDs of pointer files themselves - not the OIDs they point to)
-    fetch all the tiles that those pointer files point to that are not already present in the local cache.
+    Given a dict in the format: {dataset-path: set(pointer-file-oid-1, pointer-file-oid-2, ...)}
+    Where dataset-path is the path to a dataset, and each pointer-file-oid is the OID of the pointer file itself
+    (not the LFS oid that the pointer file points to) that is present in that dataset:
+    Fetches all the tiles that those pointer files point to that are not already present in the local cache.
     """
-    if not pointer_files:
+    if not dataset_to_pointer_file_oids:
         return
 
     if not remote_name:
@@ -312,7 +316,12 @@ def fetch_lfs_blobs_for_pointer_files(
     urls_sizes = {}
     non_urls_sizes = {}
 
-    for pointer_file in pointer_files:
+    pointer_files_to_datasets = _invert_pointer_file_oid_dict(
+        dataset_to_pointer_file_oids
+    )
+    url_redirector = UrlRedirector(repo)
+
+    for pointer_file, datasets in pointer_files_to_datasets.items():
         if isinstance(pointer_file, str):
             pointer_blob = repo[pointer_file]
         elif getattr(pointer_file, "type", None) == pygit2.GIT_OBJ_BLOB:
@@ -322,6 +331,8 @@ def fetch_lfs_blobs_for_pointer_files(
 
         pointer_dict = pointer_file_bytes_to_dict(pointer_blob)
         url = pointer_dict.get("url")
+        url = url_redirector.apply_redirect(url, datasets)
+
         lfs_oid = get_hash_from_pointer_file(pointer_dict)
         pointer_file_oid = pointer_blob.hex
         lfs_path = get_local_path_from_lfs_oid(repo, lfs_oid)
@@ -367,6 +378,20 @@ def fetch_lfs_blobs_for_pointer_files(
         _do_fetch_from_urls(repo, urls, quiet=quiet)
     if non_urls and remote_name:
         _do_fetch_from_remote(repo, non_urls, remote_name, quiet=quiet)
+
+
+def _invert_pointer_file_oid_dict(dataset_to_pointer_file_oids):
+    result = {}
+    for dataset, pointer_file_oids in dataset_to_pointer_file_oids.items():
+        assert isinstance(dataset, str)
+        for pointer_file_oid in pointer_file_oids:
+            existing = result.setdefault(pointer_file_oid, dataset)
+            if dataset != existing:
+                if isinstance(existing, str):
+                    result[pointer_file_oid] = {existing, dataset}
+                elif isinstance(existing, set):
+                    existing.add(dataset)
+    return result
 
 
 def _do_fetch_from_urls(repo, urls_and_lfs_oids, quiet=False):
