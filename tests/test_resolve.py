@@ -677,3 +677,149 @@ def test_resolve_with_renumber__string_pks(data_working_copy, cli_runner):
             "Dataset nz_waca_adjustments does not have an integer primary key"
             in r.stderr
         )
+
+
+def test_resolve_with_renumber__subsequent_merge(data_working_copy, cli_runner):
+    """
+    Test renumbering during merge, then making more changes on the user branch
+    and merging again.
+
+    Workflow:
+    - main_branch inserts pk=1424850
+    - bob branch inserts pk=1424850 (same PK, different data)
+    - merge bob to main_branch -> conflict
+    - resolve with --renumber, bob's feature gets pk=4423294 on main_branch
+    - checkout bob again -> still has pk=1424850
+    - bob edits pk=1424850
+    - merge bob to main_branch again -> should handle the edit properly
+
+    Expected behavior: Bob's edit to pk=1424850 should be applied to the
+    renumbered feature (pk=4423294) on main_branch, not to main_branch's
+    original pk=1424850.
+
+    This test currently FAILS, documenting the expected behavior.
+    """
+    with data_working_copy("polygons") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+
+        # Create a common ancestor point
+        r = cli_runner.invoke(["checkout", "-b", "ancestor_point"])
+        assert r.exit_code == 0, r.stderr
+
+        # Create main_branch and add a feature with pk=1424850
+        r = cli_runner.invoke(["checkout", "-b", "main_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                H.POLYGONS.INSERT,
+                [
+                    {
+                        "id": 1424850,
+                        "geom": Geometry.from_wkt(
+                            "MULTIPOLYGON(((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0)))"
+                        ).with_crs_id(4167),
+                        "date_adjusted": "2020-01-01T00:00:00",
+                        "survey_reference": "main_feature",
+                        "adjusted_nodes": 100,
+                    }
+                ],
+            )
+
+        r = cli_runner.invoke(["commit", "-m", "main_branch: add feature 1424850"])
+        assert r.exit_code == 0, r.stderr
+
+        # Create bob branch from ancestor and add same PK with different data
+        r = cli_runner.invoke(["checkout", "ancestor_point"])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["checkout", "-b", "bob"])
+        assert r.exit_code == 0, r.stderr
+
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                H.POLYGONS.INSERT,
+                [
+                    {
+                        "id": 1424850,
+                        "geom": Geometry.from_wkt(
+                            "MULTIPOLYGON(((1 1, 1 1.001, 1.001 1.001, 1.001 1, 1 1)))"
+                        ).with_crs_id(4167),
+                        "date_adjusted": "2020-02-01T00:00:00",
+                        "survey_reference": "bob_feature_v1",
+                        "adjusted_nodes": 50,
+                    }
+                ],
+            )
+
+        r = cli_runner.invoke(["commit", "-m", "bob: add feature 1424850"])
+        assert r.exit_code == 0, r.stderr
+
+        # Merge bob into main_branch - should create conflict
+        r = cli_runner.invoke(["checkout", "main_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["merge", "bob"])
+        assert r.exit_code == 0, r.stderr
+        assert repo.state == KartRepoState.MERGING
+
+        r = cli_runner.invoke(["conflicts", "-s"])
+        assert r.exit_code == 0, r.stderr
+        assert "nz_waca_adjustments:feature:1424850" in r.stdout
+
+        # Resolve by renumbering bob's version
+        r = cli_runner.invoke(["resolve", "--renumber=theirs"])
+        assert r.exit_code == 0, r.stderr
+        assert "Resolved 1 conflict" in r.stdout
+
+        r = cli_runner.invoke(["merge", "--continue", "-m", "merge bob to main_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        # Verify on main_branch: pk=1424850 has main_branch's data, pk=4423294 has bob's data
+        main_structure = repo.structure("HEAD")
+        feature_1424850 = get_json_feature(main_structure, H.POLYGONS.LAYER, 1424850)
+        feature_4423294 = get_json_feature(main_structure, H.POLYGONS.LAYER, 4423294)
+
+        assert feature_1424850 is not None
+        assert feature_1424850["survey_reference"] == "main_feature"
+        assert feature_4423294 is not None
+        assert feature_4423294["survey_reference"] == "bob_feature_v1"
+
+        # Go back to bob's branch - should still have pk=1424850
+        r = cli_runner.invoke(["checkout", "bob"])
+        assert r.exit_code == 0, r.stderr
+
+        bob_structure = repo.structure("HEAD")
+        bob_feature = get_json_feature(bob_structure, H.POLYGONS.LAYER, 1424850)
+        assert bob_feature is not None
+        assert bob_feature["survey_reference"] == "bob_feature_v1"
+
+        # Bob edits the feature
+        with repo.working_copy.tabular.session() as sess:
+            sess.execute(
+                "UPDATE nz_waca_adjustments SET survey_reference='bob_feature_v2' WHERE id=1424850"
+            )
+
+        r = cli_runner.invoke(["commit", "-m", "bob: edit feature 1424850"])
+        assert r.exit_code == 0, r.stderr
+
+        # Merge bob to main_branch again
+        r = cli_runner.invoke(["checkout", "main_branch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["merge", "bob"])
+        assert r.exit_code == 0, r.stderr
+
+        # Check the result - this is the key assertion
+        # The edit from bob should apply to the renumbered feature (pk=4423294)
+        # not to pk=1424850 which belongs to main_branch
+        final_structure = repo.structure("HEAD")
+        final_1424850 = get_json_feature(final_structure, H.POLYGONS.LAYER, 1424850)
+        final_4423294 = get_json_feature(final_structure, H.POLYGONS.LAYER, 4423294)
+
+        # pk=1424850 should still have main_branch's original data (unchanged)
+        assert final_1424850 is not None
+        assert final_1424850["survey_reference"] == "main_feature"
+
+        # pk=4423294 should have bob's updated data
+        assert final_4423294 is not None
+        assert final_4423294["survey_reference"] == "bob_feature_v2"
