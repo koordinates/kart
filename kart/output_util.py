@@ -1,13 +1,16 @@
 import datetime
 import itertools
 import json
+import os
 import re
 import shutil
 import sys
 import textwrap
 import types
+from contextlib import closing, contextmanager
 from pathlib import Path
 
+import click
 import msgspec.json
 import pygments
 from pygments.lexers import JsonLexer
@@ -122,6 +125,9 @@ def format_json_for_output(output, fp, json_style="pretty"):
 
 
 def can_output_colour(fp):
+    # Check if this is a pager file that supports color
+    if hasattr(fp, "_kart_supports_color"):
+        return fp._kart_supports_color
     return fp in (sys.stdout, sys.stderr) and fp.isatty()
 
 
@@ -210,9 +216,7 @@ def dump_json_output(
     """
     output = _maybe_legacy_style_output(output)
 
-    fp = resolve_output_path(output_path)
-
-    try:
+    with resolve_output_path(output_path) as fp:
         highlit = can_output_colour(fp)
         json_encoder = encoder_class(**JSON_PARAMS[json_style], **encoder_kwargs)
         if highlit:
@@ -230,8 +234,6 @@ def dump_json_output(
             for chunk in json_encoder.iterencode(output):
                 fp.write(chunk)
         fp.write("\n")
-        fp.flush()
-    finally:
         maybe_flush(fp)
 
 
@@ -251,30 +253,46 @@ def _maybe_legacy_style_output(output):
     return output
 
 
-def resolve_output_path(output_path):
+@contextmanager
+def resolve_output_path(output_path, allow_pager=True):
     """
-    Takes a path-ish thing, and returns the appropriate writable file-like object.
+    Context manager that yields the appropriate writable file-like object.
     The path-ish thing could be:
       * a pathlib.Path object
       * a file-like object
       * the string '-' or None (both will return sys.stdout)
+
+    If the file is not stdout, it will be closed when exiting the context manager.
+
+    If allow_pager=True (the default) and the file is stdout, this will attempt to use a
+    pager to display long output.
     """
-    if (not output_path) or output_path == "-":
-        return sys.stdout
-
-    if isinstance(output_path, str):
-        output_path = Path(output_path)
-    if isinstance(output_path, Path):
-        output_path = output_path.expanduser()
-
     if hasattr(output_path, "write"):
-        # filelike object. *usually* this is a io.TextIOWrapper,
-        # but in some circumstances it can be something else.
-        # e.g. click on windows may wrap it with a colorama.ansitowin32.StreamWrapper.
-        return output_path
+        # Make this contextmanager re-entrant - if it's already a file-like object, just yield it
+        yield output_path
+    elif (not output_path) or output_path == "-":
+        if allow_pager and get_input_mode() == InputMode.INTERACTIVE:
+            pager_cmd = (
+                os.environ.get("KART_PAGER")
+                or os.environ.get("PAGER")
+                or _DEFAULT_PAGER
+            )
 
+            with _push_environment("PAGER", pager_cmd):
+                with click.get_pager_file() as pager:
+                    # Mark the pager file as supporting color output
+                    # (the pager command includes -R flag for color support)
+                    pager._kart_supports_color = True
+                    yield pager
+        else:
+            yield sys.stdout
     else:
-        return output_path.open("w", encoding="utf-8")
+        if isinstance(output_path, str):
+            output_path = Path(output_path)
+        if isinstance(output_path, Path):
+            output_path = output_path.expanduser()
+        with closing(output_path.open("w", encoding="utf-8")) as f:
+            yield f
 
 
 class InputMode:
@@ -306,3 +324,25 @@ def is_empty_stream(stream):
             return True
         stream.seek(pos)
     return False
+
+
+def _setenv(k, v):
+    if v is None:
+        os.environ.pop(k, None)
+    else:
+        os.environ[k] = v
+
+
+@contextmanager
+def _push_environment(k, v):
+    orig = os.environ.get(k)
+    _setenv(k, v)
+    try:
+        yield
+    finally:
+        _setenv(k, orig)
+
+
+_DEFAULT_PAGER = shutil.which("less")
+if _DEFAULT_PAGER:
+    _DEFAULT_PAGER += " --quit-if-one-screen --no-init -R"

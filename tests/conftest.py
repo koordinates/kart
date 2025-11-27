@@ -415,9 +415,11 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 
 
 class KartCliRunner(CliRunner):
-    def __init__(self, *args, in_pdb=False, mix_stderr=False, **kwargs):
+    def __init__(self, *args, in_pdb=False, **kwargs):
         self._in_pdb = in_pdb
-        super().__init__(*args, mix_stderr=mix_stderr, **kwargs)
+        # mix_stderr was removed in Click 8.2+ - we only support Click 9.0+
+        self.mix_stderr = False
+        super().__init__(*args, **kwargs)
 
     def invoke(self, args=None, **kwargs):
         from kart.cli import load_commands_from_args, cli

@@ -10,7 +10,11 @@ from kart.base_diff_writer import BaseDiffWriter
 from kart.diff_format import DiffFormat
 from kart.diff_structs import BINARY_FILE
 from kart.list_of_conflicts import ListOfConflicts
-from kart.output_util import format_wkt_for_output, resolve_output_path
+from kart.output_util import (
+    can_output_colour,
+    format_wkt_for_output,
+    resolve_output_path,
+)
 from kart.tabular.feature_output import feature_as_text, feature_field_as_text
 from kart.schema import Schema
 
@@ -29,8 +33,38 @@ class TextDiffWriter(BaseDiffWriter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fp = resolve_output_path(self.output_path)
-        self.pecho = {"file": self.fp, "color": self.fp.isatty()}
+        self._fp_context = None
+        self.fp = None
+        self.pecho = None
+
+    def __enter__(self):
+        self._fp_context = resolve_output_path(self.output_path)
+        self.fp = self._fp_context.__enter__()
+        self.pecho = {"file": self.fp, "color": can_output_colour(self.fp)}
+        return self
+
+    def __exit__(self, *args):
+        if self._fp_context:
+            return self._fp_context.__exit__(*args)
+
+    def _write_colored(self, text, fg=None, bg=None, bold=False):
+        """
+        Write colored text to output, handling multi-line strings correctly.
+
+        Pagers process output line-by-line, so we need to color each line individually
+        (like git does), not the entire block at once.
+        """
+        if self.pecho.get("color"):
+            # Color each line individually for proper pager display
+            lines = text.rstrip("\n").split("\n")
+            for line in lines:
+                styled_line = click.style(line, fg=fg, bg=bg, bold=bold)
+                self.fp.write(styled_line)
+                self.fp.write("\n")
+        else:
+            self.fp.write(text)
+            if not text.endswith("\n"):
+                self.fp.write("\n")
 
     @classmethod
     def _check_output_path(cls, repo, output_path):
@@ -89,10 +123,10 @@ class TextDiffWriter(BaseDiffWriter):
 
         if delta.old:
             output = self._prefix_item(delta.old_value, delta.old_key, "- ")
-            click.secho(output, fg="red", **self.pecho)
+            self._write_colored(output, fg="red")
         if delta.new:
             output = self._prefix_item(delta.new_value, delta.new_key, "+ ")
-            click.secho(output, fg="green", **self.pecho)
+            self._write_colored(output, fg="green")
 
     def write_meta_delta(self, ds_path, key, delta):
         if (
@@ -111,6 +145,14 @@ class TextDiffWriter(BaseDiffWriter):
             click.echo(output, **self.pecho)
         else:
             self.write_full_delta(ds_path, "meta", key, delta)
+
+    def _write_schema_diff_item(self, text, fg=None):
+        """Write a schema diff item with color."""
+        if self.pecho.get("color") and fg:
+            styled_text = click.style(text, fg=fg)
+            self.fp.write(styled_text)
+        else:
+            self.fp.write(text)
 
     @classmethod
     def _prefix_item(cls, item, item_name, prefix):
@@ -145,14 +187,13 @@ class TextDiffWriter(BaseDiffWriter):
         if delta.type == "insert":
             click.secho(f"+++ {ds_path}:{item_type}:{new_key}", bold=True, **self.pecho)
             output = feature_as_text(new_value, prefix="+ ")
-
-            click.secho(output, fg="green", **self.pecho)
+            self._write_colored(output, fg="green")
             return
 
         if delta.type == "delete":
             click.secho(f"--- {ds_path}:{item_type}:{old_key}", bold=True, **self.pecho)
             output = feature_as_text(old_value, prefix="- ")
-            click.secho(output, fg="red", **self.pecho)
+            self._write_colored(output, fg="red")
             return
 
         # More work to do when delta.type == "update"
@@ -169,10 +210,10 @@ class TextDiffWriter(BaseDiffWriter):
                 continue
             if k in old_value:
                 output = feature_field_as_text(old_value, k, prefix="- ")
-                click.secho(output, fg="red", **self.pecho)
+                self._write_colored(output, fg="red")
             if k in new_value:
                 output = feature_field_as_text(new_value, k, prefix="+ ")
-                click.secho(output, fg="green", **self.pecho)
+                self._write_colored(output, fg="green")
 
     # The rest of the class is all just so we can get nice schema diffs. Still, that's important.
     @classmethod
@@ -332,10 +373,10 @@ class TextDiffWriter(BaseDiffWriter):
             if not (delta.flags & BINARY_FILE):
                 if delta.old:
                     output = self._prefix_item(delta.old_value, delta.old_key, "- ")
-                    click.secho(output, fg="red", **self.pecho)
+                    self._write_colored(output, fg="red")
                 if delta.new:
                     output = self._prefix_item(delta.new_value, delta.new_key, "+ ")
-                    click.secho(output, fg="green", **self.pecho)
+                    self._write_colored(output, fg="green")
                 return
 
         file_type = "binary file" if delta.flags & BINARY_FILE else "file"

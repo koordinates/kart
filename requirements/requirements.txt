@@ -22,7 +22,7 @@ certifi==2025.11.12
     #   cryptography
     #   pygit2
     #   reflink
-click==8.1.7
+click @ git+https://github.com/craigds/click.git@filelike-pager
     # via -r requirements.in
 #cryptography==44.0.1
     # via -r vendor-wheels.txt
