@@ -285,13 +285,23 @@ class JsonLinesDiffWriter(BaseDiffWriter):
 
     def __init__(self, *args, diff_estimate_accuracy=None, delta_filter=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fp = resolve_output_path(self.output_path)
+        self._fp_context = None
+        self.fp = None
 
         self._diff_estimate_accuracy = diff_estimate_accuracy
         self.delta_filter = delta_filter
         self._output_lock = threading.RLock()
         # https://jcristharif.com/msgspec/perf-tips.html#reusing-an-output-buffer
         self._output_buffer = bytearray()
+
+    def __enter__(self):
+        self._fp_context = resolve_output_path(self.output_path)
+        self.fp = self._fp_context.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        if self._fp_context:
+            return self._fp_context.__exit__(*args)
 
     def dump(self, obj):
         with self._output_lock:

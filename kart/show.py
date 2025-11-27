@@ -163,7 +163,7 @@ def show(
     from .base_diff_writer import BaseDiffWriter
 
     diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_type)
-    diff_writer = diff_writer_class(
+    with diff_writer_class(
         repo,
         commit_spec,
         filters,
@@ -173,14 +173,14 @@ def show(
         target_crs=crs,
         sort_keys=sort_keys,
         diff_estimate_accuracy=add_feature_count_estimate,
-    )
-    diff_writer.full_file_diffs(diff_files)
-    diff_writer.include_target_commit_as_header()
-    diff_writer.write_diff(diff_format=diff_format)
-    diff_writer.flush()
+    ) as diff_writer:
+        diff_writer.full_file_diffs(diff_files)
+        diff_writer.include_target_commit_as_header()
+        diff_writer.write_diff(diff_format=diff_format)
+        diff_writer.flush()
 
-    if exit_code or output_type == "quiet":
-        diff_writer.exit_with_code()
+        if exit_code or output_type == "quiet":
+            diff_writer.exit_with_code()
 
 
 @click.command(cls=KartCommand, name="create-patch")
@@ -243,7 +243,7 @@ def create_patch(
     target_crs = make_crs(crs_str) if crs_str else None
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    diff_writer = PatchWriter(
+    with PatchWriter(
         repo,
         commit_spec,
         [],
@@ -251,8 +251,8 @@ def create_patch(
         json_style=json_style,
         target_crs=target_crs,
         target_crs_str=crs_str,
-    )
-    diff_writer.full_file_diffs(True)
-    diff_writer.include_target_commit_as_header()
-    diff_writer.write_diff(diff_format=diff_format)
-    diff_writer.flush()
+    ) as diff_writer:
+        diff_writer.full_file_diffs(True)
+        diff_writer.include_target_commit_as_header()
+        diff_writer.write_diff(diff_format=diff_format)
+        diff_writer.flush()
