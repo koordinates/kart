@@ -126,8 +126,8 @@ def format_json_for_output(output, fp, json_style="pretty"):
 
 def can_output_colour(fp):
     # Check if this is a pager file that supports color
-    if hasattr(fp, "_kart_supports_color"):
-        return fp._kart_supports_color
+    if hasattr(fp, "color"):
+        return fp.color
     return fp in (sys.stdout, sys.stderr) and fp.isatty()
 
 
@@ -282,7 +282,6 @@ def resolve_output_path(output_path, allow_pager=True):
                 with click.get_pager_file() as pager:
                     # Mark the pager file as supporting color output
                     # (the pager command includes -R flag for color support)
-                    pager._kart_supports_color = True
                     yield pager
         else:
             yield sys.stdout
