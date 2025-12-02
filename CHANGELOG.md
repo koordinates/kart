@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 # Unreleased
 
 - Helper mode: Fixed crashes when environment variables contain invalid UTF-8 sequences. [#1085](https://github.com/koordinates/kart/issues/1085)
+- Fixes the HTML diff viewer (`-o html`) failing to load the page if the data contained `<`, `>`, or `/` characters. [#1081](https://github.com/koordinates/kart/issues/1081)
 
 ## 0.17.0
 

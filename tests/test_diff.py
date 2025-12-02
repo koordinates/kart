@@ -2296,13 +2296,58 @@ def test_xss_protection():
 <html>
   <head>
     <title>Kart Diff: &lt;script&gt;alert(1);&lt;/script&gt;</title>
-    <script type="application/json">{"key": "\\x3c\\x2fscript\\x3e\\x3cscript\\x3ealert(1);\\x3c\\x2fscript\\x3e"}</script>
+    <script type="application/json">{"key": "\\u003c\\u002fscript\\u003e\\u003cscript\\u003ealert(1);\\u003c\\u002fscript\\u003e"}</script>
   </head>
   <body>...</body>
 </html>
 """.lstrip()
 
     assert result == EXPECTED_RESULT
+
+
+def test_html_output_with_special_characters():
+    """Test that special characters in data are properly escaped for JSON in HTML output."""
+    TEMPLATE = """<!DOCTYPE html>
+<html>
+  <head>
+    <title>Kart Diff: ${title}</title>
+    <script id="kart-data" type="application/json">${geojson_data}</script>
+  </head>
+  <body>...</body>
+</html>
+"""
+
+    # Test data with special characters that could break JSON or cause XSS
+    test_data = {
+        "dataset1": {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "a name </> with special chars",
+                        "path": "some/path/here",
+                        "html": "<div>content</div>",
+                    },
+                }
+            ],
+        }
+    }
+
+    result = HtmlDiffWriter.substitute_into_template(
+        string.Template(TEMPLATE), "Test Title", test_data
+    )
+
+    # Parse the HTML to extract the JSON
+    parser = html5lib.HTMLParser(strict=True, namespaceHTMLElements=False)
+    document = parser.parse(result)
+    el = document.find("./head/script[@id='kart-data']")
+
+    # This should not raise a JSONDecodeError
+    parsed_data = json.loads(el.text)
+
+    # Verify the data is correct
+    assert parsed_data == test_data
 
 
 def test_diff_format_no_data_changes_json(cli_runner, data_archive):

@@ -12,8 +12,15 @@ import kart
 from kart.crs_util import make_crs
 from kart.diff_format import DiffFormat
 from .base_diff_writer import BaseDiffWriter
-from .json_diff_writers import GeojsonDiffWriter
 from .output_util import ExtendedJsonEncoder, resolve_output_path
+
+_JSON_STR_ESCAPES = str.maketrans(
+    {
+        "/": r"\u002f",
+        "<": r"\u003c",
+        ">": r"\u003e",
+    }
+)
 
 
 class HtmlDiffWriter(BaseDiffWriter):
@@ -81,9 +88,6 @@ class HtmlDiffWriter(BaseDiffWriter):
                 "title": html.escape(title),
                 "geojson_data": json.dumps(
                     all_datasets_geojson, cls=ExtendedJsonEncoder
-                )
-                .replace("/", r"\x2f")
-                .replace("<", r"\x3c")
-                .replace(">", r"\x3e"),
+                ).translate(_JSON_STR_ESCAPES),
             }
         )
