@@ -92,6 +92,48 @@ int find_executable(char **argv, char *exe_path)
 }
 
 /**
+ * @brief Base64 encode a string to handle invalid UTF-8 sequences
+ * @param[in] input Input bytes
+ * @param[in] input_len Length of input
+ * @param[out] output Output buffer (must be at least ((input_len + 2) / 3) * 4 + 1 bytes)
+ * @return Length of encoded string (not including null terminator)
+ */
+size_t base64_encode(const unsigned char *input, size_t input_len, char *output)
+{
+    const char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    size_t i, j;
+    unsigned char char_array_3[3];
+    unsigned char char_array_4[4];
+
+    j = 0;
+    for (i = 0; i < input_len; ) {
+        char_array_3[0] = i < input_len ? input[i++] : 0;
+        char_array_3[1] = i < input_len ? input[i++] : 0;
+        char_array_3[2] = i < input_len ? input[i++] : 0;
+
+        char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+        char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+        char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+        char_array_4[3] = char_array_3[2] & 0x3f;
+
+        for(int k = 0; k < 4; k++)
+            output[j++] = base64_chars[char_array_4[k]];
+    }
+
+    // Add padding
+    size_t mod = input_len % 3;
+    if (mod == 1) {
+        output[j - 2] = '=';
+        output[j - 1] = '=';
+    } else if (mod == 2) {
+        output[j - 1] = '=';
+    }
+
+    output[j] = '\0';
+    return j;
+}
+
+/**
  * @brief find the path to the kart_cli executable
  * @param[in] source absolute or relative path to existing file
  * @param[in] name sibling filename
@@ -248,7 +290,11 @@ int main(int argc, char **argv, char **environ)
         int listSZ;
         for (listSZ = 0; environ[listSZ] != NULL; listSZ++)
             ;
-        char **helper_environ = malloc(listSZ * sizeof(char *));
+        char **helper_environ = malloc((listSZ + 1) * sizeof(char *));
+        if (!helper_environ) {
+            fprintf(stderr, "kart: failed to allocate memory for environment\n");
+            return 1;
+        }
 
         cJSON *env = NULL;
         cJSON *args = NULL;
@@ -261,20 +307,53 @@ int main(int argc, char **argv, char **environ)
         // spawned process and so getting into a loop
         for (env_ptr = environ; *env_ptr != NULL; env_ptr++)
         {
-            char *key = malloc(strlen(*env_ptr));
-            char *val = malloc(strlen(*env_ptr));
+            char *key = malloc(strlen(*env_ptr) + 1);
+            if (!key) {
+                fprintf(stderr, "kart: failed to allocate memory for environment variable\n");
+                free(helper_environ);
+                cJSON_Delete(payload);
+                return 1;
+            }
+
+            char *val = malloc(strlen(*env_ptr) + 1);
+            if (!val) {
+                fprintf(stderr, "kart: failed to allocate memory for environment variable\n");
+                free(key);
+                free(helper_environ);
+                cJSON_Delete(payload);
+                return 1;
+            }
 
             if (sscanf(*env_ptr, "%[^=]=%[^\x04]", key, val) != 2) {
                 // not found with two values in a key=value pair
                 if (sscanf(*env_ptr, "%[^=]=", key) != 1) {
                     fprintf(stderr, "error reading environment variable where only name is present\n");
                 }
+                val[0] = '\0';  // Empty value
             }
             if (strcmp(key, "KART_USE_HELPER"))
             {
                 helper_environ[found++] = *env_ptr;
-                cJSON_AddStringToObject(env, key, val);
+
+                // Base64 encode the value to handle invalid UTF-8 sequences
+                size_t val_len = strlen(val);
+                size_t encoded_len = ((val_len + 2) / 3) * 4 + 1;
+                char *encoded_val = malloc(encoded_len);
+                if (!encoded_val) {
+                    fprintf(stderr, "kart: failed to allocate memory for Base64 encoding\n");
+                    free(key);
+                    free(val);
+                    free(helper_environ);
+                    cJSON_Delete(payload);
+                    return 1;
+                }
+                base64_encode((unsigned char*)val, val_len, encoded_val);
+
+                cJSON_AddStringToObject(env, key, encoded_val);
+                free(encoded_val);
             }
+            free(key);
+            free(val);
         }
         helper_environ[listSZ] = NULL;
 
@@ -290,11 +369,22 @@ int main(int argc, char **argv, char **environ)
 
         size_t socket_filename_sz = strlen(getenv("HOME")) + strlen("/.kart..socket") + sizeof(pid_t) * 3 + 1;
         char *socket_filename = malloc(socket_filename_sz);
+        if (!socket_filename) {
+            fprintf(stderr, "kart: failed to allocate memory for socket filename\n");
+            free(helper_environ);
+            cJSON_Delete(payload);
+            close(fp);
+            return 1;
+        }
         int r = snprintf(socket_filename, socket_filename_sz, "%s/.kart.%d.socket", getenv("HOME"), getsid(0));
         if (r < 0 || (size_t) r >= socket_filename_sz)
         {
             fprintf(stderr, "Error allocating socket filename\n");
-            exit(1);
+            free(socket_filename);
+            free(helper_environ);
+            cJSON_Delete(payload);
+            close(fp);
+            return 1;
         }
 
         int socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);

@@ -58,6 +58,12 @@ kart -vvvv install tab-completion --shell auto
 # This checks our tab-completion works with _KART_COMPLETE (and not _KART_CLI_COMPLETE)
 COMP_WORDS="kart sta" COMP_CWORD=1 _KART_COMPLETE=bash_complete kart sta
 
+# Test that helper can handle environment variables with invalid UTF-8
+# Regression test for GitHub issue #1085
+export CORRUPT_ENV_VAR=$(printf '\x60\x69\x84\x3f')
+kart --version
+unset CORRUPT_ENV_VAR
+
 kart init --initial-branch=main .
 kart config user.name "Kart E2E Test 1"
 kart config user.email "kart-e2e-test-1@email.invalid"
