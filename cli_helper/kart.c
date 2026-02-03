@@ -367,7 +367,16 @@ int main(int argc, char **argv, char **environ)
         int fp = open(getcwd(NULL, 0), O_RDONLY);
         int fds[4] = {fileno(stdin), fileno(stdout), fileno(stderr), fp};
 
-        size_t socket_filename_sz = strlen(getenv("HOME")) + strlen("/.kart..socket") + sizeof(pid_t) * 3 + 1;
+        char *home = getenv("HOME");
+        if (!home) {
+            fprintf(stderr, "kart: HOME environment variable not set\n");
+            free(helper_environ);
+            cJSON_Delete(payload);
+            close(fp);
+            return 1;
+        }
+
+        size_t socket_filename_sz = strlen(home) + strlen("/.kart..socket") + sizeof(pid_t) * 3 + 1;
         char *socket_filename = malloc(socket_filename_sz);
         if (!socket_filename) {
             fprintf(stderr, "kart: failed to allocate memory for socket filename\n");
@@ -376,7 +385,7 @@ int main(int argc, char **argv, char **environ)
             close(fp);
             return 1;
         }
-        int r = snprintf(socket_filename, socket_filename_sz, "%s/.kart.%d.socket", getenv("HOME"), getsid(0));
+        int r = snprintf(socket_filename, socket_filename_sz, "%s/.kart.%d.socket", home, getsid(0));
         if (r < 0 || (size_t) r >= socket_filename_sz)
         {
             fprintf(stderr, "Error allocating socket filename\n");
