@@ -27,9 +27,7 @@ click==8.1.7
 #cryptography==44.0.1
     # via -r vendor-wheels.txt
 docutils==0.17.1
-    # via
-    #   -r requirements.in
-    #   rst2txt
+    # via -r requirements.in
 #gdal==3.8.0
     # via -r vendor-wheels.txt
 jmespath==1.0.1
@@ -49,9 +47,7 @@ pycparser==2.23
 #pygit2==1.12.1
     # via -r vendor-wheels.txt
 pygments==2.19.2
-    # via
-    #   -r requirements.in
-    #   rst2txt
+    # via -r requirements.in
 pymysql==1.1.2
     # via -r requirements.in
 pyodbc==5.1.0
@@ -70,8 +66,6 @@ rpds-py==0.28.0
     # via
     #   jsonschema
     #   referencing
-rst2txt==1.1.0
-    # via -r requirements.in
 s3transfer==0.14.0
     # via boto3
 shellingham==1.5.4
