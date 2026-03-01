@@ -172,6 +172,7 @@ jobs:
           echo "PATH=$PATH"
           echo "=========================="
 
+
       - name: "setup: restore vcpkg cache"
         uses: actions/cache/restore@v4
         with:
@@ -284,6 +285,10 @@ jobs:
         shell: bash
         run: |
           ./build/pyinstaller/dist/kart/kart --version
+
+      - name: "Setup tmate session on bundle smoke test failure"
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
 
       - name: "bundle: e2e tests"
         shell: bash
@@ -568,6 +573,10 @@ jobs:
         shell: bash
         run: |
           ./build/pyinstaller/dist/kart/kart --version
+
+      - name: "Setup tmate session on bundle smoke test failure"
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
 
       - name: "bundle: e2e tests"
         shell: bash
