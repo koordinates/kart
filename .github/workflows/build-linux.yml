@@ -172,6 +172,7 @@ jobs:
           echo "PATH=$PATH"
           echo "=========================="
 
+
       - name: "setup: restore vcpkg cache"
         uses: actions/cache/restore@v4
         with:
@@ -249,6 +250,9 @@ jobs:
       - name: "test: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/kart --version
+          # Now test with helper (normal operation)
           ./build/kart --version
 
       - name: "test: create no_postgis environment for tests"
@@ -283,6 +287,9 @@ jobs:
       - name: "bundle: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/pyinstaller/dist/kart/kart --version
+          # Now test with helper (normal operation)
           ./build/pyinstaller/dist/kart/kart --version
 
       - name: "bundle: e2e tests"
@@ -434,6 +441,9 @@ jobs:
       - name: smoke test
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 /opt/kart/kart --version
+          # Now test with helper (normal operation)
           /opt/kart/kart --version
           command -v kart
           kart --version
@@ -557,6 +567,9 @@ jobs:
       - name: "test: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/kart --version
+          # Now test with helper (normal operation)
           ./build/kart --version
 
       - name: "bundle: assemble"
@@ -567,6 +580,9 @@ jobs:
       - name: "bundle: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/pyinstaller/dist/kart/kart --version
+          # Now test with helper (normal operation)
           ./build/pyinstaller/dist/kart/kart --version
 
       - name: "bundle: e2e tests"
