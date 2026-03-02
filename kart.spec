@@ -177,10 +177,8 @@ pyi_analysis = Analysis(
         *collect_submodules('sqlalchemy'),
         # required for setuptools >=70.0.0 and pyinstaller <=6.7.0
         'pkg_resources.extern',
-        # jaraco modules required by pkg_resources
+        # jaraco.text is now installed as a real dependency
         *collect_submodules('jaraco'),
-        # Collect all pkg_resources.extern vendored dependencies
-        *collect_submodules('pkg_resources.extern'),
     ],
     hookspath=[],
     runtime_hooks=[],
