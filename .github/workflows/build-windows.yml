@@ -193,7 +193,8 @@ jobs:
       - name: "test: smoke test"
         shell: bash
         run: |
-          ./build/kart.cmd --version
+          # Note: Helper is not supported on Windows, but we set this for consistency
+          KART_USE_HELPER=0 ./build/kart.cmd --version
 
       - name: "test: unit tests"
         uses: lukka/run-cmake@v10.8
@@ -219,7 +220,8 @@ jobs:
       - name: "bundle: smoke test"
         shell: bash
         run: |
-          ./build/pyinstaller/dist/kart/kart.exe --version
+          # Note: Helper is not supported on Windows, but we set this for consistency
+          KART_USE_HELPER=0 ./build/pyinstaller/dist/kart/kart.exe --version
 
       - name: "bundle: e2e tests"
         uses: lukka/run-cmake@v10.8

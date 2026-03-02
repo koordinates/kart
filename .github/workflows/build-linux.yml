@@ -250,6 +250,9 @@ jobs:
       - name: "test: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/kart --version
+          # Now test with helper (normal operation)
           ./build/kart --version
 
       - name: "test: create no_postgis environment for tests"
@@ -284,6 +287,9 @@ jobs:
       - name: "bundle: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/pyinstaller/dist/kart/kart --version
+          # Now test with helper (normal operation)
           ./build/pyinstaller/dist/kart/kart --version
 
       - name: "Setup tmate session on bundle smoke test failure"
@@ -439,8 +445,10 @@ jobs:
       - name: smoke test
         shell: bash
         run: |
-          /opt/kart/kart --version
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 /opt/kart/kart --version
           command -v kart
+          # Now test with helper (normal operation)
           kart --version
 
       - uses: actions/checkout@v4
@@ -562,6 +570,9 @@ jobs:
       - name: "test: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/kart --version
+          # Now test with helper (normal operation)
           ./build/kart --version
 
       - name: "bundle: assemble"
@@ -572,6 +583,9 @@ jobs:
       - name: "bundle: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/pyinstaller/dist/kart/kart --version
+          # Now test with helper (normal operation)
           ./build/pyinstaller/dist/kart/kart --version
 
       - name: "Setup tmate session on bundle smoke test failure"
