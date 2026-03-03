@@ -50,6 +50,8 @@ more-itertools==10.8.0
     # via -r requirements.in
 msgspec==0.18.6
     # via -r requirements.in
+platformdirs==4.9.2
+    # via -r requirements.in
 #psycopg2==2.9.9
     # via -r vendor-wheels.txt
 pycparser==2.23

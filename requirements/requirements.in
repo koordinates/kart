@@ -19,6 +19,7 @@ jaraco.context
 jaraco.collections
 # Dependencies of jaraco packages
 more-itertools
+platformdirs
 
 # these are only here for dependencies, we build them in vcpkg-vendor,
 # and they're removed by CMake from the final requirements.txt files.
