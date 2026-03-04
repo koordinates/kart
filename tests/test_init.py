@@ -244,6 +244,67 @@ def test_import_replace_existing(
             }
 
 
+def test_import_replace_existing_preserves_attachments(
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+):
+    """Test that --replace-existing preserves existing attachments at the dataset path."""
+    with data_archive("gpkg-polygons") as data:
+        repo_path = tmp_path / "emptydir"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Add an attachment to the dataset using commit-files
+            r = cli_runner.invoke(
+                [
+                    "commit-files",
+                    "-m",
+                    "Add attachment",
+                    "mytable/LICENSE.txt=This is my license file",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Verify the attachment exists
+            repo = KartRepo(repo_path)
+            assert "mytable/LICENSE.txt" in repo.head_tree
+
+            # Now modify the source GPKG and reimport with --replace-existing
+            with Db_GPKG.create_engine(
+                data / "nz-waca-adjustments.gpkg"
+            ).connect() as conn:
+                conn.execute(
+                    "UPDATE nz_waca_adjustments SET survey_reference = 'edited' WHERE id = 1424927"
+                )
+
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    "--replace-existing",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Verify the attachment is still there after --replace-existing
+            repo = KartRepo(repo_path)
+            assert "mytable/LICENSE.txt" in repo.head_tree
+            license_blob = repo.head_tree / "mytable/LICENSE.txt"
+            assert license_blob.data == b"This is my license file"
+
+
 def test_import_replace_existing_with_no_changes(
     data_archive,
     tmp_path,

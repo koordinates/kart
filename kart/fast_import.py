@@ -172,16 +172,11 @@ def fast_import_clear_tree(*, proc, replace_ids, replacing_dataset, source):
     dest_path = source.dest_path
     dest_inner_path = f"{dest_path}/{replacing_dataset.DATASET_DIRNAME}"
     if replace_ids is None:
-        # Delete the existing dataset, before we re-import it.
-        proc.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
+        # Delete the existing dataset's inner directory, preserving any attachments at dest_path.
+        proc.stdin.write(f"D {dest_inner_path}\n".encode("utf8"))
     else:
-        # Delete and reimport any attachments at dest_path
-        attachment_names = [
-            obj.name for obj in replacing_dataset.tree if obj.type_str == "blob"
-        ]
-        for name in attachment_names:
-            proc.stdin.write(f"D {dest_path}/{name}\n".encode("utf8"))
         # Delete and reimport <inner_path>/meta/
+        # (Attachments at dest_path are preserved - new attachments from the import source will overwrite them.)
         proc.stdin.write(f"D {dest_inner_path}/meta\n".encode("utf8"))
 
     # We just deleted the legends, but we still need them to reimport

@@ -306,8 +306,8 @@ class TileImporter:
             self.write_extra_blobs(proc.stdin)
 
             if not self.update_existing:
-                # Delete the entire existing dataset, before we re-import it.
-                proc.stdin.write(f"D {self.dataset_path}\n".encode("utf8"))
+                # Delete the existing dataset's inner directory, preserving any attachments at dataset_path.
+                proc.stdin.write(f"D {self.dataset_inner_path}\n".encode("utf8"))
 
             if self.delete:
                 root_tree = self.repo.head_tree

@@ -16,6 +16,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ### Other changes
 
+- import: `--replace-existing` now preserves attachments (files at the dataset root level, such as licenses or READMEs) instead of deleting them along with the dataset data. [#1083](https://github.com/koordinates/kart/pull/1083)
 - New `kart mv` command to rename dataset paths. [#1067](https://github.com/koordinates/kart/pull/1067)
 - Patches (`apply`/`create-patch`):
     - Partial feature updates (updated features don't need to include unchanged fields) [#1065](https://github.com/koordinates/kart/pull/1065)
