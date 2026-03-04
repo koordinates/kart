@@ -28,6 +28,7 @@ HELPER_PRESERVE_ENV_VARS = (
     "GIT_EXEC_PATH",
     "GIT_INDEX_FILE",
     "GIT_TEMPLATE_DIR",
+    "HOME",
     "KART_HELPER_LOG",
     "LD_LIBRARY_PATH_ORIG",
     "LD_LIBRARY_PATH",
@@ -167,7 +168,10 @@ osr.UseExceptions()
 import pygit2  # noqa
 
 try:
-    if "KART_DIAGNOSTICS" in os.environ or pygit2.Config.get_global_config()["kart.diagnostics"]:
+    if (
+        "KART_DIAGNOSTICS" in os.environ
+        or pygit2.Config.get_global_config()["kart.diagnostics"]
+    ):
         from kart.diagnostics import print_diagnostics
 
         print_diagnostics()

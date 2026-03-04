@@ -1,3 +1,4 @@
+import base64
 import errno
 import json
 import os
@@ -156,6 +157,16 @@ def helper(ctx, socket_filename, timeout, args):
                         f"Payload:\n{repr(payload)}",
                     )
                 else:
+                    # Decode Base64-encoded environment variable values
+                    # (encoded in C to handle invalid UTF-8 sequences)
+                    decoded_environ = {}
+                    for key, encoded_val in calling_environment["environ"].items():
+                        decoded_val = base64.b64decode(encoded_val).decode(
+                            "utf-8", errors="surrogateescape"
+                        )
+                        decoded_environ[key] = decoded_val
+                    calling_environment["environ"] = decoded_environ
+
                     try:
                         # Join the process group of the calling process - so that if they get killed, we get killed to.
                         os.setpgid(0, calling_environment["pid"])
@@ -171,7 +182,7 @@ def helper(ctx, socket_filename, timeout, args):
                     os.environ.clear()
                     os.environ.update(
                         {
-                            **calling_environment["environ"],
+                            **decoded_environ,
                             **required_environment,
                             "KART_HELPER_PID": str(os.getppid()),
                             "KART_CALLER_PID": str(calling_environment["pid"]),
@@ -242,7 +253,7 @@ def helper(ctx, socket_filename, timeout, args):
                         """exit is called in the commands but we ignore as we need to clean up the caller"""
                         # TODO - do we ever see negative exit codes from cli (git etc)?
                         _helper_log(
-                            f"SystemExit from cli(): {system_exit.code} semval={1000+system_exit.code}"
+                            f"SystemExit from cli(): {system_exit.code} semval={1000 + system_exit.code}"
                         )
                         if (
                             libc.semctl(
