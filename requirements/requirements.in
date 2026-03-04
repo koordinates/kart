@@ -7,11 +7,19 @@ docutils<0.18
 msgspec~=0.18.6
 Pygments
 pymysql
-rst2txt
 shellingham
 sqlalchemy~=1.4
 tqdm
 jsonschema>=4.3
+# Required by pkg_resources in setuptools >=70.0.0
+# These match the vendored packages in setuptools._vendor
+jaraco.text
+jaraco.functools
+jaraco.context
+jaraco.collections
+# Dependencies of jaraco packages
+more-itertools
+platformdirs
 
 # these are only here for dependencies, we build them in vcpkg-vendor,
 # and they're removed by CMake from the final requirements.txt files.

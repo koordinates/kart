@@ -242,6 +242,9 @@ jobs:
 
       - name: "test: smoke test"
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/kart --version
+          # Now test with helper (normal operation)
           ./build/kart --version
 
       - name: "test: install clone_checker for reflink testing"
@@ -294,6 +297,9 @@ jobs:
       - name: "bundle: smoke test"
         shell: bash
         run: |
+          # First test without helper to get clear error messages if broken
+          KART_USE_HELPER=0 ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
+          # Now test with helper (normal operation)
           ./build/pyinstaller/dist/Kart.app/Contents/MacOS/kart --version
 
       - name: "bundle: e2e tests"

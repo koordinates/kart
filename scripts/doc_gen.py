@@ -17,7 +17,6 @@ import typing as t
 from kart import cli
 
 import click
-import rst2txt
 from docutils.core import publish_string
 from docutils.writers import manpage
 
@@ -74,8 +73,9 @@ def rst_to_man(contents):
 
 
 def rst_to_text(contents):
-    text_output = publish_string(contents, writer=rst2txt.Writer()).decode("utf-8")
-    return text_output
+    from docutils.core import publish_doctree
+
+    return publish_doctree(contents).astext()
 
 
 def get_short_help_str(command, limit=45):
