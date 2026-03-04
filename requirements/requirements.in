@@ -1,8 +1,10 @@
 boto3>=1.29.1
 certifi
-# 8.2.x breaks --diff-format somehow (?)
-# 8.3.0 fixes that but breaks Context.invoke (https://github.com/pallets/click/pull/3068)
-click==8.1.7
+# TODO: Switch back to official Click once 9.0.0 is released
+# Using filelike-pager branch for click.get_pager_file() support (PR #1572)
+# Once merged into Click 9.0.0, switch back to: click~=9.0
+# See: https://github.com/pallets/click/pull/1572
+click @ git+https://github.com/craigds/click.git@filelike-pager
 docutils<0.18
 msgspec~=0.18.6
 Pygments

@@ -229,9 +229,11 @@ class PowerShellComplete(click.shell_completion.ShellComplete):
         }
 
     def get_completion_args(self) -> Tuple[List[str], str]:
+        from click.shell_completion import split_arg_string
+
         completion_args = os.getenv("_KART_COMPLETE_ARGS", "")
         incomplete = os.getenv("_KART_COMPLETE_WORD_TO_COMPLETE", "")
-        cwords = click.parser.split_arg_string(completion_args)
+        cwords = split_arg_string(completion_args)
         args = cwords[1:]
         return args, incomplete
 

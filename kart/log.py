@@ -10,7 +10,7 @@ from kart.completion_shared import ref_or_repo_path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
 from kart import subprocess_util as subprocess
 from kart.key_filters import RepoKeyFilter
-from kart.output_util import dump_json_output
+from kart.output_util import dump_json_output, resolve_output_path
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
 from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
@@ -137,6 +137,12 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     hidden=True,
 )
 @click.option(
+    "--output",
+    "output_path",
+    help="Output to a specific file/directory instead of stdout.",
+    type=click.Path(writable=True, allow_dash=True),
+)
+@click.option(
     "--with-feature-count",
     default=None,
     type=click.Choice(diff_estimation.ACCURACY_CHOICES),
@@ -240,6 +246,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
 def log(
     ctx,
     output_format,
+    output_path,
     dataset_changes,
     with_feature_count,
     args,
@@ -260,61 +267,80 @@ def log(
     paths = convert_user_patterns_to_raw_paths(filters, repo, commits)
     output_type, fmt = output_format
 
-    # TODO: should we check paths exist here? git doesn't!
-    if output_type == "text":
-        if fmt:
-            options.append(f"--format={fmt}")
-        cmd = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
-        subprocess.run_then_exit(cmd)
+    log_cmd = [
+        "git",
+        "-C",
+        repo.path,
+        "--no-pager",
+        "log",
+    ]
 
-    elif output_type in ("json", "json-lines"):
-        if kwargs.get("graph"):
-            raise click.UsageError("JSON output and --graph and not compatible")
+    with resolve_output_path(output_path) as output_fp:
+        if output_fp.color:
+            options.append("--color=always")
 
-        try:
-            cmd = [
-                "git",
-                "-C",
-                repo.path,
-                "log",
-                "--format=%H,%D",
-                *options,
-                *commits,
-                "--",
-                *paths,
-            ]
-            r = subprocess.run(
-                cmd,
-                encoding="utf8",
-                check=True,
-                capture_output=True,
+        # TODO: should we check paths exist here? git doesn't!
+        if output_type == "text":
+            if fmt:
+                options.append(f"--format={fmt}")
+
+            p = subprocess.run(
+                [
+                    *log_cmd,
+                    *options,
+                    *commits,
+                    "--",
+                    *paths,
+                ],
+                encoding="utf-8",
+                stdout=output_fp,
             )
-        except subprocess.CalledProcessError as e:
-            raise SubprocessError(
-                f"There was a problem with git log: {e}", called_process_error=e
+            sys.exit(p.returncode)
+
+        elif output_type in ("json", "json-lines"):
+            if kwargs.get("graph"):
+                raise click.UsageError("JSON output and --graph and not compatible")
+
+            try:
+                r = subprocess.run(
+                    [
+                        *log_cmd,
+                        "--format=%H,%D",
+                        *options,
+                        *commits,
+                        "--",
+                        *paths,
+                    ],
+                    encoding="utf8",
+                    check=True,
+                    capture_output=True,
+                )
+            except subprocess.CalledProcessError as e:
+                raise SubprocessError(
+                    f"There was a problem with git log: {e}", called_process_error=e
+                )
+
+            commit_ids_and_refs_log = _parse_git_log_output(r.stdout.splitlines())
+            dataset_change_cache = {}
+
+            commit_log = (
+                commit_obj_to_json(
+                    repo[commit_id],
+                    repo,
+                    refs,
+                    dataset_changes,
+                    dataset_change_cache,
+                    with_feature_count,
+                )
+                for (commit_id, refs) in commit_ids_and_refs_log
             )
+            if output_type == "json-lines":
+                for item in commit_log:
+                    # hardcoded style here; each item must be on one line.
+                    dump_json_output(item, output_fp, "compact")
 
-        commit_ids_and_refs_log = _parse_git_log_output(r.stdout.splitlines())
-        dataset_change_cache = {}
-
-        commit_log = (
-            commit_obj_to_json(
-                repo[commit_id],
-                repo,
-                refs,
-                dataset_changes,
-                dataset_change_cache,
-                with_feature_count,
-            )
-            for (commit_id, refs) in commit_ids_and_refs_log
-        )
-        if output_type == "json-lines":
-            for item in commit_log:
-                # hardcoded style here; each item must be on one line.
-                dump_json_output(item, sys.stdout, "compact")
-
-        else:
-            dump_json_output(commit_log, sys.stdout, fmt)
+            else:
+                dump_json_output(commit_log, output_fp, fmt)
 
 
 def _parse_git_log_output(lines):
