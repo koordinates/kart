@@ -150,6 +150,38 @@ def test_branches_empty(tmp_path, cli_runner, chdir):
         }
 
 
+def test_branch_with_slash(data_working_copy, cli_runner):
+    """Test that branches with slashes in their names work correctly."""
+    with data_working_copy("points") as (path, wc):
+        r = cli_runner.invoke(["branch", "foo/bar"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["switch", "foo/bar"])
+        assert r.exit_code == 0, r
+
+        repo = KartRepo(path)
+        assert repo.head_branch_shorthand == "foo/bar"
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert "On branch foo/bar" in r.stdout
+
+        r = cli_runner.invoke(["status", "-o", "json"])
+        assert r.exit_code == 0, r
+        status_json = json.loads(r.stdout)
+        assert status_json["kart.status/v2"]["branch"] == "foo/bar"
+
+        r = cli_runner.invoke(["branch"])
+        assert r.exit_code == 0, r
+        assert "* foo/bar" in r.stdout
+
+        r = cli_runner.invoke(["switch", "main"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["branch", "-d", "foo/bar"])
+        assert r.exit_code == 0, r
+
+
 def test_branches_none(tmp_path, cli_runner, chdir):
     with chdir(tmp_path):
         r = cli_runner.invoke(["branch"])
