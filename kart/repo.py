@@ -740,7 +740,7 @@ class KartRepo(pygit2.Repository):
         """
         if self.head_is_detached:
             return None
-        return self.references["HEAD"].target.rsplit("/", 1)[-1]
+        return self.references["HEAD"].target.removeprefix("refs/heads/")
 
     @property
     def head_remote_name(self):

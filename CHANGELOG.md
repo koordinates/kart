@@ -6,6 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 # Unreleased
 
+- Fixes a crash when branch names contain a slash. [#1089](https://github.com/koordinates/kart/issues/1089)
 - Helper mode: Fixed crashes when environment variables contain invalid UTF-8 sequences. [#1085](https://github.com/koordinates/kart/issues/1085)
 - import: `--replace-existing` now preserves attachments (files at the dataset root level, such as licenses or READMEs) instead of deleting them along with the dataset data. [#1083](https://github.com/koordinates/kart/pull/1083)
 - Fixes the HTML diff viewer (`-o html`) failing to load the page if the data contained `<`, `>`, or `/` characters. [#1081](https://github.com/koordinates/kart/issues/1081)
