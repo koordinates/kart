@@ -1,6 +1,11 @@
+from typing import Optional, Set
+import logging
+
 from kart.merge_util import MergeContext, MergedIndex, RichConflict
 from kart.repo import KartRepoState
 from kart.context import Context
+
+L = logging.getLogger("kart.completion_shared")
 
 
 class CompletionSet(set):
@@ -16,23 +21,55 @@ class CompletionSet(set):
         return next(iter(self))
 
 
-def discover_repository(allowed_states=None):
+def discover_repository(allowed_states: Optional[KartRepoState] = None):
+    """
+    Attempt to discover a Kart repository in the current context.
+    
+    Args:
+        allowed_states: Optional state filter for the repository
+        
+    Returns:
+        A KartRepo instance if found, None otherwise
+    """
     ctx = Context()
     try:
         return ctx.get_repo(allowed_states=allowed_states)
-    except Exception:
-        pass
+    except (KeyError, ValueError, FileNotFoundError) as e:
+        # Repository not found or invalid state - this is expected during completion
+        L.debug(f"Could not discover repository: {e}")
+        return None
 
 
-def ref_completer(ctx=None, param=None, incomplete=""):
+def ref_completer(ctx=None, param=None, incomplete: str = "") -> CompletionSet:
+    """
+    Complete Git reference names (branches, tags, etc.).
+    
+    Args:
+        ctx: Click context (unused)
+        param: Click parameter (unused)
+        incomplete: The partial string to complete
+        
+    Returns:
+        A CompletionSet of matching reference names
+    """
     repo = discover_repository()
     if not repo:
-        return []
+        return CompletionSet()
 
     return CompletionSet(_do_complete_refs(repo, incomplete))
 
 
-def _do_complete_refs(repo, incomplete=""):
+def _do_complete_refs(repo, incomplete: str = "") -> Set[str]:
+    """
+    Internal function to complete references.
+    
+    Args:
+        repo: The Kart repository
+        incomplete: The partial string to complete
+        
+    Returns:
+        A set of matching reference names
+    """
     refs = set()
     for ref in repo.references:
         if incomplete and ref.startswith(incomplete):
@@ -44,10 +81,21 @@ def _do_complete_refs(repo, incomplete=""):
     return refs
 
 
-def conflict_completer(ctx=None, param=None, incomplete=""):
+def conflict_completer(ctx=None, param=None, incomplete: str = "") -> CompletionSet:
+    """
+    Complete conflict labels during merge resolution.
+    
+    Args:
+        ctx: Click context (unused) 
+        param: Click parameter (unused)
+        incomplete: The partial string to complete
+        
+    Returns:
+        A CompletionSet of matching conflict labels
+    """
     repo = discover_repository(allowed_states=KartRepoState.MERGING)
     if not repo:
-        return []
+        return CompletionSet()
 
     merged_index = MergedIndex.read_from_repo(repo)
     merge_context = MergeContext.read_from_repo(repo)
@@ -69,23 +117,55 @@ def conflict_completer(ctx=None, param=None, incomplete=""):
     return CompletionSet(labels)
 
 
-def repo_path_completer(ctx=None, param=None, incomplete=""):
+def repo_path_completer(ctx=None, param=None, incomplete: str = "") -> CompletionSet:
+    """
+    Complete dataset paths in the repository.
+    
+    Args:
+        ctx: Click context (unused)
+        param: Click parameter (unused)
+        incomplete: The partial string to complete
+        
+    Returns:
+        A CompletionSet of matching dataset paths
+    """
     repo = discover_repository(allowed_states=KartRepoState.ALL_STATES)
     if not repo:
-        return []
+        return CompletionSet()
 
     return _do_complete_paths(repo, incomplete)
 
 
-def _do_complete_paths(repo, incomplete=""):
+def _do_complete_paths(repo, incomplete: str = "") -> CompletionSet:
+    """
+    Internal function to complete dataset paths.
+    
+    Args:
+        repo: The Kart repository
+        incomplete: The partial string to complete
+        
+    Returns:
+        A CompletionSet of matching dataset paths
+    """
     all_ds_paths = repo.datasets("HEAD").paths()
     return CompletionSet(p for p in all_ds_paths if p.startswith(incomplete))
 
 
-def ref_or_repo_path_completer(ctx=None, param=None, incomplete=""):
+def ref_or_repo_path_completer(ctx=None, param=None, incomplete: str = "") -> CompletionSet:
+    """
+    Complete either Git references or dataset paths.
+    
+    Args:
+        ctx: Click context (unused)
+        param: Click parameter (unused)
+        incomplete: The partial string to complete
+        
+    Returns:
+        A CompletionSet of matching references or dataset paths
+    """
     repo = discover_repository()
     if not repo:
-        return []
+        return CompletionSet()
 
     return CompletionSet(
         _do_complete_refs(repo, incomplete) | _do_complete_paths(repo, incomplete)

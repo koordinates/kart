@@ -30,8 +30,8 @@ def print_diagnostics():
         from kart.version import get_version_info_text
 
         output += get_version_info_text()
-    except:
-        raise
+    except ImportError as e:
+        output.append(f"\nWarning: Could not import version info: {e}")
 
     cmd = [get_executable_path()] + sys.argv[1:]
     cmd = " ".join(quote(c) for c in cmd)
@@ -88,5 +88,6 @@ def print_diagnostics():
     print(output, file=sys.stderr)
     try:
         Path(os.path.expanduser("~"), "kart-diagnostics.txt").write_text(output)
-    except:
-        pass
+    except (OSError, PermissionError) as e:
+        # If we can't write diagnostics to file, that's fine - we already printed to stderr
+        print(f"Warning: Could not write diagnostics file: {e}", file=sys.stderr)
