@@ -175,8 +175,10 @@ try:
         from kart.diagnostics import print_diagnostics
 
         print_diagnostics()
-except:
-    pass
+except (KeyError, pygit2.GitError, ImportError) as e:
+    # Silently ignore diagnostics errors - diagnostics are optional debug features
+    # that shouldn't prevent Kart from starting
+    L.debug(f"Could not print diagnostics: {e}")
 
 
 pygit2.option(pygit2.GIT_OPT_ENABLE_STRICT_HASH_VERIFICATION, 0)
@@ -236,8 +238,9 @@ def _configure_process_cleanup_nonwindows():
             _kart_process_group_killed = True
             try:
                 os.killpg(0, signum)
-            except Exception:
-                pass
+            except (ProcessLookupError, PermissionError) as e:
+                # Process group may already be killed or we may not have permission
+                L.debug(f"Could not kill process group: {e}")
             sys.exit(128 + signum)
 
         signal.signal(signal.SIGTERM, _cleanup_process_group)
