@@ -85,10 +85,6 @@ def conflict_completer(ctx=None, param=None, incomplete: str = "") -> Completion
     """
     Complete conflict labels during merge resolution.
     
-    Note: This completion has known limitations with POSIX shells.
-    Conflict labels contain ':' characters which some shells treat specially,
-    requiring the user to quote the argument manually.
-    
     Args:
         ctx: Click context (unused) 
         param: Click parameter (unused)
