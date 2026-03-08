@@ -111,6 +111,7 @@ class BaseDiffWriter:
             self.base_rs, self.target_rs, self.repo_key_filter
         )
         self.workdir_diff_cache = self.repo.working_copy.workdir_diff_cache()
+        self.tabular_wc_metadata_cache = None  # Will be initialized lazily if needed
 
         self.spatial_filter_conflicts = None
         if (
@@ -325,8 +326,12 @@ class BaseDiffWriter:
         if diff_format == DiffFormat.NONE:
             self.write_warnings_footer()
             return
+
+        # Pre-fetch metadata in batch if we have multiple datasets and working copy diff
+        self._prefetch_working_copy_metadata()
+
         # If the diff format is NO_DATA_CHANGES, check if there is a diff and print True or False
-        elif diff_format == DiffFormat.NO_DATA_CHANGES:
+        if diff_format == DiffFormat.NO_DATA_CHANGES:
             self.has_changes = False
             for ds_path in self.all_ds_paths:
                 self.has_changes |= self.write_ds_diff_for_path(ds_path, diff_format)
@@ -342,6 +347,37 @@ class BaseDiffWriter:
             )
         self.has_changes |= self.write_file_diff(self.get_file_diff())
         self.write_warnings_footer()
+
+    def _prefetch_working_copy_metadata(self):
+        """
+        Pre-fetch metadata for all datasets in batch to reduce database round-trips.
+        Only applies to tabular working copies when we have multiple datasets.
+        """
+        # Only batch if we have multiple datasets and are including working copy diff
+        if not self.include_wc_diff or len(self.all_ds_paths) <= 1:
+            return
+
+        # Skip if already initialized
+        if self.tabular_wc_metadata_cache is not None:
+            return
+
+        # Get the tabular working copy metadata cache
+        self.tabular_wc_metadata_cache = (
+            self.repo.working_copy.tabular_wc_metadata_cache()
+        )
+        if not self.tabular_wc_metadata_cache:
+            return
+
+        # Get the target datasets that we'll need metadata for
+        target_datasets = []
+        for ds_path in self.all_ds_paths:
+            target_ds = self.target_rs.datasets().get(ds_path)
+            if target_ds and hasattr(target_ds, "table_name"):  # Only tabular datasets
+                target_datasets.append(target_ds)
+
+        if len(target_datasets) > 1:
+            # Pre-fetch metadata for all datasets in batch
+            self.tabular_wc_metadata_cache.collect_batch(target_datasets)
 
     def write_ds_diff_for_path(self, ds_path, diff_format=DiffFormat.FULL):
         """Default implementation for writing the diff for a particular dataset. Subclasses can override."""
@@ -442,6 +478,7 @@ class BaseDiffWriter:
             ds_filter=self.repo_key_filter[ds_path],
             convert_to_dataset_format=self.do_convert_to_dataset_format,
             diff_format=diff_format,
+            metadata_collector=self.tabular_wc_metadata_cache,
         )
 
     def get_file_diff(self):

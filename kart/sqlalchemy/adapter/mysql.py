@@ -213,6 +213,136 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
     _MAX_SPECIFIABLE_LENGTH = 0xFFFF
 
     @classmethod
+    def all_v2_meta_items_batch(cls, sess, db_schema, table_names, id_salt):
+        """
+        Batch version that queries multiple tables at once for MySQL.
+        Returns a dict mapping table_name -> meta_items dict.
+        """
+        if not table_names:
+            return {}
+
+        from itertools import groupby
+
+        result = {}
+
+        # Batch query table comments
+        table_comments = {}
+        comments_sql = """
+            SELECT table_name, table_comment
+            FROM information_schema.tables
+            WHERE table_schema=:table_schema
+              AND table_name IN :table_names;
+        """
+        r = sess.execute(
+            comments_sql, {"table_schema": db_schema, "table_names": table_names}
+        )
+        for row in r:
+            table_comments[row.table_name] = row.table_comment
+
+        # Batch query all table schemas
+        primary_key_sql = """
+            SELECT KCU.* FROM information_schema.key_column_usage KCU
+            INNER JOIN information_schema.table_constraints TC
+            ON KCU.table_schema = TC.table_schema
+            AND KCU.table_name = TC.table_name
+            AND KCU.constraint_schema = TC.constraint_schema
+            AND KCU.constraint_name = TC.constraint_name
+            WHERE TC.constraint_type = 'PRIMARY KEY'
+        """
+
+        table_info_sql = f"""
+            SELECT
+                C.table_name,
+                C.column_name, C.ordinal_position, C.data_type, C.srs_id,
+                C.character_maximum_length, C.numeric_precision, C.numeric_scale,
+                PK.ordinal_position AS pk_ordinal_position
+            FROM information_schema.columns C
+            LEFT OUTER JOIN ({primary_key_sql}) PK
+            ON (PK.table_schema = C.table_schema)
+            AND (PK.table_name = C.table_name)
+            AND (PK.column_name = C.column_name)
+            WHERE C.table_schema=:table_schema
+              AND C.table_name IN :table_names
+            ORDER BY C.table_name, C.ordinal_position;
+        """
+        r = sess.execute(
+            table_info_sql, {"table_schema": db_schema, "table_names": table_names}
+        )
+
+        # Group results by table
+        table_infos = {}
+        for table_name, rows in groupby(r, key=lambda x: x.table_name):
+            # Need to rename columns to match single-table version
+            renamed_rows = []
+            for row in rows:
+                renamed_row = {
+                    "COLUMN_NAME": row.column_name,
+                    "ORDINAL_POSITION": row.ordinal_position,
+                    "DATA_TYPE": row.data_type,
+                    "srs_id": row.srs_id,
+                    "CHARACTER_MAXIMUM_LENGTH": row.character_maximum_length,
+                    "NUMERIC_PRECISION": row.numeric_precision,
+                    "NUMERIC_SCALE": row.numeric_scale,
+                    "pk_ordinal_position": row.pk_ordinal_position,
+                }
+                renamed_rows.append(renamed_row)
+            table_infos[table_name] = renamed_rows
+
+        # Batch query spatial reference systems
+        spatial_ref_sys_sql = """
+            SELECT GC.table_name, SRS.*
+            FROM information_schema.st_spatial_reference_systems SRS
+            INNER JOIN information_schema.st_geometry_columns GC ON (GC.srs_id = SRS.srs_id)
+            WHERE GC.table_schema=:table_schema
+              AND GC.table_name IN :table_names;
+        """
+        r = sess.execute(
+            spatial_ref_sys_sql, {"table_schema": db_schema, "table_names": table_names}
+        )
+
+        # Group by table
+        spatial_refs_by_table = {}
+        for row in r:
+            table_name = row.table_name
+            if table_name not in spatial_refs_by_table:
+                spatial_refs_by_table[table_name] = []
+            # Remove table_name from the row dict
+            srs_info = {k: v for k, v in row._mapping.items() if k != "table_name"}
+            spatial_refs_by_table[table_name].append(srs_info)
+
+        # Assemble results for each table
+        for table_name in table_names:
+            if table_name not in table_infos:
+                continue
+
+            meta_items = {}
+
+            # Add title
+            meta_items["title"] = table_comments.get(table_name)
+
+            # Generate schema
+            mysql_table_info = table_infos[table_name]
+            mysql_spatial_ref_sys = spatial_refs_by_table.get(table_name, [])
+
+            # Use table-specific salt
+            table_salt = f"{id_salt} {table_name}" if id_salt else table_name
+            schema = cls.sqlserver_to_v2_schema(
+                mysql_table_info, mysql_spatial_ref_sys, table_salt
+            )
+            meta_items["schema.json"] = schema
+
+            # Add CRS definitions
+            for crs_info in mysql_spatial_ref_sys:
+                wkt = crs_info.get("DEFINITION")
+                if wkt:
+                    id_str = crs_util.get_identifier_str(wkt)
+                    meta_items[f"crs/{id_str}.wkt"] = crs_util.normalise_wkt(wkt)
+
+            result[table_name] = cls.remove_empty_values(meta_items)
+
+        return result
+
+    @classmethod
     def sqlserver_to_v2_schema(cls, mysql_table_info, mysql_crs_info, id_salt):
         """Generate a V2 schema from the given My SQL metadata."""
         return Schema(

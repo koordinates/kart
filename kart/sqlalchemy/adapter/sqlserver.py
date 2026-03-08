@@ -327,6 +327,153 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         return f"({cls.quote(col_name)}).STSrid = {crs_id}"
 
     @classmethod
+    def all_v2_meta_items_batch(cls, sess, db_schema, table_names, id_salt):
+        """
+        Batch version that queries multiple tables at once for SQL Server.
+        Returns a dict mapping table_name -> meta_items dict.
+        """
+        if not table_names:
+            return {}
+
+        from itertools import groupby
+
+        result = {}
+
+        # No table comments in SQL Server by default (would need extended properties)
+
+        # Batch query all table schemas
+        primary_key_sql = """
+            SELECT KCU.* FROM information_schema.key_column_usage KCU
+            INNER JOIN information_schema.table_constraints TC
+            ON KCU.constraint_schema = TC.constraint_schema
+            AND KCU.constraint_name = TC.constraint_name
+            WHERE TC.constraint_type = 'PRIMARY KEY'
+        """
+
+        table_info_sql = f"""
+            SELECT
+                C.table_name,
+                C.column_name, C.ordinal_position, C.data_type,
+                C.character_maximum_length, C.numeric_precision, C.numeric_scale,
+                PK.ordinal_position AS pk_ordinal_position
+            FROM information_schema.columns C
+            LEFT OUTER JOIN ({primary_key_sql}) PK
+            ON (PK.table_schema = C.table_schema)
+            AND (PK.table_name = C.table_name)
+            AND (PK.column_name = C.column_name)
+            WHERE C.table_schema=:table_schema
+              AND C.table_name IN :table_names
+            ORDER BY C.table_name, C.ordinal_position;
+        """
+        r = sess.execute(
+            table_info_sql, {"table_schema": db_schema, "table_names": table_names}
+        )
+
+        # Group results by table
+        table_infos = {}
+        geom_cols_by_table = {}
+        for table_name, rows in groupby(r, key=lambda x: x.table_name):
+            table_rows = list(rows)
+            table_infos[table_name] = table_rows
+
+            # Track geometry columns for each table
+            geom_cols = [
+                row.column_name
+                for row in table_rows
+                if row.data_type in ("geometry", "geography")
+            ]
+            if geom_cols:
+                geom_cols_by_table[table_name] = geom_cols
+
+        # Check if OGR spatial_ref_sys table exists
+        ogr_spatial_ref_sys_identifier = cls.quote_table(
+            db_schema=db_schema, table_name="spatial_ref_sys"
+        )
+        has_ogr_spatial_ref_sys = bool(
+            sess.scalar(
+                """
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema=:table_schema AND table_name='spatial_ref_sys';
+                """,
+                {"table_schema": db_schema},
+            )
+        )
+
+        # Prepare SRS table query parts
+        srs_table_selects = [
+            "MSSRS.authority_name AS ms_auth_name",
+            "MSSRS.authorized_spatial_reference_id AS ms_auth_srid",
+            "MSSRS.well_known_text AS ms_wkt",
+        ]
+        srs_table_joins = [
+            ("sys.spatial_reference_systems MSSRS", "MSSRS.spatial_reference_id")
+        ]
+
+        if has_ogr_spatial_ref_sys:
+            srs_table_selects += [
+                "OGRSRS.auth_name AS ogr_auth_name",
+                "OGRSRS.auth_srid AS ogr_auth_srid",
+                "OGRSRS.srtext AS ogr_wkt",
+            ]
+            srs_table_joins += [
+                (f"{ogr_spatial_ref_sys_identifier} OGRSRS", "OGRSRS.srid")
+            ]
+
+        srs_table_selects = ", ".join(srs_table_selects)
+
+        # Query CRS info for all tables with geometry columns
+        crs_info_by_table = {}
+        for table_name, geom_cols in geom_cols_by_table.items():
+            table_identifier = cls.quote_table(
+                db_schema=db_schema, table_name=table_name
+            )
+            table_crs_info = []
+
+            # Still need per-table queries for geometry sampling (can't easily batch this)
+            for g in geom_cols:
+                crs_row = sess.execute(
+                    f"""
+                    SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {srs_table_selects}
+                    FROM {table_identifier}
+                    {" ".join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins)}
+                    WHERE {cls.quote(g)} IS NOT NULL;
+                    """,
+                    {"column_name": g},
+                ).fetchone()
+                if crs_row:
+                    table_crs_info.append(crs_row)
+
+            crs_info_by_table[table_name] = list(cls._parse_crs_rows(table_crs_info))
+
+        # Assemble results for each table
+        for table_name in table_names:
+            if table_name not in table_infos:
+                continue
+
+            meta_items = {}
+
+            # Add title (SQL Server doesn't have table comments by default)
+            meta_items["title"] = None
+
+            # Generate schema
+            ms_table_info = table_infos[table_name]
+            ms_crs_info = crs_info_by_table.get(table_name, [])
+
+            # Use table-specific salt
+            table_salt = f"{id_salt} {table_name}" if id_salt else table_name
+            schema = cls.sqlserver_to_v2_schema(ms_table_info, ms_crs_info, table_salt)
+            meta_items["schema.json"] = schema
+
+            # Add CRS definitions
+            for column_name, crs_name, wkt in ms_crs_info:
+                if wkt:
+                    meta_items[f"crs/{crs_name}.wkt"] = wkt
+
+            result[table_name] = cls.remove_empty_values(meta_items)
+
+        return result
+
+    @classmethod
     def sqlserver_to_v2_schema(cls, ms_table_info, ms_crs_info, id_salt):
         """Generate a V2 schema from the given SQL server metadata."""
         return Schema(

@@ -154,6 +154,36 @@ class BaseKartAdapter:
         )
 
     @classmethod
+    def all_v2_meta_items_batch(cls, sess, db_schema, table_names, id_salt):
+        """
+        Batch version of all_v2_meta_items that queries multiple tables at once.
+        Returns a dict mapping table_name -> meta_items dict.
+
+        This is more efficient than calling all_v2_meta_items multiple times
+        as it reduces database round-trips.
+
+        sess - an open sqlalchemy session.
+        db_schema - the db schema (or similar) that contains the tables, if any.
+        table_names - list of table names to generate meta items for.
+        id_salt - a string based on the current state that should change when the circumstances change.
+        """
+        if not table_names:
+            return {}
+
+        # Default implementation just calls the single-table method for each table
+        # Subclasses should override this with actual batch queries
+        result = {}
+        for table_name in table_names:
+            try:
+                result[table_name] = cls.all_v2_meta_items(
+                    sess, db_schema, table_name, id_salt
+                )
+            except Exception:
+                # Skip tables that don't exist or have errors
+                continue
+        return result
+
+    @classmethod
     def get_metadata_xml(cls, sess, db_schema, table_name):
         """Read the XML metadata stored within the database for this table, if any."""
         # As a rule, the database tables themselves don't store XML metadata. The exception is GPKG.

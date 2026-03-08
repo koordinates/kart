@@ -148,11 +148,15 @@ class RichTableDataset(TableDataset):
         ds_filter=DatasetKeyFilter.MATCH_ALL,
         *,
         convert_to_dataset_format=None,
+        metadata_collector=None,
     ):
         table_wc = self.repo.working_copy.tabular
         if table_wc is None:
             return DatasetDiff()
-        return table_wc.diff_dataset_to_working_copy(self, ds_filter)
+
+        return table_wc.diff_dataset_to_working_copy(
+            self, ds_filter, metadata_collector=metadata_collector
+        )
 
     def diff_feature(
         self, other, feature_filter=FeatureKeyFilter.MATCH_ALL, reverse=False

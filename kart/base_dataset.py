@@ -182,12 +182,15 @@ class BaseDataset(metaclass=BaseDatasetMetaClass):
         ds_filter: DatasetKeyFilter = DatasetKeyFilter.MATCH_ALL,
         *,
         convert_to_dataset_format: bool | None = None,
+        metadata_collector=None,
     ):
         """
         Generates a diff from self to the working-copy.
         It may be the case that only the dataset-revision used to write the working
         copy can be used to do this (if we are tracking changes from that revision).
         See diff_util.get_dataset_diff() to generate diffs more generally.
+
+        metadata_collector: Optional metadata collector for batching tabular WC queries.
         """
         # Subclasses to override.
         pass

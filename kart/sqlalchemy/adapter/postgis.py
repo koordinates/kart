@@ -236,6 +236,181 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
 
     @classmethod
+    def all_v2_meta_items_batch(cls, sess, db_schema, table_names, id_salt):
+        """
+        Batch version that queries multiple tables at once for PostGIS.
+        Returns a dict mapping table_name -> meta_items dict.
+        """
+        if not table_names:
+            return {}
+
+        from itertools import groupby
+
+        result = {}
+
+        # Batch query table comments
+        table_comments = {}
+        if len(table_names) == 1:
+            # Single table - use existing regclass query
+            table_identifier = cls.quote_table(
+                db_schema=db_schema, table_name=table_names[0]
+            )
+            title = sess.scalar(
+                "SELECT obj_description((:table_identifier)::regclass, 'pg_class');",
+                {"table_identifier": table_identifier},
+            )
+            table_comments[table_names[0]] = title
+        else:
+            # Multiple tables - batch query from pg_description
+            comments_sql = """
+                SELECT c.relname AS table_name,
+                       obj_description(c.oid, 'pg_class') AS title
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema_name
+                  AND c.relname = ANY(:table_names)
+                  AND c.relkind IN ('r', 'p')  -- regular tables and partitioned tables
+            """
+            r = sess.execute(
+                comments_sql, {"schema_name": db_schema, "table_names": table_names}
+            )
+            for row in r:
+                table_comments[row.table_name] = row.title
+
+        # Check if PostGIS is installed
+        postgis_installed = is_postgis_installed(sess)
+
+        # Prepare geometry SQL fragments
+        if not postgis_installed:
+            geometry_type_sql = "NULL"
+            postgis_typmod_srid = "NULL"
+        else:
+            geometry_type_sql = """CASE WHEN udt_name='geometry' THEN
+                        upper(postgis_typmod_type(A.atttypmod)) ELSE NULL END"""
+            postgis_typmod_srid = """CASE WHEN udt_name='geometry' THEN
+                    postgis_typmod_srid(A.atttypmod) ELSE NULL END"""
+
+        # Batch query all table schemas
+        primary_key_sql = """
+            SELECT KCU.* FROM information_schema.key_column_usage KCU
+            INNER JOIN information_schema.table_constraints TC
+            ON KCU.constraint_schema = TC.constraint_schema
+            AND KCU.constraint_name = TC.constraint_name
+            WHERE TC.constraint_type = 'PRIMARY KEY'
+        """
+
+        table_info_sql = f"""
+            SELECT
+                C.table_name,
+                C.column_name, C.ordinal_position, C.data_type, C.udt_name,
+                C.character_maximum_length, C.numeric_precision, C.numeric_scale,
+                PK.ordinal_position AS pk_ordinal_position,
+                {geometry_type_sql} AS geometry_type,
+                {postgis_typmod_srid} AS geometry_srid
+            FROM information_schema.columns C
+            LEFT OUTER JOIN ({primary_key_sql}) PK
+            ON (PK.table_schema = C.table_schema)
+            AND (PK.table_name = C.table_name)
+            AND (PK.column_name = C.column_name)
+            LEFT OUTER JOIN pg_class PC
+            ON PC.relname = C.table_name
+            AND PC.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = C.table_schema)
+            LEFT OUTER JOIN pg_attribute A
+            ON (A.attname = C.column_name)
+            AND (A.attrelid = PC.oid)
+            WHERE C.table_schema=:table_schema
+              AND C.table_name = ANY(:table_names)
+            ORDER BY C.table_name, C.ordinal_position;
+        """
+
+        r = sess.execute(
+            table_info_sql, {"table_schema": db_schema, "table_names": table_names}
+        )
+
+        # Group results by table
+        table_infos = {}
+        for table_name, rows in groupby(r, key=lambda x: x.table_name):
+            table_infos[table_name] = list(rows)
+
+        # Batch query geometry columns if PostGIS is installed
+        geom_cols_by_table = {}
+        if postgis_installed:
+            geom_cols_sql = """
+                SELECT GC.f_table_name AS table_name,
+                       GC.f_geometry_column AS column_name,
+                       GC.srid,
+                       SRS.srtext
+                FROM geometry_columns GC
+                LEFT OUTER JOIN spatial_ref_sys SRS ON (GC.srid = SRS.srid)
+                WHERE GC.f_table_schema=:table_schema
+                  AND GC.f_table_name = ANY(:table_names);
+            """
+            r = sess.execute(
+                geom_cols_sql, {"table_schema": db_schema, "table_names": table_names}
+            )
+
+            # Group by table
+            for table_name, rows in groupby(r, key=lambda x: x.table_name):
+                geom_cols = [cls._filter_row_to_dict(row) for row in rows]
+
+                # Sample geometries for each column (still needs per-table queries)
+                table_identifier = cls.quote_table(
+                    db_schema=db_schema, table_name=table_name
+                )
+                for col_info in geom_cols:
+                    c = col_info["column_name"]
+                    row = sess.execute(
+                        f"""
+                        SELECT ST_Zmflag({cls.quote(c)}) AS zm,
+                        ST_SRID({cls.quote(c)}) AS srid, SRS.srtext
+                        FROM {table_identifier} LEFT OUTER JOIN spatial_ref_sys SRS
+                        ON SRS.srid = ST_SRID({cls.quote(c)})
+                        WHERE {cls.quote(c)} IS NOT NULL LIMIT 1;
+                        """
+                    ).fetchone()
+                    if row:
+                        sampled_info = cls._filter_row_to_dict(row)
+                        sampled_info["zm"] = cls.ZM_FLAG_TO_STRING.get(
+                            sampled_info.get("zm")
+                        )
+                        col_info.update({**sampled_info, **col_info})
+
+                geom_cols_by_table[table_name] = geom_cols
+
+        # Assemble results for each table
+        for table_name in table_names:
+            if table_name not in table_infos:
+                continue
+
+            meta_items = {}
+
+            # Add title
+            meta_items["title"] = table_comments.get(table_name)
+
+            # Generate schema
+            pg_table_info = table_infos[table_name]
+            geom_cols_info = geom_cols_by_table.get(table_name, [])
+
+            # Use table-specific salt
+            table_salt = f"{id_salt} {table_name}" if id_salt else table_name
+            schema = cls.postgis_to_v2_schema(pg_table_info, geom_cols_info, table_salt)
+            meta_items["schema.json"] = schema
+
+            # Add CRS definitions
+            for col_info in geom_cols_info:
+                try:
+                    wkt = col_info["srtext"]
+                    if wkt:
+                        id_str = crs_util.get_identifier_str(wkt)
+                        meta_items[f"crs/{id_str}.wkt"] = crs_util.normalise_wkt(wkt)
+                except KeyError:
+                    continue
+
+            result[table_name] = cls.remove_empty_values(meta_items)
+
+        return result
+
+    @classmethod
     def postgis_to_v2_schema(cls, pg_table_info, geom_cols_info, id_salt):
         """Generate a V2 schema from the given postgis metadata tables."""
         return Schema(

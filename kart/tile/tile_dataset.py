@@ -391,6 +391,7 @@ class TileDataset(BaseDataset):
         *,
         convert_to_dataset_format=None,
         extract_metadata=True,
+        metadata_collector=None,  # For API compatibility with tabular datasets
     ):
         """
         Returns a diff of all changes made to this dataset in the working copy.

@@ -99,6 +99,7 @@ def get_dataset_diff(
     ds_filter=DatasetKeyFilter.MATCH_ALL,
     convert_to_dataset_format=None,
     diff_format=DiffFormat.FULL,
+    metadata_collector=None,
 ):
     """
     Generates the DatasetDiff for the dataset at path dataset_path.
@@ -145,6 +146,7 @@ def get_dataset_diff(
                 workdir_diff_cache,
                 ds_filter=ds_filter,
                 convert_to_dataset_format=convert_to_dataset_format,
+                metadata_collector=metadata_collector,
             )
             L.debug(
                 "target<>working_copy diff (%s): %s",

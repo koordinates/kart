@@ -169,6 +169,22 @@ class WorkingCopy:
         w = self.workdir
         return w.workdir_diff_cache() if w else None
 
+    def tabular_wc_metadata_cache(self):
+        """
+        Returns a metadata cache/collector for the tabular working copy, if present.
+        This cache is used to batch metadata queries for multiple datasets, reducing database round-trips.
+        The cache is intended to live for the duration of a single diff operation.
+        """
+        if not self.tabular:
+            return None
+
+        from kart.tabular.working_copy.metadata_collector import (
+            WorkingCopyMetadataCollector,
+        )
+
+        # Create a new collector each time - it will cache for the duration of the diff
+        return WorkingCopyMetadataCollector(self.tabular)
+
     def create_parts_if_missing(
         self, parts_to_create, reset_to=DONT_RESET, non_checkout_datasets=None
     ):

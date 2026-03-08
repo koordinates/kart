@@ -490,11 +490,18 @@ class TableWorkingCopy(WorkingCopyPart):
         return repo_diff
 
     def diff_dataset_to_working_copy(
-        self, dataset, ds_filter=DatasetKeyFilter.MATCH_ALL, raise_if_dirty=False
+        self,
+        dataset,
+        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        raise_if_dirty=False,
+        metadata_collector=None,
     ):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for a single dataset only.
+
+        metadata_collector: Optional WorkingCopyMetadataCollector instance that has
+                           pre-fetched metadata for multiple datasets in batch.
         """
         if not self._is_dataset_supported(dataset):
             return DatasetDiff()
@@ -503,7 +510,17 @@ class TableWorkingCopy(WorkingCopyPart):
         with self.session() as sess:
             if self._is_noncheckout_dataset(sess, dataset):
                 return DatasetDiff()
-            meta_diff = self.diff_dataset_to_working_copy_meta(dataset, raise_if_dirty)
+
+            # Use collector if available, otherwise fall back to regular method
+            if metadata_collector:
+                meta_diff = metadata_collector.diff_dataset_to_working_copy_meta(
+                    dataset
+                )
+            else:
+                meta_diff = self.diff_dataset_to_working_copy_meta(
+                    dataset, raise_if_dirty
+                )
+
             feature_diff = self.diff_dataset_to_working_copy_feature(
                 dataset, feature_filter, meta_diff, raise_if_dirty
             )
