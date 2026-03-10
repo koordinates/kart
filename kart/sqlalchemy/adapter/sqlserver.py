@@ -168,22 +168,30 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         return sql_type
 
     @classmethod
-    @ungenerator(dict)
-    def all_v2_meta_items_including_empty(
-        cls, sess, db_schema, table_name, id_salt=None
+    def all_v2_meta_items_including_empty_multiple(
+        cls, sess, db_schema, table_names, id_salts
     ):
         """
-        Generate all V2 meta items for the given table.
-        Varying the id_salt varies the ids that are generated for the schema.json item.
+        Generate V2 meta items for multiple tables (including empty values).
+        Returns a dict keyed by table_name with meta items as values.
+        Optimized to fetch metadata for all tables in fewer queries.
         """
-        title = sess.scalar(
-            """
-            SELECT CAST(value AS NVARCHAR) FROM::fn_listextendedproperty(
-                'MS_Description', 'schema', :schema, 'table', :table, null, null);
-            """,
-            {"schema": db_schema, "table": table_name},
+        if not table_names:
+            return {}
+
+        result = {}
+        table_name_list = list(table_names)  # Ensure it's a list
+
+        # Get titles for all tables in one query
+        titles_sql = sa.text("""
+            SELECT objname AS table_name, CAST(value AS NVARCHAR(MAX)) AS title
+            FROM ::fn_listextendedproperty('MS_Description', 'schema', :schema, 'table', null, null, null)
+            WHERE objname IN :table_names
+        """).bindparams(sa.bindparam("table_names", expanding=True))
+        r = sess.execute(
+            titles_sql, {"schema": db_schema, "table_names": table_name_list}
         )
-        yield "title", title
+        titles = {row["table_name"]: row["title"] for row in r}
 
         primary_key_sql = """
             SELECT KCU.* FROM information_schema.key_column_usage KCU
@@ -191,11 +199,14 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             ON KCU.constraint_schema = TC.constraint_schema
             AND KCU.constraint_name = TC.constraint_name
             WHERE TC.constraint_type = 'PRIMARY KEY'
+            AND TC.table_schema = :table_schema
+            AND TC.table_name IN :table_names
         """
 
-        table_info_sql = f"""
+        # Get column info for all tables in one query
+        table_info_sql = sa.text(f"""
             SELECT
-                C.column_name, C.ordinal_position, C.data_type,
+                C.table_name, C.column_name, C.ordinal_position, C.data_type,
                 C.character_maximum_length, C.numeric_precision, C.numeric_scale,
                 PK.ordinal_position AS pk_ordinal_position
             FROM information_schema.columns C
@@ -203,27 +214,31 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             ON (PK.table_schema = C.table_schema)
             AND (PK.table_name = C.table_name)
             AND (PK.column_name = C.column_name)
-            WHERE C.table_schema=:table_schema AND C.table_name=:table_name
-            ORDER BY C.ordinal_position;
-        """
+            WHERE C.table_schema=:table_schema AND C.table_name IN :table_names
+            ORDER BY C.table_name, C.ordinal_position;
+        """).bindparams(sa.bindparam("table_names", expanding=True))
         r = sess.execute(
-            table_info_sql,
-            {"table_schema": db_schema, "table_name": table_name},
-        )
-        ms_table_info = list(r)
-
-        geom_cols = [
-            row["column_name"]
-            for row in ms_table_info
-            if row["data_type"] in ("geometry", "geography")
-        ]
-
-        table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
-        ogr_spatial_ref_sys_identifier = cls.quote_table(
-            db_schema=db_schema, table_name="spatial_ref_sys"
+            table_info_sql, {"table_schema": db_schema, "table_names": table_name_list}
         )
 
-        has_ogr_spatial_ref_sys_identifier = bool(
+        # Group table info by table_name
+        ms_table_info_by_table = {}
+        geom_cols_by_table = {}
+        for row in r:
+            table_name = row["table_name"]
+            if table_name not in ms_table_info_by_table:
+                ms_table_info_by_table[table_name] = []
+                geom_cols_by_table[table_name] = []
+            # Create a dict without the table_name for compatibility
+            row_dict = cls._row_to_dict(row, exclude_columns=["table_name"])
+            ms_table_info_by_table[table_name].append(row_dict)
+
+            # Track geometry columns
+            if row["data_type"] in ("geometry", "geography"):
+                geom_cols_by_table[table_name].append(row["column_name"])
+
+        # Check for OGR spatial_ref_sys table
+        has_ogr_spatial_ref_sys = bool(
             sess.scalar(
                 """
                 SELECT COUNT(*) FROM information_schema.tables
@@ -233,50 +248,97 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             )
         )
 
-        srs_table_selects = [
-            "MSSRS.authority_name AS ms_auth_name",
-            "MSSRS.authorized_spatial_reference_id AS ms_auth_srid",
-            "MSSRS.well_known_text AS ms_wkt",
-        ]
-        srs_table_joins = [
-            ("sys.spatial_reference_systems MSSRS", "MSSRS.spatial_reference_id")
-        ]
+        ogr_spatial_ref_sys_identifier = (
+            cls.quote_table(db_schema=db_schema, table_name="spatial_ref_sys")
+            if has_ogr_spatial_ref_sys
+            else None
+        )
 
-        if has_ogr_spatial_ref_sys_identifier:
-            srs_table_selects += [
-                "OGRSRS.auth_name AS ogr_auth_name",
-                "OGRSRS.auth_srid AS ogr_auth_srid",
-                "OGRSRS.srtext AS ogr_wkt",
-            ]
-            srs_table_joins += [
-                (f"{ogr_spatial_ref_sys_identifier} OGRSRS", "OGRSRS.srid")
-            ]
+        # Process CRS info for each table with geometry columns
+        ms_crs_info_by_table = {}
+        for table_name in table_names:
+            geom_cols = geom_cols_by_table.get(table_name, [])
+            if not geom_cols:
+                ms_crs_info_by_table[table_name] = []
+                continue
 
-        srs_table_selects = ", ".join(srs_table_selects)
-
-        ms_crs_info = list(
-            cls._parse_crs_rows(
-                sess.execute(
-                    f"""
-                    SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {srs_table_selects}
-                    FROM {table_identifier}
-                    {" ".join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins)}
-                    WHERE {cls.quote(g)} IS NOT NULL;
-                    """,
-                    {"column_name": g},
-                ).fetchone()
-                for g in geom_cols
+            table_identifier = cls.quote_table(
+                db_schema=db_schema, table_name=table_name
             )
-        )
 
-        schema = KartAdapter_SqlServer.sqlserver_to_v2_schema(
-            ms_table_info, ms_crs_info, id_salt
-        )
-        yield "schema.json", schema
+            srs_table_selects = [
+                "MSSRS.authority_name AS ms_auth_name",
+                "MSSRS.authorized_spatial_reference_id AS ms_auth_srid",
+                "MSSRS.well_known_text AS ms_wkt",
+            ]
+            srs_table_joins = [
+                ("sys.spatial_reference_systems MSSRS", "MSSRS.spatial_reference_id")
+            ]
 
-        for column_name, crs_name, wkt in ms_crs_info:
-            if wkt:
-                yield f"crs/{crs_name}.wkt", wkt
+            if has_ogr_spatial_ref_sys:
+                srs_table_selects += [
+                    "OGRSRS.auth_name AS ogr_auth_name",
+                    "OGRSRS.auth_srid AS ogr_auth_srid",
+                    "OGRSRS.srtext AS ogr_wkt",
+                ]
+                srs_table_joins += [
+                    (f"{ogr_spatial_ref_sys_identifier} OGRSRS", "OGRSRS.srid")
+                ]
+
+            srs_table_selects = ", ".join(srs_table_selects)
+
+            ms_crs_info = list(
+                cls._parse_crs_rows(
+                    sess.execute(
+                        f"""
+                        SELECT TOP 1 :column_name AS column_name, {cls.quote(g)}.STSrid AS column_srid, {srs_table_selects}
+                        FROM {table_identifier}
+                        {" ".join(f"LEFT OUTER JOIN {table} ON {column} = {cls.quote(g)}.STSrid" for table, column in srs_table_joins)}
+                        WHERE {cls.quote(g)} IS NOT NULL;
+                        """,
+                        {"column_name": g},
+                    ).fetchone()
+                    for g in geom_cols
+                )
+            )
+            ms_crs_info_by_table[table_name] = ms_crs_info
+
+        # Build result for each table
+        for table_name in table_names:
+            meta_items = {}
+            meta_items["title"] = titles.get(table_name)
+
+            ms_table_info = ms_table_info_by_table.get(table_name, [])
+            ms_crs_info = ms_crs_info_by_table.get(table_name, [])
+
+            schema = cls.sqlserver_to_v2_schema(
+                ms_table_info, ms_crs_info, id_salts[table_name]
+            )
+            meta_items["schema.json"] = schema
+
+            # Add CRS definitions
+            for column_name, crs_name, wkt in ms_crs_info:
+                if wkt:
+                    id_str = crs_util.get_identifier_str(wkt)
+                    meta_items[f"crs/{id_str}.wkt"] = crs_util.normalise_wkt(wkt)
+
+            result[table_name] = meta_items
+
+        return result
+
+    @classmethod
+    def all_v2_meta_items_including_empty(
+        cls, sess, db_schema, table_name, id_salt=None
+    ):
+        """
+        Generate all V2 meta items for the given table.
+        Varying the id_salt varies the ids that are generated for the schema.json item.
+        """
+        # Delegate to the multiple-table version for consistency and to benefit from optimizations
+        result = cls.all_v2_meta_items_including_empty_multiple(
+            sess, db_schema, [table_name], {table_name: id_salt}
+        )
+        return result[table_name]
 
     @classmethod
     def _parse_crs_rows(cls, crs_rows):

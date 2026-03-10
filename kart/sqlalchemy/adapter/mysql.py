@@ -145,21 +145,33 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         return mysql_type
 
     @classmethod
-    @ungenerator(dict)
-    def all_v2_meta_items_including_empty(
-        cls, sess, db_schema, table_name, id_salt=None
+    def all_v2_meta_items_including_empty_multiple(
+        cls, sess, db_schema, table_names, id_salts
     ):
-        title = sess.scalar(
-            """
-            SELECT table_comment FROM information_schema.tables
-            WHERE table_schema=:table_schema AND table_name=:table_name;
-            """,
-            {"table_schema": db_schema, "table_name": table_name},
-        )
-        yield "title", title
+        """
+        Generate V2 meta items for multiple tables (including empty values).
+        Returns a dict keyed by table_name with meta items as values.
+        Optimized to fetch metadata for all tables in fewer queries.
 
-        # Primary key SQL is a bit different for MySQL since constraints are named within the namespace of a table -
-        # they don't names that are globally unique within the db-schema.
+        Note: MySQL driver returns all column names in uppercase.
+        """
+        if not table_names:
+            return {}
+
+        result = {}
+        table_name_list = list(table_names)  # Ensure it's a list
+
+        # Get titles for all tables in one query
+        titles_sql = sa.text("""
+            SELECT table_name, table_comment FROM information_schema.tables
+            WHERE table_schema=:table_schema AND table_name IN :table_names;
+        """).bindparams(sa.bindparam("table_names", expanding=True))
+        r = sess.execute(
+            titles_sql, {"table_schema": db_schema, "table_names": table_name_list}
+        )
+        titles = {row["TABLE_NAME"]: row["TABLE_COMMENT"] for row in r}
+
+        # Primary key SQL for MySQL
         primary_key_sql = """
             SELECT KCU.* FROM information_schema.key_column_usage KCU
             INNER JOIN information_schema.table_constraints TC
@@ -168,11 +180,14 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             AND KCU.constraint_schema = TC.constraint_schema
             AND KCU.constraint_name = TC.constraint_name
             WHERE TC.constraint_type = 'PRIMARY KEY'
+            AND TC.table_schema = :table_schema
+            AND TC.table_name IN :table_names
         """
 
-        table_info_sql = f"""
+        # Get column info for all tables in one query
+        table_info_sql = sa.text(f"""
             SELECT
-                C.column_name, C.ordinal_position, C.data_type, C.srs_id,
+                C.table_name, C.column_name, C.ordinal_position, C.data_type, C.srs_id,
                 C.character_maximum_length, C.numeric_precision, C.numeric_scale,
                 PK.ordinal_position AS pk_ordinal_position
             FROM information_schema.columns C
@@ -180,35 +195,83 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             ON (PK.table_schema = C.table_schema)
             AND (PK.table_name = C.table_name)
             AND (PK.column_name = C.column_name)
-            WHERE C.table_schema=:table_schema AND C.table_name=:table_name
-            ORDER BY C.ordinal_position;
-        """
+            WHERE C.table_schema=:table_schema AND C.table_name IN :table_names
+            ORDER BY C.table_name, C.ordinal_position;
+        """).bindparams(sa.bindparam("table_names", expanding=True))
         r = sess.execute(
-            table_info_sql,
-            {"table_schema": db_schema, "table_name": table_name},
+            table_info_sql, {"table_schema": db_schema, "table_names": table_name_list}
         )
-        mysql_table_info = list(r)
 
-        spatial_ref_sys_sql = """
-            SELECT SRS.* FROM information_schema.st_spatial_reference_systems SRS
-            LEFT OUTER JOIN information_schema.st_geometry_columns GC ON (GC.srs_id = SRS.srs_id)
-            WHERE GC.table_schema=:table_schema AND GC.table_name=:table_name;
-        """
+        # Group table info by table_name
+        mysql_table_info_by_table = {}
+        for row in r:
+            table_name = row["TABLE_NAME"]
+            if table_name not in mysql_table_info_by_table:
+                mysql_table_info_by_table[table_name] = []
+            # Create a dict without the table_name for compatibility with existing code
+            row_dict = cls._row_to_dict(row, exclude_columns=["TABLE_NAME"])
+            mysql_table_info_by_table[table_name].append(row_dict)
+
+        # Get spatial reference system info for all tables
+        spatial_ref_sys_sql = sa.text("""
+            SELECT GC.table_name, SRS.*
+            FROM information_schema.st_spatial_reference_systems SRS
+            INNER JOIN information_schema.st_geometry_columns GC ON (GC.srs_id = SRS.srs_id)
+            WHERE GC.table_schema=:table_schema AND GC.table_name IN :table_names;
+        """).bindparams(sa.bindparam("table_names", expanding=True))
         r = sess.execute(
             spatial_ref_sys_sql,
-            {"table_schema": db_schema, "table_name": table_name},
+            {"table_schema": db_schema, "table_names": table_name_list},
         )
-        mysql_spatial_ref_sys = list(r)
 
-        schema = KartAdapter_MySql.sqlserver_to_v2_schema(
-            mysql_table_info, mysql_spatial_ref_sys, id_salt
+        # Group spatial ref sys by table_name
+        mysql_spatial_ref_sys_by_table = {}
+        for row in r:
+            table_name = row["TABLE_NAME"]
+            if table_name not in mysql_spatial_ref_sys_by_table:
+                mysql_spatial_ref_sys_by_table[table_name] = []
+            # Create a dict without the table_name - include all SRS columns
+            row_dict = cls._row_to_dict(row, exclude_columns=["TABLE_NAME"])
+            # Avoid duplicates
+            if row_dict not in mysql_spatial_ref_sys_by_table[table_name]:
+                mysql_spatial_ref_sys_by_table[table_name].append(row_dict)
+
+        # Build result for each table
+        for table_name in table_names:
+            meta_items = {}
+            meta_items["title"] = titles.get(table_name)
+
+            mysql_table_info = mysql_table_info_by_table.get(table_name, [])
+            mysql_spatial_ref_sys = mysql_spatial_ref_sys_by_table.get(table_name, [])
+
+            schema = cls.sqlserver_to_v2_schema(
+                mysql_table_info, mysql_spatial_ref_sys, id_salts[table_name]
+            )
+            meta_items["schema.json"] = schema
+
+            # Add CRS definitions
+            for crs_info in mysql_spatial_ref_sys:
+                wkt = crs_info["DEFINITION"]
+                id_str = crs_util.get_identifier_str(wkt)
+                meta_items[f"crs/{id_str}.wkt"] = crs_util.normalise_wkt(wkt)
+
+            result[table_name] = meta_items
+
+        return result
+
+    @classmethod
+    def all_v2_meta_items_including_empty(
+        cls, sess, db_schema, table_name, id_salt=None
+    ):
+        """
+        Generate all V2 meta items for the given table.
+        Varying the id_salt varies the ids that are generated for the schema.json item.
+        """
+        # Delegate to the multiple-table version for consistency and to benefit from optimizations
+        result = cls.all_v2_meta_items_including_empty_multiple(
+            sess, db_schema, [table_name], {table_name: id_salt}
         )
-        yield "schema.json", schema
-
-        for crs_info in mysql_spatial_ref_sys:
-            wkt = crs_info["DEFINITION"]
-            id_str = crs_util.get_identifier_str(wkt)
-            yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
+        return result[table_name]
 
     _MAX_SPECIFIABLE_LENGTH = 0xFFFF
 

@@ -124,21 +124,31 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         return f"GEOMETRY({geometry_type},{crs_id})"
 
     @classmethod
-    @ungenerator(dict)
-    def all_v2_meta_items_including_empty(
-        cls, sess, db_schema, table_name, id_salt=None
+    def all_v2_meta_items_including_empty_multiple(
+        cls, sess, db_schema, table_names, id_salts
     ):
         """
-        Generate all V2 meta items for the given table.
-        Varying the id_salt varies the ids that are generated for the schema.json item.
+        Generate V2 meta items for multiple tables (including empty values).
+        Returns a dict keyed by table_name with meta items as values.
+        Optimized to fetch metadata for all tables in fewer queries.
         """
-        table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
+        if not table_names:
+            return {}
 
-        title = sess.scalar(
-            "SELECT obj_description((:table_identifier)::regclass, 'pg_class');",
-            {"table_identifier": table_identifier},
-        )
-        yield "title", title
+        result = {}
+        table_name_list = list(table_names)  # Ensure it's a list
+
+        # Get titles for all tables
+        titles = {}
+        for table_name in table_names:
+            table_identifier = cls.quote_table(
+                db_schema=db_schema, table_name=table_name
+            )
+            title = sess.scalar(
+                "SELECT obj_description((:table_identifier)::regclass, 'pg_class');",
+                {"table_identifier": table_identifier},
+            )
+            titles[table_name] = title
 
         primary_key_sql = """
             SELECT KCU.* FROM information_schema.key_column_usage KCU
@@ -146,23 +156,25 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             ON KCU.constraint_schema = TC.constraint_schema
             AND KCU.constraint_name = TC.constraint_name
             WHERE TC.constraint_type = 'PRIMARY KEY'
+            AND TC.table_schema = :table_schema
+            AND TC.table_name IN :table_names
         """
 
-        # Check if postgis extension has been installed and if so, get the geometry type. If not, just get the column info.
+        # Check if postgis extension has been installed
         postgis_installed = is_postgis_installed(sess)
         if not postgis_installed:
             geometry_type_sql = "NULL"
             postgis_typmod_srid = "NULL"
-
         else:
             geometry_type_sql = """CASE WHEN udt_name='geometry' THEN
                         upper(postgis_typmod_type(A.atttypmod)) ELSE NULL END"""
             postgis_typmod_srid = """CASE WHEN udt_name='geometry' THEN
                     postgis_typmod_srid(A.atttypmod) ELSE NULL END """
 
-        table_info_sql = f"""
+        # Get table info for all tables in one query
+        table_info_sql = sa.text(f"""
             SELECT
-                C.column_name, C.ordinal_position, C.data_type, C.udt_name,
+                C.table_name, C.column_name, C.ordinal_position, C.data_type, C.udt_name,
                 C.character_maximum_length, C.numeric_precision, C.numeric_scale,
                 PK.ordinal_position AS pk_ordinal_position,
                 {geometry_type_sql} AS geometry_type,
@@ -172,68 +184,122 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             ON (PK.table_schema = C.table_schema)
             AND (PK.table_name = C.table_name)
             AND (PK.column_name = C.column_name)
-            LEFT OUTER JOIN pg_attribute A
-            ON (A.attname = C.column_name)
-            AND (A.attrelid = (:table_identifier)::regclass::oid)
-            WHERE C.table_schema=:table_schema AND C.table_name=:table_name
-            ORDER BY C.ordinal_position;
-        """
+            LEFT OUTER JOIN LATERAL (
+                SELECT attname, atttypmod, attrelid
+                FROM pg_attribute
+                WHERE attrelid = (quote_ident(C.table_schema) || '.' || quote_ident(C.table_name))::regclass::oid
+                AND attname = C.column_name
+            ) A ON TRUE
+            WHERE C.table_schema=:table_schema AND C.table_name IN :table_names
+            ORDER BY C.table_name, C.ordinal_position;
+        """).bindparams(sa.bindparam("table_names", expanding=True))
+
         r = sess.execute(
             table_info_sql,
             {
-                "table_identifier": table_identifier,
                 "table_schema": db_schema,
-                "table_name": table_name,
+                "table_names": table_name_list,
             },
         )
-        pg_table_info = list(r)
+
+        # Group table info by table_name
+        pg_table_info_by_table = {}
+        for row in r:
+            table_name = row["table_name"]
+            if table_name not in pg_table_info_by_table:
+                pg_table_info_by_table[table_name] = []
+            pg_table_info_by_table[table_name].append(row)
+
+        # Get geometry column info for all tables if PostGIS is installed
+        geom_cols_info_by_table = {}
         if postgis_installed:
-            # Get all the information on the geometry columns that we can get without sampling the geometries:
-            geom_cols_info_sql = """
-                SELECT GC.f_geometry_column AS column_name, GC.srid, SRS.srtext
+            geom_cols_info_sql = sa.text("""
+                SELECT GC.f_table_name AS table_name, GC.f_geometry_column AS column_name,
+                       GC.srid, SRS.srtext
                 FROM geometry_columns GC
                 LEFT OUTER JOIN spatial_ref_sys SRS ON (GC.srid = SRS.srid)
-                WHERE GC.f_table_schema=:table_schema AND GC.f_table_name=:table_name;
-            """
+                WHERE GC.f_table_schema=:table_schema AND GC.f_table_name IN :table_names;
+            """).bindparams(sa.bindparam("table_names", expanding=True))
             r = sess.execute(
                 geom_cols_info_sql,
-                {"table_schema": db_schema, "table_name": table_name},
+                {"table_schema": db_schema, "table_names": table_name_list},
             )
-            geom_cols_info = [cls._filter_row_to_dict(row) for row in r]
 
-            # Improve the geometry information by sampling one geometry from each column, where available.
-            for col_info in geom_cols_info:
-                c = col_info["column_name"]
-                row = sess.execute(
-                    f"""
-                    SELECT ST_Zmflag({cls.quote(c)}) AS zm,
-                    ST_SRID({cls.quote(c)}) AS srid, SRS.srtext
-                    FROM {table_identifier} LEFT OUTER JOIN spatial_ref_sys SRS
-                    ON SRS.srid = ST_SRID({cls.quote(c)})
-                    WHERE {cls.quote(c)} IS NOT NULL LIMIT 1;
-                    """,
-                ).fetchone()
-                if row:
-                    sampled_info = cls._filter_row_to_dict(row)
-                    sampled_info["zm"] = cls.ZM_FLAG_TO_STRING.get(
-                        sampled_info.get("zm")
+            for row in r:
+                table_name = row["table_name"]
+                if table_name not in geom_cols_info_by_table:
+                    geom_cols_info_by_table[table_name] = []
+                geom_cols_info_by_table[table_name].append(
+                    cls._row_to_dict(
+                        row, exclude_columns=["table_name"], exclude_falsy_values=True
                     )
-                    # Original col_info from geometry_columns takes precedence, where it exists:
-                    col_info.update({**sampled_info, **col_info})
-        else:
-            geom_cols_info = []
+                )
 
-        schema = cls.postgis_to_v2_schema(pg_table_info, geom_cols_info, id_salt)
-        yield "schema.json", schema
+            # Sample geometries for each table's geometry columns
+            for table_name in table_names:
+                if table_name in geom_cols_info_by_table:
+                    table_identifier = cls.quote_table(
+                        db_schema=db_schema, table_name=table_name
+                    )
+                    for col_info in geom_cols_info_by_table[table_name]:
+                        c = col_info["column_name"]
+                        row = sess.execute(
+                            f"""
+                            SELECT ST_Zmflag({cls.quote(c)}) AS zm,
+                            ST_SRID({cls.quote(c)}) AS srid, SRS.srtext
+                            FROM {table_identifier} LEFT OUTER JOIN spatial_ref_sys SRS
+                            ON SRS.srid = ST_SRID({cls.quote(c)})
+                            WHERE {cls.quote(c)} IS NOT NULL LIMIT 1;
+                            """,
+                        ).fetchone()
+                        if row:
+                            sampled_info = cls._row_to_dict(
+                                row, exclude_falsy_values=True
+                            )
+                            sampled_info["zm"] = cls.ZM_FLAG_TO_STRING.get(
+                                sampled_info.get("zm")
+                            )
+                            # Original col_info from geometry_columns takes precedence, where it exists:
+                            col_info.update({**sampled_info, **col_info})
 
-        for col_info in geom_cols_info:
-            try:
-                wkt = col_info["srtext"]
-            except KeyError:
-                # no CRS defined for this geometry column
-                continue
-            id_str = crs_util.get_identifier_str(wkt)
-            yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
+        # Build result for each table
+        for table_name in table_names:
+            meta_items = {}
+            meta_items["title"] = titles[table_name]
+
+            pg_table_info = pg_table_info_by_table.get(table_name, [])
+            geom_cols_info = geom_cols_info_by_table.get(table_name, [])
+
+            schema = cls.postgis_to_v2_schema(
+                pg_table_info, geom_cols_info, id_salts[table_name]
+            )
+            meta_items["schema.json"] = schema
+
+            # Add CRS definitions
+            for col_info in geom_cols_info:
+                wkt = col_info.get("srtext")
+                if not wkt:
+                    continue
+                id_str = crs_util.get_identifier_str(wkt)
+                meta_items[f"crs/{id_str}.wkt"] = crs_util.normalise_wkt(wkt)
+
+            result[table_name] = meta_items
+
+        return result
+
+    @classmethod
+    def all_v2_meta_items_including_empty(
+        cls, sess, db_schema, table_name, id_salt=None
+    ):
+        """
+        Generate all V2 meta items for the given table.
+        Varying the id_salt varies the ids that are generated for the schema.json item.
+        """
+        # Delegate to the multiple-table version for consistency and to benefit from optimizations
+        result = cls.all_v2_meta_items_including_empty_multiple(
+            sess, db_schema, [table_name], {table_name: id_salt}
+        )
+        return result[table_name]
 
     @classmethod
     def postgis_to_v2_schema(cls, pg_table_info, geom_cols_info, id_salt):
@@ -350,14 +416,6 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
                 }
             )
         return result
-
-    @classmethod
-    @ungenerator(dict)
-    def _filter_row_to_dict(cls, row):
-        """Turns a db row into a dict, but leaves out key-value pairs with falsey values."""
-        for key, value in zip(row.keys(), row):
-            if value:
-                yield key, value
 
     @classmethod
     def _type_def_for_column_schema(cls, col, dataset=None):

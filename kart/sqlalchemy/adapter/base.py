@@ -129,6 +129,35 @@ class BaseKartAdapter:
             return v2_type, {}
 
     @classmethod
+    def all_v2_meta_items_multiple(cls, sess, db_schema, table_names, id_salts):
+        """
+        Returns a dict of dicts with V2 meta items for multiple tables.
+        The outer dict is keyed by table_name, inner dicts contain meta items for each table.
+        Guaranteed to at least generate the table's V2 schema with key "schema.json", if the table exists at all.
+        Possibly returns any or all of the title, description, and attached CRS definitions.
+        Varying the id_salts varies the column ids that are generated for the schema.json items -
+        these are generated deterministically so that running the same command twice in a row produces the same output.
+        But if the user does something different later, different salts should be provided.
+
+        sess - an open sqlalchemy session.
+        db_schema - the db schema (or similar) that contains the tables, if any.
+        table_names - list of tables to generate meta items for.
+        id_salts - dict of id_salt strings keyed by table_name.
+        """
+        result = {}
+        all_meta_items = cls.all_v2_meta_items_including_empty_multiple(
+            sess,
+            db_schema,
+            table_names,
+            id_salts,
+        )
+
+        for table_name, meta_items in all_meta_items.items():
+            result[table_name] = cls.remove_empty_values(meta_items)
+
+        return result
+
+    @classmethod
     def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
         """
         Returns a dict all V2 meta items for the specified table.
@@ -143,21 +172,63 @@ class BaseKartAdapter:
         table_name - the table to generate meta items for.
         id_salt - a string based on the current state that should change when the circumstances change.
         """
-
-        return cls.remove_empty_values(
-            cls.all_v2_meta_items_including_empty(
-                sess,
-                db_schema,
-                table_name,
-                id_salt,
-            )
+        # Backward compatibility wrapper - delegate to multi-table version
+        result = cls.all_v2_meta_items_multiple(
+            sess, db_schema, [table_name], {table_name: id_salt}
         )
+        return result[table_name]
+
+    @classmethod
+    def all_v2_meta_items_including_empty_multiple(
+        cls, sess, db_schema, table_names, id_salts
+    ):
+        """
+        Generate V2 meta items for multiple tables (including empty values).
+        Returns a dict keyed by table_name with meta items as values.
+        Default implementation calls single-table version for each table.
+        Subclasses can override for more efficient batch processing.
+
+        sess - an open sqlalchemy session.
+        db_schema - the db schema (or similar) that contains the tables, if any.
+        table_names - list of tables to generate meta items for.
+        id_salts - dict of id_salt strings keyed by table_name.
+        """
+        result = {}
+        for table_name in table_names:
+            result[table_name] = cls.all_v2_meta_items_including_empty(
+                sess, db_schema, table_name, id_salts[table_name]
+            )
+        return result
 
     @classmethod
     def get_metadata_xml(cls, sess, db_schema, table_name):
         """Read the XML metadata stored within the database for this table, if any."""
         # As a rule, the database tables themselves don't store XML metadata. The exception is GPKG.
         return None
+
+    @classmethod
+    def _row_to_dict(cls, row, exclude_columns=None, exclude_falsy_values=False):
+        """
+        Converts a database result row to a dictionary.
+
+        Args:
+            row: A SQLAlchemy result row
+            exclude_columns: Optional set/list of column names to exclude from the result
+            exclude_falsy_values: If True, exclude columns with falsy values (None, empty string, 0, etc.)
+
+        Returns:
+            A dictionary with the row data, excluding specified columns and optionally falsy values
+        """
+        exclude_columns = set(exclude_columns) if exclude_columns else set()
+        result = {}
+        for key in row.keys():
+            if key in exclude_columns:
+                continue
+            value = row[key]
+            if exclude_falsy_values and not value:
+                continue
+            result[key] = value
+        return result
 
     @classmethod
     def remove_empty_values(cls, meta_items):

@@ -159,6 +159,27 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         )
 
     @classmethod
+    def all_v2_meta_items_including_empty_multiple(
+        cls, sess, db_schema, table_names, id_salts
+    ):
+        """
+        Generate V2 meta items for multiple tables (including empty values).
+        Returns a dict keyed by table_name with meta items as values.
+        For GPKG, queries are low-latency so we simply iterate through tables.
+        """
+        assert not db_schema
+
+        result = {}
+        for table_name in table_names:
+            gpkg_meta_items = cls._gpkg_meta_items_from_db(
+                sess, table_name, skip_keys={"gpkg_metadata", "gpkg_metadata_reference"}
+            )
+            result[table_name] = cls.all_v2_meta_items_from_gpkg_meta_items(
+                gpkg_meta_items, id_salts[table_name]
+            )
+        return result
+
+    @classmethod
     def all_v2_meta_items_including_empty(cls, sess, db_schema, table_name, id_salt):
         """
         Generate all V2 meta items for the given table.

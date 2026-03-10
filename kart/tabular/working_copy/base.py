@@ -624,6 +624,45 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         return False
 
+    def meta_items_multiple(self, table_names):
+        """
+        Extract all the metadata for multiple tables and convert to dataset V2 format.
+        Returns a dict keyed by table_name with meta items as values.
+        Note that the extracted schema will not be aligned to any existing schema
+        - the generated column IDs are stable, but do not necessarily match the ones in the dataset.
+        Calling Schema.align_* is required to find how the columns matches the existing schema.
+        """
+        # Column IDs are generated deterministically from the column contents and the current state.
+        # That way, they don't vary at random if the same command is run twice in a row, but
+        # they will vary as the repo state changes so that we don't accidentally generate the same ID twice
+        # for two unrelated columns.
+
+        # Convert single table name to list for uniform handling
+        if isinstance(table_names, str):
+            table_names = [table_names]
+            return_single = True
+        else:
+            return_single = False
+
+        id_salts = {}
+        for table_name in table_names:
+            id_salts[table_name] = (
+                f"{self.engine.url} {self.db_schema} {table_name} {self.get_tree_id()}"
+            )
+
+        with self.session() as sess:
+            result = self.adapter.all_v2_meta_items_multiple(
+                sess,
+                self.db_schema,
+                table_names,
+                id_salts=id_salts,
+            )
+
+        # For backward compatibility, return single result if single table was passed as string
+        if return_single:
+            return result[table_names[0]]
+        return result
+
     def meta_items(self, table_name):
         """
         Extract all the metadata for this table and convert to dataset V2 format.
@@ -631,23 +670,8 @@ class TableWorkingCopy(WorkingCopyPart):
         - the generated column IDs are stable, but do not necessarily match the ones in the dataset.
         Calling Schema.align_* is required to find how the columns matches the existing schema.
         """
-
-        # Column IDs are generated deterministically from the column contents and the current state.
-        # That way, they don't vary at random if the same command is run twice in a row, but
-        # they will vary as the repo state changes so that we don't accidentally generate the same ID twice
-        # for two unrelated columns.
-
-        id_salt = (
-            f"{self.engine.url} {self.db_schema} {table_name} {self.get_tree_id()}"
-        )
-
-        with self.session() as sess:
-            return self.adapter.all_v2_meta_items(
-                sess,
-                self.db_schema,
-                table_name,
-                id_salt=id_salt,
-            )
+        # Backward compatibility wrapper - delegate to multi-table version
+        return self.meta_items_multiple(table_name)
 
     def diff_dataset_to_working_copy_feature(
         self, dataset, feature_filter, meta_diff, raise_if_dirty=False
