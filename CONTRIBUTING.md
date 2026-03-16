@@ -23,7 +23,7 @@ Requirements:
 
 On Ubuntu:
 ```console
-$ apt-get install autoconf build-essential curl flex git golang libtool patchelf python3-pip python3-venv tar unzip zip
+$ apt-get install autoconf build-essential curl flex git golang libtool patchelf python3-pip python3-venv tar unzip zip cargo pkg-config autoconf-archive
 ```
 On macOS (with [Homebrew](https://brew.sh)):
 ```console
@@ -75,6 +75,12 @@ $ cmake --install build
 Kart includes a background helper for improved command-line performance, but this
 feature is disabled by default in development builds. To enable it, configure
 Kart with `-DCLI_HELPER=ON`.
+
+On Ubuntu, you might need a fix to the shared library path `LD_LIBRARY_PATH` before configuring kart with `cmake`:
+```console
+$ export LD_LIBRARY_PATH="<path/to/kart/folder>/build/vcpkg_installed/x64-linux/lib:${LD_LIBRARY_PATH}"
+$ cmake -B build -S . -DPython3_EXECUTABLE=/path/to/python3.12 -DUSE_VCPKG=ON
+```
 
 ### Downloading vendor dependencies from CI
 
