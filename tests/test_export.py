@@ -89,6 +89,17 @@ def test_export_path_styles(spec, driver, destination, data_archive, cli_runner)
     assert actual_driver.GetName() == driver
     assert actual_destination == destination
 
+def test_export_from_git(data_archive, cli_runner):
+    with data_archive("polygons") as repo_dir:
+        target_folder = repo_dir / "git-clone"
+
+        r = cli_runner.invoke(["git", "clone", str(repo_dir / ".kart/"), str(target_folder), "--no-checkout"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["-C", str(target_folder), "export", H.POLYGONS.LAYER, "output.shp"])
+
+        assert r.exit_code == 0, r.stderr
+        assert (repo_dir / "output.shp").exists()
 
 @pytest.mark.parametrize("epsg", [4326, 27200])
 def test_export_with_transformed_crs(epsg, data_archive, cli_runner):
