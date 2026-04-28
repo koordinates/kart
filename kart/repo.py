@@ -553,6 +553,9 @@ class KartRepo(pygit2.Repository):
 
     def validate_gitdir_name(self):
         if not self.is_bare and self.gitdir_path.stem not in self.KART_DIR_NAMES:
+            if self.gitdir_path.stem == ".git":
+                L.warning("Selected repo does't follow Kart conventions, but proceeding anyway.")
+                return
             raise NotFound(
                 "Selected repo doesn't follow Kart convention of keeping internals in a '.kart' folder. Perhaps a git repo?",
                 exit_code=NO_REPOSITORY,
