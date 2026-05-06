@@ -283,3 +283,20 @@ def test_restore_leaves_untracked_files(data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
         assert notes.read_text(encoding="utf-8") == "Hello.\n"
         assert _file_status(cli_runner) == {"untracked": ["NOTES.txt"]}
+
+
+
+def test_checkout_restores_attachments(data_archive, cli_runner):
+    """Switching commits should refresh tracked attachment files in the workdir, not just datasets."""
+    with data_archive("points-with-attached-files") as path:
+        _checkout_attachments(path)
+        license_path = path / "LICENSE.txt"
+        original = license_path.read_text(encoding="utf-8")
+
+        # Modify the attachment locally without committing.
+        license_path.write_text("Local edit, will be discarded.\n", encoding="utf-8")
+
+        # `kart checkout HEAD --discard-changes` should restore the attachment to its HEAD state.
+        r = cli_runner.invoke(["checkout", "HEAD", "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+        assert license_path.read_text(encoding="utf-8") == original

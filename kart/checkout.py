@@ -245,6 +245,8 @@ def checkout(
             create_parts_if_missing=parts_to_create,
             non_checkout_datasets=non_checkout_datasets,
         )
+        if do_switch_commit or discard_changes:
+            _restore_attachments_to_head(repo)
     elif do_switch_checkout_datasets:
         # Not doing any of the above - just need to change those datasets newly added / removed from the non_checkout_list.
         repo.working_copy.reset_to_head(
@@ -450,6 +452,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
 
     if do_switch_commit or discard_changes:
         repo.working_copy.reset_to_head()
+        _restore_attachments_to_head(repo)
 
 
 def _find_remote_branch_by_name(repo, name):
@@ -573,6 +576,20 @@ def _restore_all_attachment_files(repo, source_tree):
         return
     _restore_attachment_files(repo, source_tree, sorted(tracked))
 
+def _restore_attachments_to_head(repo):
+    """
+    Restore tracked attachment files in the working directory to the state at HEAD.
+
+    Kart's working-copy reset only covers dataset contents (the GeoPackage / workdir parts).
+    Attachment files (LICENSE.txt, README.md, project files, etc. tracked alongside datasets)
+    are plain Git objects and need to be re-extracted explicitly when HEAD changes.
+    """
+    if repo.head_is_unborn:
+        return
+    _restore_all_attachment_files(repo, repo.head_tree)
+
+
+
 
 @click.command(cls=KartCommand)
 @click.pass_context
@@ -618,3 +635,4 @@ def reset(ctx, discard_changes, refish):
         repo.set_head(commit.id)
 
     repo.working_copy.reset_to_head()
+    _restore_attachments_to_head(repo)
