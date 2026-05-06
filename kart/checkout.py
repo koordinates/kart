@@ -10,6 +10,7 @@ from kart.exceptions import (
     NO_COMMIT,
     InvalidOperation,
     NotFound,
+    SubprocessError,
 )
 from kart.key_filters import RepoKeyFilter
 from kart.promisor_utils import get_partial_clone_envelope
@@ -492,6 +493,9 @@ def restore(ctx, source, filters):
     """
     Restore specified paths in the working copy with some contents from the given restore source.
     By default, restores the entire working copy to the commit at HEAD (so, discards all uncommitted changes).
+
+    FILTERS may name datasets or attachment files. Names that do not match a dataset in the source
+    tree are treated as attachment file paths and restored via `git checkout`.
     """
     repo = ctx.obj.repo
 
@@ -500,17 +504,74 @@ def restore(ctx, source, filters):
 
     try:
         commit_or_tree, ref = repo.resolve_refish(source)
-        commit_or_tree.peel(pygit2.Tree)
+        source_tree = commit_or_tree.peel(pygit2.Tree)
     except (KeyError, pygit2.InvalidSpecError):
         raise NotFound(f"{source} is not a commit or tree", exit_code=NO_COMMIT)
 
-    repo_key_filter = RepoKeyFilter.build_from_user_patterns(filters)
+    dataset_filters, file_filters = _split_restore_filters(repo, source_tree, filters)
 
     repo.working_copy.reset(
         commit_or_tree,
         track_changes_as_dirty=True,
-        repo_key_filter=repo_key_filter,
+        repo_key_filter=RepoKeyFilter.build_from_user_patterns(dataset_filters),
     )
+
+    # Restore attachment files. With no user-supplied filters we restore every tracked file in the
+    # source tree (matching the all-datasets restore above). Otherwise we restore only the explicitly
+    # named files. Untracked files in the working directory are left alone (matching git's `git
+    # restore` semantics).
+    if not filters:
+        _restore_all_attachment_files(repo, source_tree)
+    elif file_filters:
+        _restore_attachment_files(repo, source_tree, file_filters)
+
+
+def _split_restore_filters(repo, source_tree, filters):
+    """
+    Splits a list of user-supplied FILTERS into (dataset_filters, file_filters) by checking
+    which ones match a dataset path in the source tree. Anything that does not match a dataset
+    is treated as an attachment file path.
+    """
+    if not filters:
+        return [], []
+    dataset_paths = {ds.path for ds in repo.structure(source_tree).datasets()}
+    dataset_filters = []
+    file_filters = []
+    for f in filters:
+        # A user filter may select an entire dataset (e.g. "mydataset") or a feature within it
+        # (e.g. "mydataset:42"). We treat anything whose dataset-path component matches a known
+        # dataset as a dataset filter; everything else is taken to be an attachment file path.
+        ds_part = f.split(":", 1)[0]
+        if ds_part in dataset_paths:
+            dataset_filters.append(f)
+        else:
+            file_filters.append(f)
+    return dataset_filters, file_filters
+
+
+def _restore_attachment_files(repo, source_tree, rel_paths):
+    """Restores each rel_path under the working directory from source_tree via `git checkout`."""
+    workdir = str(repo.workdir_path)
+    for rel_path in rel_paths:
+        try:
+            subprocess.check_call(
+                ["git", "-C", workdir, "checkout", source_tree.id.hex, "--", rel_path],
+            )
+        except subprocess.CalledProcessError as e:
+            raise SubprocessError(
+                f"Could not restore {rel_path}: {e}", called_process_error=e
+            )
+
+
+def _restore_all_attachment_files(repo, source_tree):
+    """Restores every attachment file present in source_tree to the working directory."""
+    from kart.diff_util import ls_tree_attachments
+
+    workdir = str(repo.workdir_path)
+    tracked = ls_tree_attachments(workdir, source_tree.id.hex)
+    if not tracked:
+        return
+    _restore_attachment_files(repo, source_tree, sorted(tracked))
 
 
 @click.command(cls=KartCommand)
