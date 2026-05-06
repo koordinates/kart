@@ -11,6 +11,34 @@ from kart.structs import CommitWithReference
 H = pytest.helpers.helpers()
 
 
+def _checkout_attachments(repo_path):
+    """
+    Extracts every tracked attachment file in HEAD to the working directory.
+    Kart does not yet do this on checkout (issue #583, step 5), so test setup needs to do it
+    explicitly to exercise the workdir-vs-tree code paths added by these tests.
+    """
+    repo = KartRepo(repo_path)
+    tree_oid = repo.head_tree.id.hex
+    listing = subprocess.check_output(
+        ["git", "-C", str(repo_path), "ls-tree", "-r", "-z", tree_oid],
+        encoding="utf-8",
+    )
+    paths = []
+    for entry in listing.split("\0"):
+        if not entry:
+            continue
+        _meta, path = entry.split("\t", 1)
+        if path.split("/")[0] in (".kart", ".git") or path.startswith(".kart."):
+            continue
+        if any(p.startswith(".") and "dataset" in p for p in path.split("/")[:-1]):
+            continue
+        paths.append(path)
+    if paths:
+        subprocess.check_call(
+            ["git", "-C", str(repo_path), "checkout", tree_oid, "--"] + paths
+        )
+
+
 def text_status(cli_runner):
     r = cli_runner.invoke(["status"])
     assert r.exit_code == 0, r
@@ -394,6 +422,66 @@ def test_status_merging(data_archive, cli_runner):
                 "conflicts": {"nz_pa_points_topo_150k": {"feature": 4}},
                 "spatialFilter": None,
             }
+        }
+
+
+def test_status_attached_files_clean(data_working_copy, cli_runner):
+    """A repo with attachments but no working-tree changes does not include a `files` key."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        _checkout_attachments(path)
+        jdict = json_status(cli_runner)
+        wc_jdict = jdict["kart.status/v2"]["workingCopy"]
+        assert "files" not in wc_jdict, wc_jdict
+
+
+def test_status_attached_files_modified(data_working_copy, cli_runner):
+    """Modifying an attachment file shows up under workingCopy.files.modified in status JSON."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        _checkout_attachments(path)
+        (path / "LICENSE.txt").write_text("Edited.\n", encoding="utf-8")
+
+        wc_jdict = json_status(cli_runner)["kart.status/v2"]["workingCopy"]
+        assert wc_jdict["files"] == {"modified": ["LICENSE.txt"]}
+
+        # Text output mentions modified files in a clearly-separated block.
+        text_lines = text_status(cli_runner)
+        assert "  Modified files:" in text_lines
+        assert "    LICENSE.txt" in text_lines
+
+
+def test_status_attached_files_untracked(data_working_copy, cli_runner):
+    """Adding an untracked file shows up under workingCopy.files.untracked."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        _checkout_attachments(path)
+        (path / "NOTES.txt").write_text("Hello.\n", encoding="utf-8")
+
+        wc_jdict = json_status(cli_runner)["kart.status/v2"]["workingCopy"]
+        assert wc_jdict["files"] == {"untracked": ["NOTES.txt"]}
+
+
+def test_status_attached_files_deleted(data_working_copy, cli_runner):
+    """Deleting a tracked attachment shows up under workingCopy.files.deleted."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        _checkout_attachments(path)
+        (path / "LICENSE.txt").unlink()
+
+        wc_jdict = json_status(cli_runner)["kart.status/v2"]["workingCopy"]
+        assert wc_jdict["files"] == {"deleted": ["LICENSE.txt"]}
+
+
+def test_status_attached_files_combined(data_working_copy, cli_runner):
+    """All three classifications coexist correctly in a single status output."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        _checkout_attachments(path)
+        (path / "LICENSE.txt").write_text("X\n", encoding="utf-8")
+        (path / "nz_pa_points_topo_150k" / "metadata.xml").unlink()
+        (path / "NOTES.txt").write_text("Y\n", encoding="utf-8")
+
+        wc_jdict = json_status(cli_runner)["kart.status/v2"]["workingCopy"]
+        assert wc_jdict["files"] == {
+            "modified": ["LICENSE.txt"],
+            "deleted": ["nz_pa_points_topo_150k/metadata.xml"],
+            "untracked": ["NOTES.txt"],
         }
 
 
