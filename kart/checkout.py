@@ -238,6 +238,7 @@ def checkout(
         else ()
     )
 
+    old_tree = repo.head_tree if not repo.head_is_unborn else None
     if do_switch_commit or do_switch_spatial_filter or discard_changes:
         # Changing commit, changing spatial filter, or discarding changes mean we need to update every dataset:
         repo.working_copy.reset_to_head(
@@ -246,7 +247,7 @@ def checkout(
             non_checkout_datasets=non_checkout_datasets,
         )
         if do_switch_commit or discard_changes:
-            _restore_attachments_to_head(repo)
+            _restore_attachments_to_head(repo, old_tree=old_tree if do_switch_commit else None)
     elif do_switch_checkout_datasets:
         # Not doing any of the above - just need to change those datasets newly added / removed from the non_checkout_list.
         repo.working_copy.reset_to_head(
@@ -448,11 +449,12 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
 
         head_ref = branch.name
 
+    old_tree = repo.head_tree if not repo.head_is_unborn else None
     repo.set_head(head_ref)
 
     if do_switch_commit or discard_changes:
         repo.working_copy.reset_to_head()
-        _restore_attachments_to_head(repo)
+        _restore_attachments_to_head(repo, old_tree=old_tree if do_switch_commit else None)
 
 
 def _find_remote_branch_by_name(repo, name):
@@ -576,17 +578,42 @@ def _restore_all_attachment_files(repo, source_tree):
         return
     _restore_attachment_files(repo, source_tree, sorted(tracked))
 
-def _restore_attachments_to_head(repo):
+
+def _remove_deleted_attachment_files(repo, old_tree, new_tree):
+    """
+    Deletes any attachment files that existed in old_tree but are absent from new_tree.
+    Called after a HEAD switch so that files removed in the new commit disappear from the
+    working directory rather than lingering as untracked files.
+    """
+    from kart.diff_util import ls_tree_attachments
+    from pathlib import Path
+
+    workdir = str(repo.workdir_path)
+    old_files = set(ls_tree_attachments(workdir, old_tree.id.hex))
+    new_files = set(ls_tree_attachments(workdir, new_tree.id.hex))
+    for rel_path in sorted(old_files - new_files):
+        full_path = Path(workdir) / rel_path
+        if full_path.is_file():
+            full_path.unlink()
+
+
+def _restore_attachments_to_head(repo, old_tree=None):
     """
     Restore tracked attachment files in the working directory to the state at HEAD.
 
     Kart's working-copy reset only covers dataset contents (the GeoPackage / workdir parts).
     Attachment files (LICENSE.txt, README.md, project files, etc. tracked alongside datasets)
     are plain Git objects and need to be re-extracted explicitly when HEAD changes.
+
+    If old_tree is provided (the tree before the HEAD switch), any attachment files that
+    existed in old_tree but are absent from the new HEAD are deleted from the working directory.
     """
     if repo.head_is_unborn:
         return
-    _restore_all_attachment_files(repo, repo.head_tree)
+    new_tree = repo.head_tree
+    _restore_all_attachment_files(repo, new_tree)
+    if old_tree is not None:
+        _remove_deleted_attachment_files(repo, old_tree, new_tree)
 
 
 
@@ -628,6 +655,7 @@ def reset(ctx, discard_changes, refish):
     if do_switch_commit and not discard_changes:
         ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
+    old_tree = repo.head_tree if not repo.head_is_unborn else None
     head_branch = repo.head_branch
     if head_branch is not None:
         repo.references[head_branch].set_target(commit.id)
@@ -635,4 +663,4 @@ def reset(ctx, discard_changes, refish):
         repo.set_head(commit.id)
 
     repo.working_copy.reset_to_head()
-    _restore_attachments_to_head(repo)
+    _restore_attachments_to_head(repo, old_tree=old_tree if do_switch_commit else None)

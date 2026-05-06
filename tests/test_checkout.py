@@ -300,3 +300,59 @@ def test_checkout_restores_attachments(data_archive, cli_runner):
         r = cli_runner.invoke(["checkout", "HEAD", "--discard-changes"])
         assert r.exit_code == 0, r.stderr
         assert license_path.read_text(encoding="utf-8") == original
+
+
+def test_checkout_removes_deleted_attachments(data_archive, cli_runner):
+    """Switching to a commit where an attachment was removed should delete the file from the workdir."""
+    with data_archive("points-with-attached-files") as path:
+        _checkout_attachments(path)
+        license_path = path / "LICENSE.txt"
+        assert license_path.exists()
+
+        # Commit a new version with LICENSE.txt removed.
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "remove LICENSE.txt", "LICENSE.txt="]
+        )
+        assert r.exit_code == 0, r.stderr
+        new_commit = cli_runner.invoke(["log", "-1", "--output-format=json"])
+        assert new_commit.exit_code == 0
+
+        # Go back one commit (where LICENSE.txt existed).
+        r = cli_runner.invoke(["checkout", "HEAD~1"])
+        assert r.exit_code == 0, r.stderr
+        assert license_path.exists(), "LICENSE.txt should be restored when switching back"
+
+        # Now switch forward again (LICENSE.txt was deleted in that commit).
+        r = cli_runner.invoke(["checkout", "-"])
+        assert r.exit_code == 0, r.stderr
+        assert not license_path.exists(), "LICENSE.txt should be removed when switching to commit that deleted it"
+
+
+def test_commit_attachment_file(data_archive, cli_runner):
+    """kart commit should pick up modified and new attachment files alongside dataset changes."""
+    with data_archive("points-with-attached-files") as path:
+        _checkout_attachments(path)
+        license_path = path / "LICENSE.txt"
+        notes_path = path / "NOTES.txt"
+
+        # Modify an existing attachment and add a new one.
+        license_path.write_text("Updated license text.\n", encoding="utf-8")
+        notes_path.write_text("New notes file.\n", encoding="utf-8")
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "LICENSE.txt" in r.stdout
+        assert "NOTES.txt" in r.stdout
+
+        # kart commit should include both attachment changes.
+        r = cli_runner.invoke(["commit", "-m", "update attachments"])
+        assert r.exit_code == 0, r.stderr
+
+        # Verify the files are committed: go back then forward and check content.
+        r = cli_runner.invoke(["checkout", "HEAD~1"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["checkout", "-"])
+        assert r.exit_code == 0, r.stderr
+        assert license_path.read_text(encoding="utf-8") == "Updated license text.\n"
+        assert notes_path.read_text(encoding="utf-8") == "New notes file.\n"
