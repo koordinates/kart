@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import re
+import os
 import struct
 import sys
 from enum import Enum
@@ -553,7 +554,7 @@ class KartRepo(pygit2.Repository):
 
     def validate_gitdir_name(self):
         if not self.is_bare and self.gitdir_path.stem not in self.KART_DIR_NAMES:
-            if self.gitdir_path.stem == ".git":
+            if self.gitdir_path.stem == ".git" and os.environ.get("KART_ALLOW_FROM_GIT") == "1":
                 L.warning("Selected repo does't follow Kart conventions, but proceeding anyway.")
                 return
             raise NotFound(
