@@ -97,7 +97,9 @@ def test_export_from_git(data_archive, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(["-C", str(target_folder), "export", H.POLYGONS.LAYER, "output.shp"])
+        assert r.exit_code == 41, r.stderr
 
+        r = cli_runner.invoke(["-C", str(target_folder), "export", H.POLYGONS.LAYER, "output.shp"], env={"KART_ALLOW_FROM_GIT": "1"})
         assert r.exit_code == 0, r.stderr
         assert (repo_dir / "output.shp").exists()
 
