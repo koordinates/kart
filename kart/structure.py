@@ -183,8 +183,13 @@ class RepoStructure:
         1. (dataset_path, "meta", meta_item_path)
         2. (dataset_path, "feature", primary_key)
         3. (dataset_path, "tile", tile_name)
+
+        For attachment files that do not belong to any dataset, returns:
+        4. ("attachment", full_path)
         """
         match = DATASET_PATH_PATTERN.search(full_path)
+        if match is None:
+            return ("attachment", full_path)
         dataset_path = full_path[: match.start()]
         rel_path = full_path[match.start() + 1 :]
         return (dataset_path, *self.datasets()[dataset_path].decode_path(rel_path))
