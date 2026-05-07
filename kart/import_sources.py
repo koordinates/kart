@@ -13,12 +13,13 @@ class ImportType(Enum):
 
     SQLALCHEMY_TABLE = auto()
     OGR_TABLE = auto()
+    ESRI_REST_TABLE = auto()
     POINT_CLOUD = auto()
     RASTER = auto()
 
     @property
     def import_cmd(self):
-        if self in (self.SQLALCHEMY_TABLE, self.OGR_TABLE):
+        if self in (self.SQLALCHEMY_TABLE, self.OGR_TABLE, self.ESRI_REST_TABLE):
             from kart.tabular.import_ import table_import
 
             return table_import
@@ -37,6 +38,11 @@ class ImportType(Enum):
             from kart.tabular import SqlAlchemyTableImportSource
 
             return SqlAlchemyTableImportSource
+
+        elif self is self.ESRI_REST_TABLE:
+            from kart.tabular import ESRIRestImportSource
+
+            return ESRIRestImportSource
         elif self is self.OGR_TABLE:
             from kart.tabular import OgrTableImportSource
 
@@ -113,6 +119,12 @@ ALL_IMPORT_SOURCE_TYPES = [
         "PATH.shp",
         ImportType.OGR_TABLE,
         file_ext=(".shp", ".shx", ".dbf"),
+    ),
+    ImportSourceType(
+        "ESRI Rest Service",
+        "esri:https://HOST/PATH/FeatureServer/[LAYER_ID]",
+        ImportType.ESRI_REST_TABLE,
+        uri_scheme="esri",
     ),
     ImportSourceType(
         "OGR", "OGR:...", ImportType.OGR_TABLE, uri_scheme="OGR", hidden=True

@@ -149,6 +149,7 @@ def import_(ctx, args, **kwargs):
     if kwargs.get("do_link") and import_source_type.import_type in (
         ImportType.SQLALCHEMY_TABLE,
         ImportType.OGR_TABLE,
+        ImportType.ESRI_REST_TABLE,
     ):
         raise click.UsageError("--link is not supported for vector or tabular imports")
 

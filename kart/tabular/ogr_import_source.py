@@ -31,13 +31,14 @@ from .import_source import TableImportSource
 FORMAT_TO_OGR_MAP = {
     "GPKG": "GPKG",
     "SHP": "ESRI Shapefile",
+    "ESRIJSON": "ESRIJSON",
     # https://github.com/koordinates/kart/issues/86
     # 'TAB': 'MapInfo File',
     "PG": "PostgreSQL",
 }
 # The set of format prefixes where a local path is expected
 # (as opposed to a URL / something else)
-LOCAL_PATH_FORMATS = set(FORMAT_TO_OGR_MAP.keys()) - {"PG"}
+LOCAL_PATH_FORMATS = set(FORMAT_TO_OGR_MAP.keys()) - {"PG", "ESRIJSON"}
 
 
 class OgrTableImportSource(TableImportSource):

@@ -1,0 +1,70 @@
+{
+  "displayFieldName": "FEATURE_TYPE",
+  "fieldAliases": {
+    "FEATURE_TYPE": "FEATURE_TYPE",
+    "ID": "ID",
+    "SOURCE": "SOURCE",
+    "DATE_SUPPLIED": "DATE_SUPPLIED",
+    "FEATURE_ACCURACY": "FEATURE_ACCURACY",
+    "OBJECTID": "OBJECTID"
+  },
+  "geometryType": "esriGeometryPoint",
+  "spatialReference": {
+    "wkid": 2193,
+    "latestWkid": 2193
+  },
+  "fields": [
+    {
+      "name": "FEATURE_TYPE",
+      "type": "esriFieldTypeString",
+      "alias": "FEATURE_TYPE",
+      "length": 8
+    },
+    {
+      "name": "ID",
+      "type": "esriFieldTypeString",
+      "alias": "ID",
+      "length": 50
+    },
+    {
+      "name": "SOURCE",
+      "type": "esriFieldTypeString",
+      "alias": "SOURCE",
+      "length": 58
+    },
+    {
+      "name": "DATE_SUPPLIED",
+      "type": "esriFieldTypeDate",
+      "alias": "DATE_SUPPLIED",
+      "length": 8
+    },
+    {
+      "name": "FEATURE_ACCURACY",
+      "type": "esriFieldTypeString",
+      "alias": "FEATURE_ACCURACY",
+      "length": 25
+    },
+    {
+      "name": "OBJECTID",
+      "type": "esriFieldTypeOID",
+      "alias": "OBJECTID"
+    }
+  ],
+  "features": [
+    {
+      "attributes": {
+        "FEATURE_TYPE": "Test Feature",
+        "LINK": null,
+        "ID": "Test ID",
+        "SOURCE": "Test Source",
+        "DATE_SUPPLIED": 1401062400000,
+        "FEATURE_ACCURACY": "+/- 10m (1:10,000)",
+        "OBJECTID": 1349962
+      },
+      "geometry": {
+        "x": 1426256.0450000763,
+        "y": 5114622.024600029
+      }
+    }
+  ]
+}
