@@ -9,6 +9,7 @@ from kart.cli_util import (
 )
 from kart.completion_shared import file_path_completer
 from kart.import_sources import from_spec, suggest_specs, ImportType
+from kart.exceptions import ImportSourceError
 
 
 def list_import_formats(ctx):
@@ -128,7 +129,7 @@ def import_(ctx, args, **kwargs):
 
     Note that --dataset can be ommitted if a reasonable name can be inferred from the sources.
     """
-
+    import_source_type = None
     args = [a for a in args if not a.startswith("-")]
     if not args:
         click.echo("At least one SOURCE is required for kart import.", err=True)
@@ -140,9 +141,9 @@ def import_(ctx, args, **kwargs):
             break
 
     if import_source_type is None:
-        raise click.UsageError(
+        raise ImportSourceError(
             "Unrecognised import-source specification.\n"
-            f"Try one of the following:\n{suggest_specs()}"
+            f"Try one of the following:\n{suggest_specs()}",
         )
 
     if kwargs.get("do_link") and import_source_type.import_type in (

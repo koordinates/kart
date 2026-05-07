@@ -10,8 +10,8 @@ from osgeo import gdal, ogr
 
 from kart import crs_util, ogr_util
 from kart.exceptions import (
-    NO_IMPORT_SOURCE,
     NO_TABLE,
+    ImportSourceError,
     InvalidOperation,
     NotFound,
 )
@@ -60,11 +60,13 @@ class OgrTableImportSource(TableImportSource):
         # Optionally, accept driver-prefixed paths like 'GPKG:'
         allowed_formats = sorted(FORMAT_TO_OGR_MAP.keys())
         m = re.match(
-            rf'^(OGR|{"|".join(FORMAT_TO_OGR_MAP.keys())}):(.+)$', ogr_source, re.I
+            rf"^(OGR|{'|'.join(FORMAT_TO_OGR_MAP.keys())}):(.+)$", ogr_source, re.I
         )
         prefix = None
+
         if m:
             prefix, ogr_source = m.groups()
+            ogr_source = str(ogr_source)
             prefix = prefix.upper()
             if prefix == "OGR":
                 # Don't specify a driver; let OGR just do whatever it can do.
@@ -83,17 +85,7 @@ class OgrTableImportSource(TableImportSource):
                     ogr_source = f"{prefix}:{ogr_source}"
             if prefix in LOCAL_PATH_FORMATS:
                 if not os.path.exists(ogr_source):
-                    raise NotFound(
-                        f"Couldn't find {ogr_source!r}", exit_code=NO_IMPORT_SOURCE
-                    )
-        else:
-            # see if any subclasses have a handler for this.
-            for subclass in cls._all_subclasses():
-                if "handle_source_string" in subclass.__dict__:
-                    retval = subclass.handle_source_string(ogr_source)
-                    if retval is not None:
-                        ogr_source, allowed_formats = retval
-                        break
+                    raise ImportSourceError(f"Couldn't find {ogr_source!r}")
 
         return ogr_source, allowed_formats
 
@@ -123,14 +115,12 @@ class OgrTableImportSource(TableImportSource):
                 base_filename = os.path.splitext(os.path.basename(source))[0]
                 shx_file = base_filename + ".shx"
                 if not os.path.exists(shx_file):
-                    raise NotFound(
+                    raise ImportSourceError(
                         f"Import source was missing some required files: {shx_file}",
-                        exit_code=NO_IMPORT_SOURCE,
                     ) from e
-            raise NotFound(
+            raise ImportSourceError(
                 f"{ogr_source!r} doesn't appear to be valid "
                 f"(tried formats: {','.join(allowed_formats) if allowed_formats else '(all)'})\n{e}",
-                exit_code=NO_IMPORT_SOURCE,
             ) from e
 
         try:

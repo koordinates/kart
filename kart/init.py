@@ -52,8 +52,7 @@ from .working_copy import PartType
     "--initial-branch",
     default=None,  # Not specified? We use git's `init.defaultBranch` config
     help=(
-        "Use the specified name for the initial branch "
-        "in the newly created repository."
+        "Use the specified name for the initial branch in the newly created repository."
     ),
 )
 @click.option(

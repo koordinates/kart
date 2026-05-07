@@ -4,6 +4,7 @@ from kart.exceptions import NO_TABLE, NotFound
 from kart import list_of_conflicts
 from kart.schema import Schema
 from kart.output_util import InputMode, get_input_mode
+from kart.import_sources import from_spec
 
 
 class TableImportSource:
@@ -24,20 +25,17 @@ class TableImportSource:
         return spec
 
     @classmethod
-    def open(cls, full_spec, table=None):
-        from kart.sqlalchemy import DbType
+    def open(cls, source, table=None):
+        spec = cls._remove_unnecessary_prefix(str(source))
 
-        spec = cls._remove_unnecessary_prefix(str(full_spec))
+        source_type = from_spec(spec)
 
-        db_type = DbType.from_spec(spec)
-        if db_type is not None:
-            from .sqlalchemy_import_source import SqlAlchemyTableImportSource
-
-            return SqlAlchemyTableImportSource.open(spec, table=table)
+        if source_type is not None:
+            return source_type.import_source_class.open(spec, table=table)
         else:
             from .ogr_import_source import OgrTableImportSource
 
-            return OgrTableImportSource.open(full_spec, table=table)
+            return OgrTableImportSource.open(source, table=table)
 
     @classmethod
     def check_valid(cls, import_sources, param_hint=None):

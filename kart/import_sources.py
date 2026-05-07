@@ -1,9 +1,7 @@
 from enum import Enum, auto
 import os
 
-import click
-
-from kart.exceptions import NotYetImplemented
+from kart.exceptions import ImportSourceError, NotYetImplemented
 
 
 class ImportType(Enum):
@@ -59,7 +57,6 @@ class ImportSourceType:
         *,
         uri_scheme=None,
         file_ext=None,
-        optional_prefix=None,
         hidden=False,
     ):
         self.name = name
@@ -73,7 +70,6 @@ class ImportSourceType:
             self.file_ext = (file_ext,)
         elif isinstance(file_ext, tuple):
             self.file_ext = file_ext
-        self.optional_prefix = optional_prefix
         self.hidden = hidden
 
     @property
@@ -92,7 +88,6 @@ ALL_IMPORT_SOURCE_TYPES = [
         "PATH.gpkg",
         ImportType.SQLALCHEMY_TABLE,
         file_ext=".gpkg",
-        optional_prefix="GPKG:",
     ),
     ImportSourceType(
         "PostgreSQL",
@@ -200,7 +195,7 @@ def suggest_specs(suggestions=None, import_types=None, indent="    "):
 
 
 def bad_spec_error(spec, suggestions=None):
-    """If the user provided a bad format specification, returns a UsageError that tries to help them fix it."""
+    """If the user provided a bad format specification, returns a ImportSourceError that tries to help them fix it."""
     if suggestions is None:
         suggestion = from_spec(spec, allow_unrecognised=True)
         suggestions = (
@@ -210,9 +205,9 @@ def bad_spec_error(spec, suggestions=None):
     try_the_following = (
         "Try one of the following" if len(suggestions) >= 2 else "Try the following"
     )
-    return click.UsageError(
+    return ImportSourceError(
         f"Unrecognised import-source specification: {spec}\n"
-        f"{try_the_following}:\n{suggest_specs(suggestions)}"
+        f"{try_the_following}:\n{suggest_specs(suggestions)}",
     )
 
 

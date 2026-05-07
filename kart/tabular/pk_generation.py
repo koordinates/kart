@@ -71,7 +71,7 @@ class PkGeneratingTableImportSource(TableImportSource):
     }
 
     @classmethod
-    def wrap_source_if_needed(cls, source, repo, **kwargs):
+    def wrap_source_if_needed(cls, source: TableImportSource, repo, **kwargs):
         """Wraps an TableImportSource in a PkGeneratingTableImportSource if the original data lacks a primary key."""
         return (
             source
@@ -80,7 +80,7 @@ class PkGeneratingTableImportSource(TableImportSource):
         )
 
     @classmethod
-    def wrap_sources_if_needed(cls, sources, repo, **kwargs):
+    def wrap_sources_if_needed(cls, sources: list[TableImportSource], repo, **kwargs):
         """Wraps any of the given TableImportSources that lack a primary key, returns the result as a new list."""
         return [cls.wrap_source_if_needed(source, repo, **kwargs) for source in sources]
 
