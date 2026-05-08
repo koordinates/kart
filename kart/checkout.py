@@ -225,6 +225,9 @@ def checkout(
         repo.configure_do_checkout_datasets(non_checkout_spec, False)
 
     TableWorkingCopy.ensure_config_exists(repo)
+    # Capture old_tree before set_head so _remove_deleted_attachment_files can compare
+    # the tree before the switch with the tree after.
+    old_tree = repo.head_tree if not repo.head_is_unborn else None
     repo.set_head(head_ref)
 
     repo_key_filter = (
@@ -238,7 +241,6 @@ def checkout(
         else ()
     )
 
-    old_tree = repo.head_tree if not repo.head_is_unborn else None
     if do_switch_commit or do_switch_spatial_filter or discard_changes:
         # Changing commit, changing spatial filter, or discarding changes mean we need to update every dataset:
         repo.working_copy.reset_to_head(
@@ -538,18 +540,26 @@ def _restore_attachment_files(repo, source_tree, rel_paths):
     Paths that do not exist as files in source_tree are silently skipped, so callers can safely
     pass the same filter list that was used for dataset restore (the reviewer's preferred approach:
     each filter is tried on both sides; the side that matches wins).
+
+    Successfully restored paths are also added to the workdir-index so that future calls to
+    WorkdirDiffCache.dirty_attachment_paths() can detect changes efficiently via git's mtime
+    optimisation rather than hashing all tracked files on every diff.
     """
     workdir = str(repo.workdir_path)
+    restored = []
     for rel_path in rel_paths:
         try:
             subprocess.check_call(
                 ["git", "-C", workdir, "checkout", source_tree.id.hex, "--", rel_path],
                 stderr=subprocess.DEVNULL,
             )
+            restored.append(rel_path)
         except subprocess.CalledProcessError:
             # Path doesn't exist as a file in source_tree (e.g. it's a dataset name or
             # feature key) — silently skip so the caller can pass unfiltered user args.
             pass
+    if restored:
+        _update_attachment_workdir_index(repo, restored)
 
 
 def _restore_all_attachment_files(repo, source_tree):
@@ -561,6 +571,30 @@ def _restore_all_attachment_files(repo, source_tree):
     if not tracked:
         return
     _restore_attachment_files(repo, source_tree, sorted(tracked))
+
+
+def _update_attachment_workdir_index(repo, rel_paths):
+    """
+    Ensures the file-system working copy exists and records the given attachment paths in its
+    workdir-index, so WorkdirDiffCache can detect subsequent changes via git's mtime
+    optimisation (avoiding a full re-hash of every tracked attachment on every diff).
+
+    Tile-based datasets (point-cloud / raster) already maintain this workdir-index. For
+    tabular-only repos that have attachment files but no tile datasets, the workdir would not
+    otherwise be initialised - so we create it here (index + state DB) and track attachments
+    through the same mechanism rather than a parallel one.
+    """
+    from kart.workdir import FileSystemWorkingCopy, FileSystemWorkingCopyStatus
+
+    wc = FileSystemWorkingCopy(repo)
+    if wc.status() == FileSystemWorkingCopyStatus.UNCREATED:
+        wc.create_and_initialise()
+    # Keep the workdir's tracked tree in sync with HEAD. For tile repos the dataset reset does
+    # this; an attachment-only workdir has no tile reset, so set it here (and on every HEAD
+    # change) to avoid a spurious BAD_WORKING_COPY_STATE from kart status / diff.
+    if not repo.head_is_unborn:
+        wc.update_state_table_tree(repo.head_tree)
+    wc.add_paths_to_index(rel_paths)
 
 
 def _remove_deleted_attachment_files(repo, old_tree, new_tree):
@@ -598,8 +632,6 @@ def _restore_attachments_to_head(repo, old_tree=None):
     _restore_all_attachment_files(repo, new_tree)
     if old_tree is not None:
         _remove_deleted_attachment_files(repo, old_tree, new_tree)
-
-
 
 
 @click.command(cls=KartCommand)

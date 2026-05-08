@@ -1,5 +1,4 @@
 import json
-import subprocess
 
 import pytest
 
@@ -10,34 +9,6 @@ from kart.structs import CommitWithReference
 
 
 H = pytest.helpers.helpers()
-
-
-def _checkout_attachments(repo_path):
-    """
-    Extracts every tracked attachment file in HEAD to the working directory. Kart does not yet
-    do this on checkout (issue #583, step 5), so attachment-restore tests need to set up the
-    workdir explicitly before testing `kart restore`.
-    """
-    repo = KartRepo(repo_path)
-    tree_oid = repo.head_tree.id.hex
-    listing = subprocess.check_output(
-        ["git", "-C", str(repo_path), "ls-tree", "-r", "-z", tree_oid],
-        encoding="utf-8",
-    )
-    paths = []
-    for entry in listing.split("\0"):
-        if not entry:
-            continue
-        _meta, path = entry.split("\t", 1)
-        if path.split("/")[0] in (".kart", ".git") or path.startswith(".kart."):
-            continue
-        if any(p.startswith(".") and "dataset" in p for p in path.split("/")[:-1]):
-            continue
-        paths.append(path)
-    if paths:
-        subprocess.check_call(
-            ["git", "-C", str(repo_path), "checkout", tree_oid, "--"] + paths
-        )
 
 
 @pytest.mark.parametrize(
@@ -227,7 +198,6 @@ def _file_status(cli_runner):
 def test_restore_attachment_modified(data_working_copy, cli_runner):
     """`kart restore -- LICENSE.txt` discards a modification to a tracked attachment file."""
     with data_working_copy("points-with-attached-files") as (path, wc):
-        _checkout_attachments(path)
         license_path = path / "LICENSE.txt"
         original = license_path.read_text(encoding="utf-8")
 
@@ -243,7 +213,6 @@ def test_restore_attachment_modified(data_working_copy, cli_runner):
 def test_restore_attachment_deleted(data_working_copy, cli_runner):
     """`kart restore -- LICENSE.txt` re-creates a tracked attachment file removed from the workdir."""
     with data_working_copy("points-with-attached-files") as (path, wc):
-        _checkout_attachments(path)
         license_path = path / "LICENSE.txt"
         original = license_path.read_text(encoding="utf-8")
 
@@ -259,7 +228,6 @@ def test_restore_attachment_deleted(data_working_copy, cli_runner):
 def test_restore_all_attachments(data_working_copy, cli_runner):
     """`kart restore` (no filters) restores every tracked attachment file as well as datasets."""
     with data_working_copy("points-with-attached-files") as (path, wc):
-        _checkout_attachments(path)
         original = (path / "LICENSE.txt").read_text(encoding="utf-8")
         (path / "LICENSE.txt").write_text("Edited.\n", encoding="utf-8")
         (path / "nz_pa_points_topo_150k" / "metadata.xml").unlink()
@@ -275,7 +243,6 @@ def test_restore_all_attachments(data_working_copy, cli_runner):
 def test_restore_leaves_untracked_files(data_working_copy, cli_runner):
     """`kart restore` does not touch untracked attachment files (mirrors `git restore` semantics)."""
     with data_working_copy("points-with-attached-files") as (path, wc):
-        _checkout_attachments(path)
         notes = path / "NOTES.txt"
         notes.write_text("Hello.\n", encoding="utf-8")
 
@@ -286,10 +253,9 @@ def test_restore_leaves_untracked_files(data_working_copy, cli_runner):
 
 
 
-def test_checkout_restores_attachments(data_archive, cli_runner):
+def test_checkout_restores_attachments(data_working_copy, cli_runner):
     """Switching commits should refresh tracked attachment files in the workdir, not just datasets."""
-    with data_archive("points-with-attached-files") as path:
-        _checkout_attachments(path)
+    with data_working_copy("points-with-attached-files") as (path, wc):
         license_path = path / "LICENSE.txt"
         original = license_path.read_text(encoding="utf-8")
 
@@ -302,20 +268,17 @@ def test_checkout_restores_attachments(data_archive, cli_runner):
         assert license_path.read_text(encoding="utf-8") == original
 
 
-def test_checkout_removes_deleted_attachments(data_archive, cli_runner):
+def test_checkout_removes_deleted_attachments(data_working_copy, cli_runner):
     """Switching to a commit where an attachment was removed should delete the file from the workdir."""
-    with data_archive("points-with-attached-files") as path:
-        _checkout_attachments(path)
+    with data_working_copy("points-with-attached-files") as (path, wc):
         license_path = path / "LICENSE.txt"
         assert license_path.exists()
 
         # Commit a new version with LICENSE.txt removed.
         r = cli_runner.invoke(
-            ["commit-files", "-m", "remove LICENSE.txt", "LICENSE.txt="]
+            ["commit-files", "-m", "remove LICENSE.txt", "--remove-empty-files", "LICENSE.txt="]
         )
         assert r.exit_code == 0, r.stderr
-        new_commit = cli_runner.invoke(["log", "-1", "--output-format=json"])
-        assert new_commit.exit_code == 0
 
         # Go back one commit (where LICENSE.txt existed).
         r = cli_runner.invoke(["checkout", "HEAD~1"])
@@ -323,15 +286,14 @@ def test_checkout_removes_deleted_attachments(data_archive, cli_runner):
         assert license_path.exists(), "LICENSE.txt should be restored when switching back"
 
         # Now switch forward again (LICENSE.txt was deleted in that commit).
-        r = cli_runner.invoke(["checkout", "-"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
         assert not license_path.exists(), "LICENSE.txt should be removed when switching to commit that deleted it"
 
 
-def test_commit_attachment_file(data_archive, cli_runner):
+def test_commit_attachment_file(data_working_copy, cli_runner):
     """kart commit should pick up modified and new attachment files alongside dataset changes."""
-    with data_archive("points-with-attached-files") as path:
-        _checkout_attachments(path)
+    with data_working_copy("points-with-attached-files") as (path, wc):
         license_path = path / "LICENSE.txt"
         notes_path = path / "NOTES.txt"
 
@@ -352,7 +314,7 @@ def test_commit_attachment_file(data_archive, cli_runner):
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r.stderr
 
-        r = cli_runner.invoke(["checkout", "-"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
         assert license_path.read_text(encoding="utf-8") == "Updated license text.\n"
         assert notes_path.read_text(encoding="utf-8") == "New notes file.\n"
@@ -370,7 +332,6 @@ def test_restore_dataset_filter_and_file_filter_same_arg(data_working_copy, cli_
     no attachment file with that name exists.
     """
     with data_working_copy("points-with-attached-files") as (path, wc):
-        _checkout_attachments(path)
         # Modify the dataset so there is something to restore.
         r = cli_runner.invoke(["checkout", "HEAD", "--discard-changes"])
         assert r.exit_code == 0, r.stderr

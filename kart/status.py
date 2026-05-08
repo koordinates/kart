@@ -154,14 +154,16 @@ def get_working_copy_status_json(repo, list_untracked_tables):
     return result
 
 
-def get_file_status_json(repo):
+def get_file_status_json(repo, workdir_diff_cache=None):
     """
     Returns the working-directory status for attachment files (anything tracked in git that is not
     Kart-internal and not part of a dataset's contents). Returns {} when there are no changes.
     """
     if repo.head_is_unborn:
         return {}
-    raw = get_workdir_file_status(repo)
+    if workdir_diff_cache is None:
+        workdir_diff_cache = repo.working_copy.workdir_diff_cache()
+    raw = get_workdir_file_status(repo, workdir_diff_cache=workdir_diff_cache)
     return {k: v for k, v in raw.items() if v}
 
 

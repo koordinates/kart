@@ -198,7 +198,7 @@ def get_file_diff(
     old_tree = base_rs.tree
 
     if include_wc_diff:
-        return _get_workdir_file_diff(repo, old_tree, repo_key_filter)
+        return _get_workdir_file_diff(repo, old_tree, repo_key_filter, workdir_diff_cache)
 
     new_tree = target_rs.tree
 
@@ -248,72 +248,136 @@ def _kart_managed_workdir_files(repo):
     return set()
 
 
-def _get_workdir_file_diff(repo, base_tree, repo_key_filter):
+def _make_attachment_filter(workdir_diff_cache):
     """
-    Returns a delta-diff for attachment files between base_tree and the working directory.
+    Returns a callable ``is_attachment_non_tile(path)`` that returns True only for paths that
+    are attachment files and do NOT live inside a tile-dataset working directory.
 
-    Modifications and deletions of tracked attachment files (committed to base_tree) are detected
-    by comparing base_tree blob OIDs against the OIDs of the corresponding files in the working
-    directory. Untracked attachment files are detected with `git ls-files --others`. New blobs
-    are written to the object database via `git hash-object -w` so the resulting deltas reference
-    real OIDs, allowing diff-writers to fetch their content for `--diff-files` output. Any blobs
-    not subsequently referenced by a commit will be cleaned up by `git gc`.
+    Tile files such as ``elevation/EK.tif`` are tracked in the workdir-index by
+    FileSystemWorkingCopy and therefore appear in ``_git_diff_paths()`` when modified.
+    ``is_attachment_path()`` alone cannot exclude them because it only knows about the internal
+    dataset structure (``.raster-dataset.v1/`` etc.) and not the top-level dataset directory
+    names.  Only *tile* datasets store tiles under their directory; files under a *tabular*
+    dataset directory (e.g. ``nz_pa_points_topo_150k/metadata.xml``) are user-facing
+    attachments, so we exclude only the tile-dataset directory prefixes.
+    """
+    tile_ds_prefixes = tuple(
+        ds + "/" for ds in workdir_diff_cache.tile_dataset_paths()
+    )
 
-    A file in base_tree that is absent from the working directory is only reported as deleted if
-    it was previously extracted to the workdir (i.e. it appears in the git index). This avoids
-    spurious deletions for repos that have attachment files committed but never checked out, since
-    Kart does not yet auto-extract attachments on checkout (issue #583, step 5).
+    def _is_attachment_non_tile(p):
+        if not is_attachment_path(p):
+            return False
+        if tile_ds_prefixes and p.startswith(tile_ds_prefixes):
+            return False
+        return True
+
+    return _is_attachment_non_tile
+
+
+def _classify_workdir_attachment_paths(
+    repo, repo_key_filter, workdir_diff_cache, tree_files, managed
+):
+    """
+    Returns (present_changed, deleted, untracked) - the attachment paths in the working directory
+    that may differ from the tree:
+
+    - present_changed: tracked files present on disk whose content *may* differ (the caller
+      confirms by hashing - the fast path narrows this to git-flagged changes, the slow path
+      returns every present tracked file).
+    - deleted: tracked files that were extracted to disk but are now missing.
+    - untracked: files on disk that are not in the tree at all.
+
+    When workdir_diff_cache is provided this uses the workdir-index (git's mtime optimisation)
+    so unchanged large files are never re-hashed. Without a cache it falls back to enumerating
+    every tree attachment and stat-ing it - correct, but O(n) in the number of attachments.
+    Both branches feed the same delta/status builders in the callers, so the only thing that
+    differs between fast and slow is how these three lists are computed.
     """
     workdir = str(repo.workdir_path)
-    managed = _kart_managed_workdir_files(repo)
-
-    # 1. Enumerate attachment files in base_tree with their blob OIDs.
-    tree_files = ls_tree_attachments(workdir, base_tree.hex)
-
-    # 2. Find attachment files in the working directory that are not tracked by Kart/Git.
-    untracked = ls_workdir_untracked_attachments(workdir)
-
     workdir_path = Path(workdir)
 
-    # Filter both sets by the repo_key_filter, and split tracked files into present/missing.
-    tracked = {
-        path: sha
-        for path, sha in tree_files.items()
-        if path_matches_repo_key_filter(path, repo_key_filter)
-    }
-    present_tracked = [p for p in tracked if (workdir_path / p).is_file()]
+    if workdir_diff_cache is not None:
+        # Fast path: the workdir-index already knows which files changed.
+        # _git_diff_paths()  = tracked files that changed (modified or deleted on disk).
+        # _git_ls_others_paths() = files on disk not in the index (new/untracked).
+        is_attachment_non_tile = _make_attachment_filter(workdir_diff_cache)
+        diff_paths = [
+            p
+            for p in workdir_diff_cache._git_diff_paths()
+            if is_attachment_non_tile(p)
+            and path_matches_repo_key_filter(p, repo_key_filter)
+        ]
+        untracked = [
+            p
+            for p in workdir_diff_cache._git_ls_others_paths()
+            if is_attachment_non_tile(p)
+            and p not in tree_files
+            and p not in managed
+            and path_matches_repo_key_filter(p, repo_key_filter)
+        ]
+        present_changed = [p for p in diff_paths if (workdir_path / p).is_file()]
+        deleted = [p for p in diff_paths if not (workdir_path / p).is_file()]
+        return present_changed, deleted, untracked
+
+    # Slow path (no workdir-index): enumerate all tree attachments and stat them.
+    tracked = [
+        p for p in tree_files if path_matches_repo_key_filter(p, repo_key_filter)
+    ]
+    present_changed = [p for p in tracked if (workdir_path / p).is_file()]
     # Only report as deleted if the file was previously extracted (present in the git index).
     index_files = set(_ls_index_attachments(workdir))
-    missing_tracked = [
+    deleted = [
         p for p in tracked if not (workdir_path / p).is_file() and p in index_files
     ]
-
     untracked = [
         p
-        for p in untracked
+        for p in ls_workdir_untracked_attachments(workdir)
         if p not in tree_files
         and p not in managed
         and path_matches_repo_key_filter(p, repo_key_filter)
     ]
+    return present_changed, deleted, untracked
 
-    # 3. Hash all working-directory files we may need to reference, in a single git invocation.
-    new_oids = _hash_workdir_files(workdir, present_tracked + untracked)
+
+def _get_workdir_file_diff(repo, base_tree, repo_key_filter, workdir_diff_cache=None):
+    """
+    Returns a delta-diff for attachment files between base_tree and the working directory.
+
+    Path classification (which files are modified / deleted / untracked) is delegated to
+    _classify_workdir_attachment_paths, which uses the workdir-index fast path when a cache is
+    available and falls back to a full scan otherwise. This function then hashes the candidate
+    files and assembles the deltas - identically regardless of which path produced the lists.
+
+    New blobs are written to the object database via `git hash-object -w` so the resulting
+    deltas reference real OIDs, allowing diff-writers to fetch their content for `--diff-files`
+    output. Any blobs not subsequently referenced by a commit will be cleaned up by `git gc`.
+    """
+    workdir = str(repo.workdir_path)
+    managed = _kart_managed_workdir_files(repo)
+    tree_files = ls_tree_attachments(workdir, base_tree.hex)
+
+    present_changed, deleted, untracked = _classify_workdir_attachment_paths(
+        repo, repo_key_filter, workdir_diff_cache, tree_files, managed
+    )
 
     attachment_deltas = DeltaDiff()
+    new_oids = _hash_workdir_files(workdir, present_changed + untracked)
 
-    # Tracked + present: emit a Delta only if the content changed.
-    for path in present_tracked:
-        old_sha = tracked[path]
+    for path in present_changed:
+        old_sha = tree_files.get(path)
         new_sha = new_oids.get(path)
         if not new_sha or new_sha == old_sha:
             continue
-        attachment_deltas.add_delta(Delta((path, old_sha), (path, new_sha)))
+        attachment_deltas.add_delta(
+            Delta((path, old_sha) if old_sha else None, (path, new_sha))
+        )
 
-    # Tracked + previously extracted but now missing: deletion.
-    for path in missing_tracked:
-        attachment_deltas.add_delta(Delta((path, tracked[path]), None))
+    for path in deleted:
+        old_sha = tree_files.get(path)
+        if old_sha:
+            attachment_deltas.add_delta(Delta((path, old_sha), None))
 
-    # Untracked in workdir: insertion.
     for path in untracked:
         new_sha = new_oids.get(path)
         if new_sha:
@@ -424,7 +488,7 @@ def ls_workdir_untracked_attachments(workdir):
 
 
 def get_workdir_file_status(
-    repo, base_tree=None, repo_key_filter=RepoKeyFilter.MATCH_ALL
+    repo, base_tree=None, repo_key_filter=RepoKeyFilter.MATCH_ALL, workdir_diff_cache=None
 ):
     """
     Returns a classification of attachment files in the working directory relative to base_tree
@@ -436,45 +500,32 @@ def get_workdir_file_status(
     "untracked" - file present in the workdir but absent from base_tree.
     "deleted" - tracked file in base_tree but absent from the workdir.
 
+    When workdir_diff_cache is provided the function reuses its cached git-index results to avoid
+    redundant git invocations when called alongside get_repo_diff().
+
     Cheaper than calling get_file_diff() with include_wc_diff=True when only the file lists are
     needed, because untouched modifications can be detected via blob OID comparison without
-    writing new blobs to the object database.
+    writing new blobs to the object database (write_to_odb=False below).
     """
     if base_tree is None:
         base_tree = repo.head_tree
     workdir = str(repo.workdir_path)
-    workdir_path = Path(workdir)
     managed = _kart_managed_workdir_files(repo)
+    tree_files = ls_tree_attachments(workdir, base_tree.hex)
 
-    tracked = {
-        path: sha
-        for path, sha in ls_tree_attachments(workdir, base_tree.hex).items()
-        if path_matches_repo_key_filter(path, repo_key_filter)
-    }
-    untracked = [
-        p
-        for p in ls_workdir_untracked_attachments(workdir)
-        if p not in tracked
-        and p not in managed
-        and path_matches_repo_key_filter(p, repo_key_filter)
-    ]
-
-    present = [p for p in tracked if (workdir_path / p).is_file()]
-    # Only report as deleted if the file was previously extracted (present in the git index).
-    index_files = set(_ls_index_attachments(workdir))
-    deleted = sorted(
-        p for p in tracked if not (workdir_path / p).is_file() and p in index_files
+    present_changed, deleted, untracked = _classify_workdir_attachment_paths(
+        repo, repo_key_filter, workdir_diff_cache, tree_files, managed
     )
 
-    # Modified = tracked + present + content differs.
-    # We compute OIDs without -w because we only need to compare hashes.
-    new_oids = _hash_workdir_files(workdir, present, write_to_odb=False)
-    modified = sorted(p for p in present if new_oids.get(p) != tracked[p])
+    # A "present_changed" path is only actually modified if its content differs from the tree.
+    # Hash without -w since we only need the OIDs for comparison, not to persist blobs.
+    new_oids = _hash_workdir_files(workdir, present_changed, write_to_odb=False)
+    modified = sorted(p for p in present_changed if new_oids.get(p) != tree_files.get(p))
 
     return {
         "modified": modified,
         "untracked": sorted(untracked),
-        "deleted": deleted,
+        "deleted": sorted(deleted),
     }
 
 
