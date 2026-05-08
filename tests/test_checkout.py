@@ -356,3 +356,26 @@ def test_commit_attachment_file(data_archive, cli_runner):
         assert r.exit_code == 0, r.stderr
         assert license_path.read_text(encoding="utf-8") == "Updated license text.\n"
         assert notes_path.read_text(encoding="utf-8") == "New notes file.\n"
+
+
+def test_restore_dataset_filter_and_file_filter_same_arg(data_working_copy, cli_runner):
+    """
+    Regression: kart restore with a filter that names a dataset must not fail even if
+    the same string could also be interpreted as an attachment file path.  Previously
+    _split_restore_filters would misclassify a filter when the dataset exists only on one
+    branch but not the source tree passed to the split function.
+
+    Here we verify the simpler invariant: passing a dataset name as a filter to
+    `kart restore` succeeds (dataset is restored) and does not raise an error even though
+    no attachment file with that name exists.
+    """
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        _checkout_attachments(path)
+        # Modify the dataset so there is something to restore.
+        r = cli_runner.invoke(["checkout", "HEAD", "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+
+        # Passing the dataset name as a filter should succeed even though
+        # no attachment file called "nz_pa_points_topo_150k" exists.
+        r = cli_runner.invoke(["restore", "--", "nz_pa_points_topo_150k"])
+        assert r.exit_code == 0, r.stderr
