@@ -13,7 +13,7 @@ class TableImportSource:
     A read-only interface.
     """
 
-    UNNECESSARY_PREFIXES = ("OGR:", "GPKG:", "PG:")
+    UNNECESSARY_PREFIXES = ("GPKG:", "PG:")
 
     @classmethod
     def _remove_unnecessary_prefix(cls, spec):
@@ -35,7 +35,7 @@ class TableImportSource:
         else:
             from .ogr_import_source import OgrTableImportSource
 
-            return OgrTableImportSource.open(source, table=table)
+            return OgrTableImportSource.open(spec, table=table)
 
     @classmethod
     def check_valid(cls, import_sources, param_hint=None):
