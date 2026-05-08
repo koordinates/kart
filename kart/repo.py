@@ -559,7 +559,7 @@ class KartRepo(pygit2.Repository):
                 and os.environ.get("KART_ALLOW_FROM_GIT") == "1"
             ):
                 L.warning(
-                    "Selected repo does't follow Kart conventions, but proceeding anyway."
+                    "Selected repo doesn't follow Kart conventions, but proceeding anyway."
                 )
                 return
             raise NotFound(
