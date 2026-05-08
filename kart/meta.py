@@ -377,30 +377,14 @@ def ahead_behind(ctx):
 @click.pass_context
 def ls_files(ctx, ref):
     """List attachment files tracked at REF (not datasets or Kart internals)."""
-    import re
+    from kart.diff_util import is_attachment_path
 
     repo = ctx.obj.repo
     try:
-        commit = repo.revparse_single(ref)
-        tree = commit.peel(pygit2.Tree)
-    except KeyError:
+        obj = repo.revparse_single(ref)
+        tree = obj.peel(pygit2.Tree)
+    except (KeyError, pygit2.InvalidSpecError):
         raise click.UsageError(f"No such ref: {ref!r}")
-
-    _DATASET_DIR_RE = re.compile(r"\.[^/]*dataset[^/]*$")
-    _TOP_PREFIXES = (".kart", ".git")
-    _README_RE = re.compile(r"^[A-Z]+_README\.[^/]*$")
-
-    def is_attachment(path):
-        parts = path.split("/")
-        top = parts[0]
-        if any(top == p or top.startswith(p + ".") for p in _TOP_PREFIXES):
-            return False
-        if len(parts) == 1 and _README_RE.match(top):
-            return False
-        for part in parts[:-1]:
-            if _DATASET_DIR_RE.match(part):
-                return False
-        return True
 
     def walk_tree(tree, prefix=""):
         for entry in tree:
@@ -408,7 +392,7 @@ def ls_files(ctx, ref):
             if entry.type_str == "tree":
                 walk_tree(repo.get(entry.id), f"{full}/")
             elif entry.type_str == "blob":
-                if is_attachment(full):
+                if is_attachment_path(full):
                     click.echo(full)
 
     walk_tree(tree)
