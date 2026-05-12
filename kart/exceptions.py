@@ -117,6 +117,10 @@ class DbConnectionError(BaseException):
         super().__init__(f"{message}\nCaused by error:\n{db_error}")
 
 
+class ImportSourceError(BaseException):
+    exit_code = NO_IMPORT_SOURCE
+
+
 class BadStateError(BaseException):
     pass
 

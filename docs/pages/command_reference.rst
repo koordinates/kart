@@ -43,6 +43,7 @@ Data can be imported from any of the following types of databases:
 - `Microst SQL Server <sql_server_>`_
 - `MySQL <mysql_>`_
 - `Shapefiles <shapefiles_>`_
+- `ESRI ArcGIS REST Services <esri_rest_>`_ (MapServer/FeatureServer)
 
 The following syntax examples show how to import from each type of
 database.
@@ -54,6 +55,8 @@ database.
    kart import mssql://USERNAME:PASSWORD@HOST/DBNAME/DBSCHEMA table_1 table_2 table_3
    kart import mysql://USERNAME:PASSWORD@HOST/DBNAME/DBSCHEMA table_1 table_2 table_3
    kart import PATH-TO-FILE.shp
+   kart import esri:https://HOST/PATH/MapServer
+   kart import esri:https://HOST/PATH/FeatureServer/LAYER_ID
 
 You can also specify ``--all-tables`` to import all tables from a
 particular datasource.

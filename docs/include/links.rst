@@ -23,6 +23,7 @@
 .. _postgis: https://postgis.net
 .. _mysql: https://www.mysql.com
 .. _shapefiles: https://doc.arcgis.com/en/arcgis-online/reference/shapefiles.htm
+.. _esri_rest: https://developers.arcgis.com/rest/services-reference/enterprise/feature-service/
 .. _postgis: https://postgis.net
 .. _gpkg_spec: http://www.geopackage.org/spec
 .. _gpkg: http://www.geopackage.org

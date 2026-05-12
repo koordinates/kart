@@ -871,7 +871,7 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
         with chdir(repo_path):
             r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
             assert r.exit_code == NO_IMPORT_SOURCE, r
-            assert "fred:thingz' doesn't appear to be valid" in r.stderr
+            assert "Unrecognised import-source specification: fred:thingz" in r.stderr
 
             r = cli_runner.invoke(["init", "--import", f"gpkg:thingz.gpkg"])
             assert r.exit_code == NO_IMPORT_SOURCE, r
@@ -880,7 +880,7 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
             # not empty
             (repo_path / "a.file").touch()
             r = cli_runner.invoke(
-                ["init", "--import", f"gpkg:{data/gpkg}", str(repo_path)]
+                ["init", "--import", f"gpkg:{data / gpkg}", str(repo_path)]
             )
             assert r.exit_code == INVALID_OPERATION, r
             assert "isn't empty" in r.stderr
@@ -1116,6 +1116,7 @@ def test_import_list_formats(data_archive_readonly, cli_runner):
             "Microsoft SQL Server",
             "MySQL",
             "ESRI Shapefile",
+            "ESRI Rest Service",
             "LAS (LASer)",
             "GeoTIFF",
         ]
