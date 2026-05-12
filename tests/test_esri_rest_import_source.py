@@ -430,14 +430,16 @@ class TestESRIRestImportSourceRouter:
     def test_routes_to_layer_source(self):
         """Test that layer URLs route to ESRIJSONImportSource."""
         # Note: This will fail at OGR open time, but we can verify the routing
-        try:
+        with pytest.raises(ImportSourceError) as exc_info:
             source = ESRIRestImportSource.open(
                 "esri:https://example.com/arcgis/rest/services/MyService/MapServer/0"
             )
-            assert isinstance(source, ESRIJSONImportSource)
-        except Exception:
-            # Expected - OGR can't actually open this URL
-            pass
+        # Implied here: the layer URL was routed to ESRIJSONImportSource, which then failed to open it (since it's not a real service),
+        # and the error message should include the adapted URL:
+        assert (
+            "https://example.com/arcgis/rest/services/MyService/MapServer/0/query?f=json&where=1%3D1&outFields=%2A&returnGeometry=true"
+            in str(exc_info.value)
+        )
 
     def test_invalid_url_raises_error(self):
         """Test that invalid URLs raise an error."""
