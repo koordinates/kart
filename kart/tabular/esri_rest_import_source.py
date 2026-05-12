@@ -3,7 +3,8 @@ Import source for ESRI Rest services (MapServer/FeatureServer).
 
 ESRI Rest services can be imported using the "ESRIJSON" OGR driver which does the
 heavy lifting of fetching data from the service and converting it to a format we can
-import. This module provides two classes:
+import. This module provides ESRIRestImportSource which routes to either of the following
+depending on supplied source:
 
 ESRIRestServerSource:
     Discovers and lists all available layers from a MapServer/FeatureServer endpoint.
@@ -16,7 +17,7 @@ ESRIRestServerSource:
         tables = source.get_tables()
 
         # Import all layers from a service
-        kart import "https://example.com/.../MapServer"
+        kart import "esri:https://example.com/.../MapServer"
 
 ESRIJSONImportSource:
     Imports a specific layer from a MapServer/FeatureServer by layer ID.
@@ -26,8 +27,6 @@ ESRIJSONImportSource:
         # Import a specific layer
         kart import "esri:https://example.com/.../MapServer/0" --dataset my_layer
 
-        # Or without the esri: prefix
-        kart import "https://example.com/.../MapServer/0"
 """
 
 import functools
