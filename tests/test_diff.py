@@ -2222,42 +2222,11 @@ def test_attached_files_patch(data_archive, cli_runner):
         }
 
 
-def _checkout_attachments(repo_path):
-    """
-    Extracts all tracked attachment files in HEAD to the working directory.
-
-    `data_working_copy` only extracts the .kart gitdir; attachment files live in the object
-    database but Kart does not yet write them to the filesystem on checkout (issue #583, step 5).
-    We approximate that here so workdir-vs-tree tests have something to diff against.
-    """
-    import subprocess as _subprocess
-
-    repo = KartRepo(repo_path)
-    tree_oid = repo.head_tree.id.hex
-    listing = _subprocess.check_output(
-        ["git", "-C", str(repo_path), "ls-tree", "-r", "-z", tree_oid],
-        encoding="utf-8",
-    )
-    paths = []
-    for entry in listing.split("\0"):
-        if not entry:
-            continue
-        _meta, path = entry.split("\t", 1)
-        if path.startswith(".kart"):
-            continue
-        if any(p.startswith(".") and "dataset" in p for p in path.split("/")[:-1]):
-            continue
-        paths.append(path)
-    if paths:
-        _subprocess.check_call(
-            ["git", "-C", str(repo_path), "checkout", tree_oid, "--"] + paths
-        )
 
 
 def test_attached_files_workdir_diff_modified(data_working_copy, cli_runner):
     """Modifying a tracked attachment file shows up in `kart diff --diff-files`."""
     with data_working_copy("points-with-attached-files") as (repo_path, wc):
-        _checkout_attachments(repo_path)
         license_path = repo_path / "LICENSE.txt"
         license_path.write_text("Edited license text.\n", encoding="utf-8")
 
@@ -2275,7 +2244,6 @@ def test_attached_files_workdir_diff_modified(data_working_copy, cli_runner):
 def test_attached_files_workdir_diff_deleted(data_working_copy, cli_runner):
     """Deleting a tracked attachment file shows up in `kart diff --diff-files`."""
     with data_working_copy("points-with-attached-files") as (repo_path, wc):
-        _checkout_attachments(repo_path)
         (repo_path / "LICENSE.txt").unlink()
 
         r = cli_runner.invoke(["diff", "--diff-files", "-ojson", "--", "LICENSE.txt"])
@@ -2290,7 +2258,6 @@ def test_attached_files_workdir_diff_deleted(data_working_copy, cli_runner):
 def test_attached_files_workdir_diff_added(data_working_copy, cli_runner):
     """An untracked attachment file shows up in `kart diff --diff-files`."""
     with data_working_copy("points-with-attached-files") as (repo_path, wc):
-        _checkout_attachments(repo_path)
         new_path = repo_path / "NOTES.txt"
         new_path.write_text("Notes added in working dir.\n", encoding="utf-8")
 
@@ -2303,7 +2270,6 @@ def test_attached_files_workdir_diff_added(data_working_copy, cli_runner):
 def test_attached_files_workdir_diff_combined(data_working_copy, cli_runner):
     """Modifying, deleting and adding attachment files in one diff."""
     with data_working_copy("points-with-attached-files") as (repo_path, wc):
-        _checkout_attachments(repo_path)
         (repo_path / "LICENSE.txt").write_text("New license.\n", encoding="utf-8")
         (repo_path / "nz_pa_points_topo_150k" / "metadata.xml").unlink()
         (repo_path / "NOTES.txt").write_text("Hello.\n", encoding="utf-8")
@@ -2326,7 +2292,6 @@ def test_attached_files_workdir_diff_combined(data_working_copy, cli_runner):
 def test_attached_files_workdir_diff_oid_only(data_working_copy, cli_runner):
     """Without --diff-files, the diff reports abbreviated OIDs (and the blob is in the ODB)."""
     with data_working_copy("points-with-attached-files") as (repo_path, wc):
-        _checkout_attachments(repo_path)
         (repo_path / "LICENSE.txt").write_text("X\n", encoding="utf-8")
 
         r = cli_runner.invoke(["diff", "-ojson", "--", "LICENSE.txt"])
@@ -2343,7 +2308,6 @@ def test_attached_files_workdir_diff_oid_only(data_working_copy, cli_runner):
 def test_attached_files_workdir_diff_empty(data_working_copy, cli_runner):
     """No attachment changes => no <files> entry in the diff output."""
     with data_working_copy("points-with-attached-files") as (repo_path, wc):
-        _checkout_attachments(repo_path)
         r = cli_runner.invoke(["diff", "--diff-files", "-ojson"])
         assert r.exit_code == 0, r.stderr
         jdict = json.loads(r.stdout)
