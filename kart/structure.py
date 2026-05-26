@@ -358,9 +358,13 @@ class RepoStructure:
 
             # TODO - check for conflicts.
 
-            assert isinstance(delta.new_value, (bytes, type(None)))
-            if delta.new_value is not None:
-                object_builder.insert(path, delta.new_value)
+            new_value = delta.new_value
+            # WC diffs store blob OIDs (hex strings) rather than raw bytes; resolve them here.
+            if isinstance(new_value, str):
+                new_value = bytes(self.repo[pygit2.Oid(hex=new_value)])
+            assert isinstance(new_value, (bytes, type(None)))
+            if new_value is not None:
+                object_builder.insert(path, new_value)
             else:
                 object_builder.remove(path)
 
