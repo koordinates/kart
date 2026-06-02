@@ -16,6 +16,8 @@ from kart.diff_structs import (
     BINARY_FILE,
     Delta,
     DatasetDiff,
+    file_delta_value_to_bytes,
+    file_delta_value_to_oid,
 )
 from kart.exceptions import CrsError, InvalidOperation
 from kart.key_filters import RepoKeyFilter
@@ -369,32 +371,61 @@ class BaseDiffWriter:
     TEXT_PREFIX = ""
 
     def _full_file_delta(self, delta, skip_binary_files=False):
-        def get_blob(half_delta):
-            return self.repo[half_delta.value] if half_delta else None
+        """
+        Returns a copy of the given file delta with each side's value replaced by its actual contents
+        (as text, or base64 for binary files), resolving OIDs from the ODB or reading uncommitted bytes as needed.
+        """
 
-        def is_binary(blob):
-            return blob.is_binary if blob else False
+        def get_bytes(half_delta_value):
+            return file_delta_value_to_bytes(self.repo, half_delta_value)
 
-        old_blob = get_blob(delta.old)
-        new_blob = get_blob(delta.new)
-        delta_is_binary = is_binary(old_blob) or is_binary(new_blob)
+        def is_binary(data):
+            # Mirrors git's own heuristic - content is binary if there's a NUL byte near the start.
+            return data is not None and b"\x00" in data[:8000]
+
+        old_bytes = get_bytes(delta.old_value) if delta.old else None
+        new_bytes = get_bytes(delta.new_value) if delta.new else None
+        delta_is_binary = is_binary(old_bytes) or is_binary(new_bytes)
 
         if delta_is_binary:
             delta.flags |= BINARY_FILE
             if skip_binary_files:
                 return delta
 
-            blob_to_text = lambda blob: self.BASE64_PREFIX + b64encode_str(
-                memoryview(blob)
+            bytes_to_text = lambda data: self.BASE64_PREFIX + b64encode_str(
+                memoryview(data)
             )
         else:
-            blob_to_text = lambda blob: self.TEXT_PREFIX + str(
-                memoryview(blob), "utf-8"
+            bytes_to_text = lambda data: self.TEXT_PREFIX + str(
+                memoryview(data), "utf-8"
             )
 
-        old_half_delta = (delta.old_key, blob_to_text(old_blob)) if delta.old else None
-        new_half_delta = (delta.new_key, blob_to_text(new_blob)) if delta.new else None
+        old_half_delta = (
+            (delta.old_key, bytes_to_text(old_bytes)) if delta.old else None
+        )
+        new_half_delta = (
+            (delta.new_key, bytes_to_text(new_bytes)) if delta.new else None
+        )
 
+        result = Delta(old_half_delta, new_half_delta)
+        result.flags = delta.flags
+        return result
+
+    def _oid_file_delta(self, delta):
+        """
+        Returns a copy of the given file delta with each side's value replaced by its git OID (hex string),
+        hashing uncommitted content just-in-time. Used to display file diffs without showing their contents.
+        """
+        old_half_delta = (
+            (delta.old_key, file_delta_value_to_oid(self.repo, delta.old_value))
+            if delta.old
+            else None
+        )
+        new_half_delta = (
+            (delta.new_key, file_delta_value_to_oid(self.repo, delta.new_value))
+            if delta.new
+            else None
+        )
         result = Delta(old_half_delta, new_half_delta)
         result.flags = delta.flags
         return result
@@ -445,11 +476,12 @@ class BaseDiffWriter:
         )
 
     def get_file_diff(self):
-        """Returns the DatasetDiff object for the deltas that do not belong to any dataset."""
+        """Returns the DeltaDiff object for the deltas that do not belong to any dataset."""
         return diff_util.get_file_diff(
             self.base_rs,
             self.target_rs,
-            include_wc_diff=False,
+            include_wc_diff=self.include_wc_diff,
+            workdir_diff_cache=self.workdir_diff_cache,
             repo_key_filter=self.repo_key_filter,
         )
 

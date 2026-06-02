@@ -1,7 +1,10 @@
+import re
 from collections import UserDict
 from dataclasses import dataclass
 from itertools import chain
 from typing import Any, Iterable, Iterator
+
+import pygit2
 
 from .exceptions import InvalidOperation
 
@@ -12,6 +15,48 @@ from .exceptions import InvalidOperation
 # or not (ie <repo-root>/my-attachment.txt) but when outputting diffs, they all go in the <files> area and not in any dataset.
 # Note that this is not a valid dataset-path, so it cannot conflict with any dataset.
 FILES_KEY = "<files>"
+
+
+# The value of a file (aka attachment) delta is polymorphic: it is either the git blob OID (a hex string) of the
+# file's committed content, or the raw bytes of the file's uncommitted working-copy content. Storing committed
+# content as an OID keeps commit<>commit diffs cheap (we only load the bytes if asked to display them), while
+# storing uncommitted content as bytes means we don't have to write a blob to the ODB just to show a diff.
+# These helpers convert a delta value to whichever form a particular consumer needs, just-in-time.
+
+# A git OID is a hex string - up to 40 chars for SHA-1, 64 for SHA-256, but commit<>commit file diffs store the
+# git-abbreviated form (`git diff --raw` abbreviates to >=7 chars, extending as needed to stay unique). We use
+# this to tell an OID apart from any other string, rather than assuming every str is an OID. This is unambiguous
+# because file content is always stored as bytes, never as a (hex) str.
+_OID_PATTERN = re.compile(r"[0-9a-f]{7,64}")
+
+
+def file_delta_value_is_oid(value):
+    """Returns True if the given file-delta value is a git OID (a hex string of the right length), as opposed to
+    raw content (bytes, or a non-OID string)."""
+    return isinstance(value, str) and _OID_PATTERN.fullmatch(value) is not None
+
+
+def file_delta_value_to_bytes(repo, value):
+    """Returns a file-delta value as bytes - resolving an OID from the ODB if necessary."""
+    if value is None:
+        return None
+    if file_delta_value_is_oid(value):
+        return repo[value].data
+    if isinstance(value, str):
+        return value.encode("utf-8")
+    return bytes(value)
+
+
+def file_delta_value_to_oid(repo, value):
+    """Returns the git blob OID (hex string) of a file-delta value - hashing raw content just-in-time
+    (without writing it to the ODB) if necessary."""
+    if value is None:
+        return None
+    if file_delta_value_is_oid(value):
+        return value
+    if isinstance(value, str):
+        value = value.encode("utf-8")
+    return pygit2.hash(bytes(value)).hex
 
 
 class Conflict(Exception):

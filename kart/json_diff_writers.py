@@ -92,6 +92,9 @@ class JsonDiffWriter(BaseDiffWriter):
     def _postprocess_attachment_delta(self, delta):
         if self.do_full_file_diffs:
             delta = self._full_file_delta(delta)
+        else:
+            # Show each side as an OID rather than its (possibly binary, possibly uncommitted) contents.
+            delta = self._oid_file_delta(delta)
         return delta.to_plus_minus_dict(self.delta_filter)
 
     def default(self, obj):
@@ -434,6 +437,9 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             if self.do_full_file_diffs:
                 delta = self._full_file_delta(delta)
                 obj["binary"] = bool(delta.flags & BINARY_FILE)
+            else:
+                # Show each side as an OID rather than its (possibly binary, possibly uncommitted) contents.
+                delta = self._oid_file_delta(delta)
             obj["change"] = delta.to_plus_minus_dict()
             self.dump(obj)
 

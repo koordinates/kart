@@ -4,6 +4,7 @@ import click
 import pygit2
 
 from .base_diff_writer import BaseDiffWriter
+from .diff_structs import FILES_KEY
 from .key_filters import RepoKeyFilter
 from .conflicts_writer import BaseConflictsWriter
 from .crs_util import make_crs
@@ -66,6 +67,12 @@ class StatusDiffWriter(BaseDiffWriter):
                     filtered_type_counts["updates"] -= sf_conflicts_count
                     if not filtered_type_counts["updates"]:
                         del filtered_type_counts["updates"]
+
+        # Changes to standalone files (attachments) aren't part of any dataset - they go under FILES_KEY.
+        file_diff = self.get_file_diff()
+        file_type_counts = file_diff.type_counts()
+        if file_type_counts:
+            repo_type_counts[FILES_KEY] = {"file": file_type_counts}
 
         return repo_type_counts
 
@@ -343,7 +350,7 @@ def diff_status_to_text(jdict):
     message = []
     for dataset_path, dataset_changes in jdict.items():
         message.append(f"  {dataset_path}:")
-        for dataset_part in ("meta", "feature", "tile"):
+        for dataset_part in ("meta", "feature", "tile", "file"):
             if dataset_part not in dataset_changes:
                 continue
             message.append(f"    {dataset_part}:")

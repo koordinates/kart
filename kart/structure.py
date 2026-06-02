@@ -6,7 +6,11 @@ from typing import Optional
 import click
 import pygit2
 
-from kart.diff_structs import FILES_KEY
+from kart.diff_structs import (
+    FILES_KEY,
+    file_delta_value_is_oid,
+    file_delta_value_to_bytes,
+)
 from .exceptions import (
     NO_CHANGES,
     NO_COMMIT,
@@ -358,11 +362,17 @@ class RepoStructure:
 
             # TODO - check for conflicts.
 
-            assert isinstance(delta.new_value, (bytes, type(None)))
-            if delta.new_value is not None:
-                object_builder.insert(path, delta.new_value)
-            else:
+            # A file-delta value is either a git OID (committed content, eg from a patch describing an existing
+            # blob) or raw bytes (uncommitted content, eg an edited attachment in the working copy).
+            new_value = delta.new_value
+            if new_value is None:
                 object_builder.remove(path)
+            elif file_delta_value_is_oid(new_value):
+                object_builder.insert(path, self.repo[new_value])
+            else:
+                object_builder.insert(
+                    path, file_delta_value_to_bytes(self.repo, new_value)
+                )
 
     def commit_diff(
         self,

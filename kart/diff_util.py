@@ -80,7 +80,13 @@ def get_repo_diff(
             convert_to_dataset_format=convert_to_dataset_format,
         )
     if include_files:
-        file_diff = get_file_diff(base_rs, target_rs, repo_key_filter=repo_key_filter)
+        file_diff = get_file_diff(
+            base_rs,
+            target_rs,
+            include_wc_diff=include_wc_diff,
+            workdir_diff_cache=workdir_diff_cache,
+            repo_key_filter=repo_key_filter,
+        )
         if file_diff:
             repo_diff.recursive_set([FILES_KEY, FILES_KEY], file_diff)
 
@@ -171,14 +177,15 @@ def get_file_diff(
 ):
     """
     Returns a delta-diff for changed files aka attachments.
-    Each delta just contains the old and new file OIDs - any more than this may be unhelpful since it takes
+    Each committed delta just contains the old and new file OIDs - any more than this may be unhelpful since it takes
     CPU time to produce but isn't necessarily easier to consume than OIDs, which are straight-forward to
     turn into raw files once you know how. (Various diff-writers can transform these OIDs into inline diffs if you
     set the --diff-files flag).
-    """
 
-    # We don't yet support attachment diffs in the workdir
-    assert not include_wc_diff
+    If include_wc_diff is set, the result also includes uncommitted changes to attachments in the file-system
+    working copy (base_rs<>target_rs + target_rs<>working-copy, just as dataset diffs are computed). For these
+    uncommitted deltas the new value is the workdir file's raw bytes rather than an OID, since it isn't committed.
+    """
 
     old_tree = base_rs.tree
     new_tree = target_rs.tree
@@ -216,6 +223,17 @@ def get_file_diff(
         old_half_delta = (path, old_sha) if not ZEROES.fullmatch(old_sha) else None
         new_half_delta = (path, new_sha) if not ZEROES.fullmatch(new_sha) else None
         attachment_deltas.add_delta(Delta(old_half_delta, new_half_delta))
+
+    if include_wc_diff:
+        # Also include uncommitted attachment changes from the file-system working copy (target_rs<>working-copy).
+        workdir = repo.working_copy.workdir
+        if workdir is not None:
+            if workdir_diff_cache is None:
+                workdir_diff_cache = workdir.workdir_diff_cache()
+            wc_deltas = workdir.attachment_deltas_to_working_copy(
+                new_tree, workdir_diff_cache, repo_key_filter=repo_key_filter
+            )
+            attachment_deltas = DeltaDiff.concatenated(attachment_deltas, wc_deltas)
 
     return attachment_deltas
 
