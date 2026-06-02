@@ -192,13 +192,26 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             s.execute(CreateTable(self.kart_tables.kart_state, if_not_exists=True))
 
     def delete(self):
-        """Deletes the index file and state table, and attempts to clean up any datasets in the workdir itself."""
+        """Deletes the index file and state table, and attempts to clean up any datasets and attachments in the workdir itself."""
+        tree_id = self.get_tree_id()
         datasets = self.repo.datasets(
-            self.get_tree_id(), filter_dataset_type=self.SUPPORTED_DATASET_TYPE
+            tree_id, filter_dataset_type=self.SUPPORTED_DATASET_TYPE
         )
         self.delete_datasets_from_workdir(
             datasets, workdir_index=None, track_changes_as_dirty=True
         )
+
+        # Remove any checked-out attachment files. Diffing the current tree against the empty tree
+        # (target_tree=None) yields a delete for every attachment, which unlinks it from disk.
+        # track_changes_as_dirty=True means the (about-to-be-removed) index isn't touched.
+        # Experimental - only when enabled.
+        if tree_id and os.environ.get("X_KART_ATTACHMENTS"):
+            self.write_attached_files_to_workdir(
+                self.repo[tree_id],
+                None,
+                workdir_index=None,
+                track_changes_as_dirty=True,
+            )
 
         if self.index_path.is_file():
             self.index_path.unlink()
@@ -363,13 +376,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 self.write_full_datasets_to_workdir(
                     [target_datasets[d] for d in ds_inserts], workdir_index
                 )
-            # Update the working copy with files that have changed:
-            kart_attachments = os.environ.get("X_KART_ATTACHMENTS")
-            if kart_attachments:
-                if base_tree and target_tree:
-                    self.write_attached_files_to_workdir(
-                        base_tree, target_tree, workdir_index, track_changes_as_dirty
-                    )
 
             for ds_path in ds_updates:
                 self._update_dataset_in_workdir(
@@ -380,16 +386,41 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     track_changes_as_dirty=track_changes_as_dirty,
                 )
 
+            # Standalone files (attachments) are part of the workdir's contents too, so we reset them in
+            # the same pass. base_tree may be None (eg on first checkout), meaning the empty tree, in which
+            # case every attachment is written from scratch.
+            # Attachment support in the workdir is still experimental - only enabled behind a flag.
+            if os.environ.get("X_KART_ATTACHMENTS") and base_tree != target_tree:
+                self.write_attached_files_to_workdir(
+                    base_tree,
+                    target_tree,
+                    workdir_index,
+                    repo_key_filter=repo_key_filter,
+                    track_changes_as_dirty=track_changes_as_dirty,
+                )
+
     def write_attached_files_to_workdir(
-        self, base_tree, target_tree, workdir_index, track_changes_as_dirty=False
+        self,
+        base_tree,
+        target_tree,
+        workdir_index,
+        *,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        track_changes_as_dirty=False,
     ):
-        """Get the deltas for attachment files and write them to the working copy."""
+        """
+        Get the deltas for attachment files between base_tree and target_tree and write them to the working copy.
+        Either tree may be None, meaning the empty tree (RepoStructure resolves None to repo.empty_tree) - so a
+        None base_tree inserts all attachments, and a None target_tree deletes all of them.
+        """
         write_to_index = not track_changes_as_dirty
 
         repo = self.repo
         base_rs = RepoStructure(repo, base_tree)
         target_rs = RepoStructure(repo, target_tree)
-        attachment_deltas = get_file_diff(base_rs, target_rs)
+        attachment_deltas = get_file_diff(
+            base_rs, target_rs, repo_key_filter=repo_key_filter
+        )
 
         for file_delta in attachment_deltas.values():
             for filename in set(filter(None, (file_delta.old_key, file_delta.new_key))):
@@ -400,7 +431,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     workdir_index.remove_all([filename])
 
             if file_delta.new:
-                workdir_path = self.path / file_delta.new_key
+                filename = file_delta.new_key
+                workdir_path = self.path / filename
+                workdir_path.parent.mkdir(parents=True, exist_ok=True)
                 blob_data = repo[file_delta.new_value].data
                 workdir_path.write_bytes(blob_data)
                 if write_to_index:
