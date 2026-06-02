@@ -339,8 +339,11 @@ def test_attachment_create_workingcopy(data_working_copy, cli_runner, monkeypatc
         assert file_path.read_text() == "hello"
 
         # Remove the file then recreate the working copy from scratch - it should be checked out again.
+        # (--discard-changes since removing the file makes the working copy dirty.)
         file_path.unlink()
-        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        r = cli_runner.invoke(
+            ["create-workingcopy", "--delete-existing", "--discard-changes"]
+        )
         assert r.exit_code == 0, r.stderr
         assert file_path.read_text() == "hello"
 
@@ -463,6 +466,70 @@ def test_attachment_workingcopy_delete_and_commit(
             capture_output=True,
         )
         assert r.returncode != 0
+
+
+def test_attachment_checkout_aborts_when_dirty(
+    data_working_copy, cli_runner, monkeypatch
+):
+    # A checkout that would lose uncommitted attachment changes must abort (unless --discard-changes).
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        file_path = repo_dir / "my_attachment.txt"
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Edit the attachment in the workdir (now dirty).
+        file_path.write_text("dirty edit")
+
+        # Switching to the previous commit without --discard-changes must abort, leaving the edit intact.
+        r = cli_runner.invoke(["checkout", "HEAD^"])
+        assert r.exit_code != 0
+        assert "uncommitted changes" in r.stderr.lower()
+        assert file_path.read_text() == "dirty edit"
+
+        # With --discard-changes the checkout proceeds, and the attachment (absent at HEAD^) is removed.
+        r = cli_runner.invoke(["checkout", "HEAD^", "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+        assert not file_path.exists()
+
+
+def test_attachment_discard_changes_restores_committed_state(
+    data_working_copy, cli_runner, monkeypatch
+):
+    # `reset --discard-changes` on the same commit restores attachments to their committed state.
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        committed = repo_dir / "my_attachment.txt"
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Make a mess in the workdir: edit a committed attachment, delete it... and add an untracked one.
+        committed.write_text("dirty edit")
+        untracked = repo_dir / "untracked.txt"
+        untracked.write_text("should be discarded")
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+
+        # Discard all changes (same commit).
+        r = cli_runner.invoke(["reset", "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+
+        # The committed attachment is restored, the untracked one is removed, and the WC is clean.
+        assert committed.read_text() == "hello"
+        assert not untracked.exists()
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
 
 
 def test_commit_files_remove_empty(data_archive, cli_runner):
