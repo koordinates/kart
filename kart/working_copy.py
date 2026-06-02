@@ -669,7 +669,11 @@ class WorkingCopyPart:
         )
 
         with self.state_session() as sess:
-            if ds_inserts or ds_updates or ds_deletes:
+            # We reset the part's contents if any dataset it controls has changed, but also whenever the
+            # committed tree has changed at all (base_tree != target_tree): a part may control standalone files
+            # (attachments) that have changed even when none of its datasets have - or it may control no datasets
+            # at the relevant tree but still have attachments to update.
+            if ds_inserts or ds_updates or ds_deletes or base_tree != target_tree:
                 self._do_reset_datasets(
                     base_datasets=base_datasets,
                     target_datasets=target_datasets,

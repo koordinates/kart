@@ -5,6 +5,7 @@ import subprocess
 import pathlib
 
 import kart
+from kart.repo import KartRepo
 
 EXPECTED_TITLE = """NZ Pa Points (Topo, 1:50k)"""
 
@@ -256,10 +257,10 @@ def test_commit_files(data_archive, cli_runner):
         assert r.exit_code == 44, r.stderr
 
 
-def test_commit_files_add_and_delete(data_working_copy, cli_runner):
+def test_commit_files_add_and_delete(data_working_copy, cli_runner, monkeypatch):
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
-        # Set the environment variable
-        os.environ["X_KART_ATTACHMENTS"] = "true"
+        # Set the environment variable (monkeypatch so it's restored after the test)
+        monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
         # Define file path
         file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
 
@@ -298,6 +299,65 @@ def test_commit_files_add_and_delete(data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # Check that the file does not exist now
+        assert not file_path.exists()
+
+
+def test_attachment_checkout_roundtrip(data_working_copy, cli_runner, monkeypatch):
+    # Checking out a commit writes its attachments to the workdir; checking out a commit without
+    # them removes them again - even though no datasets changed between the two commits.
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
+        assert not file_path.exists()
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+        # The previous commit has no attachment - checking it out removes the file.
+        r = cli_runner.invoke(["checkout", "HEAD^"])
+        assert r.exit_code == 0, r.stderr
+        assert not file_path.exists()
+
+        # Checking out the commit with the attachment again restores it.
+        r = cli_runner.invoke(["checkout", "main"])
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+
+def test_attachment_create_workingcopy(data_working_copy, cli_runner, monkeypatch):
+    # Creating a working copy from scratch checks out attachments (base tree is the empty tree).
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+        # Remove the file then recreate the working copy from scratch - it should be checked out again.
+        file_path.unlink()
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+
+def test_attachment_delete_workingcopy(data_working_copy, cli_runner, monkeypatch):
+    # Deleting the file-system working copy cleans up checked-out attachment files.
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert file_path.exists()
+
+        repo = KartRepo(repo_dir)
+        repo.working_copy.workdir.delete()
         assert not file_path.exists()
 
 
