@@ -22,6 +22,7 @@ from kart.diff_structs import (
     DeltaDiff,
     DatasetDiff,
     WORKING_COPY_EDIT,
+    file_delta_value_to_bytes,
 )
 from kart.exceptions import (
     NotFound,
@@ -320,6 +321,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if dataset.diff_to_working_copy(workdir_diff_cache):
                 return True
 
+        # Finally - check for changes to standalone files (attachments). (No-op unless the feature is enabled.)
+        target_tree = self.repo[self.get_tree_id()].peel(pygit2.Tree)
+        if self.attachment_deltas_to_working_copy(target_tree, workdir_diff_cache):
+            return True
+
         return False
 
     def _is_head(self, commit_or_tree):
@@ -397,18 +403,17 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     track_changes_as_dirty=track_changes_as_dirty,
                 )
 
-            # Standalone files (attachments) are part of the workdir's contents too, so we reset them in
-            # the same pass. base_tree may be None (eg on first checkout), meaning the empty tree, in which
-            # case every attachment is written from scratch.
-            # Attachment support in the workdir is still experimental - only enabled behind a flag.
-            if os.environ.get("X_KART_ATTACHMENTS") and base_tree != target_tree:
-                self.write_attached_files_to_workdir(
-                    base_tree,
-                    target_tree,
-                    workdir_index,
-                    repo_key_filter=repo_key_filter,
-                    track_changes_as_dirty=track_changes_as_dirty,
-                )
+            # Standalone files (attachments) are part of the workdir's contents too, so we reset them in the
+            # same pass - forcing them to match target_tree and discarding any uncommitted edits (just as we do
+            # for datasets). base_tree may be None (eg on first checkout), meaning the empty tree.
+            self._reset_attachments_in_workdir(
+                base_tree,
+                target_tree,
+                workdir_index,
+                workdir_diff_cache,
+                repo_key_filter=repo_key_filter,
+                track_changes_as_dirty=track_changes_as_dirty,
+            )
 
     def write_attached_files_to_workdir(
         self,
@@ -420,20 +425,59 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         track_changes_as_dirty=False,
     ):
         """
-        Get the deltas for attachment files between base_tree and target_tree and write them to the working copy.
-        Either tree may be None, meaning the empty tree (RepoStructure resolves None to repo.empty_tree) - so a
-        None base_tree inserts all attachments, and a None target_tree deletes all of them.
+        Get the committed deltas for attachment files between base_tree and target_tree and write them to the
+        working copy. Either tree may be None, meaning the empty tree (RepoStructure resolves None to
+        repo.empty_tree) - so a None base_tree inserts all attachments, and a None target_tree deletes all of them.
         """
-        write_to_index = not track_changes_as_dirty
-
-        repo = self.repo
-        base_rs = RepoStructure(repo, base_tree)
-        target_rs = RepoStructure(repo, target_tree)
+        base_rs = RepoStructure(self.repo, base_tree)
+        target_rs = RepoStructure(self.repo, target_tree)
         attachment_deltas = get_file_diff(
             base_rs, target_rs, repo_key_filter=repo_key_filter
         )
+        self._apply_attachment_deltas_to_workdir(
+            attachment_deltas, workdir_index, write_to_index=not track_changes_as_dirty
+        )
 
-        for file_delta in attachment_deltas.values():
+    def _reset_attachments_in_workdir(
+        self,
+        base_tree,
+        target_tree,
+        workdir_index,
+        workdir_diff_cache,
+        *,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        track_changes_as_dirty=False,
+    ):
+        """
+        Resets attachments in the workdir so they match target_tree - discarding any uncommitted edits in the
+        process. Like datasets' _diff_to_reset, the diff applied is workdir<>target (the inverse of the workdir's
+        dirty changes, then the committed base<>target changes), so the workdir always ends up matching target
+        regardless of its current dirty state. track_changes_as_dirty only controls whether the resulting state is
+        recorded in the workdir-index (ie, treated as clean) or not (ie, left looking dirty).
+        """
+        # Attachment support in the workdir is still experimental - only enabled behind a flag.
+        if not os.environ.get("X_KART_ATTACHMENTS"):
+            return
+
+        base_rs = RepoStructure(self.repo, base_tree)
+        target_rs = RepoStructure(self.repo, target_tree)
+        committed_deltas = get_file_diff(
+            base_rs, target_rs, repo_key_filter=repo_key_filter
+        )
+        # base<>workdir dirty changes - inverted, this undoes the dirty edits (workdir<>base).
+        dirty_deltas = self.attachment_deltas_to_working_copy(
+            base_tree, workdir_diff_cache, repo_key_filter=repo_key_filter
+        )
+        diff_to_apply = DeltaDiff.concatenated(~dirty_deltas, committed_deltas)
+        self._apply_attachment_deltas_to_workdir(
+            diff_to_apply, workdir_index, write_to_index=not track_changes_as_dirty
+        )
+
+    def _apply_attachment_deltas_to_workdir(
+        self, file_diff, workdir_index, *, write_to_index
+    ):
+        """Writes the given attachment delta-diff to the workdir - removing old files and writing new ones."""
+        for file_delta in file_diff.values():
             for filename in set(filter(None, (file_delta.old_key, file_delta.new_key))):
                 workdir_path = self.path / filename
                 if workdir_path.is_file():
@@ -441,11 +485,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 if write_to_index:
                     workdir_index.remove_all([filename])
 
-            if file_delta.new:
+            if file_delta.new is not None:
                 filename = file_delta.new_key
                 workdir_path = self.path / filename
                 workdir_path.parent.mkdir(parents=True, exist_ok=True)
-                blob_data = repo[file_delta.new_value].data
+                blob_data = file_delta_value_to_bytes(self.repo, file_delta.new_value)
                 workdir_path.write_bytes(blob_data)
                 if write_to_index:
                     workdir_index.add_entry_with_custom_stat(
@@ -469,14 +513,15 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         return True
 
     def attachment_deltas_to_working_copy(
-        self, target_tree, workdir_diff_cache, repo_key_filter=RepoKeyFilter.MATCH_ALL
+        self, based_on_tree, workdir_diff_cache, repo_key_filter=RepoKeyFilter.MATCH_ALL
     ):
         """
-        Returns a DeltaDiff of changes to attachments (standalone files) between target_tree - the tree the workdir
-        is based on, ie HEAD - and the actual files on disk in the workdir.
+        Returns a DeltaDiff of changes to attachments (standalone files) between based_on_tree - the tree the
+        workdir's attachments are based on - and the actual files on disk in the workdir. based_on_tree may be None
+        (the empty tree), eg during an initial checkout.
 
-        The old (committed) side of each delta is stored as the git OID from target_tree; the new (uncommitted)
-        side is stored as the workdir file's raw bytes, read lazily on demand.
+        The old side of each delta is stored as the git OID from based_on_tree; the new (uncommitted) side is
+        stored as the workdir file's raw bytes, read lazily on demand.
         """
         deltas = DeltaDiff()
 
@@ -485,9 +530,18 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             return deltas
 
         # Tile-path patterns let us tell dataset content (tiles and their PAM sidecars) apart from attachments,
-        # since attachments may live inside a dataset's folder alongside the tiles.
-        datasets = self.repo.datasets(
-            target_tree, filter_dataset_type=self.SUPPORTED_DATASET_TYPE
+        # since attachments may live inside a dataset's folder alongside the tiles. The workdir holds the tiles
+        # for the tree it is based on - but based_on_tree may be the empty tree (eg initial checkout), so fall
+        # back to HEAD, which is what the workdir's tiles will have just been written from.
+        pattern_tree = (
+            based_on_tree if based_on_tree is not None else self.repo.head_tree
+        )
+        datasets = (
+            self.repo.datasets(
+                pattern_tree, filter_dataset_type=self.SUPPORTED_DATASET_TYPE
+            )
+            if pattern_tree is not None
+            else []
         )
         tile_patterns = [
             ds.get_tile_path_pattern(parent_path=ds.path) for ds in datasets
@@ -509,7 +563,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 continue
 
             old_half_delta = None
-            old_blob = self._blob_at_path(target_tree, path)
+            old_blob = self._blob_at_path(based_on_tree, path)
             if old_blob is not None:
                 old_half_delta = (path, old_blob.id.hex)
 
@@ -532,7 +586,10 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
     @staticmethod
     def _blob_at_path(tree, path):
-        """Returns the pygit2.Blob at the given path in the tree, or None if there is no blob there."""
+        """Returns the pygit2.Blob at the given path in the tree, or None if there is no blob there
+        (including when tree is None, ie the empty tree)."""
+        if tree is None:
+            return None
         try:
             obj = tree / path
         except KeyError:
