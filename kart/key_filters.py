@@ -210,6 +210,22 @@ class RepoKeyFilter(KeyFilterDict):
         """Returns a RepoKeyFilter that matches everything that is *not* in any of the given datasets."""
         return NegateKeyFilter(cls.datasets(dataset_paths))
 
+    def as_attachment_filter(self):
+        """
+        Returns an AttachmentKeyFilter matching the same standalone files (attachments) as this filter.
+
+        Only dataset-keys that match an entire dataset are carried over: a key that matches only a subset of a
+        dataset (eg a particular feature, '<dataset>:feature:123') doesn't name any attachment, so it is
+        disregarded. Glob keys are carried over too, and match file paths the same way they match dataset paths.
+        """
+        if self.match_all:
+            return AttachmentKeyFilter.MATCH_ALL
+        result = AttachmentKeyFilter()
+        for key, ds_filter in self.items():
+            if ds_filter.match_all:
+                result.add(key)
+        return result
+
     @classmethod
     def build_from_user_patterns(cls, user_patterns):
         """
@@ -293,6 +309,60 @@ class RepoKeyFilter(KeyFilterDict):
 
 
 RepoKeyFilter.MATCH_ALL = RepoKeyFilter(match_all=True)
+
+
+class AttachmentKeyFilter:
+    """
+    Filters attachments (standalone files) by their repo-relative path. Built from a RepoKeyFilter via
+    RepoKeyFilter.as_attachment_filter().
+
+    A path matches if one of the filter's keys matches the path itself, or any of its ancestor folders - so
+    the key "aaa" matches the file "aaa/bbb/ccc" (the user named a folder and means everything inside it), but
+    not the file "a". Keys may be globs containing '*', matched against the path the same way RepoKeyFilter
+    matches them against dataset paths - so "aaa" can also be a file named exactly "aaa", and "data*" matches
+    the file "database" as well as everything under the folder "data123".
+    """
+
+    MATCH_ALL: ClassVar["AttachmentKeyFilter"]
+
+    def __init__(self, keys=(), *, match_all=False):
+        self.keys = set(keys)
+        self.match_all = match_all
+
+    def __bool__(self):
+        return self.match_all or bool(self.keys)
+
+    def add(self, key):
+        if not self.match_all:
+            self.keys.add(key)
+
+    def __contains__(self, path):
+        if self.match_all:
+            return True
+        return any(self._key_matches_path(key, path) for key in self.keys)
+
+    @classmethod
+    def _key_matches_path(cls, key, path):
+        # The key matches the path itself, or any ancestor folder of the path.
+        if cls._matches(key, path):
+            return True
+        index = path.find("/")
+        while index != -1:
+            if cls._matches(key, path[:index]):
+                return True
+            index = path.find("/", index + 1)
+        return False
+
+    @staticmethod
+    def _matches(key, candidate):
+        # Globs ('*') are matched with fnmatch, exactly as RepoKeyFilter matches them against dataset paths;
+        # everything else is matched literally.
+        if "*" in key:
+            return fnmatch.fnmatch(candidate, key)
+        return key == candidate
+
+
+AttachmentKeyFilter.MATCH_ALL = AttachmentKeyFilter(match_all=True)
 
 
 class NegateKeyFilter:

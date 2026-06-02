@@ -15,7 +15,7 @@ from sqlalchemy.schema import CreateTable
 
 
 from kart import diff_util
-from kart.diff_util import get_file_diff, path_matches_repo_key_filter
+from kart.diff_util import get_file_diff
 from kart.diff_structs import (
     FILES_KEY,
     Delta,
@@ -551,6 +551,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         mosaic_paths = {
             f"{ds.path}/{ds.path.rsplit('/', 1)[-1]}.vrt" for ds in datasets
         }
+        attachment_filter = repo_key_filter.as_attachment_filter()
 
         for path in workdir_diff_cache.dirty_paths():
             if any(pattern.fullmatch(path) for pattern in tile_patterns):
@@ -559,7 +560,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 continue  # Kart-maintained mosaic file - not user data.
             if not self._is_attachment_path(path):
                 continue
-            if not path_matches_repo_key_filter(path, repo_key_filter):
+            if path not in attachment_filter:
                 continue
 
             old_half_delta = None
