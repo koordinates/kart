@@ -214,11 +214,12 @@ def get_file_diff(
         )
 
     attachment_deltas = DeltaDiff()
+    attachment_filter = repo_key_filter.as_attachment_filter()
 
     for line in lines:
         parts = line.split()
         old_sha, new_sha, path = parts[2], parts[3], parts[5]
-        if not path_matches_repo_key_filter(path, repo_key_filter):
+        if path not in attachment_filter:
             continue
         old_half_delta = (path, old_sha) if not ZEROES.fullmatch(old_sha) else None
         new_half_delta = (path, new_sha) if not ZEROES.fullmatch(new_sha) else None
@@ -236,22 +237,3 @@ def get_file_diff(
             attachment_deltas = DeltaDiff.concatenated(attachment_deltas, wc_deltas)
 
     return attachment_deltas
-
-
-def path_matches_repo_key_filter(path, repo_key_filter):
-    if repo_key_filter.match_all:
-        return True
-    # Return attachments that have a name that we are matching all of.
-    if path in repo_key_filter and repo_key_filter[path].match_all:
-        return True
-    # Return attachments that are inside a folder that we are matching all of.
-    for p, dataset_filter in repo_key_filter.items():
-        if not dataset_filter.match_all:
-            continue
-        if p == path:
-            return True
-        if path.startswith(p) and (p.endswith("/") or path[len(p)] == "/"):
-            return True
-    # Don't return attachments inside a dataset / folder that we are only matching some of
-    # ie, only matching certain features or meta items.
-    return False

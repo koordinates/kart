@@ -532,6 +532,62 @@ def test_attachment_discard_changes_restores_committed_state(
         assert "Nothing to commit, working copy clean" in r.stdout
 
 
+def test_attachment_filters_diff_and_commit(data_working_copy, cli_runner, monkeypatch):
+    # Attachment filters select which attachments a diff shows and a commit records, including by folder.
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "Add attachments",
+                "top.txt=one",
+                "docs/inner.txt=two",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Edit both attachments in the workdir.
+        (repo_dir / "top.txt").write_text("one-edited")
+        (repo_dir / "docs" / "inner.txt").write_text("two-edited")
+
+        # A folder filter shows only the attachment inside that folder.
+        r = cli_runner.invoke(["diff", "docs"])
+        assert r.exit_code == 0, r.stderr
+        assert "docs/inner.txt" in r.stdout
+        assert "top.txt" not in r.stdout
+
+        # A filename filter shows only that attachment.
+        r = cli_runner.invoke(["diff", "top.txt"])
+        assert r.exit_code == 0, r.stderr
+        assert "top.txt" in r.stdout
+        assert "docs/inner.txt" not in r.stdout
+
+        # Committing with a folder filter records only that attachment; the other stays dirty.
+        r = cli_runner.invoke(["commit", "-m", "Commit docs only", "docs"])
+        assert r.exit_code == 0, r.stderr
+
+        assert (
+            subprocess.check_output(
+                ["git", "show", "HEAD:docs/inner.txt"], cwd=repo_dir, encoding="utf-8"
+            )
+            == "two-edited"
+        )
+        # top.txt was not committed - still the original content in the tree...
+        assert (
+            subprocess.check_output(
+                ["git", "show", "HEAD:top.txt"], cwd=repo_dir, encoding="utf-8"
+            )
+            == "one"
+        )
+        # ... and still dirty in the working copy.
+        r = cli_runner.invoke(["diff", "top.txt"])
+        assert r.exit_code == 0, r.stderr
+        assert "top.txt" in r.stdout
+
+
 def test_commit_files_remove_empty(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(
