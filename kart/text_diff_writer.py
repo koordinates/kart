@@ -383,6 +383,8 @@ class TextDiffWriter(BaseDiffWriter):
                     self._write_colored(output, fg="green")
                 return
 
+        # Otherwise just show the OID of each side - hashing uncommitted content just-in-time if necessary.
+        delta = self._oid_file_delta(delta)
         file_type = "binary file" if delta.flags & BINARY_FILE else "file"
         if delta.old:
             click.secho(f"- ({file_type} {delta.old_value})", fg="red", **self.pecho)

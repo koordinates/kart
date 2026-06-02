@@ -361,6 +361,110 @@ def test_attachment_delete_workingcopy(data_working_copy, cli_runner, monkeypatc
         assert not file_path.exists()
 
 
+def test_attachment_workingcopy_diff_status_commit(
+    data_working_copy, cli_runner, monkeypatch
+):
+    # Editing/adding/deleting attachments in the workdir shows up in diff and status, and can be committed.
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+
+        # Start with a committed attachment.
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Clean to start with.
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        # Edit the attachment, add a new one, in the filesystem.
+        (repo_dir / "my_attachment.txt").write_text("goodbye")
+        (repo_dir / "new_attachment.txt").write_text("brand new")
+
+        # status reports the file changes.
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+
+        # diff reports the file changes.
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert "my_attachment.txt" in r.stdout
+        assert "new_attachment.txt" in r.stdout
+
+        # diff --diff-files shows the actual (uncommitted) contents.
+        r = cli_runner.invoke(["diff", "--diff-files"])
+        assert r.exit_code == 0, r.stderr
+        assert "goodbye" in r.stdout
+        assert "brand new" in r.stdout
+
+        # Commit the changes.
+        r = cli_runner.invoke(["commit", "-m", "Edit attachments"])
+        assert r.exit_code == 0, r.stderr
+
+        # Working copy is clean again, and the changes are committed.
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        assert (
+            subprocess.check_output(
+                ["git", "show", "HEAD:my_attachment.txt"],
+                cwd=repo_dir,
+                encoding="utf-8",
+            )
+            == "goodbye"
+        )
+        assert (
+            subprocess.check_output(
+                ["git", "show", "HEAD:new_attachment.txt"],
+                cwd=repo_dir,
+                encoding="utf-8",
+            )
+            == "brand new"
+        )
+
+
+def test_attachment_workingcopy_delete_and_commit(
+    data_working_copy, cli_runner, monkeypatch
+):
+    # Deleting a checked-out attachment from the filesystem is detected and can be committed.
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Delete the attachment from the filesystem.
+        (repo_dir / "my_attachment.txt").unlink()
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+        assert "1 delete" in r.stdout
+
+        r = cli_runner.invoke(["commit", "-m", "Delete attachment"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        # The file is no longer in the tree.
+        r = subprocess.run(
+            ["git", "show", "HEAD:my_attachment.txt"],
+            cwd=repo_dir,
+            capture_output=True,
+        )
+        assert r.returncode != 0
+
+
 def test_commit_files_remove_empty(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(
