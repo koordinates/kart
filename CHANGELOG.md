@@ -29,6 +29,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Adds support for cloning from git bundles to speed up initial clones of large repositories [#1106](https://github.com/koordinates/kart/pull/1106)
 - Removes dev/test-only Python packages (IPython, pytest, etc.) that were being included in release bundles, slightly reducing bundle size. [#1108](https://github.com/koordinates/kart/pull/1108)
 - Adds support for ArcGIS REST services as import sources. [#1102](https://github.com/koordinates/kart/pull/1102)
+- Attachments (standalone files such as licenses or READMEs, stored alongside or outside datasets) are now checked out into the file-system working copy, and changes to them are shown by `diff`/`status`, recorded by `commit`, and can be filtered by path or folder - just like dataset changes. [#583](https://github.com/koordinates/kart/issues/583)
 
 ## 0.17.0
 
