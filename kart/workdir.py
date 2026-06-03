@@ -1,5 +1,4 @@
 import contextlib
-import os
 import click
 import logging
 from enum import Enum, auto
@@ -216,8 +215,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         # Remove any checked-out attachment files. Diffing the current tree against the empty tree
         # (target_tree=None) yields a delete for every attachment, which unlinks it from disk.
         # track_changes_as_dirty=True means the (about-to-be-removed) index isn't touched.
-        # Experimental - only when enabled.
-        if tree_id and os.environ.get("X_KART_ATTACHMENTS"):
+        if tree_id:
             self.write_attached_files_to_workdir(
                 self.repo[tree_id],
                 None,
@@ -455,10 +453,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         regardless of its current dirty state. track_changes_as_dirty only controls whether the resulting state is
         recorded in the workdir-index (ie, treated as clean) or not (ie, left looking dirty).
         """
-        # Attachment support in the workdir is still experimental - only enabled behind a flag.
-        if not os.environ.get("X_KART_ATTACHMENTS"):
-            return
-
         base_rs = RepoStructure(self.repo, base_tree)
         target_rs = RepoStructure(self.repo, target_tree)
         committed_deltas = get_file_diff(
@@ -524,10 +518,6 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         stored as the workdir file's raw bytes, read lazily on demand.
         """
         deltas = DeltaDiff()
-
-        # Attachment support in the workdir is still experimental - only enabled behind a flag.
-        if not os.environ.get("X_KART_ATTACHMENTS"):
-            return deltas
 
         # Tile-path patterns let us tell dataset content (tiles and their PAM sidecars) apart from attachments,
         # since attachments may live inside a dataset's folder alongside the tiles. The workdir holds the tiles

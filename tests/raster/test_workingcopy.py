@@ -219,9 +219,11 @@ def test_working_copy_add_or_remove_rat(
         assert r.exit_code == 0
 
         pam_path = repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml"
-        pam_path.rename(
-            repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml.obsolete"
-        )
+        # Stash the PAM contents in memory and delete the file (rather than renaming it aside) - a
+        # renamed-aside copy would now be picked up as a new standalone-file (attachment) change, which
+        # isn't what this test is exercising. We write it back later to test re-adding the PAM.
+        pam_bytes = pam_path.read_bytes()
+        pam_path.unlink()
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0
@@ -302,8 +304,8 @@ def test_working_copy_add_or_remove_rat(
         pam_path = repo_path / "erorisk_si/erorisk_silcdb4.tif.aux.xml"
         assert not pam_path.exists()
 
-        pam_path = repo_path / "erorisk_si/erorisk_silcdb4.tif.aux.xml.obsolete"
-        pam_path.rename(repo_path / "erorisk_si" / "erorisk_silcdb4.tif.aux.xml")
+        # Restore the PAM file from the stashed contents to test re-adding it.
+        pam_path.write_bytes(pam_bytes)
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0

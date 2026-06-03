@@ -1,5 +1,4 @@
 import json
-import os
 import pytest
 import subprocess
 import pathlib
@@ -257,10 +256,8 @@ def test_commit_files(data_archive, cli_runner):
         assert r.exit_code == 44, r.stderr
 
 
-def test_commit_files_add_and_delete(data_working_copy, cli_runner, monkeypatch):
+def test_commit_files_add_and_delete(data_working_copy, cli_runner):
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
-        # Set the environment variable (monkeypatch so it's restored after the test)
-        monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
         # Define file path
         file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
 
@@ -302,10 +299,9 @@ def test_commit_files_add_and_delete(data_working_copy, cli_runner, monkeypatch)
         assert not file_path.exists()
 
 
-def test_attachment_checkout_roundtrip(data_working_copy, cli_runner, monkeypatch):
+def test_attachment_checkout_roundtrip(data_working_copy, cli_runner):
     # Checking out a commit writes its attachments to the workdir; checking out a commit without
     # them removes them again - even though no datasets changed between the two commits.
-    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
         assert not file_path.exists()
@@ -327,9 +323,8 @@ def test_attachment_checkout_roundtrip(data_working_copy, cli_runner, monkeypatc
         assert file_path.read_text() == "hello"
 
 
-def test_attachment_create_workingcopy(data_working_copy, cli_runner, monkeypatch):
+def test_attachment_create_workingcopy(data_working_copy, cli_runner):
     # Creating a working copy from scratch checks out attachments (base tree is the empty tree).
-    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
         r = cli_runner.invoke(
@@ -348,9 +343,8 @@ def test_attachment_create_workingcopy(data_working_copy, cli_runner, monkeypatc
         assert file_path.read_text() == "hello"
 
 
-def test_attachment_delete_workingcopy(data_working_copy, cli_runner, monkeypatch):
+def test_attachment_delete_workingcopy(data_working_copy, cli_runner):
     # Deleting the file-system working copy cleans up checked-out attachment files.
-    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
         r = cli_runner.invoke(
@@ -364,11 +358,8 @@ def test_attachment_delete_workingcopy(data_working_copy, cli_runner, monkeypatc
         assert not file_path.exists()
 
 
-def test_attachment_workingcopy_diff_status_commit(
-    data_working_copy, cli_runner, monkeypatch
-):
+def test_attachment_workingcopy_diff_status_commit(data_working_copy, cli_runner):
     # Editing/adding/deleting attachments in the workdir shows up in diff and status, and can be committed.
-    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         repo_dir = pathlib.Path(repo_dir)
 
@@ -431,11 +422,8 @@ def test_attachment_workingcopy_diff_status_commit(
         )
 
 
-def test_attachment_workingcopy_delete_and_commit(
-    data_working_copy, cli_runner, monkeypatch
-):
+def test_attachment_workingcopy_delete_and_commit(data_working_copy, cli_runner):
     # Deleting a checked-out attachment from the filesystem is detected and can be committed.
-    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         repo_dir = pathlib.Path(repo_dir)
 
@@ -468,11 +456,8 @@ def test_attachment_workingcopy_delete_and_commit(
         assert r.returncode != 0
 
 
-def test_attachment_checkout_aborts_when_dirty(
-    data_working_copy, cli_runner, monkeypatch
-):
+def test_attachment_checkout_aborts_when_dirty(data_working_copy, cli_runner):
     # A checkout that would lose uncommitted attachment changes must abort (unless --discard-changes).
-    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         repo_dir = pathlib.Path(repo_dir)
         file_path = repo_dir / "my_attachment.txt"
@@ -498,10 +483,9 @@ def test_attachment_checkout_aborts_when_dirty(
 
 
 def test_attachment_discard_changes_restores_committed_state(
-    data_working_copy, cli_runner, monkeypatch
+    data_working_copy, cli_runner
 ):
     # `reset --discard-changes` on the same commit restores attachments to their committed state.
-    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         repo_dir = pathlib.Path(repo_dir)
         committed = repo_dir / "my_attachment.txt"
@@ -532,9 +516,8 @@ def test_attachment_discard_changes_restores_committed_state(
         assert "Nothing to commit, working copy clean" in r.stdout
 
 
-def test_attachment_filters_diff_and_commit(data_working_copy, cli_runner, monkeypatch):
+def test_attachment_filters_diff_and_commit(data_working_copy, cli_runner):
     # Attachment filters select which attachments a diff shows and a commit records, including by folder.
-    monkeypatch.setenv("X_KART_ATTACHMENTS", "true")
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         repo_dir = pathlib.Path(repo_dir)
 

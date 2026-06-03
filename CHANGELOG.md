@@ -12,6 +12,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Fixes the HTML diff viewer (`-o html`) failing to load the page if the data contained `<`, `>`, or `/` characters. [#1081](https://github.com/koordinates/kart/issues/1081)
 - Adds support for an env-var flag `KART_ALLOW_FROM_GIT=1` that turns off the safe-guard that stops Kart from running on what appear to be Git repositories. [#1100](https://github.com/koordinates/kart/pull/1100)
 - Adds support for cloning from git bundles to speed up initial clones of large repositories [#1106](https://github.com/koordinates/kart/pull/1106)
+- Attachments (standalone files such as licenses or READMEs, stored alongside or outside datasets) are now checked out into the file-system working copy, and changes to them are shown by `diff`/`status`, recorded by `commit`, and can be filtered by path or folder - just like dataset changes. [#583](https://github.com/koordinates/kart/issues/583)
 
 ## 0.17.0
 
