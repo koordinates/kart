@@ -571,6 +571,37 @@ def test_attachment_filters_diff_and_commit(data_working_copy, cli_runner):
         assert "top.txt" in r.stdout
 
 
+def test_attachment_in_vector_repo(data_working_copy, cli_runner):
+    # A vector (GPKG) repo has no tile datasets, but the file-system workdir is now created proactively, so
+    # attachments still work - and the GPKG working-copy file itself isn't mistaken for an attachment.
+    with data_working_copy("points") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        file_path = repo_dir / "README.md"
+
+        # Sanity check: a fresh vector working copy is clean (despite now having a workdir + GPKG in the dir).
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        # Committing an attachment checks it out, even though there are no tile datasets.
+        r = cli_runner.invoke(["commit-files", "-m", "Add readme", "README.md=hello"])
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        # Editing the attachment is detected.
+        file_path.write_text("goodbye")
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert "README.md" in r.stdout
+
+
 def test_commit_files_remove_empty(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(

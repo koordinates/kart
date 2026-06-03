@@ -216,11 +216,21 @@ class WorkingCopy:
 
         w = self.get_workdir(allow_uncreated=True)
         if w and not (w.status() == FileSystemWorkingCopyStatus.CREATED):
-            if not w.check_if_reflink_okay():
-                return False
-            click.echo(
-                f"Creating {w.WORKING_COPY_TYPE_NAME} working copy in {w.path.stem} folder"
+            # A workdir is now always created, even for repos with no tiles, so that attachments work. But the
+            # reflink check and the "Creating ..." message are about checking out tiles - for a repo with no
+            # tiles, the workdir is just (potentially) holding attachments, so we create it quietly.
+            has_tiles = any(
+                self.repo.datasets(
+                    self.repo.head_commit,
+                    filter_dataset_type=w.SUPPORTED_DATASET_TYPE,
+                )
             )
+            if has_tiles:
+                if not w.check_if_reflink_okay():
+                    return False
+                click.echo(
+                    f"Creating {w.WORKING_COPY_TYPE_NAME} working copy in {w.path.stem} folder"
+                )
             w.create_and_initialise()
             self._workdir = w
             return True

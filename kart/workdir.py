@@ -506,6 +506,29 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             return False
         return True
 
+    def _tabular_working_copy_paths(self):
+        """
+        Returns the workdir-relative paths of the tabular working copy (eg a GPKG file) and its sqlite sidecars,
+        if it lives inside this workdir. These are working-copy artifacts, not attachments.
+        """
+        location = self.repo.workingcopy_location
+        if not location or not str(location).endswith(".gpkg"):
+            # No tabular working copy, or it's a database server (not a file in the workdir).
+            return set()
+        gpkg_path = (self.path / location).resolve()
+        try:
+            rel_path = gpkg_path.relative_to(self.path.resolve())
+        except ValueError:
+            # The tabular working copy is outside this workdir, so it won't show up here anyway.
+            return set()
+        rel_path = str(rel_path).replace("\\", "/")
+        return {
+            rel_path,
+            f"{rel_path}-wal",
+            f"{rel_path}-journal",
+            f"{rel_path}-shm",
+        }
+
     def attachment_deltas_to_working_copy(
         self, based_on_tree, workdir_diff_cache, repo_key_filter=RepoKeyFilter.MATCH_ALL
     ):
@@ -541,13 +564,16 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         mosaic_paths = {
             f"{ds.path}/{ds.path.rsplit('/', 1)[-1]}.vrt" for ds in datasets
         }
+        # The tabular (eg GPKG) working copy often lives inside the workdir too - it's a working-copy artifact,
+        # not user data, so it (and its sqlite sidecars) must never be treated as an attachment.
+        non_attachment_paths = mosaic_paths | self._tabular_working_copy_paths()
         attachment_filter = repo_key_filter.as_attachment_filter()
 
         for path in workdir_diff_cache.dirty_paths():
             if any(pattern.fullmatch(path) for pattern in tile_patterns):
                 continue  # Dataset content (a tile or PAM file) - handled by the dataset diff.
-            if path in mosaic_paths:
-                continue  # Kart-maintained mosaic file - not user data.
+            if path in non_attachment_paths:
+                continue  # Kart-maintained file (mosaic, or the tabular working copy) - not user data.
             if not self._is_attachment_path(path):
                 continue
             if path not in attachment_filter:
@@ -718,7 +744,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         with self.workdir_index_session() as workdir_index:
             for ds_path, ds_filter in repo_key_filter.items():
-                dataset = datasets[ds_path]
+                # repo_key_filter may mention datasets this workdir doesn't own (eg vector datasets, now that
+                # a workdir exists even for non-tile repos) - skip anything that isn't one of our tile datasets.
+                dataset = datasets.get(ds_path)
+                if dataset is None:
+                    continue
                 self.delete_tiles_for_dataset(
                     dataset,
                     ds_filter,
