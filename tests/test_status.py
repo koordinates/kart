@@ -49,7 +49,7 @@ def test_status(
 
         parts_status = {
             "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
-            "workdir": {"status": "notFound"},
+            "workdir": {"status": "ok"},
         }
         assert json_status(cli_runner) == {
             "kart.status/v2": {
@@ -154,7 +154,7 @@ def test_status(
 
         parts_status = {
             "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
-            "workdir": {"status": "notFound"},
+            "workdir": {"status": "ok"},
         }
         assert json_status(cli_runner) == {
             "kart.status/v2": {
@@ -409,7 +409,7 @@ def test_status_untracked_tables(data_working_copy, cli_runner):
         r = cli_runner.invoke(["status", "--list-untracked-tables", "-o", "json"])
         parts_status = {
             "tabular": {"location": str(wc), "type": "gpkg", "status": "ok"},
-            "workdir": {"status": "notFound"},
+            "workdir": {"status": "ok"},
         }
 
         assert json.loads(r.stdout) == {
