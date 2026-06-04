@@ -340,6 +340,19 @@ def working_copy_status_to_text(jdict):
     return "\n\n".join(result_list)
 
 
+def flatten_file_changes(type_counts):
+    """
+    In a RepoDiff.type_counts() the <files> entry is wrapped in a redundant inner <files> layer (files are
+    addressed as <files>:<files>:<filename>, mirroring <dataset>:<part>:<pk>). Returns a copy of the given
+    type-counts dict with that inner layer removed, so file change counts sit directly under <files> - eg for
+    display in `kart commit -o json`. Other (dataset) entries are left unchanged.
+    """
+    if FILES_KEY not in type_counts:
+        return type_counts
+    file_entry = type_counts[FILES_KEY]
+    return {**type_counts, FILES_KEY: file_entry.get(FILES_KEY, file_entry)}
+
+
 def diff_status_to_text(jdict):
     change_types = (
         ("inserts", "inserts"),

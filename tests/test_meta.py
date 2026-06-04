@@ -395,9 +395,12 @@ def test_attachment_workingcopy_diff_status_commit(data_working_copy, cli_runner
         assert "goodbye" in r.stdout
         assert "brand new" in r.stdout
 
-        # Commit the changes.
-        r = cli_runner.invoke(["commit", "-m", "Edit attachments"])
+        # Commit the changes - the JSON change summary reports files directly under <files>, with no
+        # redundant inner "file:" layer.
+        r = cli_runner.invoke(["commit", "-m", "Edit attachments", "-o", "json"])
         assert r.exit_code == 0, r.stderr
+        changes = json.loads(r.stdout)["kart.commit/v1"]["changes"]
+        assert changes == {"<files>": {"inserts": 1, "updates": 1}}
 
         # Working copy is clean again, and the changes are committed.
         r = cli_runner.invoke(["status"])
