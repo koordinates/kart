@@ -349,7 +349,14 @@ def table_import(
     )
 
     # During imports we can keep old changes since they won't conflict with newly imported datasets.
-    parts_to_create = [PartType.TABULAR] if do_checkout else []
+    parts_to_create = []
+    if do_checkout:
+        parts_to_create.append(PartType.TABULAR)
+        # Also create the file-system working copy (for attachments) so that attachments work straight after
+        # the repo's first import, rather than only once a tile dataset is checked out. (For tile imports the
+        # workdir is created regardless.)
+        if repo.workdir_supports_attachments:
+            parts_to_create.append(PartType.WORKDIR)
     repo.configure_do_checkout_datasets(new_ds_paths, do_checkout)
     repo.working_copy.reset_to_head(
         repo_key_filter=RepoKeyFilter.datasets(new_ds_paths),
