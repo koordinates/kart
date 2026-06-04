@@ -437,8 +437,13 @@ def test_attachment_workingcopy_delete_and_commit(data_working_copy, cli_runner)
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr
-        assert "<files>" in r.stdout
-        assert "1 delete" in r.stdout
+        # Files are reported directly under <files>, with no redundant "file:" sub-layer.
+        assert r.stdout.splitlines()[-2:] == ["  <files>:", "    1 deletes"]
+
+        r = cli_runner.invoke(["status", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        changes = json.loads(r.stdout)["kart.status/v2"]["workingCopy"]["changes"]
+        assert changes == {"<files>": {"deletes": 1}}
 
         r = cli_runner.invoke(["commit", "-m", "Delete attachment"])
         assert r.exit_code == 0, r.stderr
@@ -622,6 +627,34 @@ def test_attachments_disabled_by_config(data_archive, cli_runner):
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r.stderr
         assert "Nothing to commit, working copy clean" in r.stdout
+
+
+def test_attachment_after_vector_import(data_archive, tmp_path, cli_runner, chdir):
+    # A vector import creates the file-system workdir too (not just the tabular part), so attachments work
+    # straight after the repo's first import - no tile dataset or extra create-workingcopy needed.
+    repo_path = tmp_path / "myproj"
+    r = cli_runner.invoke(["init", str(repo_path)])
+    assert r.exit_code == 0, r.stderr
+
+    with data_archive("gpkg-points") as data:
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    f"GPKG:{data / 'nz-pa-points-topo-150k.gpkg'}",
+                    "nz_pa_points_topo_150k",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            repo = KartRepo(repo_path)
+            assert repo.working_copy.workdir is not None
+
+            r = cli_runner.invoke(
+                ["commit-files", "-m", "Add readme", "README.md=hello"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert (repo_path / "README.md").read_text() == "hello"
 
 
 def test_commit_files_remove_empty(data_archive, cli_runner):
