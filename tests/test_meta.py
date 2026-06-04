@@ -602,6 +602,28 @@ def test_attachment_in_vector_repo(data_working_copy, cli_runner):
         assert "README.md" in r.stdout
 
 
+def test_attachments_disabled_by_config(data_archive, cli_runner):
+    # `kart.workingcopy.attachments=false` opts out: no file-system workdir is created for a vector repo, and
+    # edits to files in the repo directory are not tracked as attachments.
+    with data_archive("points") as repo_path:
+        repo_path = pathlib.Path(repo_path)
+        repo = KartRepo(repo_path)
+        repo.config["kart.workingcopy.attachments"] = "false"
+        assert not repo.workdir_supports_attachments
+
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+
+        # No file-system workdir was created (the repo has no tile datasets).
+        assert repo.working_copy.workdir is None
+
+        # A stray file in the repo directory is not reported as an attachment change.
+        (repo_path / "README.md").write_text("hello")
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+
 def test_commit_files_remove_empty(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(

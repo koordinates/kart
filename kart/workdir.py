@@ -215,7 +215,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         # Remove any checked-out attachment files. Diffing the current tree against the empty tree
         # (target_tree=None) yields a delete for every attachment, which unlinks it from disk.
         # track_changes_as_dirty=True means the (about-to-be-removed) index isn't touched.
-        if tree_id:
+        if tree_id and self.repo.workdir_supports_attachments:
             self.write_attached_files_to_workdir(
                 self.repo[tree_id],
                 None,
@@ -453,6 +453,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         regardless of its current dirty state. track_changes_as_dirty only controls whether the resulting state is
         recorded in the workdir-index (ie, treated as clean) or not (ie, left looking dirty).
         """
+        if not self.repo.workdir_supports_attachments:
+            return
+
         base_rs = RepoStructure(self.repo, base_tree)
         target_rs = RepoStructure(self.repo, target_tree)
         committed_deltas = get_file_diff(
@@ -541,6 +544,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         stored as the workdir file's raw bytes, read lazily on demand.
         """
         deltas = DeltaDiff()
+
+        if not self.repo.workdir_supports_attachments:
+            return deltas
 
         # Tile-path patterns let us tell dataset content (tiles and their PAM sidecars) apart from attachments,
         # since attachments may live inside a dataset's folder alongside the tiles. The workdir holds the tiles
