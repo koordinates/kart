@@ -24,6 +24,7 @@ from kart.output_util import dump_json_output
 from kart.repo import KartRepoFiles
 from kart.status import (
     diff_status_to_text,
+    flatten_file_changes,
     get_branch_status_message,
     get_diff_status_message,
 )
@@ -308,7 +309,7 @@ def commit_obj_to_json(commit, repo, wc_diff):
             "committer": commit.committer.email,
             "branch": branch,
             "message": commit.message,
-            "changes": wc_diff.type_counts(),
+            "changes": flatten_file_changes(wc_diff.type_counts()),
             "commitTime": datetime_to_iso8601_utc(commit_time),
             "commitTimeOffset": timedelta_to_iso8601_tz(commit_time_offset),
         }
