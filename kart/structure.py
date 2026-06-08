@@ -183,8 +183,13 @@ class RepoStructure:
         1. (dataset_path, "meta", meta_item_path)
         2. (dataset_path, "feature", primary_key)
         3. (dataset_path, "tile", tile_name)
+
+        For attachment files that do not belong to any dataset, returns:
+        4. ("attachment", full_path)
         """
         match = DATASET_PATH_PATTERN.search(full_path)
+        if match is None:
+            return ("attachment", full_path)
         dataset_path = full_path[: match.start()]
         rel_path = full_path[match.start() + 1 :]
         return (dataset_path, *self.datasets()[dataset_path].decode_path(rel_path))
@@ -358,9 +363,13 @@ class RepoStructure:
 
             # TODO - check for conflicts.
 
-            assert isinstance(delta.new_value, (bytes, type(None)))
-            if delta.new_value is not None:
-                object_builder.insert(path, delta.new_value)
+            new_value = delta.new_value
+            # WC diffs store blob OIDs (hex strings) rather than raw bytes; resolve them here.
+            if isinstance(new_value, str):
+                new_value = bytes(self.repo[pygit2.Oid(hex=new_value)])
+            assert isinstance(new_value, (bytes, type(None)))
+            if new_value is not None:
+                object_builder.insert(path, new_value)
             else:
                 object_builder.remove(path)
 

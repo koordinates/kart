@@ -317,3 +317,82 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
 
     click.echo(f"Committed as: {new_commit.hex}")
     repo.working_copy.reset_to_head()
+
+
+# ---------------------------------------------------------------------------
+# Hidden helper commands used by the QGIS Kart plugin
+# ---------------------------------------------------------------------------
+
+
+@click.command("blob-hash", hidden=True, cls=KartCommand)
+@click.argument("ref_path")
+@click.pass_context
+def blob_hash(ctx, ref_path):
+    """Output the object ID of a blob. Usage: kart blob-hash REF:PATH"""
+    repo = ctx.obj.repo
+    ref, _, path = ref_path.partition(":")
+    try:
+        obj = repo.revparse_single(f"{ref}:{path}")
+    except KeyError:
+        raise click.UsageError(f"No such blob: {ref_path!r}")
+    click.echo(str(obj.id))
+
+
+@click.command("show-file", hidden=True, cls=KartCommand)
+@click.argument("ref_path")
+@click.pass_context
+def show_file(ctx, ref_path):
+    """Output raw content of a blob. Usage: kart show-file REF:PATH"""
+    import sys
+
+    repo = ctx.obj.repo
+    ref, _, path = ref_path.partition(":")
+    try:
+        blob = repo.revparse_single(f"{ref}:{path}")
+    except KeyError:
+        raise click.UsageError(f"No such blob: {ref_path!r}")
+    sys.stdout.buffer.write(blob.data)
+
+
+@click.command("ahead-behind", hidden=True, cls=KartCommand)
+@click.pass_context
+def ahead_behind(ctx):
+    """Output ahead/behind counts vs tracking branch. Outputs '0 0' when no upstream."""
+    repo = ctx.obj.repo
+    try:
+        head = repo.head
+        shorthand = head.shorthand
+        branch = repo.branches.get(shorthand)
+        if branch is None or branch.upstream is None:
+            click.echo("0 0")
+            return
+        ahead, behind = repo.ahead_behind(head.target, branch.upstream.target)
+        click.echo(f"{ahead} {behind}")
+    except Exception:
+        click.echo("0 0")
+
+
+@click.command("ls-files", hidden=True, cls=KartCommand)
+@click.argument("ref", default="HEAD")
+@click.pass_context
+def ls_files(ctx, ref):
+    """List attachment files tracked at REF (not datasets or Kart internals)."""
+    from kart.diff_util import is_attachment_path
+
+    repo = ctx.obj.repo
+    try:
+        obj = repo.revparse_single(ref)
+        tree = obj.peel(pygit2.Tree)
+    except (KeyError, pygit2.InvalidSpecError):
+        raise click.UsageError(f"No such ref: {ref!r}")
+
+    def walk_tree(tree, prefix=""):
+        for entry in tree:
+            full = f"{prefix}{entry.name}" if prefix else entry.name
+            if entry.type_str == "tree":
+                walk_tree(repo.get(entry.id), f"{full}/")
+            elif entry.type_str == "blob":
+                if is_attachment_path(full):
+                    click.echo(full)
+
+    walk_tree(tree)
