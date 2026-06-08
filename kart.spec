@@ -88,6 +88,8 @@ binaries = [
     # work if run from outside Kart - note that this works on other systems due to RPATH,
     # and when run from within Kart we can use os.add_dll_directory in kart/__init__.py
     (f'{BINARY_DIR}/venv/tools/gdal/*{exe_suffix}', '.' if is_win else "tools/gdal"),
+    # libkart C-ABI shared library (Rust), for in-process consumers like cave
+    (f'{BINARY_DIR}/libkart/libkart.{lib_suffix_glob}', '.'),
 ]
 if not is_win:
     binaries += [
@@ -107,6 +109,7 @@ datas = [
     ('kart/diff-view.html', 'share/kart'),
     ('README.md', '.'),
     ('COPYING', '.'),
+    ('libkart/include/libkart.h', 'share/kart'),
     (f'{BINARY_DIR}/venv/share/gdal', 'share/gdal'),
     (f'{BINARY_DIR}/venv/share/proj', 'share/proj'),
     (f'{BINARY_DIR}/venv/help', 'help'),
