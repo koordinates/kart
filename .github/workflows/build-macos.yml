@@ -294,6 +294,13 @@ jobs:
           configurePreset: ci-macos
           buildPreset: ci-bundle-macos
 
+      - name: "libkart: save shared library"
+        uses: actions/upload-artifact@v4
+        with:
+          name: libkart-macOS-${{ runner.arch }}
+          path: build/libkart/libkart.dylib
+          if-no-files-found: error
+
       - name: "bundle: smoke test"
         shell: bash
         run: |
