@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-# Unreleased
+## 0.17.1
 
 - Fixes a crash when branch names contain a slash. [#1089](https://github.com/koordinates/kart/issues/1089)
 - Helper mode: Fixed crashes when environment variables contain invalid UTF-8 sequences. [#1085](https://github.com/koordinates/kart/issues/1085)
