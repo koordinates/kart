@@ -342,3 +342,245 @@ pub unsafe extern "C" fn kart_free(ptr: *mut std::os::raw::c_void) {
         libc::free(ptr);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use git2::{ObjectType, Tree};
+    use std::ffi::CString;
+    use std::process::Command;
+
+    const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
+
+    /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
+    fn extract_fixture(tgz: &str, subdir: &str) -> std::path::PathBuf {
+        let base = std::env::temp_dir().join(format!(
+            "libkart-capitest-{}-{}",
+            subdir,
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let status = Command::new("tar")
+            .arg("xzf")
+            .arg(tgz)
+            .arg("-C")
+            .arg(&base)
+            .status()
+            .expect("run tar");
+        assert!(status.success(), "tar failed for {tgz}");
+        base.join(subdir)
+    }
+
+    /// Consume a buffer-returning call's out-params: assert rc 0, copy the bytes out, and
+    /// free the libkart-owned buffer. Returns None for the absent (NULL) case.
+    unsafe fn read_out(rc: c_int, ptr: *mut u8, len: usize) -> Option<Vec<u8>> {
+        assert_eq!(rc, 0, "expected rc 0, last_error: {}", last_error_str());
+        if ptr.is_null() {
+            assert_eq!(len, 0, "NULL buffer must have zero length");
+            return None;
+        }
+        let v = std::slice::from_raw_parts(ptr, len).to_vec();
+        kart_free(ptr as *mut std::os::raw::c_void);
+        Some(v)
+    }
+
+    unsafe fn last_error_str() -> String {
+        CStr::from_ptr(kart_last_error())
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
+    /// Find the first feature blob bytes under the dataset's inner `feature/` tree.
+    fn first_feature_blob(repo: &crate::repo::Repo, dataset_path: &str) -> Vec<u8> {
+        let root = repo.resolve_tree("HEAD").unwrap();
+        let ds_entry = root
+            .get_path(std::path::Path::new(dataset_path))
+            .unwrap();
+        let ds_tree = ds_entry.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
+        let inner = ds_tree
+            .iter()
+            .find(|e| e.name() == Some(".table-dataset"))
+            .unwrap();
+        let inner_tree = inner.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
+        let feat_entry = inner_tree.get_name("feature").unwrap();
+        let feat_tree = feat_entry.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
+
+        let mut out: Option<Vec<u8>> = None;
+        find_first_blob(repo, &feat_tree, &mut out);
+        out.expect("no feature blob found")
+    }
+
+    fn find_first_blob(repo: &crate::repo::Repo, tree: &Tree<'_>, out: &mut Option<Vec<u8>>) {
+        if out.is_some() {
+            return;
+        }
+        for entry in tree.iter() {
+            match entry.kind() {
+                Some(ObjectType::Blob) => {
+                    let obj = entry.to_object(&repo.git).unwrap();
+                    if let Some(blob) = obj.as_blob() {
+                        *out = Some(blob.content().to_vec());
+                        return;
+                    }
+                }
+                Some(ObjectType::Tree) => {
+                    let obj = entry.to_object(&repo.git).unwrap();
+                    if let Some(child) = obj.as_tree() {
+                        find_first_blob(repo, child, out);
+                        if out.is_some() {
+                            return;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn test_capi_full_flow() {
+        let root = extract_fixture(POINTS_TGZ, "points");
+        let path_c = CString::new(root.to_str().unwrap()).unwrap();
+        let head = CString::new("HEAD").unwrap();
+
+        unsafe {
+            // ---- kart_repo_open ------------------------------------------------
+            // Bogus path => rc -1 with a non-empty error.
+            let bogus = CString::new("/no/such/kart/repo/here").unwrap();
+            let mut bogus_handle: u64 = 0;
+            let rc = kart_repo_open(bogus.as_ptr(), &mut bogus_handle);
+            assert_eq!(rc, -1);
+            assert!(!last_error_str().is_empty(), "expected an error message");
+
+            // NULL path pointer => rc -1.
+            let mut null_handle: u64 = 0;
+            let rc = kart_repo_open(std::ptr::null(), &mut null_handle);
+            assert_eq!(rc, -1);
+
+            // Valid fixture => rc 0 and a non-zero handle.
+            let mut repo: u64 = 0;
+            let rc = kart_repo_open(path_c.as_ptr(), &mut repo);
+            assert_eq!(rc, 0, "open failed: {}", last_error_str());
+            assert_ne!(repo, 0);
+
+            // ---- kart_repo_table_dataset_version -------------------------------
+            let mut version: c_int = -1;
+            let rc = kart_repo_table_dataset_version(repo, &mut version);
+            assert_eq!(rc, 0);
+            assert_eq!(version, 3);
+
+            // ---- kart_repo_list_datasets ---------------------------------------
+            let mut ptr: *mut u8 = std::ptr::null_mut();
+            let mut len: usize = 0;
+            let rc = kart_repo_list_datasets(repo, head.as_ptr(), &mut ptr, &mut len);
+            let json = read_out(rc, ptr, len).expect("datasets buffer is non-NULL");
+            let datasets: Vec<String> = serde_json::from_slice(&json).unwrap();
+            assert!(
+                datasets.contains(&"nz_pa_points_topo_150k".to_string()),
+                "datasets: {datasets:?}"
+            );
+
+            // Unknown repo handle => rc -1 "not found: repo handle".
+            let mut p2: *mut u8 = std::ptr::null_mut();
+            let mut l2: usize = 0;
+            let rc = kart_repo_list_datasets(99999, head.as_ptr(), &mut p2, &mut l2);
+            assert_eq!(rc, -1);
+            assert!(
+                last_error_str().contains("not found: repo handle"),
+                "got: {}",
+                last_error_str()
+            );
+
+            // ---- kart_dataset_open ---------------------------------------------
+            let ds_path = CString::new("nz_pa_points_topo_150k").unwrap();
+            let mut ds: u64 = 0;
+            let rc = kart_dataset_open(repo, head.as_ptr(), ds_path.as_ptr(), &mut ds);
+            assert_eq!(rc, 0, "dataset open failed: {}", last_error_str());
+            assert_ne!(ds, 0);
+
+            // dataset_type
+            let mut ptr: *mut u8 = std::ptr::null_mut();
+            let mut len: usize = 0;
+            let rc = kart_dataset_type(ds, &mut ptr, &mut len);
+            let t = read_out(rc, ptr, len).expect("type buffer");
+            assert_eq!(String::from_utf8(t).unwrap(), "table");
+
+            // schema_json
+            let mut ptr: *mut u8 = std::ptr::null_mut();
+            let mut len: usize = 0;
+            let rc = kart_dataset_schema_json(ds, &mut ptr, &mut len);
+            let schema = read_out(rc, ptr, len).expect("schema buffer");
+            let schema: serde_json::Value = serde_json::from_slice(&schema).unwrap();
+            assert_eq!(schema["has_geometry"], true);
+
+            // crs_wkt
+            let mut ptr: *mut u8 = std::ptr::null_mut();
+            let mut len: usize = 0;
+            let rc = kart_dataset_crs_wkt(ds, &mut ptr, &mut len);
+            let wkt = read_out(rc, ptr, len).expect("crs buffer");
+            assert!(String::from_utf8(wkt).unwrap().starts_with("GEOGCS"));
+
+            // meta_item: a MISSING key => rc 0 with absent (NULL/0) result.
+            let missing = CString::new("does-not-exist").unwrap();
+            let mut ptr: *mut u8 = std::ptr::null_mut();
+            let mut len: usize = 0;
+            let rc = kart_dataset_meta_item(ds, missing.as_ptr(), &mut ptr, &mut len);
+            assert_eq!(read_out(rc, ptr, len), None);
+
+            // ---- feature path --------------------------------------------------
+            // Fetch a raw feature blob via git2, decode its geometry through the ABI.
+            let repo_rust = crate::repo::Repo::open(root.to_str().unwrap()).unwrap();
+            let blob = first_feature_blob(&repo_rust, "nz_pa_points_topo_150k");
+
+            let mut ptr: *mut u8 = std::ptr::null_mut();
+            let mut len: usize = 0;
+            let rc =
+                kart_feature_geometry(ds, blob.as_ptr(), blob.len(), &mut ptr, &mut len);
+            let geom = read_out(rc, ptr, len).expect("geometry buffer");
+            assert!(
+                geom.starts_with(b"GP"),
+                "geometry should start with GPKG magic, got {:?}",
+                &geom[..geom.len().min(4)]
+            );
+
+            // GPKG -> WKB.
+            let mut ptr: *mut u8 = std::ptr::null_mut();
+            let mut len: usize = 0;
+            let rc = kart_gpkg_to_wkb(geom.as_ptr(), geom.len(), &mut ptr, &mut len);
+            let wkb = read_out(rc, ptr, len).expect("wkb buffer");
+            assert!(!wkb.is_empty());
+
+            // GPKG geometry type code is non-negative.
+            let mut gtype: c_int = -1;
+            let rc = kart_gpkg_geometry_type(geom.as_ptr(), geom.len(), &mut gtype);
+            assert_eq!(rc, 0);
+            assert!(gtype >= 0, "geometry type code {gtype}");
+
+            // ---- memory / handle hygiene --------------------------------------
+            // kart_free(NULL) is a no-op.
+            kart_free(std::ptr::null_mut());
+            // freeing unknown handles is a no-op.
+            kart_repo_free(99999);
+            kart_dataset_free(99999);
+
+            // After freeing the dataset handle, calls return rc -1 "not found".
+            kart_dataset_free(ds);
+            let mut ptr: *mut u8 = std::ptr::null_mut();
+            let mut len: usize = 0;
+            let rc = kart_dataset_type(ds, &mut ptr, &mut len);
+            assert_eq!(rc, -1);
+            assert!(last_error_str().contains("not found"), "got: {}", last_error_str());
+
+            // After freeing the repo handle, calls return rc -1 "not found".
+            kart_repo_free(repo);
+            let mut version: c_int = -1;
+            let rc = kart_repo_table_dataset_version(repo, &mut version);
+            assert_eq!(rc, -1);
+            assert!(last_error_str().contains("not found"), "got: {}", last_error_str());
+        }
+
+        let _ = std::fs::remove_dir_all(root.parent().unwrap());
+    }
+}
