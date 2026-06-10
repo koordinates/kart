@@ -37,6 +37,26 @@ add_custom_command(
   VERBATIM)
 
 add_custom_target(
-  libkart
+  libkart ALL
   DEPENDS ${LIBKART_LIB}
   COMMENT "libkart C-ABI library")
+
+# Tests (label "pytest" so they run under the existing ci-{linux,macos} ctest preset).
+if(BUILD_TESTING)
+  # Rust unit + C-ABI tests.
+  add_test(
+    NAME libkart-cargo-test
+    COMMAND ${CARGO_EXECUTABLE} test --locked --manifest-path ${LIBKART_SRC_DIR}/Cargo.toml
+            --target-dir ${LIBKART_CARGO_TARGET_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  set_property(TEST libkart-cargo-test PROPERTY LABELS "pytest")
+
+  # Golden parity check: load the built cdylib and diff its output against Kart's own Python
+  # implementation in the same process.
+  add_test(
+    NAME libkart-golden
+    COMMAND ${VENV_PY} ${LIBKART_SRC_DIR}/tests_py/golden_check.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  set_property(TEST libkart-golden PROPERTY LABELS "pytest")
+  set_property(TEST libkart-golden PROPERTY ENVIRONMENT "LIBKART_PATH=${LIBKART_LIB}")
+endif()
