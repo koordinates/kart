@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## UNRELEASED
+
+- Adds `libkart`, a native shared library exposing a C API for reading Kart repositories in-process (without invoking the `kart` CLI). It is shipped in the bundle alongside the `kart` executable; see the libkart C API reference in the developer docs.
+
 ## 0.17.1
 
 - Fixes a crash when branch names contain a slash. [#1089](https://github.com/koordinates/kart/issues/1089)
