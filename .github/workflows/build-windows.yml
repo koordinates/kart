@@ -54,9 +54,9 @@ jobs:
       AWS_NO_SIGN_REQUEST: ${{ inputs.aws_no_sign_request }}
       NINJA_VERSION: "~1.10.2"  # workaround for python logging output buffering noise
       SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
-      # Cache vcpkg-built packages in the GitHub Actions cache. Job-level so it applies to
-      # the cmake configure step, where the vendor dependencies actually get built.
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      # Cache vcpkg-built packages. Job-level so it applies to the cmake configure step,
+      # where the vendor dependencies actually get built.
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
 
     # Windows builds are expensive, so only run them when:
     # - Pushing a tag/release (always build releases)
@@ -113,15 +113,13 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'requirements/*.txt'
 
-      # vcpkg's x-gha backend needs the Actions cache endpoint + token, which are only
-      # exposed to actions (not run steps) - export them for the rest of the job.
-      - name: "setup: vcpkg binary cache env"
-        uses: actions/github-script@v7
+      - name: "setup: restore vcpkg cache"
+        uses: actions/cache/restore@v4
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
+          restore-keys: |
+            vcpkg-x64-windows-
 
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
@@ -175,6 +173,15 @@ jobs:
         with:
           configurePreset: ci-windows
           buildPreset: ci-windows
+
+      # if: always() so a failed build still saves whatever packages it got through -
+      # the next attempt resumes from there instead of starting cold.
+      - name: "setup: save vcpkg cache"
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v4

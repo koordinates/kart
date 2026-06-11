@@ -94,9 +94,9 @@ jobs:
       MACOS_NOTARIZE_KEYCHAIN: "/Users/runner/Library/Keychains/signing_temp.keychain-db"
       # X.Y version needs to match PY_VER:
       PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg"
-      # Cache vcpkg-built packages in the GitHub Actions cache. Job-level so it applies to
-      # the cmake configure step, where the vendor dependencies actually get built.
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      # Cache vcpkg-built packages. Job-level so it applies to the cmake configure step,
+      # where the vendor dependencies actually get built.
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
 
     steps:
       - uses: actions/checkout@v4
@@ -160,15 +160,13 @@ jobs:
           mkdir -p ${{ env.CCACHE_DIR }}
           echo "$(brew --prefix)/opt/ccache/libexec" >> $GITHUB_PATH
 
-      # vcpkg's x-gha backend needs the Actions cache endpoint + token, which are only
-      # exposed to actions (not run steps) - export them for the rest of the job.
-      - name: "setup: vcpkg binary cache env"
-        uses: actions/github-script@v7
+      - name: "setup: restore vcpkg cache"
+        uses: actions/cache/restore@v4
         with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
+          restore-keys: |
+            vcpkg-${{ matrix.os.arch_triplet }}-
 
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
@@ -225,6 +223,15 @@ jobs:
         with:
           configurePreset: ci-macos
           buildPreset: ci-macos
+
+      # if: always() so a failed build still saves whatever packages it got through -
+      # the next attempt resumes from there instead of starting cold.
+      - name: "setup: save vcpkg cache"
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v4
