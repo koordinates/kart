@@ -28,6 +28,7 @@ file(GLOB_RECURSE _libkart_sources CONFIGURE_DEPENDS "${LIBKART_SRC_DIR}/src/*.r
 add_custom_command(
   OUTPUT ${LIBKART_LIB}
   DEPENDS ${_libkart_sources} ${LIBKART_SRC_DIR}/Cargo.toml ${LIBKART_SRC_DIR}/Cargo.lock
+          ${LIBKART_SRC_DIR}/build.rs
   COMMAND ${CARGO_EXECUTABLE} build --release --locked --manifest-path ${LIBKART_SRC_DIR}/Cargo.toml
           --target-dir ${LIBKART_CARGO_TARGET_DIR}
   COMMAND ${CMAKE_COMMAND} -E make_directory ${LIBKART_STAGE_DIR}

@@ -102,6 +102,10 @@ jobs:
           cmakeVersion: "${{ env.CMAKE_VERSION }}"
           ninjaVersion: "${{ env.NINJA_VERSION }}"
 
+      # rust toolchain for libkart; uses the MSVC linker from the msvc setup above
+      - name: "setup: rust"
+        uses: dtolnay/rust-toolchain@stable
+
       - name: "setup: python"
         uses: actions/setup-python@v4
         with:
@@ -215,6 +219,13 @@ jobs:
         with:
           configurePreset: ci-windows
           buildPreset: ci-bundle-windows
+
+      - name: "libkart: save shared library"
+        uses: actions/upload-artifact@v4
+        with:
+          name: libkart-windows-${{ runner.arch }}
+          path: build/libkart/libkart.dll
+          if-no-files-found: error
 
       - name: "bundle: smoke test"
         shell: bash
