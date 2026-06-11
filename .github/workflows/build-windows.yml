@@ -54,6 +54,9 @@ jobs:
       AWS_NO_SIGN_REQUEST: ${{ inputs.aws_no_sign_request }}
       NINJA_VERSION: "~1.10.2"  # workaround for python logging output buffering noise
       SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
+      # Cache vcpkg-built packages. Job-level so it applies to the cmake configure step,
+      # where the vendor dependencies actually get built.
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
 
     # Windows builds are expensive, so only run them when:
     # - Pushing a tag/release (always build releases)
@@ -114,14 +117,12 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/vcpkg_cache
-          key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*') }}
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
           restore-keys: |
             vcpkg-x64-windows-
 
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
-        env:
-          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
@@ -173,11 +174,14 @@ jobs:
           configurePreset: ci-windows
           buildPreset: ci-windows
 
+      # if: always() so a failed build still saves whatever packages it got through -
+      # the next attempt resumes from there instead of starting cold.
       - name: "setup: save vcpkg cache"
         uses: actions/cache/save@v4
+        if: always()
         with:
           path: ${{ github.workspace }}/vcpkg_cache
-          key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*') }}
+          key: vcpkg-x64-windows-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v4

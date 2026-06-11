@@ -94,6 +94,9 @@ jobs:
       MACOS_NOTARIZE_KEYCHAIN: "/Users/runner/Library/Keychains/signing_temp.keychain-db"
       # X.Y version needs to match PY_VER:
       PY_VER_INSTALLER: "https://www.python.org/ftp/python/3.12.10/python-3.12.10-macos11.pkg"
+      # Cache vcpkg-built packages. Job-level so it applies to the cmake configure step,
+      # where the vendor dependencies actually get built.
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
 
     steps:
       - uses: actions/checkout@v4
@@ -167,8 +170,6 @@ jobs:
 
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
-        env:
-          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
@@ -223,8 +224,11 @@ jobs:
           configurePreset: ci-macos
           buildPreset: ci-macos
 
+      # if: always() so a failed build still saves whatever packages it got through -
+      # the next attempt resumes from there instead of starting cold.
       - name: "setup: save vcpkg cache"
         uses: actions/cache/save@v4
+        if: always()
         with:
           path: ${{ github.workspace }}/vcpkg_cache
           key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
