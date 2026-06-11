@@ -16,10 +16,13 @@ import sys
 import tempfile
 
 import cffi
-import pygit2
 
+# kart must be imported before pygit2: on Windows, kart/__init__.py registers the
+# DLL directories (os.add_dll_directory) that pygit2's git2.dll lives in.
 from kart.repo import KartRepo
 from kart.geometry import Geometry
+
+import pygit2
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CRATE = os.path.dirname(HERE)
