@@ -354,6 +354,7 @@ mod tests {
 
     /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
     fn extract_fixture(tgz: &str, subdir: &str) -> std::path::PathBuf {
+        crate::test_support::disable_owner_validation();
         let base = std::env::temp_dir().join(format!(
             "libkart-capitest-{}-{}",
             subdir,

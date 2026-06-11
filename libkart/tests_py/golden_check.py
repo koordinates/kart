@@ -10,12 +10,39 @@ pointing at the built library; CTest does this automatically via the
 ``cargo build --release`` under the crate. Exits 0 iff every check passes.
 """
 
+import atexit
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 
 import cffi
+
+
+def _bypass_git_ownership_check():
+    """Disable libgit2's repository-ownership check when running as root.
+
+    CI runs this harness as root in a container, where the fixture repos
+    extracted under the temp dir trip libgit2's ownership check ("repository
+    path ... is not owned by current user"). Both libgit2 instances in play
+    (pygit2's and the libkart .so's) read the global git config from $HOME, so
+    pointing HOME at a temp config with ``safe.directory = *`` covers both. This
+    must run before pygit2 is imported (which initializes libgit2). Mirrors the
+    workaround in tests/conftest.py.
+    """
+    if os.name != "posix" or not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return
+    home = tempfile.mkdtemp(prefix="libkart-golden-home-")
+    atexit.register(shutil.rmtree, home, ignore_errors=True)
+    with open(os.path.join(home, ".gitconfig"), "w") as f:
+        f.write("[safe]\n\tdirectory = *\n")
+    os.environ["HOME"] = home
+    os.environ.pop("XDG_CONFIG_HOME", None)
+    os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
+
+
+_bypass_git_ownership_check()
 
 # kart must be imported before pygit2: on Windows, kart/__init__.py registers the
 # DLL directories (os.add_dll_directory) that pygit2's git2.dll lives in.

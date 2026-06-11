@@ -228,10 +228,12 @@ fn parse_schema(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::disable_owner_validation;
     use std::process::Command;
 
     /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
     fn extract_fixture(tgz: &str, subdir: &str) -> std::path::PathBuf {
+        disable_owner_validation();
         let base = std::env::temp_dir().join(format!(
             "libkart-test-{}-{}",
             subdir,

@@ -181,6 +181,7 @@ impl Repo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::disable_owner_validation;
     use std::process::Command;
 
     const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
@@ -190,6 +191,7 @@ mod tests {
     /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
     /// `tag` is a per-test label so parallel tests on the same fixture don't collide.
     fn extract_fixture(tgz: &str, subdir: &str, tag: &str) -> std::path::PathBuf {
+        disable_owner_validation();
         let base = std::env::temp_dir().join(format!(
             "libkart-repotest-{}-{}-{}",
             tag,

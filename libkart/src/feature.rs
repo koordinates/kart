@@ -130,6 +130,7 @@ mod tests {
         concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/polygons.tgz");
 
     fn extract_fixture(tgz: &str, subdir: &str) -> std::path::PathBuf {
+        crate::test_support::disable_owner_validation();
         let base = std::env::temp_dir().join(format!(
             "libkart-feattest-{}-{}",
             subdir,
