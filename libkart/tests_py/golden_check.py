@@ -244,6 +244,7 @@ def check(name, ok, detail=""):
 
 def extract(tgz, subdir):
     base = tempfile.mkdtemp(prefix="libkart-golden-")
+    atexit.register(shutil.rmtree, base, ignore_errors=True)
     subprocess.run(["tar", "xzf", tgz, "-C", base], check=True)
     return os.path.join(base, subdir)
 

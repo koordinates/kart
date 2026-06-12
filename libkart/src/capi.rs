@@ -38,18 +38,29 @@ unsafe fn bytes<'a>(p: *const u8, n: usize) -> &'a [u8] {
     }
 }
 
-/// malloc + copy `data` into a caller-owned buffer. Empty/None -> (NULL, 0).
-unsafe fn emit(data: Option<&[u8]>, out: *mut *mut u8, out_len: *mut usize) {
+/// malloc + copy `data` into a caller-owned buffer, returning the function's rc.
+/// Empty/None -> (NULL, 0) with rc 0; malloc failure -> (NULL, 0) with rc -1.
+unsafe fn emit(data: Option<&[u8]>, out: *mut *mut u8, out_len: *mut usize) -> c_int {
     match data {
         Some(b) if !b.is_empty() => {
             let p = libc::malloc(b.len()) as *mut u8;
+            if p.is_null() {
+                *out = std::ptr::null_mut();
+                *out_len = 0;
+                return fail(Error::Format(format!(
+                    "out of memory allocating {} byte out-buffer",
+                    b.len()
+                )));
+            }
             std::ptr::copy_nonoverlapping(b.as_ptr(), p, b.len());
             *out = p;
             *out_len = b.len();
+            ok()
         }
         _ => {
             *out = std::ptr::null_mut();
             *out_len = 0;
+            ok()
         }
     }
 }
@@ -108,8 +119,7 @@ pub unsafe extern "C" fn kart_repo_list_datasets(
     });
     match result {
         Some(Ok(bytes_vec)) => {
-            emit(Some(&bytes_vec), out_json, out_len);
-            ok()
+            emit(Some(&bytes_vec), out_json, out_len)
         }
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("repo handle".into())),
@@ -157,8 +167,7 @@ pub unsafe extern "C" fn kart_dataset_type(
 ) -> c_int {
     match DATASETS.with(ds, |d| d.dataset_type.clone()) {
         Some(t) => {
-            emit(Some(t.as_bytes()), out, out_len);
-            ok()
+            emit(Some(t.as_bytes()), out, out_len)
         }
         None => fail(Error::NotFound("dataset handle".into())),
     }
@@ -172,8 +181,7 @@ pub unsafe extern "C" fn kart_dataset_schema_json(
 ) -> c_int {
     match DATASETS.with(ds, |d| d.schema_json()) {
         Some(Ok(b)) => {
-            emit(Some(&b), out, out_len);
-            ok()
+            emit(Some(&b), out, out_len)
         }
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
@@ -188,8 +196,7 @@ pub unsafe extern "C" fn kart_dataset_crs_wkt(
 ) -> c_int {
     match DATASETS.with(ds, |d| d.crs_wkt()) {
         Some(Ok(opt)) => {
-            emit(opt.as_ref().map(|s| s.as_bytes()), out, out_len);
-            ok()
+            emit(opt.as_ref().map(|s| s.as_bytes()), out, out_len)
         }
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
@@ -209,8 +216,7 @@ pub unsafe extern "C" fn kart_dataset_meta_item(
     };
     match DATASETS.with(ds, |d| d.meta_item(name)) {
         Some(Ok(opt)) => {
-            emit(opt.as_deref(), out, out_len);
-            ok()
+            emit(opt.as_deref(), out, out_len)
         }
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
@@ -230,8 +236,7 @@ pub unsafe extern "C" fn kart_feature_geometry(
     let blob = bytes(blob, blob_len);
     match DATASETS.with(ds, |d| feature::feature_geometry(d, blob)) {
         Some(Ok(opt)) => {
-            emit(opt.as_deref(), out, out_len);
-            ok()
+            emit(opt.as_deref(), out, out_len)
         }
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
@@ -249,8 +254,7 @@ pub unsafe extern "C" fn kart_tile_summary_json(
     let blob = bytes(blob, blob_len);
     match DATASETS.with(ds, |d| tile::tile_summary_json(d, blob)) {
         Some(Ok(b)) => {
-            emit(Some(&b), out, out_len);
-            ok()
+            emit(Some(&b), out, out_len)
         }
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
@@ -322,8 +326,7 @@ pub unsafe extern "C" fn kart_gpkg_to_wkb(
 ) -> c_int {
     match gpkg::to_wkb(bytes(g, n)) {
         Ok(b) => {
-            emit(Some(&b), out, out_len);
-            ok()
+            emit(Some(&b), out, out_len)
         }
         Err(e) => fail(e),
     }

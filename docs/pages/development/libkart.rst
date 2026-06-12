@@ -75,7 +75,10 @@ Typical call sequence
    :c:func:`kart_dataset_crs_wkt` — inspect the dataset. The type tells you which
    decoder applies: ``table`` => :c:func:`kart_feature_geometry`;
    ``point-cloud`` => :c:func:`kart_tile_summary_json`; ``raster`` /
-   ``unsupported`` => no per-blob reader is provided.
+   ``unsupported`` => no per-blob reader is provided. (Raster is not yet
+   implemented rather than fundamentally different: raster tiles are LFS
+   pointers like point-cloud tiles, but their summaries also involve the PAM
+   sidecar files, and no consumer needs them yet.)
 #. *Read blobs yourself* (see `Reading feature and tile blobs`_): use your own
    git library to walk the dataset's ``feature/`` or ``tile/`` subtree and read
    each blob's raw bytes.
