@@ -188,9 +188,7 @@ fn load_tree_blobs(
 }
 
 /// Parse schema.json bytes, returning (geom_column_name, geom_column_id, primary_key).
-fn parse_schema(
-    bytes: &[u8],
-) -> Result<(Option<String>, Option<String>, Option<String>)> {
+fn parse_schema(bytes: &[u8]) -> Result<(Option<String>, Option<String>, Option<String>)> {
     let cols: Value = serde_json::from_slice(bytes)?;
     let arr = cols
         .as_array()
@@ -234,11 +232,8 @@ mod tests {
     /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
     fn extract_fixture(tgz: &str, subdir: &str) -> std::path::PathBuf {
         disable_owner_validation();
-        let base = std::env::temp_dir().join(format!(
-            "libkart-test-{}-{}",
-            subdir,
-            std::process::id()
-        ));
+        let base =
+            std::env::temp_dir().join(format!("libkart-test-{}-{}", subdir, std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
         let status = Command::new("tar")
@@ -252,10 +247,8 @@ mod tests {
         base.join(subdir)
     }
 
-    const POINTS_TGZ: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
-    const AU_CENSUS_TGZ: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/au-census.tgz");
+    const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
+    const AU_CENSUS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/au-census.tgz");
 
     #[test]
     fn test_points_repo_and_dataset() {

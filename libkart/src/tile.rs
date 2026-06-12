@@ -51,7 +51,10 @@ pub fn tile_summary_json(ds: &Dataset, blob: &[u8]) -> Result<Vec<u8>> {
 
     // Post-processing (TileDataset.get_tile_summary_from_pointer_blob):
     // derive the tile name extension from `format`, then drop `version`.
-    let format = map.get("format").and_then(JsonValue::as_str).map(str::to_string);
+    let format = map
+        .get("format")
+        .and_then(JsonValue::as_str)
+        .map(str::to_string);
     if let Some(JsonValue::String(name)) = map.get("name") {
         let new_name = set_tile_extension(name, format.as_deref());
         map.insert("name".to_string(), JsonValue::String(new_name));

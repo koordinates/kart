@@ -80,9 +80,10 @@ fn resolve_geom_index(ds: &Dataset, legend_hash: &str, geom_id: &str) -> Result<
     }
 
     let key = format!("legend/{legend_hash}");
-    let legend_bytes = ds.meta.get(&key).ok_or_else(|| {
-        Error::NotFound(format!("legend not found in meta: {key}"))
-    })?;
+    let legend_bytes = ds
+        .meta
+        .get(&key)
+        .ok_or_else(|| Error::NotFound(format!("legend not found in meta: {key}")))?;
 
     let index = geom_index_from_legend(legend_bytes, geom_id)?;
     ds.legend_geom_index
@@ -126,8 +127,7 @@ mod tests {
     use git2::{ObjectType, Tree};
     use std::process::Command;
 
-    const POLYGONS_TGZ: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/polygons.tgz");
+    const POLYGONS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/polygons.tgz");
 
     fn extract_fixture(tgz: &str, subdir: &str) -> std::path::PathBuf {
         crate::test_support::disable_owner_validation();
@@ -152,10 +152,12 @@ mod tests {
     /// Find the first feature blob bytes under the dataset's inner `feature/` tree.
     fn first_feature_blob(repo: &Repo, dataset_path: &str) -> Vec<u8> {
         let root = repo.resolve_tree("HEAD").unwrap();
-        let ds_entry = root
-            .get_path(std::path::Path::new(dataset_path))
+        let ds_entry = root.get_path(std::path::Path::new(dataset_path)).unwrap();
+        let ds_tree = ds_entry
+            .to_object(&repo.git)
+            .unwrap()
+            .peel_to_tree()
             .unwrap();
-        let ds_tree = ds_entry.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
         // inner .table-dataset tree
         let inner = ds_tree
             .iter()
@@ -163,7 +165,11 @@ mod tests {
             .unwrap();
         let inner_tree = inner.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
         let feat_entry = inner_tree.get_name("feature").unwrap();
-        let feat_tree = feat_entry.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
+        let feat_tree = feat_entry
+            .to_object(&repo.git)
+            .unwrap()
+            .peel_to_tree()
+            .unwrap();
 
         let mut out: Option<Vec<u8>> = None;
         find_first_blob(repo, &feat_tree, &mut out);

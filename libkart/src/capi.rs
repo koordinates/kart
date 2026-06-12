@@ -118,9 +118,7 @@ pub unsafe extern "C" fn kart_repo_list_datasets(
             .and_then(|paths| serde_json::to_vec(&paths).map_err(Error::from))
     });
     match result {
-        Some(Ok(bytes_vec)) => {
-            emit(Some(&bytes_vec), out_json, out_len)
-        }
+        Some(Ok(bytes_vec)) => emit(Some(&bytes_vec), out_json, out_len),
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("repo handle".into())),
     }
@@ -166,9 +164,7 @@ pub unsafe extern "C" fn kart_dataset_type(
     out_len: *mut usize,
 ) -> c_int {
     match DATASETS.with(ds, |d| d.dataset_type.clone()) {
-        Some(t) => {
-            emit(Some(t.as_bytes()), out, out_len)
-        }
+        Some(t) => emit(Some(t.as_bytes()), out, out_len),
         None => fail(Error::NotFound("dataset handle".into())),
     }
 }
@@ -180,9 +176,7 @@ pub unsafe extern "C" fn kart_dataset_schema_json(
     out_len: *mut usize,
 ) -> c_int {
     match DATASETS.with(ds, |d| d.schema_json()) {
-        Some(Ok(b)) => {
-            emit(Some(&b), out, out_len)
-        }
+        Some(Ok(b)) => emit(Some(&b), out, out_len),
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
     }
@@ -195,9 +189,7 @@ pub unsafe extern "C" fn kart_dataset_crs_wkt(
     out_len: *mut usize,
 ) -> c_int {
     match DATASETS.with(ds, |d| d.crs_wkt()) {
-        Some(Ok(opt)) => {
-            emit(opt.as_ref().map(|s| s.as_bytes()), out, out_len)
-        }
+        Some(Ok(opt)) => emit(opt.as_ref().map(|s| s.as_bytes()), out, out_len),
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
     }
@@ -215,9 +207,7 @@ pub unsafe extern "C" fn kart_dataset_meta_item(
         Err(e) => return fail(e),
     };
     match DATASETS.with(ds, |d| d.meta_item(name)) {
-        Some(Ok(opt)) => {
-            emit(opt.as_deref(), out, out_len)
-        }
+        Some(Ok(opt)) => emit(opt.as_deref(), out, out_len),
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
     }
@@ -235,9 +225,7 @@ pub unsafe extern "C" fn kart_feature_geometry(
 ) -> c_int {
     let blob = bytes(blob, blob_len);
     match DATASETS.with(ds, |d| feature::feature_geometry(d, blob)) {
-        Some(Ok(opt)) => {
-            emit(opt.as_deref(), out, out_len)
-        }
+        Some(Ok(opt)) => emit(opt.as_deref(), out, out_len),
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
     }
@@ -253,9 +241,7 @@ pub unsafe extern "C" fn kart_tile_summary_json(
 ) -> c_int {
     let blob = bytes(blob, blob_len);
     match DATASETS.with(ds, |d| tile::tile_summary_json(d, blob)) {
-        Some(Ok(b)) => {
-            emit(Some(&b), out, out_len)
-        }
+        Some(Ok(b)) => emit(Some(&b), out, out_len),
         Some(Err(e)) => fail(e),
         None => fail(Error::NotFound("dataset handle".into())),
     }
@@ -275,11 +261,7 @@ pub unsafe extern "C" fn kart_gpkg_is_empty(g: *const u8, n: usize, out: *mut c_
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn kart_gpkg_geometry_type(
-    g: *const u8,
-    n: usize,
-    out: *mut c_int,
-) -> c_int {
+pub unsafe extern "C" fn kart_gpkg_geometry_type(g: *const u8, n: usize, out: *mut c_int) -> c_int {
     match gpkg::geometry_type(bytes(g, n)) {
         Ok(t) => {
             *out = t;
@@ -325,9 +307,7 @@ pub unsafe extern "C" fn kart_gpkg_to_wkb(
     out_len: *mut usize,
 ) -> c_int {
     match gpkg::to_wkb(bytes(g, n)) {
-        Ok(b) => {
-            emit(Some(&b), out, out_len)
-        }
+        Ok(b) => emit(Some(&b), out, out_len),
         Err(e) => fail(e),
     }
 }
@@ -399,17 +379,23 @@ mod tests {
     /// Find the first feature blob bytes under the dataset's inner `feature/` tree.
     fn first_feature_blob(repo: &crate::repo::Repo, dataset_path: &str) -> Vec<u8> {
         let root = repo.resolve_tree("HEAD").unwrap();
-        let ds_entry = root
-            .get_path(std::path::Path::new(dataset_path))
+        let ds_entry = root.get_path(std::path::Path::new(dataset_path)).unwrap();
+        let ds_tree = ds_entry
+            .to_object(&repo.git)
+            .unwrap()
+            .peel_to_tree()
             .unwrap();
-        let ds_tree = ds_entry.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
         let inner = ds_tree
             .iter()
             .find(|e| e.name() == Some(".table-dataset"))
             .unwrap();
         let inner_tree = inner.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
         let feat_entry = inner_tree.get_name("feature").unwrap();
-        let feat_tree = feat_entry.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
+        let feat_tree = feat_entry
+            .to_object(&repo.git)
+            .unwrap()
+            .peel_to_tree()
+            .unwrap();
 
         let mut out: Option<Vec<u8>> = None;
         find_first_blob(repo, &feat_tree, &mut out);
@@ -540,8 +526,7 @@ mod tests {
 
             let mut ptr: *mut u8 = std::ptr::null_mut();
             let mut len: usize = 0;
-            let rc =
-                kart_feature_geometry(ds, blob.as_ptr(), blob.len(), &mut ptr, &mut len);
+            let rc = kart_feature_geometry(ds, blob.as_ptr(), blob.len(), &mut ptr, &mut len);
             let geom = read_out(rc, ptr, len).expect("geometry buffer");
             assert!(
                 geom.starts_with(b"GP"),
@@ -575,14 +560,22 @@ mod tests {
             let mut len: usize = 0;
             let rc = kart_dataset_type(ds, &mut ptr, &mut len);
             assert_eq!(rc, -1);
-            assert!(last_error_str().contains("not found"), "got: {}", last_error_str());
+            assert!(
+                last_error_str().contains("not found"),
+                "got: {}",
+                last_error_str()
+            );
 
             // After freeing the repo handle, calls return rc -1 "not found".
             kart_repo_free(repo);
             let mut version: c_int = -1;
             let rc = kart_repo_table_dataset_version(repo, &mut version);
             assert_eq!(rc, -1);
-            assert!(last_error_str().contains("not found"), "got: {}", last_error_str());
+            assert!(
+                last_error_str().contains("not found"),
+                "got: {}",
+                last_error_str()
+            );
         }
 
         let _ = std::fs::remove_dir_all(root.parent().unwrap());

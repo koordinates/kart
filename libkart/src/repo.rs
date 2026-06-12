@@ -127,12 +127,7 @@ impl Repo {
 
     /// Recursively walk `tree`, skipping dot-prefixed (hidden) trees. A tree is a dataset
     /// path if any direct child tree's name matches the dataset-dir pattern.
-    fn collect_datasets(
-        &self,
-        tree: &Tree<'_>,
-        path: &str,
-        out: &mut Vec<String>,
-    ) -> Result<()> {
+    fn collect_datasets(&self, tree: &Tree<'_>, path: &str, out: &mut Vec<String>) -> Result<()> {
         // Is this tree itself a dataset (has a `.*-dataset*` child)?
         let mut is_dataset = false;
         for entry in tree.iter() {
@@ -185,8 +180,7 @@ mod tests {
     use std::process::Command;
 
     const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
-    const AU_CENSUS_TGZ: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/au-census.tgz");
+    const AU_CENSUS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/au-census.tgz");
 
     /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
     /// `tag` is a per-test label so parallel tests on the same fixture don't collide.
@@ -233,10 +227,8 @@ mod tests {
 
     #[test]
     fn test_open_nonexistent_path_errors() {
-        let missing = std::env::temp_dir().join(format!(
-            "libkart-repotest-missing-{}",
-            std::process::id()
-        ));
+        let missing =
+            std::env::temp_dir().join(format!("libkart-repotest-missing-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&missing);
         assert!(Repo::open(missing.to_str().unwrap()).is_err());
     }
@@ -244,10 +236,8 @@ mod tests {
     #[test]
     fn test_open_non_repo_path_errors() {
         // An existing directory that is not a git/Kart repo must fail to open.
-        let dir = std::env::temp_dir().join(format!(
-            "libkart-repotest-nonrepo-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("libkart-repotest-nonrepo-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         assert!(Repo::open(dir.to_str().unwrap()).is_err());

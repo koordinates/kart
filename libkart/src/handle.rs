@@ -30,10 +30,7 @@ impl<T> Registry<T> {
     /// Store `v`, returning its new handle id.
     pub fn insert(&self, v: T) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        self.map
-            .lock()
-            .unwrap()
-            .insert(id, Arc::new(Mutex::new(v)));
+        self.map.lock().unwrap().insert(id, Arc::new(Mutex::new(v)));
         id
     }
 
