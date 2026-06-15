@@ -159,6 +159,7 @@ if(NOT WIN32)
 endif()
 
 include(KartPy)
+include(KartLibkart)
 include(KartBundle)
 
 #

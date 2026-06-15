@@ -284,6 +284,13 @@ jobs:
         run: |
           cmake --build --preset=ci-bundle-linux --verbose
 
+      - name: "libkart: save shared library"
+        uses: actions/upload-artifact@v4
+        with:
+          name: libkart-linux-${{ matrix.os.arch }}
+          path: build/libkart/libkart.so
+          if-no-files-found: error
+
       - name: "bundle: smoke test"
         shell: bash
         run: |

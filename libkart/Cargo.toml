@@ -1,0 +1,23 @@
+[package]
+name = "libkart"
+version = "0.1.0"
+edition = "2021"
+description = "Dependency-light native library exposing Kart on-disk repository format via a C ABI. Replaces the `kart ext-run` integration used by cave."
+license = "GPL-2.0-or-later"
+
+[lib]
+name = "kart"
+# cdylib: the C-ABI shared library cave loads in-process (libkart.so / libkart.dylib)
+# staticlib: optional static linking
+# rlib: so we can `cargo test` the pure-Rust core
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+# git access (reads objects/trees/blobs/refs). libgit2 is vendored & built from source.
+git2 = { version = "0.19", default-features = false }
+# msgpack decoding for feature blobs / legends (supports ext types, which Kart uses for geometry)
+rmpv = "1"
+# JSON output for schema / tile summaries
+serde_json = "1"
+# malloc/free for buffers handed across the C boundary
+libc = "0.2"
