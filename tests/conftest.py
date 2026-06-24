@@ -417,7 +417,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 class KartCliRunner(CliRunner):
     def __init__(self, *args, in_pdb=False, **kwargs):
         self._in_pdb = in_pdb
-        # mix_stderr was removed in Click 8.2+ - we only support Click 9.0+
+        # mix_stderr was removed in Click 8.2+ (we target Click 8.4.x)
         self.mix_stderr = False
         super().__init__(*args, **kwargs)
 
