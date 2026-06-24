@@ -6,7 +6,7 @@ from kart import diff_estimation
 from kart.cli_util import KartCommand, OutputFormatType, DeltaFilterType
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
-from kart.diff_format import DiffFormat
+from kart.diff_format import DiffFormat, DiffFormatChoice
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
 
@@ -89,7 +89,7 @@ from kart.repo import KartRepoState
 )
 @click.option(
     "--diff-format",
-    type=click.Choice(list(DiffFormat)),
+    type=DiffFormatChoice(list(DiffFormat)),
     default=DiffFormat.FULL,
     help="Choose the diff format: \n'full' for full diff, 'none' for viewing commit metadata only, or 'no-data-changes' for metadata and a bool indicating the feature/tile tree changes.",
 )

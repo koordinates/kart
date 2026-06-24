@@ -1,3 +1,4 @@
+import io
 import sys
 import logging
 from datetime import datetime, timedelta, timezone
@@ -10,7 +11,11 @@ from kart.completion_shared import ref_or_repo_path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
 from kart import subprocess_util as subprocess
 from kart.key_filters import RepoKeyFilter
-from kart.output_util import dump_json_output, resolve_output_path
+from kart.output_util import (
+    can_output_colour,
+    dump_json_output,
+    resolve_output_path,
+)
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
 from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
@@ -276,7 +281,7 @@ def log(
     ]
 
     with resolve_output_path(output_path) as output_fp:
-        if output_fp.color:
+        if can_output_colour(output_fp):
             options.append("--color=always")
 
         # TODO: should we check paths exist here? git doesn't!
@@ -284,18 +289,8 @@ def log(
             if fmt:
                 options.append(f"--format={fmt}")
 
-            p = subprocess.run(
-                [
-                    *log_cmd,
-                    *options,
-                    *commits,
-                    "--",
-                    *paths,
-                ],
-                encoding="utf-8",
-                stdout=output_fp,
-            )
-            sys.exit(p.returncode)
+            cmd = [*log_cmd, *options, *commits, "--", *paths]
+            sys.exit(_run_git_log_to_output(cmd, output_fp))
 
         elif output_type in ("json", "json-lines"):
             if kwargs.get("graph"):
@@ -341,6 +336,27 @@ def log(
 
             else:
                 dump_json_output(commit_log, output_fp, fmt)
+
+
+def _run_git_log_to_output(cmd, output_fp):
+    """
+    Runs `git log`, sending its stdout to output_fp, and returns the exit code.
+
+    When output_fp has a real file descriptor (normal operation, including
+    writing to a pager or a file) git streams directly into it. Under the Click
+    test harness the output stream has no fileno, so we capture git's output and
+    write it through output_fp.write() instead.
+    """
+    try:
+        output_fp.fileno()
+    except (AttributeError, io.UnsupportedOperation):
+        p = subprocess.run(cmd, encoding="utf-8", capture_output=True)
+        output_fp.write(p.stdout)
+        output_fp.flush()
+        return p.returncode
+
+    p = subprocess.run(cmd, encoding="utf-8", stdout=output_fp)
+    return p.returncode
 
 
 def _parse_git_log_output(lines):

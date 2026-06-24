@@ -6,7 +6,7 @@ from kart import diff_estimation
 from kart.cli_util import OutputFormatType, DeltaFilterType
 from kart.completion_shared import ref_or_repo_path_completer
 from kart.crs_util import CoordinateReferenceString
-from kart.diff_format import DiffFormat
+from kart.diff_format import DiffFormat, DiffFormatChoice
 from kart.output_util import dump_json_output
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
@@ -132,7 +132,7 @@ def feature_count_diff(
 )
 @click.option(
     "--diff-format",
-    type=click.Choice(list(DiffFormat)),
+    type=DiffFormatChoice(list(DiffFormat)),
     default=DiffFormat.FULL,
     help="Choose the diff format: \n'full' for full diff or 'no-data-changes' for metadata and a bool indicating the feature/tile tree changes.",
 )

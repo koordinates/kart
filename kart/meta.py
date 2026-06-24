@@ -74,8 +74,6 @@ def meta_get(ctx, output_format, ref, with_dataset_types, dataset, keys):
     else:
         datasets = repo.datasets(ref)
 
-    fp = resolve_output_path("-")
-
     all_items = {}
     for ds in datasets:
         if keys:
@@ -91,24 +89,25 @@ def meta_get(ctx, output_format, ref, with_dataset_types, dataset, keys):
 
     output_type, fmt = output_format
 
-    if output_type == "text":
-        for ds_path, items in all_items.items():
-            click.secho(ds_path, bold=True)
-            for key, value in items.items():
-                click.secho(f"    {key}", bold=True)
-                value_indent = "        "
-                if key.endswith(".json") or not isinstance(value, str):
-                    value = format_json_for_output(
-                        value, fp, json_style=fmt or "pretty"
-                    )
-                    write_with_indent(fp, value, indent=value_indent)
-                elif key.endswith(".wkt"):
-                    value = format_wkt_for_output(value, fp)
-                    write_with_indent(fp, value, indent=value_indent)
-                else:
-                    fp.write(wrap_text_to_terminal(value, indent=value_indent))
-    else:
-        dump_json_output(all_items, fp, json_style=fmt)
+    with resolve_output_path("-") as fp:
+        if output_type == "text":
+            for ds_path, items in all_items.items():
+                click.secho(ds_path, bold=True)
+                for key, value in items.items():
+                    click.secho(f"    {key}", bold=True)
+                    value_indent = "        "
+                    if key.endswith(".json") or not isinstance(value, str):
+                        value = format_json_for_output(
+                            value, fp, json_style=fmt or "pretty"
+                        )
+                        write_with_indent(fp, value, indent=value_indent)
+                    elif key.endswith(".wkt"):
+                        value = format_wkt_for_output(value, fp)
+                        write_with_indent(fp, value, indent=value_indent)
+                    else:
+                        fp.write(wrap_text_to_terminal(value, indent=value_indent))
+        else:
+            dump_json_output(all_items, fp, json_style=fmt)
 
 
 def get_meta_items(ds, keys):

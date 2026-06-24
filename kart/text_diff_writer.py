@@ -51,20 +51,24 @@ class TextDiffWriter(BaseDiffWriter):
         """
         Write colored text to output, handling multi-line strings correctly.
 
-        Pagers process output line-by-line, so we need to color each line individually
-        (like git does), not the entire block at once.
+        Equivalent to click.secho(text, ...) - the text is written followed by a
+        single trailing newline - except that each line is colored individually
+        (like git does) rather than wrapping the whole block in one escape
+        sequence. Pagers process output line-by-line, so per-line coloring is
+        needed for colors to display correctly.
         """
         if self.pecho.get("color"):
-            # Color each line individually for proper pager display
-            lines = text.rstrip("\n").split("\n")
-            for line in lines:
-                styled_line = click.style(line, fg=fg, bg=bg, bold=bold)
-                self.fp.write(styled_line)
-                self.fp.write("\n")
+            # Color each (non-empty) line individually for proper pager display.
+            text = "\n".join(
+                click.style(line, fg=fg, bg=bg, bold=bold) if line else ""
+                for line in text.split("\n")
+            )
         else:
-            self.fp.write(text)
-            if not text.endswith("\n"):
-                self.fp.write("\n")
+            # Match click.echo(color=False): strip any embedded ANSI codes
+            # (eg the cyan conflict separator added by _format_item).
+            text = click.unstyle(text)
+        self.fp.write(text)
+        self.fp.write("\n")
 
     @classmethod
     def _check_output_path(cls, repo, output_path):
@@ -89,7 +93,7 @@ class TextDiffWriter(BaseDiffWriter):
             click.secho(f"Merge: {parent_ids_s}", **self.pecho)
         click.secho(f"Author: {author.name} <{author.email}>", **self.pecho)
         click.secho(
-            f'Date:   {author_time_in_author_timezone.strftime("%c %z")}',
+            f"Date:   {author_time_in_author_timezone.strftime('%c %z')}",
             **self.pecho,
         )
         click.secho(**self.pecho)

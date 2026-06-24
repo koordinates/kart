@@ -279,9 +279,14 @@ def resolve_output_path(output_path, allow_pager=True):
             )
 
             with _push_environment("PAGER", pager_cmd):
-                with click.get_pager_file() as pager:
-                    # Mark the pager file as supporting color output
-                    # (the pager command includes -R flag for color support)
+                with click.get_pager_file(color=True) as pager:
+                    # Mark the pager file as supporting color output so
+                    # can_output_colour() returns True for it (the pager
+                    # command includes the -R flag for color support).
+                    try:
+                        pager.color = True
+                    except AttributeError:
+                        pass
                     yield pager
         else:
             yield sys.stdout
