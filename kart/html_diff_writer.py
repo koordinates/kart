@@ -72,11 +72,14 @@ class HtmlDiffWriter(BaseDiffWriter):
             if ds_path != "<files>"
         }
 
-        fo = resolve_output_path(self.output_path)
-        fo.write(self.substitute_into_template(template, title, all_datasets_geojson))
+        # HTML output is never paged - it's either written to a file (and
+        # opened in a browser) or to stdout for redirection.
+        with resolve_output_path(self.output_path, allow_pager=False) as fo:
+            fo.write(
+                self.substitute_into_template(template, title, all_datasets_geojson)
+            )
 
         if fo != sys.stdout:
-            fo.close()
             webbrowser.open_new(f"file://{self.output_path.resolve()}")
 
         self.write_warnings_footer()

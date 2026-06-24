@@ -137,6 +137,12 @@ class BaseDiffWriter:
         self.do_full_file_diffs = False
         self.sort_keys = sort_keys
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
     def include_target_commit_as_header(self):
         """
         For show / create-patch commands, which show the diff C^...C but also include a header

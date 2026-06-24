@@ -77,7 +77,7 @@ def conflicts(
     output_type, fmt = output_format
 
     conflicts_writer_class = BaseConflictsWriter.get_conflicts_writer_class(output_type)
-    conflicts_writer = conflicts_writer_class(
+    with conflicts_writer_class(
         repo,
         filters,
         output_path,
@@ -85,8 +85,8 @@ def conflicts(
         flat,
         json_style=fmt,
         target_crs=crs,
-    )
-    conflicts_writer.write_conflicts()
+    ) as conflicts_writer:
+        conflicts_writer.write_conflicts()
 
-    if exit_code or output_type == "quiet":
-        conflicts_writer.exit_with_code()
+        if exit_code or output_type == "quiet":
+            conflicts_writer.exit_with_code()

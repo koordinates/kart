@@ -22,7 +22,7 @@ certifi==2025.11.12
     #   cryptography
     #   pygit2
     #   reflink
-click==8.1.7
+click==8.4.1
     # via -r requirements.in
 #cryptography==44.0.1
     # via -r vendor-wheels.txt

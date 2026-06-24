@@ -1,4 +1,7 @@
-from kart.output_util import format_wkt_for_output
+import os
+import sys
+
+from kart.output_util import InputMode, format_wkt_for_output, resolve_output_path
 
 NZGD_2000 = """
 PROJCS["NZGD2000 / New Zealand Transverse Mercator 2000",
@@ -56,3 +59,40 @@ def test_format_wkt_for_output():
         '    AXIS["Easting", EAST],',
         '    AXIS["Northing", NORTH]]',
     ]
+
+
+def _mock_pager_file(mocker):
+    """Patches click.get_pager_file to yield a sentinel, and returns (mock, sentinel)."""
+    sentinel = object()
+    pager_cm = mocker.MagicMock()
+    pager_cm.__enter__.return_value = sentinel
+    mock = mocker.patch("kart.output_util.click.get_pager_file", return_value=pager_cm)
+    return mock, sentinel
+
+
+def test_resolve_output_path_pages_when_interactive(mocker):
+    mocker.patch.dict(os.environ, {"KART_PAGER": "cat"})
+    mocker.patch("kart.output_util.get_input_mode", return_value=InputMode.INTERACTIVE)
+    get_pager_file, sentinel = _mock_pager_file(mocker)
+
+    with resolve_output_path("-") as fp:
+        assert fp is sentinel
+    get_pager_file.assert_called_once()
+
+
+def test_resolve_output_path_no_pager_when_disabled(mocker):
+    mocker.patch("kart.output_util.get_input_mode", return_value=InputMode.INTERACTIVE)
+    get_pager_file, _ = _mock_pager_file(mocker)
+
+    with resolve_output_path("-", allow_pager=False) as fp:
+        assert fp is sys.stdout
+    get_pager_file.assert_not_called()
+
+
+def test_resolve_output_path_no_pager_when_not_interactive(mocker):
+    mocker.patch("kart.output_util.get_input_mode", return_value=InputMode.NO_INPUT)
+    get_pager_file, _ = _mock_pager_file(mocker)
+
+    with resolve_output_path("-") as fp:
+        assert fp is sys.stdout
+    get_pager_file.assert_not_called()
