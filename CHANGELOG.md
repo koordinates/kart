@@ -6,6 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## UNRELEASED
 
+- Piped (non-tty) output is now always utf-8 on all platforms. Previously human-readable text used the locale codepage on Windows (e.g. cp1252), so piped output was inconsistently encoded vs the always-utf-8 JSON output, which broke consumers such as the QGIS plugin. [#1115](https://github.com/koordinates/kart/issues/1115)
 - Adds `libkart`, a native shared library exposing a C API for reading Kart repositories in-process (without invoking the `kart` CLI). It is shipped in the bundle alongside the `kart` executable; see the libkart C API reference in the developer docs. [#1110](https://github.com/koordinates/kart/pull/1110)
 - Add pager support to `diff` and `show` commands. [#1080](https://github.com/koordinates/kart/pull/1080)
 
