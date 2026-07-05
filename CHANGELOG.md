@@ -4,12 +4,20 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-# Unreleased
+## UNRELEASED
+
+- Adds `libkart`, a native shared library exposing a C API for reading Kart repositories in-process (without invoking the `kart` CLI). It is shipped in the bundle alongside the `kart` executable; see the libkart C API reference in the developer docs. [#1110](https://github.com/koordinates/kart/pull/1110)
+- Add pager support to `diff` and `show` commands. [#1080](https://github.com/koordinates/kart/pull/1080)
+
+## 0.17.1
 
 - Fixes a crash when branch names contain a slash. [#1089](https://github.com/koordinates/kart/issues/1089)
 - Helper mode: Fixed crashes when environment variables contain invalid UTF-8 sequences. [#1085](https://github.com/koordinates/kart/issues/1085)
 - import: `--replace-existing` now preserves attachments (files at the dataset root level, such as licenses or READMEs) instead of deleting them along with the dataset data. [#1083](https://github.com/koordinates/kart/pull/1083)
 - Fixes the HTML diff viewer (`-o html`) failing to load the page if the data contained `<`, `>`, or `/` characters. [#1081](https://github.com/koordinates/kart/issues/1081)
+- Adds support for an env-var flag `KART_ALLOW_FROM_GIT=1` that turns off the safe-guard that stops Kart from running on what appear to be Git repositories. [#1100](https://github.com/koordinates/kart/pull/1100)
+- Adds support for cloning from git bundles to speed up initial clones of large repositories [#1106](https://github.com/koordinates/kart/pull/1106)
+- Removes dev/test-only Python packages (IPython, pytest, etc.) that were being included in release bundles, slightly reducing bundle size. [#1108](https://github.com/koordinates/kart/pull/1108)
 
 ## 0.17.0
 

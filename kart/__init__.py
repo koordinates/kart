@@ -175,7 +175,7 @@ try:
         from kart.diagnostics import print_diagnostics
 
         print_diagnostics()
-except (KeyError, pygit2.GitError, ImportError) as e:
+except Exception as e:
     # Silently ignore diagnostics errors - diagnostics are optional debug features
     # that shouldn't prevent Kart from starting
     L.debug(f"Could not print diagnostics: {e}")
