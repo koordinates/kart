@@ -7,7 +7,7 @@ endif()
 
 project(
   kart
-  VERSION 0.17.1
+  VERSION 0.17.2
   DESCRIPTION "Version control for geospatial data"
   HOMEPAGE_URL "https://kartproject.org"
   LANGUAGES C CXX)
@@ -159,6 +159,7 @@ if(NOT WIN32)
 endif()
 
 include(KartPy)
+include(KartLibkart)
 include(KartBundle)
 
 #
