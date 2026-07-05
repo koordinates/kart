@@ -46,7 +46,7 @@ jobs:
             arch_triplet: x64-linux
             build_parallel: ""
 
-          - base: buildjet-4vcpu-ubuntu-2204-arm
+          - base: ubuntu-22.04-arm
             label: manylinux_2_28/arm64
             image: quay.io/pypa/manylinux_2_28_aarch64
             arch: arm64
@@ -114,6 +114,9 @@ jobs:
         '-DPKG_CONFIG_EXECUTABLE=/__w/kart/kart/vcpkg-vendor/vcpkg/installed/${{ matrix.os.arch_triplet }}/tools/pkgconf/pkgconf',
         '-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=${{ matrix.os.arch }}'
         ]
+      # Cache vcpkg-built packages. Job-level so it applies to the cmake configure step,
+      # where the vendor dependencies actually get built.
+      VCPKG_BINARY_SOURCES: "clear;files,/__w/kart/kart/vcpkg_cache,readwrite"
 
     container:
       image: ${{ matrix.os.image }}
@@ -176,15 +179,15 @@ jobs:
       - name: "setup: restore vcpkg cache"
         uses: actions/cache/restore@v4
         with:
-          path: ${{ github.workspace }}/vcpkg_cache
+          # github.workspace evaluates to the host path in container jobs; use the
+          # container path (same workaround as the GITHUB_WORKSPACE env override above)
+          path: /__w/kart/kart/vcpkg_cache
           key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
           restore-keys: |
             vcpkg-${{ matrix.os.arch_triplet }}-
 
       - name: "setup: vcpkg"
         uses: lukka/run-vcpkg@v11
-        env:
-          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_cache,readwrite"
         with:
           vcpkgDirectory: "${{ github.workspace }}/vcpkg-vendor/vcpkg"
           vcpkgJsonGlob: "**/vcpkg-vendor/vcpkg.json"
@@ -195,12 +198,6 @@ jobs:
         shell: bash
         run: |
           ${GITHUB_WORKSPACE}/vcpkg-vendor/vcpkg/vcpkg install pkgconf
-
-      - name: "setup: save vcpkg cache"
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/vcpkg_cache
-          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       #
       # App Build
@@ -235,6 +232,17 @@ jobs:
         shell: bash
         run: |
           cmake --build --preset=ci-linux --verbose --parallel ${{ matrix.os.build_parallel }}
+
+      # if: always() so a failed build still saves whatever packages it got through -
+      # the next attempt resumes from there instead of starting cold.
+      - name: "setup: save vcpkg cache"
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          # github.workspace evaluates to the host path in container jobs; use the
+          # container path (same workaround as the GITHUB_WORKSPACE env override above)
+          path: /__w/kart/kart/vcpkg_cache
+          key: vcpkg-${{ matrix.os.arch_triplet }}-${{ hashFiles('vcpkg-vendor/vcpkg.json', '.git/modules/vcpkg-vendor/vcpkg/HEAD', 'vcpkg-vendor/vcpkg-overlay-*/**') }}
 
       - name: "vendor: save archive"
         uses: actions/upload-artifact@v4
@@ -283,6 +291,13 @@ jobs:
         shell: bash
         run: |
           cmake --build --preset=ci-bundle-linux --verbose
+
+      - name: "libkart: save shared library"
+        uses: actions/upload-artifact@v4
+        with:
+          name: libkart-linux-${{ matrix.os.arch }}
+          path: build/libkart/libkart.so
+          if-no-files-found: error
 
       - name: "bundle: smoke test"
         shell: bash
@@ -348,7 +363,7 @@ jobs:
           - label: amd64
             runner: ubuntu-22.04
           - label: arm64
-            runner: buildjet-2vcpu-ubuntu-2204-arm
+            runner: ubuntu-22.04-arm
         os:
           - label: "tgz-ubuntu-24.04"
             image: "public.ecr.aws/ubuntu/ubuntu:noble"
