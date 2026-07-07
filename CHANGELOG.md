@@ -6,6 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## UNRELEASED
 
+- `log`: Fixed `<dataset>:tile` and raw-path filters silently matching nothing for point-cloud and raster datasets. [#1119](https://github.com/koordinates/kart/pull/1119)
 - Adds `libkart`, a native shared library exposing a C API for reading Kart repositories in-process (without invoking the `kart` CLI). It is shipped in the bundle alongside the `kart` executable; see the libkart C API reference in the developer docs. [#1110](https://github.com/koordinates/kart/pull/1110)
 - Add pager support to `diff` and `show` commands. [#1080](https://github.com/koordinates/kart/pull/1080)
 
