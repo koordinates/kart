@@ -18,6 +18,7 @@ from kart.output_util import (
 )
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
+from kart.structure import DATASET_DIRNAME_GLOB, DATASET_PATH_PATTERN
 from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
 L = logging.getLogger("kart.log")
@@ -71,10 +72,9 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     finds the path encoding for the dataset they apply to and converts them to the feature's path, eg:
     path/to/dataset/.table-dataset/feature/F/9/o/6/kc4F9o6L
     """
-    DATASET_DIRNAME = repo.dataset_class.DATASET_DIRNAME
     # Specially handle raw paths, because we can and it's nice for Kart developers
-    result = [p for p in paths if f"/{DATASET_DIRNAME}/" in p]
-    normal_paths = [p for p in paths if f"/{DATASET_DIRNAME}/" not in p]
+    result = [p for p in paths if DATASET_PATH_PATTERN.search(p)]
+    normal_paths = [p for p in paths if not DATASET_PATH_PATTERN.search(p)]
     repo_filter = RepoKeyFilter.build_from_user_patterns(normal_paths)
     if repo_filter.match_all:
         return result
@@ -95,7 +95,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
         else:
             for ds_part, part_filter in ds_filter.items():
                 if part_filter.match_all:
-                    result.append(f"{ds_path}/{DATASET_DIRNAME}/{ds_part}/*")
+                    result.append(f"{ds_path}/{DATASET_DIRNAME_GLOB}/{ds_part}/*")
                     continue
 
                 for item_key in part_filter:
@@ -114,7 +114,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
                             )
                     else:
                         result.append(
-                            f"{ds_path}/{DATASET_DIRNAME}/{ds_part}/{item_key}"
+                            f"{ds_path}/{DATASET_DIRNAME_GLOB}/{ds_part}/{item_key}"
                         )
     return result
 

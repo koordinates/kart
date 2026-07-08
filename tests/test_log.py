@@ -303,6 +303,61 @@ def test_path_handling(data_archive, cli_runner, output_format):
 
 
 @pytest.mark.parametrize("output_format", ["text", "json"])
+@pytest.mark.parametrize(
+    "archive,ds_name,dirname",
+    [
+        pytest.param(
+            "point-cloud/auckland.tgz",
+            "auckland",
+            ".point-cloud-dataset.v1",
+            id="point-cloud",
+        ),
+        pytest.param("raster/aerial.tgz", "aerial", ".raster-dataset.v1", id="raster"),
+    ],
+)
+def test_path_handling_tile_datasets(
+    data_archive, cli_runner, output_format, archive, ds_name, dirname
+):
+    def num_commits(r):
+        if output_format == "text":
+            return len(re.findall(r"(?m)^commit [0-9a-f]{40}$", r.stdout))
+        else:
+            return len(json.loads(r.stdout))
+
+    with data_archive(archive):
+        # Make a metadata-only commit so we can check that :tile filters exclude it.
+        r = cli_runner.invoke(["meta", "set", ds_name, "title=A new title"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["log", "-o", output_format, "--", ds_name])
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 2
+
+        r = cli_runner.invoke(["log", "-o", output_format, "--", f"{ds_name}:tile"])
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+        r = cli_runner.invoke(["log", "-o", output_format, "--", f"{ds_name}:meta"])
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 2
+
+        # The import commit didn't create a title meta item, so only the
+        # meta-set commit touches it:
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", f"{ds_name}:meta:title"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+        # Raw path syntax works for tile datasets too:
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", f"{ds_name}/{dirname}/tile"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
 def test_path_handling_where_dataset_needs_finding(
     data_archive, cli_runner, output_format
 ):
