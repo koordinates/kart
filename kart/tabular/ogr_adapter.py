@@ -66,6 +66,9 @@ def _build_geometry_dicts():
         link_together(f"{kart_type} ZM", base_ogr_type + 3000)
 
     link_together("GEOMETRY", ogr.wkbUnknown)
+    link_together("GEOMETRY Z", ogr.wkbUnknown + 1000)
+    link_together("GEOMETRY M", ogr.wkbUnknown + 2000)
+    link_together("GEOMETRY ZM", ogr.wkbUnknown + 3000)
     return kart_to_ogr, ogr_to_kart
 
 
