@@ -23,6 +23,7 @@ pub mod dataset;
 pub mod feature;
 pub mod gpkg;
 pub mod paths;
+pub mod query;
 pub mod repo;
 pub mod tile;
 
