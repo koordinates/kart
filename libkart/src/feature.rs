@@ -23,28 +23,10 @@ pub fn feature_geometry(ds: &Dataset, blob: &[u8]) -> Result<Option<Vec<u8>>> {
         None => return Ok(None),
     };
 
-    // Top level: [legend_hash, non_pk_values].
-    let mut cur = &blob[..];
-    let top = rmpv::decode::read_value(&mut cur)
-        .map_err(|e| Error::Msgpack(format!("feature blob: {e}")))?;
-    let arr = top
-        .as_array()
-        .ok_or_else(|| Error::Format("feature blob is not a msgpack array".to_string()))?;
-    if arr.len() < 2 {
-        return Err(Error::Format(format!(
-            "feature blob array has {} elements, expected >= 2",
-            arr.len()
-        )));
-    }
-    let legend_hash = arr[0]
-        .as_str()
-        .ok_or_else(|| Error::Format("feature legend hash is not a string".to_string()))?;
-    let non_pk_values = arr[1]
-        .as_array()
-        .ok_or_else(|| Error::Format("feature non-pk values is not an array".to_string()))?;
+    let (legend_hash, non_pk_values) = decode_feature(blob)?;
 
     // Resolve (and cache) the geometry value's index within non_pk_values for this legend.
-    let geom_index = resolve_geom_index(ds, legend_hash, geom_id)?;
+    let geom_index = resolve_geom_index(ds, &legend_hash, geom_id)?;
     let geom_index = match geom_index {
         Some(i) => i,
         None => return Ok(None),
@@ -64,6 +46,69 @@ pub fn feature_geometry(ds: &Dataset, blob: &[u8]) -> Result<Option<Vec<u8>>> {
             "expected geometry ext (0x47) or nil, got {other:?}"
         ))),
     }
+}
+
+/// Split a feature blob (`msg_pack([legend_hash, non_pk_values])`) into its
+/// (legend hash, non-pk values) parts. PK values are not in the blob; they're
+/// encoded in the feature's tree path.
+pub fn decode_feature(blob: &[u8]) -> Result<(String, Vec<Value>)> {
+    let mut cur = blob;
+    let top = rmpv::decode::read_value(&mut cur)
+        .map_err(|e| Error::Msgpack(format!("feature blob: {e}")))?;
+    if !cur.is_empty() {
+        return Err(Error::Format(format!(
+            "feature blob has {} trailing bytes after msgpack value",
+            cur.len()
+        )));
+    }
+    let arr = match top {
+        Value::Array(arr) => arr,
+        _ => {
+            return Err(Error::Format(
+                "feature blob is not a msgpack array".to_string(),
+            ))
+        }
+    };
+    if arr.len() != 2 {
+        return Err(Error::Format(format!(
+            "feature blob array has {} elements, expected 2",
+            arr.len()
+        )));
+    }
+    let mut it = arr.into_iter();
+    let legend_hash = match it.next().unwrap() {
+        Value::String(s) => s
+            .into_str()
+            .ok_or_else(|| Error::Format("feature legend hash is not a string".to_string()))?,
+        _ => {
+            return Err(Error::Format(
+                "feature legend hash is not a string".to_string(),
+            ))
+        }
+    };
+    let values = match it.next().unwrap() {
+        Value::Array(v) => v,
+        _ => {
+            return Err(Error::Format(
+                "feature non-pk values is not an array".to_string(),
+            ))
+        }
+    };
+    Ok((legend_hash, values))
+}
+
+/// Inverse of `decode_feature`: serialize (legend_hash, values) back to feature blob
+/// bytes. Must be byte-identical to what kart (msgspec) writes, so that re-encoding
+/// an unmodified feature yields the same blob OID.
+pub fn encode_feature(legend_hash: &str, values: &[Value]) -> Result<Vec<u8>> {
+    let top = Value::Array(vec![
+        Value::from(legend_hash),
+        Value::Array(values.to_vec()),
+    ]);
+    let mut out = Vec::new();
+    rmpv::encode::write_value(&mut out, &top)
+        .map_err(|e| Error::Msgpack(format!("encode feature blob: {e}")))?;
+    Ok(out)
 }
 
 /// Look up the index of the geometry column within the non-pk values list for a given legend,
@@ -127,12 +172,16 @@ mod tests {
     use git2::{ObjectType, Tree};
     use std::process::Command;
 
+    const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
     const POLYGONS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/polygons.tgz");
+    const STRING_PKS_TGZ: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/string-pks.tgz");
 
-    fn extract_fixture(tgz: &str, subdir: &str) -> std::path::PathBuf {
+    fn extract_fixture(tgz: &str, subdir: &str, label: &str) -> std::path::PathBuf {
         crate::test_support::disable_owner_validation();
         let base = std::env::temp_dir().join(format!(
-            "libkart-feattest-{}-{}",
+            "libkart-feattest-{}-{}-{}",
+            label,
             subdir,
             std::process::id()
         ));
@@ -203,9 +252,123 @@ mod tests {
         }
     }
 
+    /// Collect (path, bytes) of every feature blob under the dataset's inner `feature/` tree
+    /// at HEAD.
+    fn all_feature_blobs(repo: &Repo, dataset_path: &str) -> Vec<(String, Vec<u8>)> {
+        let root = repo.resolve_tree("HEAD").unwrap();
+        let ds_entry = root.get_path(std::path::Path::new(dataset_path)).unwrap();
+        let ds_tree = ds_entry
+            .to_object(&repo.git)
+            .unwrap()
+            .peel_to_tree()
+            .unwrap();
+        let inner = ds_tree
+            .iter()
+            .find(|e| e.name() == Some(".table-dataset"))
+            .unwrap();
+        let inner_tree = inner.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
+        let feat_entry = inner_tree.get_name("feature").unwrap();
+        let feat_tree = feat_entry
+            .to_object(&repo.git)
+            .unwrap()
+            .peel_to_tree()
+            .unwrap();
+
+        let mut out = Vec::new();
+        collect_blobs(repo, &feat_tree, "feature", &mut out);
+        out
+    }
+
+    fn collect_blobs(repo: &Repo, tree: &Tree<'_>, prefix: &str, out: &mut Vec<(String, Vec<u8>)>) {
+        for entry in tree.iter() {
+            let name = entry.name().unwrap_or("?");
+            let path = format!("{prefix}/{name}");
+            match entry.kind() {
+                Some(ObjectType::Blob) => {
+                    let obj = entry.to_object(&repo.git).unwrap();
+                    if let Some(blob) = obj.as_blob() {
+                        out.push((path, blob.content().to_vec()));
+                    }
+                }
+                Some(ObjectType::Tree) => {
+                    let obj = entry.to_object(&repo.git).unwrap();
+                    if let Some(child) = obj.as_tree() {
+                        collect_blobs(repo, child, &path, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn test_decode_encode_roundtrip_all_fixtures() {
+        for (tgz, subdir, ds_name) in [
+            (POINTS_TGZ, "points", Some("nz_pa_points_topo_150k")),
+            (POLYGONS_TGZ, "polygons", Some("nz_waca_adjustments")),
+            (STRING_PKS_TGZ, "string-pks", None), // discover via list_datasets
+        ] {
+            let root = extract_fixture(tgz, subdir, "roundtrip");
+            let repo = Repo::open(root.to_str().unwrap()).unwrap();
+            let datasets = repo.list_datasets("HEAD").unwrap();
+            let ds_name = match ds_name {
+                Some(n) => n.to_string(),
+                None => {
+                    assert_eq!(datasets.len(), 1, "expected single dataset in {subdir}");
+                    datasets[0].clone()
+                }
+            };
+            assert!(datasets.contains(&ds_name));
+
+            let blobs = all_feature_blobs(&repo, &ds_name);
+            assert!(!blobs.is_empty(), "no feature blobs in {subdir}");
+            for (path, blob) in &blobs {
+                let (legend_hash, values) = decode_feature(blob).unwrap();
+                assert_eq!(legend_hash.len(), 40, "{subdir} {path}: bad legend hash");
+                let encoded = encode_feature(&legend_hash, &values).unwrap();
+                assert_eq!(
+                    &encoded, blob,
+                    "{subdir} {path}: re-encode not byte-identical"
+                );
+            }
+
+            let _ = std::fs::remove_dir_all(root.parent().unwrap());
+        }
+    }
+
+    #[test]
+    fn test_decode_feature_rejects_wrong_element_count() {
+        let legend = "0123456789abcdef0123456789abcdef01234567";
+        // 3-element top-level array: would round-trip lossily, must error.
+        let top = Value::Array(vec![
+            Value::from(legend),
+            Value::Array(vec![Value::from(1)]),
+            Value::from("extra"),
+        ]);
+        let mut blob = Vec::new();
+        rmpv::encode::write_value(&mut blob, &top).unwrap();
+        let err = decode_feature(&blob).unwrap_err();
+        assert!(
+            err.to_string().contains("3 elements, expected 2"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_decode_feature_rejects_trailing_bytes() {
+        let legend = "0123456789abcdef0123456789abcdef01234567";
+        let mut blob = encode_feature(legend, &[Value::from(1)]).unwrap();
+        blob.push(0x00);
+        let err = decode_feature(&blob).unwrap_err();
+        assert!(
+            err.to_string().contains("trailing bytes"),
+            "unexpected error: {err}"
+        );
+    }
+
     #[test]
     fn test_feature_geometry_polygons() {
-        let root = extract_fixture(POLYGONS_TGZ, "polygons");
+        let root = extract_fixture(POLYGONS_TGZ, "polygons", "geom");
         let repo = Repo::open(root.to_str().unwrap()).unwrap();
         let ds = Dataset::open(&repo, "HEAD", "nz_waca_adjustments").unwrap();
         assert_eq!(
