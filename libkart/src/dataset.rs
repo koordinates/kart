@@ -6,7 +6,7 @@
 //! access and no live `Repo`.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use git2::{ObjectType, Tree};
 use serde_json::Value;
@@ -44,6 +44,8 @@ pub struct Dataset {
     pub(crate) primary_key: Option<String>,
     /// Cache: legend hash -> index of the geometry value within that legend's non-pk values.
     pub(crate) legend_geom_index: Mutex<HashMap<String, Option<usize>>>,
+    /// Lazily-built feature path encoder (see `feature_path`).
+    pub(crate) path_encoder: OnceLock<crate::paths::PathEncoder>,
 }
 
 impl Dataset {
@@ -107,6 +109,7 @@ impl Dataset {
             geom_column_id,
             primary_key,
             legend_geom_index: Mutex::new(HashMap::new()),
+            path_encoder: OnceLock::new(),
         })
     }
 
@@ -232,9 +235,15 @@ impl Dataset {
                 self.dataset_type
             )));
         }
-        let encoder = crate::paths::PathEncoder::from_path_structure_json(
-            self.meta.get("path-structure.json").map(Vec::as_slice),
-        )?;
+        let encoder = match self.path_encoder.get() {
+            Some(enc) => enc,
+            None => {
+                let enc = crate::paths::PathEncoder::from_path_structure_json(
+                    self.meta.get("path-structure.json").map(Vec::as_slice),
+                )?;
+                self.path_encoder.get_or_init(|| enc)
+            }
+        };
         Ok(format!(
             "{}/feature/{}",
             self.inner_name,

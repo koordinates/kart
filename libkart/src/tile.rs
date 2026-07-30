@@ -212,6 +212,7 @@ mod tests {
             geom_column_id: None,
             primary_key: None,
             legend_geom_index: std::sync::Mutex::new(HashMap::new()),
+            path_encoder: std::sync::OnceLock::new(),
         }
     }
 
