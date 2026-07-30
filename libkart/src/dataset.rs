@@ -336,21 +336,35 @@ fn parse_columns(bytes: &[u8]) -> Result<Vec<(ColumnInfo, Option<i64>)>> {
 }
 
 /// Parse schema.json bytes, returning (geom_column_name, geom_column_id, primary_key).
+/// Lenient about missing fields: this runs eagerly at open time for every dataset type,
+/// and non-table datasets (e.g. point-cloud) have columns without `id`. The strict
+/// per-column parse (`parse_columns`) is reserved for the table-only helpers.
 fn parse_schema(bytes: &[u8]) -> Result<(Option<String>, Option<String>, Option<String>)> {
-    let cols = parse_columns(bytes)?;
+    let cols: Value = serde_json::from_slice(bytes)?;
+    let arr = cols
+        .as_array()
+        .ok_or_else(|| Error::Format("schema.json is not an array".to_string()))?;
 
-    let geom = cols.iter().find(|(col, _)| col.data_type == "geometry");
-    let geom_name = geom.map(|(col, _)| col.name.clone());
-    let geom_id = geom.map(|(col, _)| col.id.clone());
+    let geom = arr
+        .iter()
+        .find(|col| col.get("dataType").and_then(Value::as_str) == Some("geometry"));
+    let get_str = |col: &Value, field: &str| -> Option<String> {
+        col.get(field).and_then(Value::as_str).map(str::to_string)
+    };
+    let geom_name = geom.and_then(|col| get_str(col, "name"));
+    let geom_id = geom.and_then(|col| get_str(col, "id"));
 
     // Primary key column(s): those with a primaryKeyIndex, sorted by it. Single PK only.
-    let mut pks: Vec<(i64, &ColumnInfo)> = cols
+    let mut pks: Vec<(i64, String)> = arr
         .iter()
-        .filter_map(|(col, idx)| idx.map(|i| (i, col)))
+        .filter_map(|col| {
+            let idx = col.get("primaryKeyIndex").and_then(Value::as_i64)?;
+            Some((idx, get_str(col, "name")?))
+        })
         .collect();
     pks.sort_by_key(|(idx, _)| *idx);
     let primary_key = if pks.len() == 1 {
-        Some(pks[0].1.name.clone())
+        Some(pks.into_iter().next().unwrap().1)
     } else {
         None
     };
