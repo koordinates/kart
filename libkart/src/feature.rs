@@ -111,6 +111,92 @@ pub fn encode_feature(legend_hash: &str, values: &[Value]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Return a copy of `blob` with the values of the named columns replaced.
+///
+/// `updates` maps column name -> JSON value; each value is coerced to msgpack
+/// according to the column's Kart data type (this is the only place JSON->msgpack
+/// value coercion lives). Errors if a column is unknown, is part of the primary key,
+/// isn't present in the feature's legend, or the JSON value doesn't fit the column's
+/// data type. Geometry and blob columns can only be set to null (JSON can't express
+/// their binary values).
+pub fn update_feature_blob(
+    ds: &Dataset,
+    blob: &[u8],
+    updates: &serde_json::Map<String, serde_json::Value>,
+) -> Result<Vec<u8>> {
+    let (legend_hash, mut values) = decode_feature(blob)?;
+    let (_, non_pk_ids) = ds.legend(&legend_hash)?;
+
+    for (name, json_val) in updates {
+        let col = ds
+            .column_by_name(name)?
+            .ok_or_else(|| Error::NotFound(format!("no column named '{name}' in schema")))?;
+        if col.is_pk {
+            return Err(Error::Format(format!(
+                "cannot update primary key column '{name}'"
+            )));
+        }
+        let index = non_pk_ids
+            .iter()
+            .position(|id| *id == col.id)
+            .ok_or_else(|| {
+                Error::Format(format!(
+                    "column '{name}' is not in this feature's legend {legend_hash}"
+                ))
+            })?;
+        let n_values = values.len();
+        let slot = values.get_mut(index).ok_or_else(|| {
+            Error::Format(format!(
+                "column '{name}' index {index} out of range ({n_values} values)"
+            ))
+        })?;
+        *slot = json_to_msgpack_value(name, &col.data_type, json_val)?;
+    }
+
+    encode_feature(&legend_hash, &values)
+}
+
+/// Coerce a JSON value to the msgpack value kart would store for a column of
+/// `data_type`. Null maps to Nil for any type; otherwise the JSON type must match.
+fn json_to_msgpack_value(name: &str, data_type: &str, val: &serde_json::Value) -> Result<Value> {
+    if val.is_null() {
+        return Ok(Value::Nil);
+    }
+    match data_type {
+        "geometry" => Err(Error::Format(format!(
+            "geometry column '{name}' can only be set to null"
+        ))),
+        "blob" => Err(Error::Format(format!(
+            "blob column '{name}' can only be set to null"
+        ))),
+        "integer" => val.as_i64().map(Value::from).ok_or_else(|| {
+            Error::Format(format!(
+                "integer column '{name}' requires a JSON integer, got {val}"
+            ))
+        }),
+        "float" => val.as_f64().map(Value::F64).ok_or_else(|| {
+            Error::Format(format!(
+                "float column '{name}' requires a JSON number, got {val}"
+            ))
+        }),
+        "boolean" => val.as_bool().map(Value::from).ok_or_else(|| {
+            Error::Format(format!(
+                "boolean column '{name}' requires a JSON boolean, got {val}"
+            ))
+        }),
+        "text" | "date" | "time" | "timestamp" | "interval" | "numeric" => {
+            val.as_str().map(Value::from).ok_or_else(|| {
+                Error::Format(format!(
+                    "{data_type} column '{name}' requires a JSON string, got {val}"
+                ))
+            })
+        }
+        other => Err(Error::Format(format!(
+            "unsupported data type '{other}' for column '{name}'"
+        ))),
+    }
+}
+
 /// Look up the index of the geometry column within the non-pk values list for a given legend,
 /// using the cache in `ds.legend_geom_index`. Returns None if the legend has no geometry column.
 fn resolve_geom_index(ds: &Dataset, legend_hash: &str, geom_id: &str) -> Result<Option<usize>> {
@@ -364,6 +450,72 @@ mod tests {
             err.to_string().contains("trailing bytes"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn test_update_feature_blob_values() {
+        let root = extract_fixture(POINTS_TGZ, "points", "update");
+        let repo = Repo::open(root.to_str().unwrap()).unwrap();
+        let ds = Dataset::open(&repo, "HEAD", "nz_pa_points_topo_150k").unwrap();
+        let blob = first_feature_blob(&repo, "nz_pa_points_topo_150k");
+
+        let updates = serde_json::json!({"name_ascii": "REDACTED", "t50_fid": null});
+        let updates = updates.as_object().unwrap();
+        let new_blob = update_feature_blob(&ds, &blob, updates).unwrap();
+        assert_ne!(new_blob, blob);
+
+        // Legend unchanged; updated indexes hold new values; all others byte-identical.
+        let (old_lh, old_values) = decode_feature(&blob).unwrap();
+        let (new_lh, new_values) = decode_feature(&new_blob).unwrap();
+        assert_eq!(new_lh, old_lh);
+        assert_eq!(new_values.len(), old_values.len());
+        let (_, non_pk_ids) = ds.legend(&old_lh).unwrap();
+        let idx_of = |name: &str| {
+            let col = ds.column_by_name(name).unwrap().unwrap();
+            non_pk_ids.iter().position(|id| *id == col.id).unwrap()
+        };
+        let name_idx = idx_of("name_ascii");
+        let t50_idx = idx_of("t50_fid");
+        assert_eq!(new_values[name_idx], Value::from("REDACTED"));
+        assert_eq!(new_values[t50_idx], Value::Nil);
+        for (i, (old, new)) in old_values.iter().zip(new_values.iter()).enumerate() {
+            if i != name_idx && i != t50_idx {
+                assert_eq!(old, new, "value {i} changed unexpectedly");
+            }
+        }
+
+        // Idempotency: applying the same updates to new_blob returns new_blob.
+        let again = update_feature_blob(&ds, &new_blob, updates).unwrap();
+        assert_eq!(again, new_blob);
+
+        // Integer column accepts a JSON integer, rejects string / non-integer number.
+        let int_ok = serde_json::json!({"t50_fid": 99});
+        let int_blob = update_feature_blob(&ds, &blob, int_ok.as_object().unwrap()).unwrap();
+        let (_, int_values) = decode_feature(&int_blob).unwrap();
+        assert_eq!(int_values[t50_idx], Value::from(99));
+        let int_str = serde_json::json!({"t50_fid": "hello"});
+        assert!(update_feature_blob(&ds, &blob, int_str.as_object().unwrap()).is_err());
+        let int_frac = serde_json::json!({"t50_fid": 1.5});
+        assert!(update_feature_blob(&ds, &blob, int_frac.as_object().unwrap()).is_err());
+
+        // Geometry column: null accepted, non-null rejected.
+        let geom_null = serde_json::json!({"geom": null});
+        let geom_blob = update_feature_blob(&ds, &blob, geom_null.as_object().unwrap()).unwrap();
+        assert_eq!(feature_geometry(&ds, &geom_blob).unwrap(), None);
+        let geom_str = serde_json::json!({"geom": "not allowed"});
+        assert!(update_feature_blob(&ds, &blob, geom_str.as_object().unwrap()).is_err());
+
+        // Unknown column and pk column rejected.
+        let unknown = serde_json::json!({"nope": 1});
+        assert!(update_feature_blob(&ds, &blob, unknown.as_object().unwrap()).is_err());
+        let pk = serde_json::json!({"fid": 1});
+        assert!(update_feature_blob(&ds, &blob, pk.as_object().unwrap()).is_err());
+
+        // Empty updates round-trip byte-identically.
+        let empty = serde_json::Map::new();
+        assert_eq!(update_feature_blob(&ds, &blob, &empty).unwrap(), blob);
+
+        let _ = std::fs::remove_dir_all(root.parent().unwrap());
     }
 
     #[test]
