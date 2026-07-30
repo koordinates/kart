@@ -6,6 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## UNRELEASED
 
+- Update vcpkg to 2026-07-30 upstream master. Fixes CI build failures caused by libaec downloads from gitlab.dkrz.de returning HTTP 429; the port now downloads from GitHub. [#1121](https://github.com/koordinates/kart/pull/1121)
 - Adds `libkart`, a native shared library exposing a C API for reading Kart repositories in-process (without invoking the `kart` CLI). It is shipped in the bundle alongside the `kart` executable; see the libkart C API reference in the developer docs. [#1110](https://github.com/koordinates/kart/pull/1110)
 - Add pager support to `diff` and `show` commands. [#1080](https://github.com/koordinates/kart/pull/1080)
 - Piped (non-tty) output is now always UTF-8 on all platforms. Previously text output used the locale codepage on Windows (e.g. cp1252), inconsistent with JSON output (which is always UTF-8). [#1115](https://github.com/koordinates/kart/issues/1115)
