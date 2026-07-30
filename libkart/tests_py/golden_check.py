@@ -11,6 +11,8 @@ pointing at the built library; CTest does this automatically via the
 """
 
 import atexit
+import base64
+import json
 import os
 import shutil
 import subprocess
@@ -74,6 +76,9 @@ int kart_repo_open(const char *path, uint64_t *out_repo);
 void kart_repo_free(uint64_t repo);
 int kart_repo_table_dataset_version(uint64_t repo, int *out_version);
 int kart_repo_list_datasets(uint64_t repo, const char *refish, uint8_t **out_json, size_t *out_len);
+int kart_repo_find_feature_blobs(uint64_t repo, const char *commits_json, const char *dataset_path, const char *query_json, uint8_t **out, size_t *out_len);
+int kart_repo_rewrite_history(uint64_t repo, const char *substitutions_json, const char *backup_ref_prefix, uint8_t **out, size_t *out_len);
+int kart_repo_blob(uint64_t repo, const char *oid_hex, uint8_t **out, size_t *out_len);
 
 int kart_dataset_open(uint64_t repo, const char *refish, const char *path, uint64_t *out_ds);
 void kart_dataset_free(uint64_t ds);
@@ -81,8 +86,10 @@ int kart_dataset_type(uint64_t ds, uint8_t **out, size_t *out_len);
 int kart_dataset_schema_json(uint64_t ds, uint8_t **out, size_t *out_len);
 int kart_dataset_crs_wkt(uint64_t ds, uint8_t **out, size_t *out_len);
 int kart_dataset_meta_item(uint64_t ds, const char *name, uint8_t **out, size_t *out_len);
+int kart_dataset_feature_path(uint64_t ds, const char *pk_values_json, uint8_t **out, size_t *out_len);
 
 int kart_feature_geometry(uint64_t ds, const uint8_t *blob, size_t blob_len, uint8_t **out, size_t *out_len);
+int kart_feature_update_blob(uint64_t ds, const uint8_t *blob, size_t blob_len, const char *updates_json, uint8_t **out, size_t *out_len);
 int kart_tile_summary_json(uint64_t ds, const uint8_t *blob, size_t blob_len, uint8_t **out, size_t *out_len);
 
 int kart_gpkg_is_empty(const uint8_t *g, size_t n, int *out);
@@ -150,6 +157,63 @@ def repo_list_datasets(repo, refish):
     import json
 
     return json.loads(_take_bytes(pp, n).decode("utf-8"))
+
+
+def repo_find_feature_blobs(repo, commit_oids, dataset_path, query):
+    pp = ffi.new("uint8_t **")
+    n = ffi.new("size_t *")
+    rc = lib.kart_repo_find_feature_blobs(
+        repo,
+        json.dumps(commit_oids).encode(),
+        dataset_path.encode(),
+        json.dumps(query).encode(),
+        pp,
+        n,
+    )
+    if rc != 0:
+        raise KartError(f"find_feature_blobs: {last_error()}")
+    return json.loads(_take_bytes(pp, n).decode("utf-8"))
+
+
+def repo_rewrite_history(repo, substitutions, backup_ref_prefix):
+    pp = ffi.new("uint8_t **")
+    n = ffi.new("size_t *")
+    prefix = backup_ref_prefix.encode() if backup_ref_prefix is not None else ffi.NULL
+    rc = lib.kart_repo_rewrite_history(
+        repo, json.dumps(substitutions).encode(), prefix, pp, n
+    )
+    if rc != 0:
+        raise KartError(f"rewrite_history: {last_error()}")
+    return json.loads(_take_bytes(pp, n).decode("utf-8"))
+
+
+def repo_blob(repo, oid_hex):
+    pp = ffi.new("uint8_t **")
+    n = ffi.new("size_t *")
+    rc = lib.kart_repo_blob(repo, oid_hex.encode(), pp, n)
+    if rc != 0:
+        raise KartError(f"repo_blob: {last_error()}")
+    return _take_bytes(pp, n)
+
+
+def dataset_feature_path(ds, pk_values_json):
+    pp = ffi.new("uint8_t **")
+    n = ffi.new("size_t *")
+    rc = lib.kart_dataset_feature_path(ds, pk_values_json.encode(), pp, n)
+    if rc != 0:
+        raise KartError(f"feature_path: {last_error()}")
+    return _take_bytes(pp, n).decode("utf-8")
+
+
+def feature_update_blob(ds, blob, updates):
+    pp = ffi.new("uint8_t **")
+    n = ffi.new("size_t *")
+    rc = lib.kart_feature_update_blob(
+        ds, blob, len(blob), json.dumps(updates).encode(), pp, n
+    )
+    if rc != 0:
+        raise KartError(f"feature_update_blob: {last_error()}")
+    return _take_bytes(pp, n)
 
 
 def dataset_schema_json(ds):
@@ -472,6 +536,137 @@ def check_pointcloud(tgz, subdir, ds_path):
         lib.kart_repo_free(repo)
 
 
+# ---- history-rewrite end-to-end check (points.tgz) ---------------------------
+
+
+def check_rewrite(tgz, subdir, ds_path):
+    """Redact one feature attribute across history via the C ABI, then verify the
+    rewritten repo with kart's own Python implementation."""
+    print(f"\n=== rewrite repo {subdir} ({ds_path}) ===")
+    PK = 3  # pk=3 has a non-null name_ascii ('Tauwhare Pa'), so the redaction is observable
+    root = extract(tgz, subdir)
+    pyrepo = KartRepo(root)
+    pyds = [d for d in pyrepo.structure("HEAD").datasets() if d.path == ds_path][0]
+
+    geom_name = [c for c in pyds.schema if c.data_type == "geometry"][0].name
+    pre_feature = pyds.get_feature([PK])
+    pre_name = pre_feature["name_ascii"]
+    pre_geom = bytes(pre_feature[geom_name])
+    pre_count = pyds.feature_count
+    head_oid = str(pyrepo.head_commit.id)
+
+    repo = repo_open(root)
+    try:
+        ds = dataset_open(repo, "HEAD", ds_path)
+        try:
+            # feature path: C ABI (dataset-dir-relative) vs kart's own encoder (full path)
+            path_c = dataset_feature_path(ds, json.dumps([PK]))
+            path_py = pyds.encode_1pk_to_path(PK)
+            check(
+                f"{subdir}: feature_path matches kart encoder",
+                f"{ds_path}/{path_c}" == path_py,
+                f"c={ds_path}/{path_c} py={path_py}",
+            )
+
+            # find the pk=1 blob at HEAD; cross-check against pygit2
+            hits = repo_find_feature_blobs(repo, [head_oid], ds_path, {"pk": [PK]})
+            check(
+                f"{subdir}: find_feature_blobs one hit", len(hits) == 1, f"hits={hits}"
+            )
+            hit = hits[0]
+            old_oid = hit["oid"]
+            py_entry = pyrepo.head_commit.tree / hit["path"]
+            check(
+                f"{subdir}: found blob oid matches pygit2",
+                hit["commit"] == head_oid
+                and hit["path"] == path_py
+                and old_oid == str(py_entry.id),
+                f"c={hit} py_oid={py_entry.id}",
+            )
+
+            # old blob content via C ABI, byte-equal to pygit2
+            old_blob = repo_blob(repo, old_oid)
+            check(
+                f"{subdir}: repo_blob byte-equal to pygit2",
+                old_blob == py_entry.data,
+                f"c_len={len(old_blob)} py_len={len(py_entry.data)}",
+            )
+
+            # build the redacted blob and rewrite history
+            new_blob = feature_update_blob(
+                ds, old_blob, {"name_ascii": "GOLDEN-REDACTED"}
+            )
+            stats = repo_rewrite_history(
+                repo,
+                {old_oid: base64.b64encode(new_blob).decode("ascii")},
+                "refs/kx/backup/golden",
+            )
+            check(
+                f"{subdir}: rewrite stats",
+                stats["commits_rewritten"] >= 1
+                and stats["blobs_written"] >= 1
+                and stats["refs_updated"]
+                and stats["backup_refs"],
+                f"stats={stats}",
+            )
+        finally:
+            lib.kart_dataset_free(ds)
+    finally:
+        lib.kart_repo_free(repo)
+
+    # ---- verify the rewritten repo with kart's Python implementation ----
+    pyrepo2 = KartRepo(root)  # fresh open: the rewrite happened behind pyrepo's back
+    pyds2 = [d for d in pyrepo2.structure("HEAD").datasets() if d.path == ds_path][0]
+    feature = pyds2.get_feature([PK])
+    check(
+        f"{subdir}: kart reads redacted attribute at HEAD",
+        feature["name_ascii"] == "GOLDEN-REDACTED",
+        f"name_ascii={feature['name_ascii']!r}",
+    )
+    check(
+        f"{subdir}: geometry unchanged",
+        bytes(feature[geom_name]) == pre_geom,
+        f"eq={bytes(feature[geom_name]) == pre_geom}",
+    )
+    check(
+        f"{subdir}: feature count unchanged",
+        pyds2.feature_count == pre_count,
+        f"pre={pre_count} post={pyds2.feature_count}",
+    )
+
+    # old blob unreachable from (rewritten) HEAD
+    rev_list = subprocess.run(
+        ["git", "-C", root, "rev-list", "--objects", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    check(
+        f"{subdir}: old blob absent from HEAD object walk",
+        old_oid not in rev_list.stdout,
+        f"old_oid={old_oid}",
+    )
+
+    # backup ref exists and the OLD feature is readable there via kart
+    backup_ref = stats["backup_refs"][0]
+    check(
+        f"{subdir}: backup ref exists",
+        backup_ref in pyrepo2.listall_references(),
+        f"backup_ref={backup_ref}",
+    )
+    pyds_backup = [
+        d for d in pyrepo2.structure(backup_ref).datasets() if d.path == ds_path
+    ][0]
+    backup_feature = pyds_backup.get_feature([PK])
+    check(
+        f"{subdir}: pre-rewrite feature readable at backup ref",
+        backup_feature["name_ascii"] == pre_name
+        and pre_name not in (None, "GOLDEN-REDACTED")
+        and bytes(backup_feature[geom_name]) == pre_geom,
+        f"backup name_ascii={backup_feature['name_ascii']!r} pre={pre_name!r}",
+    )
+
+
 def ds_type_bytes(ds):
     pp = ffi.new("uint8_t **")
     n = ffi.new("size_t *")
@@ -503,6 +698,11 @@ def main():
         os.path.join(DATA, "point-cloud", "auckland.tgz"),
         "auckland",
         "auckland",
+    )
+    check_rewrite(
+        os.path.join(DATA, "points.tgz"),
+        "points",
+        "nz_pa_points_topo_150k",
     )
 
     print("\n==== SUMMARY ====")
