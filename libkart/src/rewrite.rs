@@ -272,33 +272,12 @@ fn rewrite_tree(
 mod tests {
     use super::*;
     use crate::query::{find_feature_blobs, FeatureQuery};
+    use crate::test_support::extract_fixture;
     use git2::ObjectType;
     use rmpv::Value as MpValue;
     use std::collections::HashSet;
-    use std::process::Command;
 
     const EDITING_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/editing.tgz");
-
-    fn extract_fixture(tgz: &str, subdir: &str, label: &str) -> std::path::PathBuf {
-        crate::test_support::disable_owner_validation();
-        let base = std::env::temp_dir().join(format!(
-            "libkart-rewritetest-{}-{}-{}",
-            label,
-            subdir,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let status = Command::new("tar")
-            .arg("xzf")
-            .arg(tgz)
-            .arg("-C")
-            .arg(&base)
-            .status()
-            .expect("run tar");
-        assert!(status.success(), "tar failed for {tgz}");
-        base.join(subdir)
-    }
 
     /// Editing fixture: two commits on branch `main` ("Import ..." then "R1 edits")
     /// over dataset `editing` (int pk `id`, text `value`). Returns [head, head~1].

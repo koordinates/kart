@@ -361,32 +361,11 @@ fn value_matches(actual: &MpValue, expected: &JsonValue) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::extract_fixture;
     use serde_json::json;
-    use std::process::Command;
 
     const EDITING_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/editing.tgz");
     const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
-
-    fn extract_fixture(tgz: &str, subdir: &str, label: &str) -> std::path::PathBuf {
-        crate::test_support::disable_owner_validation();
-        let base = std::env::temp_dir().join(format!(
-            "libkart-querytest-{}-{}-{}",
-            label,
-            subdir,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let status = Command::new("tar")
-            .arg("xzf")
-            .arg(tgz)
-            .arg("-C")
-            .arg(&base)
-            .status()
-            .expect("run tar");
-        assert!(status.success(), "tar failed for {tgz}");
-        base.join(subdir)
-    }
 
     /// The editing fixture has two commits on the `editing` dataset (columns:
     /// integer pk `id`, text `value`): the import, then "R1 edits" which modifies

@@ -243,8 +243,8 @@ mod tests {
     use super::*;
     use crate::dataset::Dataset;
     use crate::repo::Repo;
+    use crate::test_support::extract_fixture;
     use git2::{ObjectType, Tree};
-    use std::process::Command;
 
     const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
     const STRING_PKS_TGZ: &str =
@@ -353,27 +353,6 @@ mod tests {
     }
 
     // ---- fixture round-trip: re-encode every feature path in real repos ----
-
-    fn extract_fixture(tgz: &str, subdir: &str, label: &str) -> std::path::PathBuf {
-        crate::test_support::disable_owner_validation();
-        let base = std::env::temp_dir().join(format!(
-            "libkart-pathtest-{}-{}-{}",
-            label,
-            subdir,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let status = Command::new("tar")
-            .arg("xzf")
-            .arg(tgz)
-            .arg("-C")
-            .arg(&base)
-            .status()
-            .expect("run tar");
-        assert!(status.success(), "tar failed for {tgz}");
-        base.join(subdir)
-    }
 
     /// Collect the dataset-relative path of every feature blob (e.g.
     /// ".table-dataset/feature/A/A/A/B/kUA=").

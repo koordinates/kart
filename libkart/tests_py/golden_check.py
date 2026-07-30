@@ -154,8 +154,6 @@ def repo_list_datasets(repo, refish):
     rc = lib.kart_repo_list_datasets(repo, refish.encode(), pp, n)
     if rc != 0:
         raise KartError(f"list_datasets: {last_error()}")
-    import json
-
     return json.loads(_take_bytes(pp, n).decode("utf-8"))
 
 
@@ -222,8 +220,6 @@ def dataset_schema_json(ds):
     rc = lib.kart_dataset_schema_json(ds, pp, n)
     if rc != 0:
         raise KartError(f"schema_json: {last_error()}")
-    import json
-
     return json.loads(_take_bytes(pp, n).decode("utf-8"))
 
 
@@ -252,8 +248,6 @@ def tile_summary_json(ds, blob):
     rc = lib.kart_tile_summary_json(ds, blob, len(blob), pp, n)
     if rc != 0:
         raise KartError(f"tile_summary_json: {last_error()}")
-    import json
-
     return json.loads(_take_bytes(pp, n).decode("utf-8"))
 
 
@@ -380,8 +374,6 @@ def check_vector(tgz, subdir, ds_path, expected_datasets):
             )
 
             # columns byte-faithful to the raw meta/schema.json blob
-            import json
-
             meta_schema = json.loads((pyds.inner_tree / "meta" / "schema.json").data)
             check(
                 f"{subdir}: schema columns match meta/schema.json",
@@ -568,7 +560,7 @@ def check_rewrite(tgz, subdir, ds_path):
                 f"c={ds_path}/{path_c} py={path_py}",
             )
 
-            # find the pk=1 blob at HEAD; cross-check against pygit2
+            # find the pk=3 blob at HEAD; cross-check against pygit2
             hits = repo_find_feature_blobs(repo, [head_oid], ds_path, {"pk": [PK]})
             check(
                 f"{subdir}: find_feature_blobs one hit", len(hits) == 1, f"hits={hits}"

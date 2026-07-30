@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## UNRELEASED
 
 - Adds `libkart`, a native shared library exposing a C API for reading Kart repositories in-process (without invoking the `kart` CLI). It is shipped in the bundle alongside the `kart` executable; see the libkart C API reference in the developer docs. [#1110](https://github.com/koordinates/kart/pull/1110)
+- `libkart`: Adds feature path encoding, feature blob search/update, and generic history-rewrite primitives to the C API.
 - Add pager support to `diff` and `show` commands. [#1080](https://github.com/koordinates/kart/pull/1080)
 - Piped (non-tty) output is now always UTF-8 on all platforms. Previously text output used the locale codepage on Windows (e.g. cp1252), inconsistent with JSON output (which is always UTF-8). [#1115](https://github.com/koordinates/kart/issues/1115)
 - `export`: Fixed a crash (`KeyError: 'GEOMETRY Z'`) when exporting datasets whose geometry type is the generic `GEOMETRY` with a `Z`, `M`, or `ZM` suffix. [#1063](https://github.com/koordinates/kart/issues/1063)

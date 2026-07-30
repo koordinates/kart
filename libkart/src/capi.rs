@@ -86,7 +86,8 @@ fn json_pk_to_msgpack(v: &serde_json::Value) -> Result<rmpv::Value> {
 
 /// Parse a JSON array of primary-key values (e.g. `[3]` or `["abc"]`) to msgpack values.
 fn parse_pk_values(json: &str) -> Result<Vec<rmpv::Value>> {
-    let parsed: serde_json::Value = serde_json::from_str(json)?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| Error::Json(format!("pk values: {e}")))?;
     let arr = parsed
         .as_array()
         .ok_or_else(|| Error::Format(format!("pk values must be a JSON array, got {parsed}")))?;
@@ -95,7 +96,8 @@ fn parse_pk_values(json: &str) -> Result<Vec<rmpv::Value>> {
 
 /// Parse a JSON object holding column-name -> value pairs (updates or filter).
 fn parse_json_object(json: &str, what: &str) -> Result<serde_json::Map<String, serde_json::Value>> {
-    let parsed: serde_json::Value = serde_json::from_str(json)?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| Error::Json(format!("{what}: {e}")))?;
     match parsed {
         serde_json::Value::Object(map) => Ok(map),
         other => Err(Error::Format(format!(
@@ -116,7 +118,8 @@ fn parse_oid(hex: &str) -> Result<Oid> {
 
 /// Parse a JSON array of 40-hex commit oids.
 fn parse_commits(json: &str) -> Result<Vec<Oid>> {
-    let parsed: serde_json::Value = serde_json::from_str(json)?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| Error::Json(format!("commits: {e}")))?;
     let arr = parsed
         .as_array()
         .ok_or_else(|| Error::Format(format!("commits must be a JSON array, got {parsed}")))?;
@@ -601,35 +604,12 @@ pub unsafe extern "C" fn kart_free(ptr: *mut std::os::raw::c_void) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::extract_fixture;
     use git2::{ObjectType, Tree};
     use std::ffi::CString;
-    use std::process::Command;
 
     const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
     const EDITING_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/editing.tgz");
-
-    /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
-    /// `label` is a per-test tag so parallel tests on the same fixture don't collide.
-    fn extract_fixture(tgz: &str, subdir: &str, label: &str) -> std::path::PathBuf {
-        crate::test_support::disable_owner_validation();
-        let base = std::env::temp_dir().join(format!(
-            "libkart-capitest-{}-{}-{}",
-            label,
-            subdir,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let status = Command::new("tar")
-            .arg("xzf")
-            .arg(tgz)
-            .arg("-C")
-            .arg(&base)
-            .status()
-            .expect("run tar");
-        assert!(status.success(), "tar failed for {tgz}");
-        base.join(subdir)
-    }
 
     /// Consume a buffer-returning call's out-params: assert rc 0, copy the bytes out, and
     /// free the libkart-owned buffer. Returns None for the absent (NULL) case.

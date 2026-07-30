@@ -375,30 +375,7 @@ fn parse_schema(bytes: &[u8]) -> Result<(Option<String>, Option<String>, Option<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::disable_owner_validation;
-    use std::process::Command;
-
-    /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
-    fn extract_fixture(tgz: &str, subdir: &str, label: &str) -> std::path::PathBuf {
-        disable_owner_validation();
-        let base = std::env::temp_dir().join(format!(
-            "libkart-test-{}-{}-{}",
-            label,
-            subdir,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let status = Command::new("tar")
-            .arg("xzf")
-            .arg(tgz)
-            .arg("-C")
-            .arg(&base)
-            .status()
-            .expect("run tar");
-        assert!(status.success(), "tar failed for {tgz}");
-        base.join(subdir)
-    }
+    use crate::test_support::extract_fixture;
 
     const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
     const AU_CENSUS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/au-census.tgz");
