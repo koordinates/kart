@@ -25,6 +25,7 @@ pub mod gpkg;
 pub mod paths;
 pub mod query;
 pub mod repo;
+pub mod rewrite;
 pub mod tile;
 
 pub use error::{Error, Result};
