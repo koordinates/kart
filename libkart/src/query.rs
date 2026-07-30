@@ -49,6 +49,24 @@ pub fn find_feature_blobs(
     dataset_path: &str,
     query: &FeatureQuery,
 ) -> Result<Vec<FeatureHit>> {
+    // Schema-independent query validation: a malformed query always errors, even
+    // with no commits or no features to look at.
+    if let FeatureQuery::Filter(filter) = query {
+        if filter.is_empty() {
+            return Err(Error::Format("empty feature filter".to_string()));
+        }
+        for (name, expected) in filter {
+            if !matches!(
+                expected,
+                JsonValue::Null | JsonValue::Bool(_) | JsonValue::Number(_) | JsonValue::String(_)
+            ) {
+                return Err(Error::Format(format!(
+                    "filter value for column '{name}' must be a JSON scalar, got {expected}"
+                )));
+            }
+        }
+    }
+
     let mut hits: Vec<FeatureHit> = Vec::new();
     // Pk memo: (feature tree oid, feature-tree-relative path) -> blob oid (if present).
     let mut pk_memo: HashMap<(Oid, String), Option<Oid>> = HashMap::new();
@@ -87,7 +105,9 @@ pub fn find_feature_blobs(
                 let ds_rel = ds.feature_path(pk_values)?;
                 let in_feature = ds_rel
                     .strip_prefix(&format!("{}/feature/", ds.inner_name))
-                    .expect("feature_path returns <inner>/feature/...")
+                    .ok_or_else(|| {
+                        Error::Format(format!("unexpected feature path form: {ds_rel}"))
+                    })?
                     .to_string();
                 let key = (feature_tree.id(), in_feature.clone());
                 let blob_oid = match pk_memo.get(&key) {
@@ -156,11 +176,8 @@ fn filter_matches_at_commit(
     filter: &serde_json::Map<String, JsonValue>,
     memo: &mut FilterMemo,
 ) -> Result<Vec<(String, Oid)>> {
-    if filter.is_empty() {
-        return Err(Error::Format("empty feature filter".to_string()));
-    }
-
     // Resolve column names to ids for this commit's schema; validate column types.
+    // (Schema-independent validation already happened in `find_feature_blobs`.)
     let mut cols: Vec<(String, &JsonValue)> = Vec::with_capacity(filter.len());
     for (name, expected) in filter {
         let col = match ds.column_by_name(name)? {
@@ -177,14 +194,6 @@ fn filter_matches_at_commit(
         if col.is_pk {
             return Err(Error::Format(format!(
                 "cannot filter on primary key column '{name}'; use a pk query instead"
-            )));
-        }
-        if !matches!(
-            expected,
-            JsonValue::Null | JsonValue::Bool(_) | JsonValue::Number(_) | JsonValue::String(_)
-        ) {
-            return Err(Error::Format(format!(
-                "filter value for column '{name}' must be a JSON scalar, got {expected}"
             )));
         }
         cols.push((col.id, expected));
@@ -544,6 +553,16 @@ mod tests {
         .is_err());
         // Empty filter.
         assert!(find_feature_blobs(&repo, &commits, ds_path, &filter(&[])).is_err());
+
+        // Schema-independent validation applies even with an empty commits list.
+        assert!(find_feature_blobs(&repo, &[], ds_path, &filter(&[])).is_err());
+        assert!(find_feature_blobs(
+            &repo,
+            &[],
+            ds_path,
+            &filter(&[("name_ascii", json!({"nested": 1}))])
+        )
+        .is_err());
 
         let _ = std::fs::remove_dir_all(root.parent().unwrap());
     }
