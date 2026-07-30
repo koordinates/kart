@@ -206,6 +206,7 @@ mod tests {
         Dataset {
             dataset_type: "point-cloud".to_string(),
             path: "auckland".to_string(),
+            inner_name: ".point-cloud-dataset.v1".to_string(),
             meta,
             geom_column_name: None,
             geom_column_id: None,

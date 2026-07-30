@@ -31,6 +31,8 @@ pub struct Dataset {
     pub(crate) dataset_type: String,
     /// Dataset path within the repo, e.g. "mylayer".
     pub(crate) path: String,
+    /// Name of the inner dataset dir, e.g. ".table-dataset" or ".sno-dataset".
+    pub(crate) inner_name: String,
     /// Raw contents of the dataset's `meta/` subtree, keyed by path relative to `meta/`
     /// (e.g. "schema.json", "crs/EPSG:4326.wkt", "legend/<hash>").
     pub(crate) meta: HashMap<String, Vec<u8>>,
@@ -99,6 +101,7 @@ impl Dataset {
         Ok(Dataset {
             dataset_type,
             path: path.to_string(),
+            inner_name,
             meta,
             geom_column_name,
             geom_column_id,
@@ -217,6 +220,26 @@ impl Dataset {
         let pk_ids = legend_id_list(it.next().unwrap(), "pk")?;
         let non_pk_ids = legend_id_list(it.next().unwrap(), "non-pk")?;
         Ok((pk_ids, non_pk_ids))
+    }
+
+    /// Path of the feature with the given pk values, relative to the dataset dir,
+    /// e.g. ".table-dataset/feature/A/A/A/B/kUA=". The encoding is configured by
+    /// the `path-structure.json` meta item (absent = legacy encoding).
+    pub fn feature_path(&self, pk_values: &[rmpv::Value]) -> Result<String> {
+        if self.dataset_type != "table" {
+            return Err(Error::Format(format!(
+                "feature paths only apply to table datasets, not {}",
+                self.dataset_type
+            )));
+        }
+        let encoder = crate::paths::PathEncoder::from_path_structure_json(
+            self.meta.get("path-structure.json").map(Vec::as_slice),
+        )?;
+        Ok(format!(
+            "{}/feature/{}",
+            self.inner_name,
+            encoder.encode_pks_to_path(pk_values)?
+        ))
     }
 }
 

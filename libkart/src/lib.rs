@@ -22,6 +22,7 @@ mod handle;
 pub mod dataset;
 pub mod feature;
 pub mod gpkg;
+pub mod paths;
 pub mod repo;
 pub mod tile;
 
