@@ -22,7 +22,9 @@ jobs:
     uses: ./.github/workflows/build-linux.yml
     with:
       py_ver: "3.12"
-      cmake_version: "~3.25.0"
+      # vcpkg's port scripts need cmake >= 4.x; on arm64 lukka/run-vcpkg forces
+      # VCPKG_FORCE_SYSTEM_BINARIES=1, so the PATH cmake must be new enough itself.
+      cmake_version: "~4.4.0"
       force_color: "YES"
       kart_s3_test_data_point_cloud: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
       kart_s3_test_data_raster: "s3://kart-bring-your-own-data-poc/erorisk_si/*.tif"
