@@ -55,9 +55,6 @@
             "displayName": "CI: Windows",
             "inherits": "ci-base",
             "generator": "Ninja",
-            "environment": {
-                "X_VCPKG_RECURSIVE_DATA": null
-            },
             "cacheVariables": {
                 "WIN_SIGN_BUNDLE": "$env{WIN_SIGN_BUNDLE}",
                 "WIN_SIGN_INSTALLER": "$env{WIN_SIGN_INSTALLER}"
