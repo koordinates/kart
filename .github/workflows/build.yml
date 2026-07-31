@@ -5,7 +5,7 @@ on: [push, pull_request]
 
 env:
   PY_VER: "3.12"
-  CMAKE_VERSION: "~3.25.0"
+  CMAKE_VERSION: "~4.4.0"
   FORCE_COLOR: "YES"
   KART_S3_TEST_DATA_POINT_CLOUD: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
   KART_S3_TEST_DATA_RASTER: "s3://kart-bring-your-own-data-poc/erorisk_si/*.tif"
@@ -37,7 +37,8 @@ jobs:
     uses: ./.github/workflows/build-macos.yml
     with:
       py_ver: "3.12"
-      cmake_version: "~3.25.0"
+      # vcpkg's port scripts and toolchain need cmake >= 4.x
+      cmake_version: "~4.4.0"
       force_color: "YES"
       kart_s3_test_data_point_cloud: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
       kart_s3_test_data_raster: "s3://kart-bring-your-own-data-poc/erorisk_si/*.tif"
@@ -57,7 +58,8 @@ jobs:
     uses: ./.github/workflows/build-windows.yml
     with:
       py_ver: "3.12"
-      cmake_version: "~3.25.0"
+      # vcpkg's port scripts and toolchain need cmake >= 4.x
+      cmake_version: "~4.4.0"
       force_color: "YES"
       kart_s3_test_data_point_cloud: "s3://kart-bring-your-own-data-poc/auckland-small-laz1.2/*.laz"
       kart_s3_test_data_raster: "s3://kart-bring-your-own-data-poc/erorisk_si/*.tif"
