@@ -13,7 +13,8 @@
             "cacheVariables": {
                 "USE_VCPKG": "ON",
                 "CMAKE_BUILD_TYPE": "Release",
-                "KART_VERSION": "$env{KART_VERSION}"
+                "KART_VERSION": "$env{KART_VERSION}",
+                "PYTEST_ARGS": "--no-cov"
             },
             "environment": {
                 "CI": "true"

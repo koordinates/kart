@@ -85,6 +85,12 @@ jobs:
 
       # Setup
 
+      # Defender real-time scanning taxes every compiler/test subprocess spawn
+      # and temp file; the runner is ephemeral so scanning the build is pointless.
+      - name: "setup: defender exclusions"
+        shell: pwsh
+        run: Add-MpPreference -ExclusionPath "${{ github.workspace }}", "$env:TEMP", "$env:LOCALAPPDATA\Temp"
+
       - name: "msvc setup"
         uses: ilammy/msvc-dev-cmd@v1
 
