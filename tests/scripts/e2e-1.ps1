@@ -48,6 +48,7 @@ $SPATIALITE=("${KART_PREFIX}\_internal\mod_spatialite" -replace '\\', '/').ToLow
 
 New-Item -ItemType Directory -Path "${TMP_PATH}\test"
 Push-Location "${TMP_PATH}\test"
+$E2E_FAILED = $false
 try {
     Exec { kart -vvvv install tab-completion --shell auto }
     Exec { kart init --initial-branch=main . }
@@ -81,10 +82,14 @@ def main(ctx, args):
 }
 catch {
     Write-Output ">>> E2E Error: $($PSItem.ToString())"
+    $E2E_FAILED = $true
 }
 finally {
     Pop-Location
     Remove-Item -Force -Recurse "$TMP_PATH"
 }
 
+if ($E2E_FAILED) {
+    exit 1
+}
 Write-Output ">>> E2E Success"
