@@ -70,7 +70,9 @@ def main(ctx, args):
         )
 "@
 
-    $script_py | Out-File "script.py";
+    # Out-File defaults to UTF-16 in Windows PowerShell 5.1, which Python can't
+    # parse as source ("null bytes"). Write plain ASCII instead.
+    Set-Content -Path "script.py" -Value $script_py -Encoding ASCII
     Exec { kart ext-run script.py }
     Exec { kart status }
     Exec { kart diff --crs=EPSG:3857 }
