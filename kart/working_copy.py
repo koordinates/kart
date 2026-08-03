@@ -18,7 +18,7 @@ from kart.exceptions import (
     BAD_WORKING_COPY_STATE,
 )
 from kart.key_filters import RepoKeyFilter
-from kart.output_util import get_input_mode, InputMode
+from kart.output_util import is_interactive
 from kart.sqlalchemy.upsert import Upsert as upsert
 
 
@@ -844,7 +844,7 @@ def handle_working_copy_tree_mismatch(wc_type_name, actual_tree_id, expected_tre
         "The simplest fix is generally to recreate the working copy (losing any uncommitted changes in the process.)",
     ]
 
-    if get_input_mode() != InputMode.INTERACTIVE:
+    if not is_interactive():
         message.append("\nTo do so, try the following command:")
         message.append("\tkart create-workingcopy --delete-existing --discard-changes")
         raise BadStateError("\n".join(message), exit_code=BAD_WORKING_COPY_STATE)

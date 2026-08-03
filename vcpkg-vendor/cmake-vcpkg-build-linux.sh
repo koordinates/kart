@@ -166,11 +166,6 @@ if [ ! -f "$(aclocal --print)/pkg.m4" ]; then
     export ACLOCAL_PATH
 fi
 
-if [ "$ARCH" == "arm64" ]; then
-    # not sure why this is needed, but vcpkg is quite insistent
-    export VCPKG_FORCE_SYSTEM_BINARIES=1
-fi
-
 if ! [ -f vcpkg-vendor/vcpkg/vcpkg ] || ! [[ "$(file vcpkg-vendor/vcpkg/vcpkg)" =~ "ELF" ]]; then
     echo "🌀  bootstrapping vcpkg..."
     vcpkg-vendor/vcpkg/bootstrap-vcpkg.sh

@@ -237,6 +237,7 @@ jobs:
           ./build/pyinstaller/dist/kart/kart.exe --version
 
       - name: "bundle: e2e tests"
+        timeout-minutes: 15
         uses: lukka/run-cmake@v10.8
         with:
           configurePreset: ci-windows
@@ -270,6 +271,7 @@ jobs:
           if-no-files-found: error
 
       - name: "package: tests"
+        timeout-minutes: 20
         shell: pwsh
         run: |
           $ErrorView = 'NormalView'
