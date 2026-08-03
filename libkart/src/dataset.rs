@@ -6,7 +6,7 @@
 //! access and no live `Repo`.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use git2::{ObjectType, Tree};
 use serde_json::Value;
@@ -14,11 +14,25 @@ use serde_json::Value;
 use crate::error::{Error, Result};
 use crate::repo::{dataset_type_for_dirname, Repo};
 
+/// One column parsed from a dataset's schema.json.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColumnInfo {
+    /// Kart column id (stable across renames; used in legends).
+    pub id: String,
+    pub name: String,
+    /// Kart data type, e.g. "integer", "text", "geometry".
+    pub data_type: String,
+    /// True iff the column is part of the primary key.
+    pub is_pk: bool,
+}
+
 pub struct Dataset {
     /// Kart dataset type, e.g. "table" or "point-cloud".
     pub(crate) dataset_type: String,
     /// Dataset path within the repo, e.g. "mylayer".
     pub(crate) path: String,
+    /// Name of the inner dataset dir, e.g. ".table-dataset" or ".sno-dataset".
+    pub(crate) inner_name: String,
     /// Raw contents of the dataset's `meta/` subtree, keyed by path relative to `meta/`
     /// (e.g. "schema.json", "crs/EPSG:4326.wkt", "legend/<hash>").
     pub(crate) meta: HashMap<String, Vec<u8>>,
@@ -30,6 +44,8 @@ pub struct Dataset {
     pub(crate) primary_key: Option<String>,
     /// Cache: legend hash -> index of the geometry value within that legend's non-pk values.
     pub(crate) legend_geom_index: Mutex<HashMap<String, Option<usize>>>,
+    /// Lazily-built feature path encoder (see `feature_path`).
+    pub(crate) path_encoder: OnceLock<crate::paths::PathEncoder>,
 }
 
 impl Dataset {
@@ -87,11 +103,13 @@ impl Dataset {
         Ok(Dataset {
             dataset_type,
             path: path.to_string(),
+            inner_name,
             meta,
             geom_column_name,
             geom_column_id,
             primary_key,
             legend_geom_index: Mutex::new(HashMap::new()),
+            path_encoder: OnceLock::new(),
         })
     }
 
@@ -148,6 +166,106 @@ impl Dataset {
     pub fn meta_item(&self, name: &str) -> Result<Option<Vec<u8>>> {
         Ok(self.meta.get(name).cloned())
     }
+
+    /// All columns from schema.json, paired with their primaryKeyIndex (if any),
+    /// in schema order.
+    fn schema_columns(&self) -> Result<Vec<(ColumnInfo, Option<i64>)>> {
+        let bytes = self
+            .meta
+            .get("schema.json")
+            .ok_or_else(|| Error::NotFound("schema.json not found in dataset meta".to_string()))?;
+        parse_columns(bytes)
+    }
+
+    /// Look up a column by name in schema.json. Returns None if no such column.
+    pub fn column_by_name(&self, name: &str) -> Result<Option<ColumnInfo>> {
+        Ok(self
+            .schema_columns()?
+            .into_iter()
+            .map(|(col, _)| col)
+            .find(|col| col.name == name))
+    }
+
+    /// The primary key columns, in ascending primaryKeyIndex order.
+    pub fn pk_columns(&self) -> Result<Vec<ColumnInfo>> {
+        let mut pks: Vec<(i64, ColumnInfo)> = self
+            .schema_columns()?
+            .into_iter()
+            .filter_map(|(col, idx)| idx.map(|i| (i, col)))
+            .collect();
+        pks.sort_by_key(|(idx, _)| *idx);
+        Ok(pks.into_iter().map(|(_, col)| col).collect())
+    }
+
+    /// Decode the legend blob for `legend_hash` (`meta/legend/<hash>` =
+    /// `msg_pack([pk_ids, non_pk_ids])`), returning (pk column ids, non-pk column ids).
+    pub fn legend(&self, legend_hash: &str) -> Result<(Vec<String>, Vec<String>)> {
+        let key = format!("legend/{legend_hash}");
+        let bytes = self
+            .meta
+            .get(&key)
+            .ok_or_else(|| Error::NotFound(format!("legend not found in meta: {key}")))?;
+
+        let mut cur: &[u8] = bytes;
+        let val = rmpv::decode::read_value(&mut cur)
+            .map_err(|e| Error::Msgpack(format!("legend blob: {e}")))?;
+        let arr = match val {
+            rmpv::Value::Array(arr) => arr,
+            _ => return Err(Error::Format("legend is not a msgpack array".to_string())),
+        };
+        if arr.len() != 2 {
+            return Err(Error::Format(format!(
+                "legend array has {} elements, expected 2",
+                arr.len()
+            )));
+        }
+        let mut it = arr.into_iter();
+        let pk_ids = legend_id_list(it.next().unwrap(), "pk")?;
+        let non_pk_ids = legend_id_list(it.next().unwrap(), "non-pk")?;
+        Ok((pk_ids, non_pk_ids))
+    }
+
+    /// Path of the feature with the given pk values, relative to the dataset dir,
+    /// e.g. ".table-dataset/feature/A/A/A/B/kUA=". The encoding is configured by
+    /// the `path-structure.json` meta item (absent = legacy encoding).
+    pub fn feature_path(&self, pk_values: &[rmpv::Value]) -> Result<String> {
+        if self.dataset_type != "table" {
+            return Err(Error::Format(format!(
+                "feature paths only apply to table datasets, not {}",
+                self.dataset_type
+            )));
+        }
+        let encoder = match self.path_encoder.get() {
+            Some(enc) => enc,
+            None => {
+                let enc = crate::paths::PathEncoder::from_path_structure_json(
+                    self.meta.get("path-structure.json").map(Vec::as_slice),
+                )?;
+                self.path_encoder.get_or_init(|| enc)
+            }
+        };
+        Ok(format!(
+            "{}/feature/{}",
+            self.inner_name,
+            encoder.encode_pks_to_path(pk_values)?
+        ))
+    }
+}
+
+/// Convert one element of a legend array (a msgpack array of strings) to a Vec<String>.
+fn legend_id_list(val: rmpv::Value, label: &str) -> Result<Vec<String>> {
+    let arr = match val {
+        rmpv::Value::Array(arr) => arr,
+        _ => return Err(Error::Format(format!("legend {label} ids is not an array"))),
+    };
+    arr.into_iter()
+        .map(|v| match v {
+            rmpv::Value::String(s) => s
+                .into_str()
+                .ok_or_else(|| Error::Format(format!("legend {label} id is not a string"))),
+            _ => Err(Error::Format(format!("legend {label} id is not a string"))),
+        })
+        .collect()
 }
 
 /// Recursively load all blobs under `tree` into `out`, keyed by path relative to the
@@ -187,32 +305,63 @@ fn load_tree_blobs(
     Ok(())
 }
 
+/// Parse schema.json bytes into columns paired with their primaryKeyIndex (if present
+/// and non-null), in schema order.
+fn parse_columns(bytes: &[u8]) -> Result<Vec<(ColumnInfo, Option<i64>)>> {
+    let cols: Value = serde_json::from_slice(bytes)?;
+    let arr = cols
+        .as_array()
+        .ok_or_else(|| Error::Format("schema.json is not an array".to_string()))?;
+
+    let mut out = Vec::with_capacity(arr.len());
+    for col in arr {
+        let get_str = |field: &str| -> Result<String> {
+            col.get(field)
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| Error::Format(format!("schema.json column missing {field}")))
+        };
+        let pk_index = col.get("primaryKeyIndex").and_then(Value::as_i64);
+        out.push((
+            ColumnInfo {
+                id: get_str("id")?,
+                name: get_str("name")?,
+                data_type: get_str("dataType")?,
+                is_pk: pk_index.is_some(),
+            },
+            pk_index,
+        ));
+    }
+    Ok(out)
+}
+
 /// Parse schema.json bytes, returning (geom_column_name, geom_column_id, primary_key).
+/// Lenient about missing fields: this runs eagerly at open time for every dataset type,
+/// and non-table datasets (e.g. point-cloud) have columns without `id`. The strict
+/// per-column parse (`parse_columns`) is reserved for the table-only helpers.
 fn parse_schema(bytes: &[u8]) -> Result<(Option<String>, Option<String>, Option<String>)> {
     let cols: Value = serde_json::from_slice(bytes)?;
     let arr = cols
         .as_array()
         .ok_or_else(|| Error::Format("schema.json is not an array".to_string()))?;
 
-    let mut geom_name = None;
-    let mut geom_id = None;
-    for col in arr {
-        if col.get("dataType").and_then(Value::as_str) == Some("geometry") {
-            geom_id = col.get("id").and_then(Value::as_str).map(str::to_string);
-            geom_name = col.get("name").and_then(Value::as_str).map(str::to_string);
-            break;
-        }
-    }
+    let geom = arr
+        .iter()
+        .find(|col| col.get("dataType").and_then(Value::as_str) == Some("geometry"));
+    let get_str = |col: &Value, field: &str| -> Option<String> {
+        col.get(field).and_then(Value::as_str).map(str::to_string)
+    };
+    let geom_name = geom.and_then(|col| get_str(col, "name"));
+    let geom_id = geom.and_then(|col| get_str(col, "id"));
 
     // Primary key column(s): those with a primaryKeyIndex, sorted by it. Single PK only.
-    let mut pks: Vec<(i64, String)> = Vec::new();
-    for col in arr {
-        if let Some(idx) = col.get("primaryKeyIndex").and_then(Value::as_i64) {
-            if let Some(name) = col.get("name").and_then(Value::as_str) {
-                pks.push((idx, name.to_string()));
-            }
-        }
-    }
+    let mut pks: Vec<(i64, String)> = arr
+        .iter()
+        .filter_map(|col| {
+            let idx = col.get("primaryKeyIndex").and_then(Value::as_i64)?;
+            Some((idx, get_str(col, "name")?))
+        })
+        .collect();
     pks.sort_by_key(|(idx, _)| *idx);
     let primary_key = if pks.len() == 1 {
         Some(pks.into_iter().next().unwrap().1)
@@ -226,33 +375,14 @@ fn parse_schema(bytes: &[u8]) -> Result<(Option<String>, Option<String>, Option<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::disable_owner_validation;
-    use std::process::Command;
-
-    /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
-    fn extract_fixture(tgz: &str, subdir: &str) -> std::path::PathBuf {
-        disable_owner_validation();
-        let base =
-            std::env::temp_dir().join(format!("libkart-test-{}-{}", subdir, std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let status = Command::new("tar")
-            .arg("xzf")
-            .arg(tgz)
-            .arg("-C")
-            .arg(&base)
-            .status()
-            .expect("run tar");
-        assert!(status.success(), "tar failed for {tgz}");
-        base.join(subdir)
-    }
+    use crate::test_support::extract_fixture;
 
     const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
     const AU_CENSUS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/au-census.tgz");
 
     #[test]
     fn test_points_repo_and_dataset() {
-        let root = extract_fixture(POINTS_TGZ, "points");
+        let root = extract_fixture(POINTS_TGZ, "points", "ds");
         let repo = Repo::open(root.to_str().unwrap()).unwrap();
 
         // Version.
@@ -301,9 +431,82 @@ mod tests {
         let _ = std::fs::remove_dir_all(root.parent().unwrap());
     }
 
+    /// Return the raw bytes of the first blob found (depth-first) under `tree`.
+    fn first_blob(repo: &Repo, tree: &Tree<'_>) -> Option<Vec<u8>> {
+        for entry in tree.iter() {
+            match entry.kind() {
+                Some(ObjectType::Blob) => {
+                    let obj = entry.to_object(&repo.git).unwrap();
+                    if let Some(blob) = obj.as_blob() {
+                        return Some(blob.content().to_vec());
+                    }
+                }
+                Some(ObjectType::Tree) => {
+                    let child = entry.to_object(&repo.git).unwrap().peel_to_tree().unwrap();
+                    if let Some(found) = first_blob(repo, &child) {
+                        return Some(found);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn test_column_lookup_and_legend() {
+        let root = extract_fixture(POINTS_TGZ, "points", "cols");
+        let repo = Repo::open(root.to_str().unwrap()).unwrap();
+        let ds = Dataset::open(&repo, "HEAD", "nz_pa_points_topo_150k").unwrap();
+
+        // column_by_name
+        let col = ds.column_by_name("name_ascii").unwrap().unwrap();
+        assert_eq!(col.data_type, "text");
+        assert!(!col.is_pk);
+        let fid = ds.column_by_name("fid").unwrap().unwrap();
+        assert!(fid.is_pk);
+        assert!(ds.column_by_name("no_such_col").unwrap().is_none());
+
+        // legend lookup, via the legend hash referenced by a real feature blob
+        let tree = repo.resolve_tree("HEAD").unwrap();
+        let feat_entry = tree
+            .get_path(std::path::Path::new(
+                "nz_pa_points_topo_150k/.table-dataset/feature",
+            ))
+            .unwrap();
+        let feat_tree = feat_entry
+            .to_object(&repo.git)
+            .unwrap()
+            .peel_to_tree()
+            .unwrap();
+        let blob = first_blob(&repo, &feat_tree).expect("no feature blob found");
+        let (legend_hash, _) = crate::feature::decode_feature(&blob).unwrap();
+
+        let (pk_ids, non_pk_ids) = ds.legend(&legend_hash).unwrap();
+        assert_eq!(pk_ids.len(), 1);
+        let fid_col = ds.column_by_name("fid").unwrap().unwrap();
+        assert_eq!(pk_ids[0], fid_col.id);
+        assert!(non_pk_ids.contains(ds.geom_column_id.as_ref().unwrap()));
+        assert!(!non_pk_ids.contains(&pk_ids[0]));
+
+        // unknown legend hash errors
+        assert!(ds
+            .legend("0000000000000000000000000000000000000000")
+            .is_err());
+
+        // pk_columns
+        let pks = ds.pk_columns().unwrap();
+        assert_eq!(pks.len(), 1);
+        assert_eq!(pks[0].name, "fid");
+        assert_eq!(pks[0].data_type, "integer");
+        assert!(pks[0].is_pk);
+
+        let _ = std::fs::remove_dir_all(root.parent().unwrap());
+    }
+
     #[test]
     fn test_au_census_multi_dataset() {
-        let root = extract_fixture(AU_CENSUS_TGZ, "au-census");
+        let root = extract_fixture(AU_CENSUS_TGZ, "au-census", "ds");
         let repo = Repo::open(root.to_str().unwrap()).unwrap();
         assert_eq!(repo.table_dataset_version().unwrap(), 3);
 

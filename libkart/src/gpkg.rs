@@ -216,7 +216,7 @@ fn swap_geometry(wkb: &[u8], pos: &mut usize, out: &mut Vec<u8>) -> Result<()> {
                 swap_doubles(wkb, pos, out, dims * n as usize, src_le)?;
             }
         }
-        4 | 5 | 6 | 7 => {
+        4..=7 => {
             // Multi* / GeometryCollection: u32 sub count, each is a full sub-geometry
             let subs = swap_count(wkb, pos, out, src_le)?;
             for _ in 0..subs {

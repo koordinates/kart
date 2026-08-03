@@ -107,10 +107,10 @@ impl Repo {
         // 2) Fall back to git config.
         let cfg = self.git.config()?;
         if let Ok(v) = cfg.get_i32("kart.repostructure.version") {
-            return Ok(v as i32);
+            return Ok(v);
         }
         if let Ok(v) = cfg.get_i32("sno.repository.version") {
-            return Ok(v as i32);
+            return Ok(v);
         }
         // 3) Default.
         Ok(3)
@@ -176,34 +176,10 @@ impl Repo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::disable_owner_validation;
-    use std::process::Command;
+    use crate::test_support::extract_fixture;
 
     const POINTS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/points.tgz");
     const AU_CENSUS_TGZ: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/data/au-census.tgz");
-
-    /// Extract a fixture tgz into a fresh temp dir, returning the repo root path.
-    /// `tag` is a per-test label so parallel tests on the same fixture don't collide.
-    fn extract_fixture(tgz: &str, subdir: &str, tag: &str) -> std::path::PathBuf {
-        disable_owner_validation();
-        let base = std::env::temp_dir().join(format!(
-            "libkart-repotest-{}-{}-{}",
-            tag,
-            subdir,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let status = Command::new("tar")
-            .arg("xzf")
-            .arg(tgz)
-            .arg("-C")
-            .arg(&base)
-            .status()
-            .expect("run tar");
-        assert!(status.success(), "tar failed for {tgz}");
-        base.join(subdir)
-    }
 
     #[test]
     fn test_is_dataset_dirname() {
@@ -221,7 +197,7 @@ mod tests {
         let root = extract_fixture(POINTS_TGZ, "points", "open");
         let repo = Repo::open(root.to_str().unwrap()).unwrap();
         // HEAD resolves to a non-empty tree.
-        assert!(repo.resolve_tree("HEAD").unwrap().len() > 0);
+        assert!(!repo.resolve_tree("HEAD").unwrap().is_empty());
         let _ = std::fs::remove_dir_all(root.parent().unwrap());
     }
 

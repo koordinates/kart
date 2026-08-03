@@ -22,7 +22,10 @@ mod handle;
 pub mod dataset;
 pub mod feature;
 pub mod gpkg;
+pub mod paths;
+pub mod query;
 pub mod repo;
+pub mod rewrite;
 pub mod tile;
 
 pub use error::{Error, Result};
@@ -43,5 +46,29 @@ pub(crate) mod test_support {
         unsafe {
             let _ = git2::opts::set_verify_owner_validation(false);
         }
+    }
+
+    /// Extract a `.tgz` fixture repo into a fresh per-test temp dir and return the
+    /// path to `subdir` within it. `label` must be unique per (fixture, test) so
+    /// parallel tests don't clobber each other's directories.
+    pub(crate) fn extract_fixture(tgz: &str, subdir: &str, label: &str) -> std::path::PathBuf {
+        disable_owner_validation();
+        let base = std::env::temp_dir().join(format!(
+            "libkart-test-{}-{}-{}",
+            label,
+            subdir,
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let status = std::process::Command::new("tar")
+            .arg("xzf")
+            .arg(tgz)
+            .arg("-C")
+            .arg(&base)
+            .status()
+            .expect("run tar");
+        assert!(status.success(), "tar failed for {tgz}");
+        base.join(subdir)
     }
 }

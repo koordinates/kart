@@ -19,5 +19,9 @@ git2 = { version = "0.19", default-features = false }
 rmpv = "1"
 # JSON output for schema / tile summaries
 serde_json = "1"
+# sha256 for msgpack/hash feature path encoding
+sha2 = "0.10"
 # malloc/free for buffers handed across the C boundary
 libc = "0.2"
+# decoding blob-substitution content passed as JSON across the C boundary
+base64 = "0.22"
