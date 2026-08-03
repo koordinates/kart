@@ -1,9 +1,11 @@
 import datetime
+import io
 import itertools
 import json
 import os
 import re
 import shutil
+import stat
 import sys
 import textwrap
 import types
@@ -271,7 +273,7 @@ def resolve_output_path(output_path, allow_pager=True):
         # Make this contextmanager re-entrant - if it's already a file-like object, just yield it
         yield output_path
     elif (not output_path) or output_path == "-":
-        if allow_pager and get_input_mode() == InputMode.INTERACTIVE:
+        if allow_pager and is_interactive():
             pager_cmd = (
                 os.environ.get("KART_PAGER")
                 or os.environ.get("PAGER")
@@ -305,6 +307,17 @@ class InputMode:
     NO_INPUT = 2
 
 
+def is_interactive():
+    """
+    True if we can prompt the user - ie both stdin and stdout are a terminal.
+
+    Prefer this over get_input_mode() when all you need to know is whether the user
+    can be prompted: get_input_mode() may block reading stdin to tell NO_INPUT from
+    DEFAULT, and that distinction doesn't affect whether we can prompt.
+    """
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
 def get_input_mode():
     if sys.stdin.isatty() and sys.stdout.isatty():
         return InputMode.INTERACTIVE
@@ -316,7 +329,20 @@ def get_input_mode():
         return InputMode.DEFAULT
 
 
+def _is_pipe(stream):
+    try:
+        return stat.S_ISFIFO(os.fstat(stream.fileno()).st_mode)
+    except (AttributeError, OSError, io.UnsupportedOperation, ValueError):
+        return False
+
+
 def is_empty_stream(stream):
+    if _is_pipe(stream):
+        # Reading a pipe blocks until the writer sends something or closes it, which
+        # may be never - GitHub Actions hands us a stdin pipe that does neither. On
+        # Windows such a pipe also reports seekable() as True and tell() as 0, so the
+        # checks below aren't enough on their own.
+        return False
     if stream.seekable():
         try:
             pos = stream.tell()

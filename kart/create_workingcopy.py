@@ -2,7 +2,7 @@ import click
 
 from kart.cli_util import KartCommand
 from kart.exceptions import InvalidOperation, DbConnectionError
-from kart.output_util import InputMode, get_input_mode
+from kart.output_util import is_interactive
 from kart.working_copy import PartType
 
 
@@ -49,7 +49,7 @@ def create_tabular_workingcopy(repo, delete_existing, discard_changes, new_wc_lo
         )
 
         if delete_existing is None:
-            if get_input_mode() is not InputMode.INTERACTIVE:
+            if not is_interactive():
                 if old_wc_loc == new_wc_loc:
                     help_message = (
                         "Specify --delete-existing to delete and recreate it."
@@ -128,7 +128,7 @@ def create_workdir(repo, delete_existing, discard_changes):
 
     if status != FileSystemWorkingCopyStatus.UNCREATED:
         if delete_existing is None:
-            if get_input_mode() is not InputMode.INTERACTIVE:
+            if not is_interactive():
                 raise click.UsageError(
                     f"A file-system working copy already exists. Specify --delete-existing to delete and recreate it."
                 )
