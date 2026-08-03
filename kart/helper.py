@@ -138,11 +138,15 @@ def helper(ctx, socket_filename, timeout, args):
             client, info = sock.accept()
             _helper_log("pre-fork messaged received")
             if os.fork() != 0:
-                # parent
+                # parent - the child owns the connection from here on
+                client.close()
                 continue
             else:
                 # child
                 _helper_log("post-fork")
+                # don't hold the listening socket open in the child, or in any subprocess
+                # it goes on to spawn
+                sock.close()
 
                 payload, fds = recv_json_and_fds(client, maxfds=4)
                 if not payload or len(fds) != 4:
