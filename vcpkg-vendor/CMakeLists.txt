@@ -214,7 +214,7 @@ find_package(PostgreSQL REQUIRED)
 if(WIN32)
   set(PG_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/libpq/pg_config.exe")
 else()
-  set(PG_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/libpq/bin/pg_config")
+  set(PG_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/libpq/pg_config")
 endif()
 
 file(

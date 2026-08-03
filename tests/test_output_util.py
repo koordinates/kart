@@ -1,7 +1,11 @@
 import os
 import sys
 
-from kart.output_util import InputMode, format_wkt_for_output, resolve_output_path
+from kart.output_util import (
+    format_wkt_for_output,
+    is_empty_stream,
+    resolve_output_path,
+)
 
 NZGD_2000 = """
 PROJCS["NZGD2000 / New Zealand Transverse Mercator 2000",
@@ -72,7 +76,7 @@ def _mock_pager_file(mocker):
 
 def test_resolve_output_path_pages_when_interactive(mocker):
     mocker.patch.dict(os.environ, {"KART_PAGER": "cat"})
-    mocker.patch("kart.output_util.get_input_mode", return_value=InputMode.INTERACTIVE)
+    mocker.patch("kart.output_util.is_interactive", return_value=True)
     get_pager_file, sentinel = _mock_pager_file(mocker)
 
     with resolve_output_path("-") as fp:
@@ -81,7 +85,7 @@ def test_resolve_output_path_pages_when_interactive(mocker):
 
 
 def test_resolve_output_path_no_pager_when_disabled(mocker):
-    mocker.patch("kart.output_util.get_input_mode", return_value=InputMode.INTERACTIVE)
+    mocker.patch("kart.output_util.is_interactive", return_value=True)
     get_pager_file, _ = _mock_pager_file(mocker)
 
     with resolve_output_path("-", allow_pager=False) as fp:
@@ -90,9 +94,26 @@ def test_resolve_output_path_no_pager_when_disabled(mocker):
 
 
 def test_resolve_output_path_no_pager_when_not_interactive(mocker):
-    mocker.patch("kart.output_util.get_input_mode", return_value=InputMode.NO_INPUT)
+    mocker.patch("kart.output_util.is_interactive", return_value=False)
     get_pager_file, _ = _mock_pager_file(mocker)
 
     with resolve_output_path("-") as fp:
         assert fp is sys.stdout
     get_pager_file.assert_not_called()
+
+
+def test_is_empty_stream_does_not_block_on_pipe():
+    """
+    A pipe that is never written to and never closed must not be read from: on Windows
+    such a pipe reports seekable() as True and tell() as 0, so reading it would block
+    forever (github.com/koordinates/kart - Windows CI e2e hang).
+    """
+    read_fd, write_fd = os.pipe()
+    try:
+        with os.fdopen(read_fd, "r") as stream:
+            read_fd = None
+            assert is_empty_stream(stream) is False
+    finally:
+        if read_fd is not None:
+            os.close(read_fd)
+        os.close(write_fd)
