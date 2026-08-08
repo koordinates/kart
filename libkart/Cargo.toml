@@ -14,7 +14,7 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 # git access (reads objects/trees/blobs/refs). libgit2 is vendored & built from source.
-git2 = { version = "0.19", default-features = false }
+git2 = { version = "0.20", default-features = false }
 # msgpack decoding for feature blobs / legends (supports ext types, which Kart uses for geometry)
 rmpv = "1"
 # JSON output for schema / tile summaries
