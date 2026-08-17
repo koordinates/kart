@@ -14,23 +14,28 @@ class DiffAnnotations:
     def __init__(self, repo):
         self.repo = repo
 
-    def _object_id(self, base, target):
-        # this is actually symmetric, so we can marginally increase hit rate by sorting first
+    def _object_id(self, base, target, ordered=False):
         base = base.peel(pygit2.Tree)
         target = target.peel(pygit2.Tree)
-        tree_ids = sorted(r.id for r in (base, target))
+        tree_ids = [base.id, target.id]
+        if not ordered:
+            # most annotations are symmetric, so we can marginally increase hit rate by sorting first
+            tree_ids = sorted(tree_ids)
         return f"{tree_ids[0]}...{tree_ids[1]}"
 
-    def store(self, *, base, target, annotation_type, data):
+    def store(self, *, base, target, annotation_type, data, ordered=False):
         """
         Stores a diff annotation to the repo's sqlite database,
         and returns the annotation itself.
 
         base: base Tree or Commit object for this diff (revA in a 'revA...revB' diff)
         target: target Tree or Commit object for this diff (revB in a 'revA...revB' diff)
+        ordered: set for annotation types whose data isn't the same in both
+            directions (eg counts of inserts vs deletes), so that base and target
+            aren't used interchangeably.
         """
         assert isinstance(data, dict)
-        object_id = self._object_id(base, target)
+        object_id = self._object_id(base, target, ordered=ordered)
         data = json.dumps(data)
         with annotations_session(self.repo) as session:
             if session.is_readonly:
@@ -61,16 +66,17 @@ class DiffAnnotations:
                         raise
         return data
 
-    def get(self, *, base, target, annotation_type):
+    def get(self, *, base, target, annotation_type, ordered=False):
         """
         Returns a diff annotation from the sqlite database.
         Returns None if it isn't found.
 
         base: base Tree or Commit object for this diff (revA in a 'revA...revB' diff)
         target: target Tree or Commit object for this diff (revB in a 'revA...revB' diff)
+        ordered: see store()
         """
         with annotations_session(self.repo) as session:
-            object_id = self._object_id(base, target)
+            object_id = self._object_id(base, target, ordered=ordered)
             try:
                 annotations = list(
                     session.query(KartAnnotation).filter(
