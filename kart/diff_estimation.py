@@ -45,6 +45,62 @@ def get_exact_diff_blob_count(repo, tree1, tree2):
     return count
 
 
+def get_exact_diff_blob_type_counts(repo, tree1, tree2):
+    """
+    Returns exact counts of the blobs added, modified and deleted between the two
+    pygit2.Tree instances, as a dict: {"inserts": int, "updates": int, "deletes": int}
+    Types with a count of zero are omitted, as they are by DeltaDiff.type_counts()
+    """
+    if tree1 == tree2:
+        return {}
+
+    git_rev_spec = f"{tree1.id}..{tree2.id}"
+    p = subprocess.Popen(
+        [
+            "git",
+            "-C",
+            repo.path,
+            "diff",
+            "--name-status",
+            "--no-renames",
+            # -z makes git use \0 as a separator, both between entries and between
+            # each entry's status and path. Without it, unusual paths are quoted
+            # and escaped, which is harder to parse.
+            "-z",
+            git_rev_spec,
+        ],
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    )
+    counts = {"inserts": 0, "updates": 0, "deletes": 0}
+    # Each entry is "<status>\0<path>\0" - we only care about the statuses.
+    # --no-renames means R (rename) can't occur, and C (copy) requires -C.
+    pieces = iter(p.stdout.read().split("\0"))
+    for status in pieces:
+        if not status:
+            # trailing separator at the end of the output
+            continue
+        try:
+            next(pieces)  # the path this status refers to
+        except StopIteration:
+            raise SubprocessError(f"Truncated git diff output at status {status!r}")
+        if status == "A":
+            counts["inserts"] += 1
+        elif status == "D":
+            counts["deletes"] += 1
+        elif status in ("M", "T"):
+            # T is a change of object type, which shouldn't happen inside a dataset,
+            # but if it does, it's a change to a blob that exists in both trees.
+            counts["updates"] += 1
+        else:
+            raise SubprocessError(f"Unexpected git diff status {status!r}")
+
+    retcode = p.wait()
+    if retcode != 0:
+        raise SubprocessError("Error calling git diff", exit_code=retcode)
+    return {k: v for k, v in counts.items() if v}
+
+
 def get_approximate_diff_blob_count(
     repo, accuracy, tree1, tree2, dataset_path, path_encoder
 ):
@@ -74,6 +130,99 @@ def get_data_tree(repo, ds):
         return ds.feature_tree if ds.DATASET_TYPE == "table" else ds.tile_tree
     else:
         return repo.empty_tree
+
+
+TYPE_COUNTS_ANNOTATION_TYPE = "feature-change-type-counts-exact"
+
+
+def _invert_type_counts(counts):
+    """
+    Given type counts for a diff, returns the type counts for the reverse diff:
+    what was inserted was deleted, and vice versa.
+    """
+    result = {}
+    if "deletes" in counts:
+        result["inserts"] = counts["deletes"]
+    if "updates" in counts:
+        result["updates"] = counts["updates"]
+    if "inserts" in counts:
+        result["deletes"] = counts["inserts"]
+    return result
+
+
+def get_diff_feature_type_counts(repo, base, target):
+    """
+    Counts the features (or tiles) inserted, updated and deleted by the given diff,
+    for each dataset in it.
+    Returns a dict: {dataset_path: {"inserts": int, "updates": int, "deletes": int}}
+    Datasets with no feature/tile changes are not present in the dict, and neither
+    are types with a count of zero.
+
+    Counts are always exact - unlike estimate_diff_feature_counts(), there's no
+    approximation available, since sampling subtrees can't tell the types apart.
+    """
+    base = base.peel(pygit2.Tree)
+    target = target.peel(pygit2.Tree)
+    if base == target:
+        return {}
+
+    # Unlike the other annotation types, these counts differ depending on which way
+    # around the diff is, so they're stored against an ordered key.
+    annotation = repo.diff_annotations.get(
+        base=base,
+        target=target,
+        annotation_type=TYPE_COUNTS_ANNOTATION_TYPE,
+        ordered=True,
+    )
+    if annotation is not None:
+        return annotation
+    # If we've already done this diff in the other direction, we can just invert it
+    # rather than doing the work again.
+    reverse = repo.diff_annotations.get(
+        base=target,
+        target=base,
+        annotation_type=TYPE_COUNTS_ANNOTATION_TYPE,
+        ordered=True,
+    )
+    if reverse is not None:
+        return {ds_path: _invert_type_counts(c) for ds_path, c in reverse.items()}
+
+    base_rs = repo.structure(base)
+    target_rs = repo.structure(target)
+    all_ds_paths = {ds.path for ds in base_rs.datasets()} | {
+        ds.path for ds in target_rs.datasets()
+    }
+
+    dataset_type_counts = {}
+    for dataset_path in all_ds_paths:
+        if terminate_estimate_thread.is_set():
+            raise ThreadTerminated()
+
+        base_ds = base_rs.datasets().get(dataset_path)
+        target_ds = target_rs.datasets().get(dataset_path)
+        if not base_ds and not target_ds:
+            continue
+
+        counts = get_exact_diff_blob_type_counts(
+            repo,
+            get_data_tree(repo, base_ds),
+            get_data_tree(repo, target_ds),
+        )
+        if counts:
+            dataset_type_counts[dataset_path] = counts
+
+    repo.diff_annotations.store(
+        base=base,
+        target=target,
+        annotation_type=TYPE_COUNTS_ANNOTATION_TYPE,
+        data=dataset_type_counts,
+        ordered=True,
+    )
+
+    if terminate_estimate_thread.is_set():
+        raise ThreadTerminated()
+
+    return dataset_type_counts
 
 
 def estimate_diff_feature_counts(

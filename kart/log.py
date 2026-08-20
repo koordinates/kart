@@ -158,6 +158,16 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
         "For non-tabular datasets, the feature count is always exact, and refers to the number of tiles."
     ),
 )
+@click.option(
+    "--with-change-counts",
+    is_flag=True,
+    help=(
+        "Adds a 'featureChangeCounts' object to JSON output: for each dataset, the exact "
+        "number of features inserted, updated and deleted by each commit, relative to its "
+        "first parent. For non-tabular datasets, these refer to numbers of tiles. "
+        "Counts are always exact (this may be slow for large tabular diffs)."
+    ),
+)
 # Some standard git options
 @click.option(
     "-n",
@@ -254,6 +264,7 @@ def log(
     output_path,
     dataset_changes,
     with_feature_count,
+    with_change_counts,
     args,
     **kwargs,
 ):
@@ -271,6 +282,11 @@ def log(
 
     paths = convert_user_patterns_to_raw_paths(filters, repo, commits)
     output_type, fmt = output_format
+
+    if with_change_counts and output_type == "text":
+        raise click.UsageError(
+            "--with-change-counts requires --output-format=json or json-lines"
+        )
 
     log_cmd = [
         "git",
@@ -326,6 +342,7 @@ def log(
                     dataset_changes,
                     dataset_change_cache,
                     with_feature_count,
+                    with_change_counts,
                 )
                 for (commit_id, refs) in commit_ids_and_refs_log
             )
@@ -374,6 +391,7 @@ def commit_obj_to_json(
     dataset_changes=False,
     dataset_change_cache={},
     with_feature_count=None,
+    with_change_counts=False,
 ):
     """Given a commit object, returns a dict ready for dumping as JSON."""
     author = commit.author
@@ -411,7 +429,8 @@ def commit_obj_to_json(
         result["datasetChanges"] = get_dataset_changes(
             repo, commit, dataset_change_cache
         )
-    if with_feature_count:
+    if with_feature_count or with_change_counts:
+        # Both of these describe the diff between this commit and its first parent.
         if (not dataset_changes) or result["datasetChanges"]:
             try:
                 parent_commit = commit.parents[0]
@@ -421,14 +440,26 @@ def commit_obj_to_json(
             else:
                 base = parent_commit
 
-            result["featureChanges"] = diff_estimation.estimate_diff_feature_counts(
-                repo,
-                base=base,
-                target=commit,
-                accuracy=with_feature_count,
-            )
+            if with_feature_count:
+                result["featureChanges"] = diff_estimation.estimate_diff_feature_counts(
+                    repo,
+                    base=base,
+                    target=commit,
+                    accuracy=with_feature_count,
+                )
+            if with_change_counts:
+                result["featureChangeCounts"] = (
+                    diff_estimation.get_diff_feature_type_counts(
+                        repo,
+                        base=base,
+                        target=commit,
+                    )
+                )
         else:
-            result["featureChanges"] = {}
+            if with_feature_count:
+                result["featureChanges"] = {}
+            if with_change_counts:
+                result["featureChangeCounts"] = {}
     return result
 
 
