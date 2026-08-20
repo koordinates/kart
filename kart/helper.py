@@ -31,6 +31,29 @@ def getsid():
     return 0
 
 
+def _become_stdio(fds):
+    """
+    Move the caller's [stdin, stdout, stderr] onto this process's fds 0, 1 and 2,
+    closing the originals.
+
+    Rebinding sys.stdin/stdout/stderr isn't enough: subprocesses we spawn - the pager,
+    git, etc - inherit the OS-level descriptors, and in the helper those don't belong to
+    the caller at all. cli_helper/kart.c closes 0, 1 and 2 before exec'ing the helper, so
+    they get reused for whatever the helper opens next (its own sockets, in practice).
+    """
+    # Unix-only; the helper doesn't run on Windows.
+    import fcntl
+
+    # Duplicate above fd 2 first, so a dup2() below can't clobber a source fd.
+    caller_fds = [fcntl.fcntl(fd, fcntl.F_DUPFD, 3) for fd in fds]
+    for fd in fds:
+        if fd > 2:
+            os.close(fd)
+    for target, caller_fd in enumerate(caller_fds):
+        os.dup2(caller_fd, target)
+        os.close(caller_fd)
+
+
 @click.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.option(
@@ -115,11 +138,15 @@ def helper(ctx, socket_filename, timeout, args):
             client, info = sock.accept()
             _helper_log("pre-fork messaged received")
             if os.fork() != 0:
-                # parent
+                # parent - the child owns the connection from here on
+                client.close()
                 continue
             else:
                 # child
                 _helper_log("post-fork")
+                # don't hold the listening socket open in the child, or in any subprocess
+                # it goes on to spawn
+                sock.close()
 
                 payload, fds = recv_json_and_fds(client, maxfds=4)
                 if not payload or len(fds) != 4:
@@ -138,12 +165,12 @@ def helper(ctx, socket_filename, timeout, args):
 
                 # set this processes stdin/stdout/stderr to the calling processes passed in fds
                 # TODO - have these passed as named pipes paths, will work on windows as well
-
-                # 0,1,2 are the wrong places since they were closed before the helper was attached
-
-                sys.stdin = os.fdopen(fds[0], "r")
-                sys.stdout = os.fdopen(fds[1], "w")
-                sys.stderr = os.fdopen(fds[2], "w")
+                _become_stdio(fds[:3])
+                sys.stdin = os.fdopen(0, "r")
+                sys.stdout = os.fdopen(1, "w")
+                sys.stderr = os.fdopen(2, "w")
+                if fds[3] > 2:
+                    os.close(fds[3])
 
                 # re-enable SIGCHLD so subprocess handling works
                 signal.signal(signal.SIGCHLD, signal.SIG_DFL)

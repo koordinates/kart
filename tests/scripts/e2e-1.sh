@@ -86,6 +86,23 @@ kart status
 kart merge edit-1 --no-ff -m merge-1
 kart log
 
+# Paged output (only happens when attached to a terminal). In helper mode the pager is
+# spawned by the helper process, so it has to be given the caller's stdout rather than
+# the helper's own. Run twice: this used to work only every second invocation.
+# Needs python3 for a pty - the slim distro images used by the install-check jobs don't
+# have one, but the runners that test helper mode do.
+if command -v python3 >/dev/null; then
+    for i in 1 2; do
+        PAGED_LOG=$(python3 "$HERE/pty-run.py" kart log --output-format=text:oneline)
+        if ! echo "$PAGED_LOG" | grep -q merge-1; then
+            echo "paged log output missing on attempt ${i}: ${PAGED_LOG}"
+            exit 1
+        fi
+    done
+else
+    echo "skipping paged-output test: no python3"
+fi
+
 # Briefly try a remote to ensure the CA cert bundle is working
 kart git ls-remote https://github.com/koordinates/kart.git HEAD
 
