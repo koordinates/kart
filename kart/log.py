@@ -162,11 +162,11 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     "--with-change-counts",
     is_flag=True,
     help=(
-        "Adds a 'featureChangeCounts' object to JSON output: for each dataset the commit "
-        "changed, the exact number of features inserted, updated and deleted relative to "
-        "its first parent, plus 'features' - how many features the dataset contains at "
-        "that commit. For non-tabular datasets these are numbers of tiles. Counts are "
-        "always exact (this may be slow for large tabular datasets)."
+        "Adds a 'featureChangeCounts' object to JSON output. For each dataset changed by "
+        "the commit, it gives the exact number of features inserted, updated and deleted "
+        "relative to the commit's first parent, plus 'features' - how many features that "
+        "dataset contains at the commit. For non-tabular datasets these are numbers of "
+        "tiles. Counts are always exact (this may be slow for large tabular datasets)."
     ),
 )
 # Some standard git options

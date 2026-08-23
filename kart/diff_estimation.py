@@ -146,14 +146,17 @@ def get_dataset_feature_totals(repo, commit, dataset_paths):
     of the diff), so it's cached against each dataset's data tree - commits that don't
     touch a dataset share its tree, and therefore its cached count.
     """
-    dataset_paths = set(dataset_paths)
     if not dataset_paths:
         return {}
 
-    rs = repo.structure(commit)
+    # Looked up by path rather than by iterating the datasets, which would walk the whole
+    # repo tree for what is usually one dataset.
+    datasets = repo.structure(commit).datasets()
     totals = {}
-    for ds in rs.datasets():
-        if ds.path not in dataset_paths:
+    for ds_path in sorted(dataset_paths):
+        ds = datasets.get(ds_path)
+        if ds is None:
+            # eg the commit deleted the dataset; it has changes but no size.
             continue
         if terminate_estimate_thread.is_set():
             raise ThreadTerminated()
