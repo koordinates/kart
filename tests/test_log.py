@@ -198,13 +198,19 @@ def test_log_with_change_counts_tabular(data_archive, cli_runner):
         assert r.exit_code == 0, r
         result = [c["featureChangeCounts"] for c in json.loads(r.stdout)]
         assert result == [
-            {"nz_pa_points_topo_150k": {"updates": 5}},
+            {"nz_pa_points_topo_150k": {"updates": 5, "features": 2143}},
             # the initial import, so everything is an insert
-            {"nz_pa_points_topo_150k": {"inserts": 2143}},
+            {"nz_pa_points_topo_150k": {"inserts": 2143, "features": 2143}},
         ]
-        # the counts add up to the totals reported by --with-feature-count=exact
-        assert [sum(counts.values()) for counts in result[0].values()] == [5]
-        assert [sum(counts.values()) for counts in result[1].values()] == [2143]
+        # the change counts add up to the totals reported by --with-feature-count=exact
+        assert [
+            sum(v for k, v in counts.items() if k != "features")
+            for counts in result[0].values()
+        ] == [5]
+        assert [
+            sum(v for k, v in counts.items() if k != "features")
+            for counts in result[1].values()
+        ] == [2143]
 
         # not reported unless asked for
         r = cli_runner.invoke(["log", "--output-format=json"])
@@ -217,7 +223,7 @@ def test_log_with_change_counts_pointcloud(data_archive, cli_runner):
         r = cli_runner.invoke(["log", "--output-format=json", "--with-change-counts"])
         assert r.exit_code == 0, r
         result = [c["featureChangeCounts"] for c in json.loads(r.stdout)]
-        assert result == [{"auckland": {"inserts": 16}}]
+        assert result == [{"auckland": {"inserts": 16, "features": 16}}]
 
 
 def test_log_with_change_counts_reverse_diff(data_archive, cli_runner):
