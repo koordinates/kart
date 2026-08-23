@@ -133,6 +133,51 @@ def get_data_tree(repo, ds):
 
 
 TYPE_COUNTS_ANNOTATION_TYPE = "feature-change-type-counts-exact"
+TOTALS_ANNOTATION_TYPE = "feature-totals-exact"
+
+
+def get_dataset_feature_totals(repo, commit, dataset_paths):
+    """
+    Counts the features (or tiles, for non-tabular datasets) that each of the given
+    datasets contains at the given commit.
+    Returns a dict: {dataset_path: int}
+
+    Unlike the change counts, this is O(the size of the dataset) rather than O(the size
+    of the diff), so it's cached against each dataset's data tree - commits that don't
+    touch a dataset share its tree, and therefore its cached count.
+    """
+    dataset_paths = set(dataset_paths)
+    if not dataset_paths:
+        return {}
+
+    rs = repo.structure(commit)
+    totals = {}
+    for ds in rs.datasets():
+        if ds.path not in dataset_paths:
+            continue
+        if terminate_estimate_thread.is_set():
+            raise ThreadTerminated()
+
+        data_tree = get_data_tree(repo, ds)
+        # An annotation is stored against a pair of trees; here both sides are the same
+        # tree, since the count describes one tree rather than a diff between two.
+        annotation = repo.diff_annotations.get(
+            base=data_tree, target=data_tree, annotation_type=TOTALS_ANNOTATION_TYPE
+        )
+        if annotation is None:
+            total = ds.feature_count if ds.DATASET_TYPE == "table" else ds.tile_count
+            repo.diff_annotations.store(
+                base=data_tree,
+                target=data_tree,
+                annotation_type=TOTALS_ANNOTATION_TYPE,
+                data={"total": total},
+            )
+        else:
+            total = annotation["total"]
+
+        totals[ds.path] = total
+
+    return totals
 
 
 def _invert_type_counts(counts):

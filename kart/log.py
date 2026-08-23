@@ -162,10 +162,11 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     "--with-change-counts",
     is_flag=True,
     help=(
-        "Adds a 'featureChangeCounts' object to JSON output: for each dataset, the exact "
-        "number of features inserted, updated and deleted by each commit, relative to its "
-        "first parent. For non-tabular datasets, these refer to numbers of tiles. "
-        "Counts are always exact (this may be slow for large tabular diffs)."
+        "Adds a 'featureChangeCounts' object to JSON output: for each dataset the commit "
+        "changed, the exact number of features inserted, updated and deleted relative to "
+        "its first parent, plus 'features' - how many features the dataset contains at "
+        "that commit. For non-tabular datasets these are numbers of tiles. Counts are "
+        "always exact (this may be slow for large tabular datasets)."
     ),
 )
 # Some standard git options
@@ -448,13 +449,25 @@ def commit_obj_to_json(
                     accuracy=with_feature_count,
                 )
             if with_change_counts:
-                result["featureChangeCounts"] = (
-                    diff_estimation.get_diff_feature_type_counts(
-                        repo,
-                        base=base,
-                        target=commit,
-                    )
+                change_counts = diff_estimation.get_diff_feature_type_counts(
+                    repo,
+                    base=base,
+                    target=commit,
                 )
+                # How big each dataset is, alongside how much of it changed. Only for the
+                # datasets this commit changed: counting one is O(its size), and a commit
+                # that didn't touch a dataset leaves it the same size as its parent did.
+                totals = diff_estimation.get_dataset_feature_totals(
+                    repo, commit, change_counts.keys()
+                )
+                result["featureChangeCounts"] = {
+                    ds_path: (
+                        {**counts, "features": totals[ds_path]}
+                        if ds_path in totals
+                        else counts
+                    )
+                    for ds_path, counts in change_counts.items()
+                }
         else:
             if with_feature_count:
                 result["featureChanges"] = {}
