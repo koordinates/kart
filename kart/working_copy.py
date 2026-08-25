@@ -165,9 +165,11 @@ class WorkingCopy:
         )
 
     def workdir_diff_cache(self):
-        """Returns a WorkdirDiffCache for caching the results of certain workdir operations over the course of a single diff."""
+        """Returns a WorkdirDiffCache for caching the results of certain workdir operations over the course of a single diff.
+        Returns None if there is no file-system working copy (eg a tabular-only repo that has no attachment files, so the
+        workdir was never initialised)."""
         w = self.workdir
-        return w.workdir_diff_cache() if w else None
+        return w.workdir_diff_cache() if w is not None else None
 
     def create_parts_if_missing(
         self, parts_to_create, reset_to=DONT_RESET, non_checkout_datasets=None
