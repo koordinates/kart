@@ -39,6 +39,9 @@ class TableDataset(BaseDataset, TableImportSource):
 
     NUM_FEATURES_PER_PROGRESS_LOG = 10_000
 
+    # Only set when creating a new dataset - see new_dataset_for_writing.
+    path_encoder_overrides = None
+
     def __init__(self, tree, path, repo, dirname=None):
         super().__init__(tree, path, repo, dirname=dirname)
 
@@ -50,12 +53,17 @@ class TableDataset(BaseDataset, TableImportSource):
         self.repo = repo
 
     @classmethod
-    def new_dataset_for_writing(cls, path, schema, repo):
+    def new_dataset_for_writing(cls, path, schema, repo, path_encoder_overrides=None):
         """
         Creates a new dataset instance that can be used to write to a new dataset.
+
+        path_encoder_overrides - an optional dict of path-structure parameters
+        ("encoding", "levels" and / or "branches") that override the defaults that
+        would otherwise be chosen based on the schema. See PathEncoder.with_overrides.
         """
         result = cls(None, path, repo)
         result._schema = schema
+        result.path_encoder_overrides = path_encoder_overrides
         return result
 
     @classmethod

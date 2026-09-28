@@ -18,8 +18,10 @@ from kart.exceptions import InvalidOperation
 from kart.fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
 from kart.import_sources import suggest_specs
 from kart.key_filters import RepoKeyFilter
+from kart.tabular.import_options import path_structure_options
 from kart.tabular.import_source import TableImportSource
 from kart.tabular.pk_generation import PkGeneratingTableImportSource
+from kart.tabular.v3_paths import validate_path_structure_overrides
 from kart.working_copy import PartType
 
 
@@ -175,6 +177,7 @@ def any_at_all(iterable):
     help="The dataset's path once imported",
     hidden=True,
 )
+@path_structure_options
 @click.argument(
     "args",
     nargs=-1,
@@ -197,6 +200,9 @@ def table_import(
     do_checkout,
     num_workers,
     ds_path,
+    path_encoding,
+    path_levels,
+    path_branches,
     args,
 ):
     """
@@ -238,6 +244,19 @@ def table_import(
     repo = ctx.obj.repo
     check_git_user(repo)
     check_for_import_from_within_working_copy(repo, source, tables)
+
+    try:
+        path_encoder_overrides = validate_path_structure_overrides(
+            encoding=path_encoding, levels=path_levels, branches=path_branches
+        )
+    except ValueError as e:
+        raise click.UsageError(str(e))
+
+    if path_encoder_overrides and repo.table_dataset_version < 3:
+        raise InvalidOperation(
+            "--path-encoding, --path-levels and --path-branches are not supported for "
+            f"V{repo.table_dataset_version} datasets"
+        )
 
     base_import_source = TableImportSource.open(source)
     if all_tables:
@@ -346,6 +365,7 @@ def table_import(
         from_commit=repo.head_commit,
         replace_ids=replace_ids,
         allow_empty=allow_empty,
+        path_encoder_overrides=path_encoder_overrides,
     )
 
     # During imports we can keep old changes since they won't conflict with newly imported datasets.

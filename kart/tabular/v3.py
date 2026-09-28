@@ -204,6 +204,22 @@ class TableV3(RichTableDataset):
     def feature_path_encoder_for_schema(self, schema):
         if schema is None:
             return self.feature_path_encoder
+
+        default_encoder = self._default_path_encoder_for_schema(schema)
+
+        if self.inner_tree:
+            # This dataset already exists - its features are already laid out according to
+            # its existing path-structure, so we keep using that. The exception is if the new
+            # schema needs a different scheme entirely (ie the PK is changing to or from a
+            # single integer) - then every feature's path changes anyway.
+            existing_encoder = self.feature_path_encoder
+            if existing_encoder.scheme == default_encoder.scheme:
+                return existing_encoder
+            return default_encoder
+
+        return default_encoder.with_overrides(self.path_encoder_overrides)
+
+    def _default_path_encoder_for_schema(self, schema):
         pks = schema.pk_columns
         if len(pks) == 1 and pks[0].data_type == "integer":
             return PathEncoder.INT_PK_ENCODER
