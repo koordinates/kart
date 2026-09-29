@@ -343,6 +343,15 @@ class OgrTableImportSource(TableImportSource):
             for col in self.schema
         }
 
+    @property
+    @functools.lru_cache(maxsize=1)
+    def field_index_map(self):
+        # GetField(name) resolves the name to an index by linearly scanning all
+        # field definitions - GetField(index) doesn't. Field indices don't change
+        # during an import, so look each one up just once rather than per-feature.
+        ld = self.layer_defn
+        return {name: ld.GetFieldIndex(name) for name in self.field_adapter_map}
+
     def _get_type_value_adapter(self, name, v2_type):
         return ogr_util.get_type_value_adapter(v2_type)
 
@@ -354,7 +363,7 @@ class OgrTableImportSource(TableImportSource):
             elif name in self.geometry_column_names:
                 value = ogr_feature.GetGeometryRef()
             else:
-                value = ogr_feature.GetField(name)
+                value = ogr_feature.GetField(self.field_index_map[name])
             yield name, adapter(value)
 
     def _iter_ogr_features(self, filter_sql=None):
