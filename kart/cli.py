@@ -44,7 +44,7 @@ MODULE_COMMANDS = {
     "lfs_commands": {"lfs+"},
     "log": {"log"},
     "merge": {"merge"},
-    "meta": {"commit-files", "meta"},
+    "meta": {"ahead-behind", "blob-hash", "commit-files", "ls-files", "meta", "show-file"},
     "mv": {"mv"},
     "pull": {"pull"},
     "raster.import_": {"raster-import"},
