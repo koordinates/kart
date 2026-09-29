@@ -28,8 +28,14 @@ jobs:
       - name: Run mypy
         run: mypy
 
-  # Increase rate limits for public registry
+  # Increase rate limits for public registry.
+  # Fork PRs get no OIDC token, so skip it there and pull anonymously.
   amazon-ecr-auth:
+    if: >
+      (
+        github.event_name != 'pull_request'
+        || github.event.pull_request.head.repo.full_name == github.repository
+      )
     runs-on: ubuntu-latest
     permissions:
       id-token: write

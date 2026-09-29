@@ -22,12 +22,15 @@ on:
       aws_no_sign_request:
         required: true
         type: string
+      # Empty on fork PRs: images are then pulled anonymously
       ecr_username:
-        required: true
+        required: false
         type: string
+        default: ""
       ecr_password:
-        required: true
+        required: false
         type: string
+        default: ""
 
 jobs:
   #
