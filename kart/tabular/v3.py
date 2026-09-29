@@ -212,6 +212,9 @@ class TableV3(RichTableDataset):
             # its existing path-structure, so we keep using that. The exception is if the new
             # schema needs a different scheme entirely (ie the PK is changing to or from a
             # single integer) - then every feature's path changes anyway.
+            # Note that this includes datasets that are still using the legacy structure -
+            # a schema change no longer quietly migrates them to the modern structure, since
+            # that would only move the features that the same commit happens to modify.
             existing_encoder = self.feature_path_encoder
             if existing_encoder.scheme == default_encoder.scheme:
                 return existing_encoder

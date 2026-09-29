@@ -1013,6 +1013,15 @@ def test_pk_encoder_no_overrides(overrides):
     [
         ({"branches": 256}, "must be one of: 64, 4096"),
         ({"encoding": "hex", "branches": 64}, "must be one of: 16, 256, 4096"),
+        # The default branch-count of 64 isn't a power of 16, so hex needs a branch-count.
+        (
+            {"encoding": "hex"},
+            "hex path encoding requires --path-branches to be specified",
+        ),
+        (
+            {"encoding": "hex", "levels": 1},
+            "hex path encoding requires --path-branches to be specified",
+        ),
         ({"branches": 0}, "must be one of: 64, 4096"),
         ({"levels": 0}, "must be at least 1"),
         ({"levels": 99}, "must be at most 8"),

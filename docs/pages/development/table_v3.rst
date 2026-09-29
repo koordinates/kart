@@ -640,9 +640,11 @@ This stores the features in a single level of 256 directories named ``00`` to
 ``ff``, which is plenty for a dataset that is not expected to grow beyond a
 million or so features.
 
-Any of the three options can be given on its own; the rest keep their default
-values. ``branches`` must be a power of the size of the alphabet selected by
-``encoding`` - so 16, 256 or 4096 for ``hex``, or 64 or 4096 for ``base64``.
+Options that aren't given keep their default values. ``branches`` must be a
+power of the size of the alphabet selected by ``encoding`` - so 16, 256 or 4096
+for ``hex``, or 64 or 4096 for ``base64``. Since the default ``branches`` of 64
+is not a valid ``hex`` branch-count, ``--path-encoding=hex`` must always be
+accompanied by ``--path-branches``.
 
 ``scheme`` cannot be set directly - it is always determined by the type of the
 dataset's primary key.
@@ -651,7 +653,8 @@ The path-structure is a property of the dataset, not of the repository, so it
 is written once when the dataset is imported and then used for all subsequent
 edits to that dataset. Re-importing over an existing dataset with
 ``--replace-existing`` keeps the structure that dataset already has, unless
-these options are given again.
+these options are given again. They cannot be used with ``--replace-ids``,
+which leaves the features it is not replacing where they already are.
 
 Legacy path-structure
 ^^^^^^^^^^^^^^^^^^^^^

@@ -1208,6 +1208,42 @@ def test_import_path_structure_int_pk(data_archive, tmp_path, cli_runner, chdir)
             assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
 
 
+def test_import_path_structure_int_pk_wraparound(
+    data_archive, tmp_path, cli_runner, chdir
+):
+    """
+    A structure that is too small for the dataset means the PKs wrap around and every tree
+    is occupied - the next unassigned PK must still be found correctly, or else newly
+    inserted features would be given PKs that are already in use.
+    """
+    with data_archive("gpkg-points") as data:
+        repo_path = tmp_path / "emptydir"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0, r.stderr
+        with chdir(repo_path):
+            # 16 branches x 1 level holds 16 * 16 = 256 features before PKs wrap around,
+            # and this dataset has a lot more features than that.
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "nz-pa-points-topo-150k.gpkg",
+                    f"{H.POINTS.LAYER}:mytable",
+                    "--path-encoding=hex",
+                    "--path-levels=1",
+                    "--path-branches=16",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            repo = KartRepo(repo_path)
+            dataset = repo.datasets()["mytable"]
+            max_pk = max(
+                dataset.decode_path_to_1pk(p.split("/")[-1])
+                for p in _feature_paths(repo, "mytable")
+            )
+            assert dataset.find_start_of_unassigned_range() == max_pk + 1
+
+
 def test_import_path_structure_replace_existing(
     data_archive, tmp_path, cli_runner, chdir
 ):
@@ -1280,6 +1316,14 @@ def test_import_path_structure_replace_existing(
             ["--path-encoding=hex", "--path-branches=64"],
             "must be one of: 16, 256, 4096",
         ),
+        (
+            ["--path-encoding=hex"],
+            "hex path encoding requires --path-branches to be specified",
+        ),
+        (
+            ["--path-encoding=hex", "--path-levels=1"],
+            "hex path encoding requires --path-branches to be specified",
+        ),
         (["--path-levels=0"], "must be at least 1"),
         (["--path-encoding=octal"], "Invalid value for '--path-encoding'"),
     ],
@@ -1302,6 +1346,42 @@ def test_import_path_structure_invalid(
             )
             assert r.exit_code == 2, r.stderr
             assert message in r.stderr
+
+
+def test_import_path_structure_replace_ids(data_archive, tmp_path, cli_runner, chdir):
+    """
+    --replace-ids only rewrites the features it is given, so it can't be combined with a
+    change of path-structure - the rest of the features would be left in the wrong place.
+    """
+    with data_archive("gpkg-polygons") as data:
+        repo_path = tmp_path / "emptydir"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0, r.stderr
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            paths_before = _feature_paths(KartRepo(repo_path), "mytable")
+
+            ids_file = tmp_path / "ids.txt"
+            ids_file.write_text("1424927\n")
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    f"--replace-ids=@{ids_file}",
+                    "--path-levels=1",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 2, r.stderr
+            assert "cannot be used with --replace-ids" in r.stderr
+            assert _feature_paths(KartRepo(repo_path), "mytable") == paths_before
 
 
 def test_init_import_detached_head(data_working_copy, data_archive, chdir, cli_runner):

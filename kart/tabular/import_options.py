@@ -23,7 +23,9 @@ _PATH_STRUCTURE_OPTIONS = [
         default=None,
         help=(
             "Which alphabet is used to name the trees that features are stored in. "
-            "Defaults to base64. Only affects newly imported datasets."
+            "Defaults to base64. Using hex requires --path-branches to be given too, "
+            "since the default branch-count of 64 is not a power of 16. "
+            "Only affects newly imported datasets."
         ),
     ),
     click.option(

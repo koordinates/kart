@@ -513,7 +513,13 @@ class IntPathEncoder(PathEncoder):
             best_last_seen = last_seen
 
         if best_last_seen is None:
-            return 0
+            # Every possible tree is already occupied, which means the PK range has wrapped
+            # around (or is exactly full) - so the gaps between trees tell us nothing about
+            # where the largest PK is. This can happen for a dataset with more than
+            # branches ** (levels + 1) features. Fall back to finding the largest PK the
+            # slow-but-certain way - if we guessed wrong here, we would hand out PKs that
+            # are already in use.
+            return self._find_max_pk_by_scanning(dataset) + 1
 
         current_tree = feature_tree[best_last_seen]
 
@@ -533,6 +539,22 @@ class IntPathEncoder(PathEncoder):
         max_pk = max(dataset.decode_path_to_1pk(c.name) for c in current_tree)
         return max_pk + 1
 
+    def _find_max_pk_by_scanning(self, dataset):
+        """
+        Returns the largest PK in the given dataset by looking at every feature path,
+        or -1 if it has no features. Only used as a fallback when the structure of the
+        feature tree doesn't tell us where the largest PK is.
+        """
+        L.debug(
+            "All %d trees are occupied in %s - scanning all features to find the largest PK",
+            self.branches,
+            dataset.path,
+        )
+        max_pk = -1
+        for blob in dataset.feature_blobs():
+            max_pk = max(max_pk, dataset.decode_path_to_1pk(blob.name))
+        return max_pk
+
 
 # The encoder that was previously used for all datasets.
 PathEncoder.LEGACY_ENCODER = PathEncoder.get(
@@ -549,10 +571,12 @@ PathEncoder.GENERAL_ENCODER = PathEncoder.get(
     scheme="msgpack/hash", branches=64, levels=4, encoding="base64"
 )
 
-# The encodings that a dataset can end up with if the user doesn't specify one.
-DEFAULT_ENCODINGS = frozenset(
-    e.encoding for e in (PathEncoder.INT_PK_ENCODER, PathEncoder.GENERAL_ENCODER)
-)
+# The encoders that a dataset can end up with if the user doesn't specify a path-structure.
+_DEFAULT_ENCODERS = (PathEncoder.INT_PK_ENCODER, PathEncoder.GENERAL_ENCODER)
+
+# The encodings / branch-counts that a dataset can end up with if the user doesn't specify one.
+DEFAULT_ENCODINGS = frozenset(e.encoding for e in _DEFAULT_ENCODERS)
+DEFAULT_BRANCH_COUNTS = frozenset(e.branches for e in _DEFAULT_ENCODERS)
 
 MAX_LEVELS = 8
 
@@ -588,15 +612,28 @@ def validate_path_structure_overrides(*, encoding=None, levels=None, branches=No
             f"Invalid number of path levels {levels} - must be at most {MAX_LEVELS}"
         )
 
-    if branches is not None:
-        # If the encoding wasn't specified, the branch count needs to work with whichever
-        # encoding the default encoder for this dataset turns out to use.
-        encodings = [encoding] if encoding is not None else sorted(DEFAULT_ENCODINGS)
-        for e in encodings:
-            if branches not in set(valid_branch_counts(e)):
+    # The encoding and the branch-count have to be compatible with each other. Either of them
+    # may be unspecified, in which case it keeps whichever value the default encoder for this
+    # dataset turns out to have - so an unspecified value has to work with all of the defaults.
+    encodings = [encoding] if encoding is not None else sorted(DEFAULT_ENCODINGS)
+    branch_counts = (
+        [branches] if branches is not None else sorted(DEFAULT_BRANCH_COUNTS)
+    )
+    for e in encodings:
+        valid = set(valid_branch_counts(e))
+        for b in branch_counts:
+            if b in valid:
+                continue
+            if branches is not None:
                 raise ValueError(
-                    f"Invalid number of path branches {branches} for {e} path encoding - "
+                    f"Invalid number of path branches {b} for {e} path encoding - "
                     f"must be one of: {valid_branch_counts_str(e)}"
                 )
+            # The user asked for an encoding that the default branch-count doesn't work with,
+            # so they need to supply a branch-count too.
+            raise ValueError(
+                f"{e} path encoding requires --path-branches to be specified as well - "
+                f"must be one of: {valid_branch_counts_str(e)}"
+            )
 
     return overrides

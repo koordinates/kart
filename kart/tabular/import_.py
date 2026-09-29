@@ -258,6 +258,16 @@ def table_import(
             f"V{repo.table_dataset_version} datasets"
         )
 
+    if path_encoder_overrides and replace_ids is not None:
+        # A --replace-ids import only rewrites the features that are named, leaving the rest
+        # of the existing features where they are - so we can't move them to a new structure.
+        raise click.UsageError(
+            "--path-encoding, --path-levels and --path-branches cannot be used with "
+            "--replace-ids, since that would leave the features that aren't being replaced "
+            "in the wrong place. Use --replace-existing to re-import the entire dataset "
+            "with a new path-structure."
+        )
+
     base_import_source = TableImportSource.open(source)
     if all_tables:
         tables = base_import_source.get_tables().keys()
