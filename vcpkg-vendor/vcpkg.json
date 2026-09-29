@@ -52,7 +52,8 @@
                 "lzma",
                 "webp",
                 "zstd",
-                "kea"
+                "kea",
+                "parquet"
             ]
         },
         {

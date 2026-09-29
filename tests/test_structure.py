@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from osgeo import gdal
+from osgeo import gdal, ogr
 
 import pygit2
 import pytest
@@ -370,6 +370,58 @@ def test_import_from_shp(
         else:
             first_pk = 1424927 if use_existing_col_as_pk else 1
             assert dataset.get_feature(first_pk)["adjusted_n"] == 1122
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    ogr.GetDriverByName("Parquet") is None,
+    reason="GDAL build does not include the Parquet driver",
+)
+@pytest.mark.parametrize(
+    "archive,source_shp,layer",
+    [
+        pytest.param("shp-points", "nz_pa_points_topo_150k.shp", H.POINTS, id="points"),
+        pytest.param(
+            "shp-polygons", "nz_waca_adjustments.shp", H.POLYGONS, id="polygons"
+        ),
+    ],
+)
+def test_import_from_parquet(
+    archive,
+    source_shp,
+    layer,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+):
+    with data_archive(f"shapefiles/{archive}.tgz") as data:
+        # Convert the shapefile fixture to (Geo)Parquet, and import from that instead.
+        source_parquet = tmp_path / f"{Path(source_shp).stem}.parquet"
+        gdal.VectorTranslate(
+            str(source_parquet), str(data / source_shp), format="Parquet"
+        )
+
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        with chdir(repo_path):
+            r = cli_runner.invoke(["init"])
+            assert r.exit_code == 0, r
+
+            r = cli_runner.invoke(["import", str(source_parquet)])
+            assert r.exit_code == 0, r.stderr
+
+        repo = KartRepo(repo_path)
+        dataset = repo.datasets()[layer.LAYER]
+
+        expected_crs = 4326 if archive == "shp-points" else 4167
+        meta_items = dict(dataset.meta_items())
+        assert set(meta_items) == {
+            "schema.json",
+            f"crs/EPSG:{expected_crs}.wkt",
+        }
+
+        assert dataset.feature_count == layer.ROWCOUNT
 
 
 @pytest.mark.slow

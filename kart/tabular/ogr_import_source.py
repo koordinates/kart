@@ -34,6 +34,7 @@ FORMAT_TO_OGR_MAP = {
     # https://github.com/koordinates/kart/issues/86
     # 'TAB': 'MapInfo File',
     "PG": "PostgreSQL",
+    "PARQUET": "Parquet",
 }
 # The set of format prefixes where a local path is expected
 # (as opposed to a URL / something else)
