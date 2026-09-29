@@ -22,7 +22,8 @@ on:
       aws_no_sign_request:
         required: true
         type: string
-      # Empty on fork PRs: images are then pulled anonymously
+      # Empty on fork PRs: images are then pulled anonymously. Empty username/password
+      # values fail template validation, so credentials is `{}` in that case.
       ecr_username:
         required: false
         type: string
@@ -89,9 +90,7 @@ jobs:
           - 1433:1433
       mysql:
         image: public.ecr.aws/docker/library/mysql:latest
-        credentials:
-          username: ${{ inputs.ecr_username }}
-          password: ${{ inputs.ecr_password }}
+        credentials: ${{ inputs.ecr_username && fromJSON(format('{{"username":"{0}","password":"{1}"}}', inputs.ecr_username, inputs.ecr_password)) || fromJSON('{}') }}
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -399,9 +398,7 @@ jobs:
 
     container:
       image: ${{ matrix.os.image }}
-      credentials:
-        username: ${{ inputs.ecr_username }}
-        password: ${{ inputs.ecr_password }}
+      credentials: ${{ inputs.ecr_username && fromJSON(format('{{"username":"{0}","password":"{1}"}}', inputs.ecr_username, inputs.ecr_password)) || fromJSON('{}') }}
       env:
         DEBIAN_FRONTEND: noninteractive
 
