@@ -22,7 +22,8 @@ on:
       aws_no_sign_request:
         required: true
         type: string
-      # Empty on fork PRs: images are then pulled anonymously
+      # Empty on fork PRs: images are then pulled anonymously. Empty username/password
+      # values fail template validation, so credentials is `{}` in that case.
       ecr_username:
         required: false
         type: string
@@ -89,9 +90,7 @@ jobs:
           - 1433:1433
       mysql:
         image: public.ecr.aws/docker/library/mysql:latest
-        credentials:
-          username: ${{ inputs.ecr_username }}
-          password: ${{ inputs.ecr_password }}
+        credentials: ${{ inputs.ecr_username && fromJSON(format('{{"username":"{0}","password":"{1}"}}', inputs.ecr_username, inputs.ecr_password)) || fromJSON('{}') }}
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -158,7 +157,20 @@ jobs:
 
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
-          yum install -y autoconf-archive perl-IPC-Cmd perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex
+          yum install -y autoconf-archive perl-IPC-Cmd perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex bison
+
+          # thrift's CMakeLists.txt passes --file-prefix-map to bison (for reproducible builds),
+          # which is only supported from bison 3.7+. manylinux_2_28 ships 3.0.4, so build a newer
+          # one from source when needed. /usr/local/bin is ahead of /usr/bin on this container's PATH.
+          MIN_BISON_VERSION=3.7
+          BISON_VERSION_TO_BUILD=3.8.2
+          BISON_VERSION=$(bison --version | head -1 | grep -oP '\d+\.\d+(\.\d+)?')
+          if [ "$MIN_BISON_VERSION" != "$(echo -e "${MIN_BISON_VERSION}\\n${BISON_VERSION}" | sort -V | head -n1)" ]; then
+            echo "🌀  building newer bison (system bison ${BISON_VERSION} lacks --file-prefix-map)..."
+            curl -fL "https://ftp.gnu.org/gnu/bison/bison-${BISON_VERSION_TO_BUILD}.tar.gz" | tar xz -C /tmp
+            (cd "/tmp/bison-${BISON_VERSION_TO_BUILD}" && ./configure --prefix=/usr/local && make -j"$(nproc)" && make install)
+            bison --version | head -1
+          fi
 
           # Create a wrapper script for system curl that preserves the original library environment
           mkdir -p ${GITHUB_WORKSPACE}/systemcurl
@@ -399,9 +411,7 @@ jobs:
 
     container:
       image: ${{ matrix.os.image }}
-      credentials:
-        username: ${{ inputs.ecr_username }}
-        password: ${{ inputs.ecr_password }}
+      credentials: ${{ inputs.ecr_username && fromJSON(format('{{"username":"{0}","password":"{1}"}}', inputs.ecr_username, inputs.ecr_password)) || fromJSON('{}') }}
       env:
         DEBIAN_FRONTEND: noninteractive
 

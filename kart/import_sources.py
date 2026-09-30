@@ -120,6 +120,12 @@ ALL_IMPORT_SOURCE_TYPES = [
         file_ext=(".shp", ".shx", ".dbf"),
     ),
     ImportSourceType(
+        "(Geo)Parquet",
+        "PATH.parquet",
+        ImportType.OGR_TABLE,
+        file_ext=".parquet",
+    ),
+    ImportSourceType(
         "OGR", "OGR:...", ImportType.OGR_TABLE, uri_scheme="OGR", hidden=True
     ),
     # Point cloud imports:
