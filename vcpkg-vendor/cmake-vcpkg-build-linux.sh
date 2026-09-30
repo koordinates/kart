@@ -37,10 +37,12 @@ APT_DEPENDS=(
 )
 YUM_DEPENDS=(
     perl-IPC-Cmd
+    perl-Time-Piece
     rpm-build
     unixODBC
     zip
     autoconf-archive
+    flex
 )
 PY_DEPENDS=(
     # cmake
@@ -48,6 +50,8 @@ PY_DEPENDS=(
 )
 MIN_GOLANG_VERSION=1.17
 MIN_PATCHELF_VERSION=0.17.2
+MIN_BISON_VERSION=3.7
+BISON_VERSION_TO_BUILD=3.8.2
 CMAKE_VERSION=3.25.0
 PYTHON=python${PYVER}
 
@@ -55,6 +59,8 @@ source /etc/os-release
 OSID="${ID}-${VERSION_ID}"
 
 echo "🌀  checking setup..."
+
+git config --global --add safe.directory "$(pwd)"
 
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
     SUDO=
@@ -178,6 +184,16 @@ if [ "${MIN_PATCHELF_VERSION}" != "$(echo -e "${MIN_PATCHELF_VERSION}\\n${PATCHE
     patchelf --version
 fi
 
+# thrift's CMakeLists.txt passes --file-prefix-map to bison (for reproducible builds),
+# which is only supported from bison 3.7+. manylinux_2_28 ship 3.0.4, so build a newer one from source when needed.
+BISON_VERSION=$(bison --version | head -1 | grep -oP '\d+\.\d+(\.\d+)?')
+if [ "$MIN_BISON_VERSION" != "$(echo -e "${MIN_BISON_VERSION}\\n${BISON_VERSION}" | sort -V | head -n1)" ]; then
+    echo "🌀  building newer bison (system bison ${BISON_VERSION} lacks --file-prefix-map)..."
+    curl -fL "https://ftp.gnu.org/gnu/bison/bison-${BISON_VERSION_TO_BUILD}.tar.gz" | tar xz -C /tmp
+    (cd "/tmp/bison-${BISON_VERSION_TO_BUILD}" && ./configure --prefix=/usr/local && make -j"$(nproc)" && $SUDO make install)
+    bison --version | head -1
+fi
+
 echo "🌀  installing pkg-config via vcpkg..."
 (cd /tmp && /src/vcpkg-vendor/vcpkg/vcpkg install pkgconf)
 export PKG_CONFIG=/src/vcpkg-vendor/vcpkg/installed/${TRIPLET}/tools/pkgconf/pkgconf
@@ -194,9 +210,13 @@ if ! command -v dpkg >/dev/null 2>&1; then
     EXTRA_CMAKE_OPTIONS="-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=${ARCH}"
 fi
 
+# the vcpkg-built python3 port's version can drift from $PYVER
+# Which is only used for the apt/system-python bootstrap path above
+VCPKG_PYTHON_VERSION=$(grep -m1 '"version"' vcpkg-vendor/vcpkg/ports/python3/vcpkg.json | grep -oP '\d+\.\d+' | head -1)
+
 echo "🌀  running kart cmake configuration..."
 cmake -B /build -S . --preset=ci-linux \
-    -DPython3_EXECUTABLE=/build/vcpkg_installed/${TRIPLET}/tools/python3/python${PYVER} \
+    -DPython3_EXECUTABLE=/build/vcpkg_installed/${TRIPLET}/tools/python3/python${VCPKG_PYTHON_VERSION} \
     -DPython3_ROOT=/build/vcpkg_installed/${TRIPLET} \
     -DPKG_CONFIG_EXECUTABLE=${PKG_CONFIG} \
     ${EXTRA_CMAKE_OPTIONS-}
