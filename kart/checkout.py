@@ -10,6 +10,7 @@ from kart.exceptions import (
     NO_COMMIT,
     InvalidOperation,
     NotFound,
+    SubprocessError,
 )
 from kart.key_filters import RepoKeyFilter
 from kart.promisor_utils import get_partial_clone_envelope
@@ -224,6 +225,9 @@ def checkout(
         repo.configure_do_checkout_datasets(non_checkout_spec, False)
 
     TableWorkingCopy.ensure_config_exists(repo)
+    # Capture old_tree before set_head so _remove_deleted_attachment_files can compare
+    # the tree before the switch with the tree after.
+    old_tree = repo.head_tree if not repo.head_is_unborn else None
     repo.set_head(head_ref)
 
     repo_key_filter = (
@@ -244,6 +248,8 @@ def checkout(
             create_parts_if_missing=parts_to_create,
             non_checkout_datasets=non_checkout_datasets,
         )
+        if do_switch_commit or discard_changes:
+            _restore_attachments_to_head(repo, old_tree=old_tree if do_switch_commit else None)
     elif do_switch_checkout_datasets:
         # Not doing any of the above - just need to change those datasets newly added / removed from the non_checkout_list.
         repo.working_copy.reset_to_head(
@@ -445,10 +451,12 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
 
         head_ref = branch.name
 
+    old_tree = repo.head_tree if not repo.head_is_unborn else None
     repo.set_head(head_ref)
 
     if do_switch_commit or discard_changes:
         repo.working_copy.reset_to_head()
+        _restore_attachments_to_head(repo, old_tree=old_tree if do_switch_commit else None)
 
 
 def _find_remote_branch_by_name(repo, name):
@@ -492,6 +500,11 @@ def restore(ctx, source, filters):
     """
     Restore specified paths in the working copy with some contents from the given restore source.
     By default, restores the entire working copy to the commit at HEAD (so, discards all uncommitted changes).
+
+    FILTERS may name datasets, individual features, or attachment files. Each filter is tried
+    against both datasets and attachment files — a filter matching a dataset restores all its
+    features, a filter matching a file path restores that file, and a filter can match both if
+    the same name exists as a dataset on one branch and a file on another.
     """
     repo = ctx.obj.repo
 
@@ -500,17 +513,125 @@ def restore(ctx, source, filters):
 
     try:
         commit_or_tree, ref = repo.resolve_refish(source)
-        commit_or_tree.peel(pygit2.Tree)
+        source_tree = commit_or_tree.peel(pygit2.Tree)
     except (KeyError, pygit2.InvalidSpecError):
         raise NotFound(f"{source} is not a commit or tree", exit_code=NO_COMMIT)
-
-    repo_key_filter = RepoKeyFilter.build_from_user_patterns(filters)
 
     repo.working_copy.reset(
         commit_or_tree,
         track_changes_as_dirty=True,
-        repo_key_filter=repo_key_filter,
+        repo_key_filter=RepoKeyFilter.build_from_user_patterns(filters),
     )
+
+    # Restore attachment files. With no user-supplied filters we restore every tracked file in the
+    # source tree (matching the all-datasets restore above). Otherwise we pass the same filters to
+    # the attachment restore: each filter is tried as both a dataset filter (above) and an
+    # attachment-file path (here), so the correct side silently wins regardless of which branch a
+    # dataset happens to exist on.
+    if not filters:
+        _restore_all_attachment_files(repo, source_tree)
+    else:
+        _restore_attachment_files(repo, source_tree, filters)
+
+
+def _restore_attachment_files(repo, source_tree, rel_paths):
+    """Restores each rel_path under the working directory from source_tree via `git checkout`.
+
+    Paths that do not exist as files in source_tree are silently skipped, so callers can safely
+    pass the same filter list that was used for dataset restore (the reviewer's preferred approach:
+    each filter is tried on both sides; the side that matches wins).
+
+    Successfully restored paths are also added to the workdir-index so that future calls to
+    WorkdirDiffCache.dirty_attachment_paths() can detect changes efficiently via git's mtime
+    optimisation rather than hashing all tracked files on every diff.
+    """
+    workdir = str(repo.workdir_path)
+    restored = []
+    for rel_path in rel_paths:
+        try:
+            subprocess.check_call(
+                ["git", "-C", workdir, "checkout", source_tree.id.hex, "--", rel_path],
+                stderr=subprocess.DEVNULL,
+            )
+            restored.append(rel_path)
+        except subprocess.CalledProcessError:
+            # Path doesn't exist as a file in source_tree (e.g. it's a dataset name or
+            # feature key) — silently skip so the caller can pass unfiltered user args.
+            pass
+    if restored:
+        _update_attachment_workdir_index(repo, restored)
+
+
+def _restore_all_attachment_files(repo, source_tree):
+    """Restores every attachment file present in source_tree to the working directory."""
+    from kart.diff_util import ls_tree_attachments
+
+    workdir = str(repo.workdir_path)
+    tracked = ls_tree_attachments(workdir, source_tree.id.hex)
+    if not tracked:
+        return
+    _restore_attachment_files(repo, source_tree, sorted(tracked))
+
+
+def _update_attachment_workdir_index(repo, rel_paths):
+    """
+    Ensures the file-system working copy exists and records the given attachment paths in its
+    workdir-index, so WorkdirDiffCache can detect subsequent changes via git's mtime
+    optimisation (avoiding a full re-hash of every tracked attachment on every diff).
+
+    Tile-based datasets (point-cloud / raster) already maintain this workdir-index. For
+    tabular-only repos that have attachment files but no tile datasets, the workdir would not
+    otherwise be initialised - so we create it here (index + state DB) and track attachments
+    through the same mechanism rather than a parallel one.
+    """
+    from kart.workdir import FileSystemWorkingCopy, FileSystemWorkingCopyStatus
+
+    wc = FileSystemWorkingCopy(repo)
+    if wc.status() == FileSystemWorkingCopyStatus.UNCREATED:
+        wc.create_and_initialise()
+    # Keep the workdir's tracked tree in sync with HEAD. For tile repos the dataset reset does
+    # this; an attachment-only workdir has no tile reset, so set it here (and on every HEAD
+    # change) to avoid a spurious BAD_WORKING_COPY_STATE from kart status / diff.
+    if not repo.head_is_unborn:
+        wc.update_state_table_tree(repo.head_tree)
+    wc.add_paths_to_index(rel_paths)
+
+
+def _remove_deleted_attachment_files(repo, old_tree, new_tree):
+    """
+    Deletes any attachment files that existed in old_tree but are absent from new_tree.
+    Called after a HEAD switch so that files removed in the new commit disappear from the
+    working directory rather than lingering as untracked files.
+    """
+    from kart.diff_util import ls_tree_attachments
+    from pathlib import Path
+
+    workdir = str(repo.workdir_path)
+    old_files = set(ls_tree_attachments(workdir, old_tree.id.hex))
+    new_files = set(ls_tree_attachments(workdir, new_tree.id.hex))
+    for rel_path in sorted(old_files - new_files):
+        full_path = Path(workdir) / rel_path
+        if full_path.is_file():
+            full_path.unlink()
+
+
+def _restore_attachments_to_head(repo, old_tree=None):
+    """
+    Restore tracked attachment files in the working directory to the state at HEAD.
+
+    Kart's working-copy reset only covers dataset contents (the GeoPackage / workdir parts).
+    Attachment files (LICENSE.txt, README.md, project files, etc. tracked alongside datasets)
+    are plain Git objects and need to be re-extracted explicitly when HEAD changes.
+
+    If old_tree is provided (the tree before the HEAD switch), any attachment files that
+    existed in old_tree but are absent from the new HEAD are deleted from the working directory.
+    """
+    if repo.head_is_unborn:
+        return
+    new_tree = repo.head_tree
+    _restore_all_attachment_files(repo, new_tree)
+    if old_tree is not None:
+        _remove_deleted_attachment_files(repo, old_tree, new_tree)
 
 
 @click.command(cls=KartCommand)
@@ -550,6 +671,7 @@ def reset(ctx, discard_changes, refish):
     if do_switch_commit and not discard_changes:
         ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
+    old_tree = repo.head_tree if not repo.head_is_unborn else None
     head_branch = repo.head_branch
     if head_branch is not None:
         repo.references[head_branch].set_target(commit.id)
@@ -557,3 +679,4 @@ def reset(ctx, discard_changes, refish):
         repo.set_head(commit.id)
 
     repo.working_copy.reset_to_head()
+    _restore_attachments_to_head(repo, old_tree=old_tree if do_switch_commit else None)
