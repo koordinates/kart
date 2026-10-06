@@ -3,12 +3,12 @@ set -euo pipefail
 
 #
 # invoke via
-#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it quay.io/pypa/manylinux_2_28_x86_64
+#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it quay.io/pypa/manylinux_2_34_x86_64
 #   mycontainer $ vcpkg-vendor/cmake-vcpkg-build-linux.sh [--verbose]
 #
 # manylinux images are per-arch
-# - quay.io/pypa/manylinux_2_28_x86_64
-# - quay.io/pypa/manylinux_2_28_aarch64
+# - quay.io/pypa/manylinux_2_34_x86_64
+# - quay.io/pypa/manylinux_2_34_aarch64
 # should also work with most other OS images too (eg: ubuntu:jammy, ubuntu:focal)
 
 PYVER=3.11
@@ -43,6 +43,7 @@ YUM_DEPENDS=(
     zip
     autoconf-archive
     flex
+    bison
 )
 PY_DEPENDS=(
     # cmake
@@ -50,8 +51,6 @@ PY_DEPENDS=(
 )
 MIN_GOLANG_VERSION=1.17
 MIN_PATCHELF_VERSION=0.17.2
-MIN_BISON_VERSION=3.7
-BISON_VERSION_TO_BUILD=3.8.2
 CMAKE_VERSION=3.25.0
 PYTHON=python${PYVER}
 
@@ -182,16 +181,6 @@ if [ "${MIN_PATCHELF_VERSION}" != "$(echo -e "${MIN_PATCHELF_VERSION}\\n${PATCHE
     echo "🌀  installing patchelf 0.17.2..."
     curl -L https://github.com/NixOS/patchelf/releases/download/0.17.2/patchelf-0.17.2-$(arch).tar.gz | tar xz -C /usr/local
     patchelf --version
-fi
-
-# thrift's CMakeLists.txt passes --file-prefix-map to bison (for reproducible builds),
-# which is only supported from bison 3.7+. manylinux_2_28 ship 3.0.4, so build a newer one from source when needed.
-BISON_VERSION=$(bison --version | head -1 | grep -oP '\d+\.\d+(\.\d+)?')
-if [ "$MIN_BISON_VERSION" != "$(echo -e "${MIN_BISON_VERSION}\\n${BISON_VERSION}" | sort -V | head -n1)" ]; then
-    echo "🌀  building newer bison (system bison ${BISON_VERSION} lacks --file-prefix-map)..."
-    curl -fL "https://ftp.gnu.org/gnu/bison/bison-${BISON_VERSION_TO_BUILD}.tar.gz" | tar xz -C /tmp
-    (cd "/tmp/bison-${BISON_VERSION_TO_BUILD}" && ./configure --prefix=/usr/local && make -j"$(nproc)" && $SUDO make install)
-    bison --version | head -1
 fi
 
 echo "🌀  installing pkg-config via vcpkg..."

@@ -44,15 +44,15 @@ jobs:
       matrix:
         os:
           - base: ubuntu-22.04
-            label: manylinux_2_28/amd64
-            image: quay.io/pypa/manylinux_2_28_x86_64
+            label: manylinux_2_34/amd64
+            image: quay.io/pypa/manylinux_2_34_x86_64
             arch: amd64
             arch_triplet: x64-linux
             build_parallel: ""
 
           - base: ubuntu-22.04-arm
-            label: manylinux_2_28/arm64
-            image: quay.io/pypa/manylinux_2_28_aarch64
+            label: manylinux_2_34/arm64
+            image: quay.io/pypa/manylinux_2_34_aarch64
             arch: arm64
             arch_triplet: arm64-linux
             build_parallel: 1
@@ -158,19 +158,6 @@ jobs:
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
           yum install -y autoconf-archive perl-IPC-Cmd perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex bison
-
-          # thrift's CMakeLists.txt passes --file-prefix-map to bison (for reproducible builds),
-          # which is only supported from bison 3.7+. manylinux_2_28 ships 3.0.4, so build a newer
-          # one from source when needed. /usr/local/bin is ahead of /usr/bin on this container's PATH.
-          MIN_BISON_VERSION=3.7
-          BISON_VERSION_TO_BUILD=3.8.2
-          BISON_VERSION=$(bison --version | head -1 | grep -oP '\d+\.\d+(\.\d+)?')
-          if [ "$MIN_BISON_VERSION" != "$(echo -e "${MIN_BISON_VERSION}\\n${BISON_VERSION}" | sort -V | head -n1)" ]; then
-            echo "🌀  building newer bison (system bison ${BISON_VERSION} lacks --file-prefix-map)..."
-            curl -fL "https://ftp.gnu.org/gnu/bison/bison-${BISON_VERSION_TO_BUILD}.tar.gz" | tar xz -C /tmp
-            (cd "/tmp/bison-${BISON_VERSION_TO_BUILD}" && ./configure --prefix=/usr/local && make -j"$(nproc)" && make install)
-            bison --version | head -1
-          fi
 
           # Create a wrapper script for system curl that preserves the original library environment
           mkdir -p ${GITHUB_WORKSPACE}/systemcurl
