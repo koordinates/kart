@@ -36,7 +36,9 @@ APT_DEPENDS=(
     zip
 )
 YUM_DEPENDS=(
+    perl-FindBin
     perl-IPC-Cmd
+    perl-lib
     perl-Time-Piece
     rpm-build
     unixODBC

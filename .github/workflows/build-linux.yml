@@ -157,7 +157,7 @@ jobs:
 
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
-          yum install -y autoconf-archive perl-IPC-Cmd perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex bison
+          yum install -y autoconf-archive perl-FindBin perl-IPC-Cmd perl-lib perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex bison
 
           # Create a wrapper script for system curl that preserves the original library environment
           mkdir -p ${GITHUB_WORKSPACE}/systemcurl
