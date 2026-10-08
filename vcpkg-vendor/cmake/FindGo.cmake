@@ -17,7 +17,7 @@ if(GO_EXECUTABLE)
     COMMAND ${GO_EXECUTABLE} version
     OUTPUT_VARIABLE GO_VERSION_OUTPUT
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(GO_VERSION_OUTPUT MATCHES "go([0-9]+\\.[0-9]+\\.?[0-9]*)[a-zA-Z0-9]* ([^/]+)/(.*)")
+  if(GO_VERSION_OUTPUT MATCHES "go([0-9]+\\.[0-9]+\\.?[0-9]*)[^ ]* ([^/]+)/(.*)")
     set(GO_VERSION ${CMAKE_MATCH_1})
     set(GO_PLATFORM ${CMAKE_MATCH_2})
     set(GO_ARCH ${CMAKE_MATCH_3})

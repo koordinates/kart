@@ -3,12 +3,12 @@ set -euo pipefail
 
 #
 # invoke via
-#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it quay.io/pypa/manylinux_2_28_x86_64
+#   myhost $ docker run -v /build -v /root -v /tmp -v $(pwd):/src -w /src --rm -it quay.io/pypa/manylinux_2_34_x86_64
 #   mycontainer $ vcpkg-vendor/cmake-vcpkg-build-linux.sh [--verbose]
 #
 # manylinux images are per-arch
-# - quay.io/pypa/manylinux_2_28_x86_64
-# - quay.io/pypa/manylinux_2_28_aarch64
+# - quay.io/pypa/manylinux_2_34_x86_64
+# - quay.io/pypa/manylinux_2_34_aarch64
 # should also work with most other OS images too (eg: ubuntu:jammy, ubuntu:focal)
 
 PYVER=3.11
@@ -36,11 +36,16 @@ APT_DEPENDS=(
     zip
 )
 YUM_DEPENDS=(
+    perl-FindBin
     perl-IPC-Cmd
+    perl-lib
+    perl-Time-Piece
     rpm-build
     unixODBC
     zip
     autoconf-archive
+    flex
+    bison
 )
 PY_DEPENDS=(
     # cmake
@@ -55,6 +60,8 @@ source /etc/os-release
 OSID="${ID}-${VERSION_ID}"
 
 echo "🌀  checking setup..."
+
+git config --global --add safe.directory "$(pwd)"
 
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
     SUDO=
@@ -194,9 +201,13 @@ if ! command -v dpkg >/dev/null 2>&1; then
     EXTRA_CMAKE_OPTIONS="-DCPACK_DEBIAN_PACKAGE_ARCHITECTURE=${ARCH}"
 fi
 
+# the vcpkg-built python3 port's version can drift from $PYVER
+# Which is only used for the apt/system-python bootstrap path above
+VCPKG_PYTHON_VERSION=$(grep -m1 '"version"' vcpkg-vendor/vcpkg/ports/python3/vcpkg.json | grep -oP '\d+\.\d+' | head -1)
+
 echo "🌀  running kart cmake configuration..."
 cmake -B /build -S . --preset=ci-linux \
-    -DPython3_EXECUTABLE=/build/vcpkg_installed/${TRIPLET}/tools/python3/python${PYVER} \
+    -DPython3_EXECUTABLE=/build/vcpkg_installed/${TRIPLET}/tools/python3/python${VCPKG_PYTHON_VERSION} \
     -DPython3_ROOT=/build/vcpkg_installed/${TRIPLET} \
     -DPKG_CONFIG_EXECUTABLE=${PKG_CONFIG} \
     ${EXTRA_CMAKE_OPTIONS-}

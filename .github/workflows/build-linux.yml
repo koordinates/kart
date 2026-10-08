@@ -22,7 +22,8 @@ on:
       aws_no_sign_request:
         required: true
         type: string
-      # Empty on fork PRs: images are then pulled anonymously
+      # Empty on fork PRs: images are then pulled anonymously. Empty username/password
+      # values fail template validation, so credentials is `{}` in that case.
       ecr_username:
         required: false
         type: string
@@ -43,15 +44,15 @@ jobs:
       matrix:
         os:
           - base: ubuntu-22.04
-            label: manylinux_2_28/amd64
-            image: quay.io/pypa/manylinux_2_28_x86_64
+            label: manylinux_2_34/amd64
+            image: quay.io/pypa/manylinux_2_34_x86_64
             arch: amd64
             arch_triplet: x64-linux
             build_parallel: ""
 
           - base: ubuntu-22.04-arm
-            label: manylinux_2_28/arm64
-            image: quay.io/pypa/manylinux_2_28_aarch64
+            label: manylinux_2_34/arm64
+            image: quay.io/pypa/manylinux_2_34_aarch64
             arch: arm64
             arch_triplet: arm64-linux
             build_parallel: 1
@@ -89,9 +90,7 @@ jobs:
           - 1433:1433
       mysql:
         image: public.ecr.aws/docker/library/mysql:latest
-        credentials:
-          username: ${{ inputs.ecr_username }}
-          password: ${{ inputs.ecr_password }}
+        credentials: ${{ inputs.ecr_username && fromJSON(format('{{"username":"{0}","password":"{1}"}}', inputs.ecr_username, inputs.ecr_password)) || fromJSON('{}') }}
         options: >-
           -e MYSQL_ROOT_PASSWORD=PassWord1
         ports:
@@ -158,7 +157,7 @@ jobs:
 
           git config --global --add safe.directory ${GITHUB_WORKSPACE}
 
-          yum install -y autoconf-archive perl-IPC-Cmd perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex
+          yum install -y autoconf-archive perl-FindBin perl-IPC-Cmd perl-lib perl-Time-Piece rpm-build unixODBC zip rustc cargo golang flex bison
 
           # Create a wrapper script for system curl that preserves the original library environment
           mkdir -p ${GITHUB_WORKSPACE}/systemcurl
@@ -399,9 +398,7 @@ jobs:
 
     container:
       image: ${{ matrix.os.image }}
-      credentials:
-        username: ${{ inputs.ecr_username }}
-        password: ${{ inputs.ecr_password }}
+      credentials: ${{ inputs.ecr_username && fromJSON(format('{{"username":"{0}","password":"{1}"}}', inputs.ecr_username, inputs.ecr_password)) || fromJSON('{}') }}
       env:
         DEBIAN_FRONTEND: noninteractive
 
