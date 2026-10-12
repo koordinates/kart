@@ -614,6 +614,48 @@ last scheme, the feature's filename by itself can be decoded back into
 the primary key values. The paths are simply there to spread out the
 features for performance reasons.
 
+Choosing a path-structure at import time
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By default, ``levels``, ``branches`` and ``encoding`` are set to the values
+shown above - 4 levels of 64 base64-named directories. These defaults suit
+datasets with sequential integer primary keys, and datasets that could grow
+to many millions of features.
+
+They suit datasets with randomly distributed primary keys - UUIDs, for example
+- much less well. Such a dataset's features are spread evenly over all
+``64 ** 4 = 16777216`` leaf-node directories, so a dataset of a million
+features ends up with roughly one feature per directory. The trees then take
+up more space than the features themselves, and a large number of them are
+rewritten by every commit.
+
+For those datasets, fewer levels and / or fewer branches is a better fit, and
+can be requested when the dataset is imported:
+
+.. code:: console
+
+   $ kart import my_data.gpkg mytable --path-encoding=hex --path-levels=1 --path-branches=256
+
+This stores the features in a single level of 256 directories named ``00`` to
+``ff``, which is plenty for a dataset that is not expected to grow beyond a
+million or so features.
+
+Options that aren't given keep their default values. ``branches`` must be a
+power of the size of the alphabet selected by ``encoding`` - so 16, 256 or 4096
+for ``hex``, or 64 or 4096 for ``base64``. Since the default ``branches`` of 64
+is not a valid ``hex`` branch-count, ``--path-encoding=hex`` must always be
+accompanied by ``--path-branches``.
+
+``scheme`` cannot be set directly - it is always determined by the type of the
+dataset's primary key.
+
+The path-structure is a property of the dataset, not of the repository, so it
+is written once when the dataset is imported and then used for all subsequent
+edits to that dataset. Re-importing over an existing dataset with
+``--replace-existing`` keeps the structure that dataset already has, unless
+these options are given again. They cannot be used with ``--replace-ids``,
+which leaves the features it is not replacing where they already are.
+
 Legacy path-structure
 ^^^^^^^^^^^^^^^^^^^^^
 
