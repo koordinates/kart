@@ -4,6 +4,7 @@ import click
 import pygit2
 
 from .base_diff_writer import BaseDiffWriter
+from .diff_util import get_workdir_file_status
 from .key_filters import RepoKeyFilter
 from .conflicts_writer import BaseConflictsWriter
 from .crs_util import make_crs
@@ -142,10 +143,28 @@ def get_working_copy_status_json(repo, list_untracked_tables):
         "changes": get_diff_status_json(repo),
         "nonCheckoutDatasets": sorted(repo.non_checkout_datasets),
     }
+    files = get_file_status_json(repo)
+    if files:
+        # Only include the files key when there are any attachment changes, so the existing JSON
+        # shape is preserved for repos with no attachments / no attachment changes.
+        result["files"] = files
     if list_untracked_tables:
         result["untrackedTables"] = get_untracked_tables(repo)
 
     return result
+
+
+def get_file_status_json(repo, workdir_diff_cache=None):
+    """
+    Returns the working-directory status for attachment files (anything tracked in git that is not
+    Kart-internal and not part of a dataset's contents). Returns {} when there are no changes.
+    """
+    if repo.head_is_unborn:
+        return {}
+    if workdir_diff_cache is None:
+        workdir_diff_cache = repo.working_copy.workdir_diff_cache()
+    raw = get_workdir_file_status(repo, workdir_diff_cache=workdir_diff_cache)
+    return {k: v for k, v in raw.items() if v}
 
 
 def get_untracked_tables(repo):
@@ -318,18 +337,42 @@ def working_copy_status_to_text(jdict):
             f"  (to overturn, use `kart checkout --dataset=DATASET`):\n{non_checkout_datasets}"
         )
 
-    if not jdict["changes"]:
-        result_list.append("Nothing to commit, working copy clean")
+    files = jdict.get("files") or {}
+    has_dataset_changes = bool(jdict["changes"])
+    has_file_changes = bool(files)
 
+    if not has_dataset_changes and not has_file_changes:
+        result_list.append("Nothing to commit, working copy clean")
     else:
-        result_list.append(
+        sections = [
             "Changes in working copy:\n"
             '  (use "kart commit" to commit)\n'
-            '  (use "kart restore" to discard changes)\n\n'
-            + diff_status_to_text(jdict["changes"])
-        )
+            '  (use "kart restore" to discard changes)'
+        ]
+        if has_dataset_changes:
+            sections.append(diff_status_to_text(jdict["changes"]))
+        if has_file_changes:
+            sections.append(file_status_to_text(files))
+        result_list.append("\n\n".join(sections))
 
     return "\n\n".join(result_list)
+
+
+def file_status_to_text(files):
+    """Render the attachment-files section of `kart status`."""
+    sections = []
+    for label, key in (
+        ("Modified files", "modified"),
+        ("Untracked files", "untracked"),
+        ("Deleted files", "deleted"),
+    ):
+        paths = files.get(key) or []
+        if not paths:
+            continue
+        sections.append(f"  {label}:")
+        for path in paths:
+            sections.append(f"    {path}")
+    return "\n".join(sections)
 
 
 def diff_status_to_text(jdict):

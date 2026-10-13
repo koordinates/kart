@@ -397,6 +397,61 @@ def test_status_merging(data_archive, cli_runner):
         }
 
 
+def test_status_attached_files_clean(data_working_copy, cli_runner):
+    """A repo with attachments but no working-tree changes does not include a `files` key."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        jdict = json_status(cli_runner)
+        wc_jdict = jdict["kart.status/v2"]["workingCopy"]
+        assert "files" not in wc_jdict, wc_jdict
+
+
+def test_status_attached_files_modified(data_working_copy, cli_runner):
+    """Modifying an attachment file shows up under workingCopy.files.modified in status JSON."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        (path / "LICENSE.txt").write_text("Edited.\n", encoding="utf-8")
+
+        wc_jdict = json_status(cli_runner)["kart.status/v2"]["workingCopy"]
+        assert wc_jdict["files"] == {"modified": ["LICENSE.txt"]}
+
+        # Text output mentions modified files in a clearly-separated block.
+        text_lines = text_status(cli_runner)
+        assert "  Modified files:" in text_lines
+        assert "    LICENSE.txt" in text_lines
+
+
+def test_status_attached_files_untracked(data_working_copy, cli_runner):
+    """Adding an untracked file shows up under workingCopy.files.untracked."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        (path / "NOTES.txt").write_text("Hello.\n", encoding="utf-8")
+
+        wc_jdict = json_status(cli_runner)["kart.status/v2"]["workingCopy"]
+        assert wc_jdict["files"] == {"untracked": ["NOTES.txt"]}
+
+
+def test_status_attached_files_deleted(data_working_copy, cli_runner):
+    """Deleting a tracked attachment shows up under workingCopy.files.deleted."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        (path / "LICENSE.txt").unlink()
+
+        wc_jdict = json_status(cli_runner)["kart.status/v2"]["workingCopy"]
+        assert wc_jdict["files"] == {"deleted": ["LICENSE.txt"]}
+
+
+def test_status_attached_files_combined(data_working_copy, cli_runner):
+    """All three classifications coexist correctly in a single status output."""
+    with data_working_copy("points-with-attached-files") as (path, wc):
+        (path / "LICENSE.txt").write_text("X\n", encoding="utf-8")
+        (path / "nz_pa_points_topo_150k" / "metadata.xml").unlink()
+        (path / "NOTES.txt").write_text("Y\n", encoding="utf-8")
+
+        wc_jdict = json_status(cli_runner)["kart.status/v2"]["workingCopy"]
+        assert wc_jdict["files"] == {
+            "modified": ["LICENSE.txt"],
+            "deleted": ["nz_pa_points_topo_150k/metadata.xml"],
+            "untracked": ["NOTES.txt"],
+        }
+
+
 def test_status_untracked_tables(data_working_copy, cli_runner):
     new_table = "test_table"
     with data_working_copy("points") as (path, wc):
