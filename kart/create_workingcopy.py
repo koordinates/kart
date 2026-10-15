@@ -234,6 +234,14 @@ def create_workingcopy(ctx, parts, delete_existing, discard_changes, tabular_loc
     if PartType.WORKDIR in parts:
         create_workdir(repo, delete_existing, discard_changes)
 
+    # Restore tracked attachment files (LICENSE.txt, README.md, etc.) to the working
+    # directory. Without this, a fresh `kart create-workingcopy` (or `kart clone`,
+    # which calls into the same code path via reset_to_head) leaves attachment files
+    # absent from disk — matching neither git's behaviour nor the rest of this PR.
+    from kart.checkout import _restore_attachments_to_head
+
+    _restore_attachments_to_head(repo, old_tree=None)
+
     # This command is used in tests and by other commands, so we have to be extra careful to
     # tidy up properly - otherwise, tests can fail (on Windows especially) due to PermissionError.
     repo.free()
