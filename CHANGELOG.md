@@ -8,6 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 - `import`/`export`: Adds support for reading and writing (Geo)Parquet files directly, via GDAL's OGR Parquet driver.
 - `import`: Speeds up importing from any OGR-backed source (Shapefile, Parquet, generic OGR) by caching each field's index instead of re-resolving it by name on every feature.
+- `import`: Adds `--path-encoding`, `--path-levels` and `--path-branches`, which control how features are spread out into trees in the repository. The defaults are unchanged, but datasets with randomly distributed primary keys (eg UUIDs) are generally much more efficiently stored using fewer levels - eg `--path-encoding=hex --path-levels=1 --path-branches=256`. [#1097](https://github.com/koordinates/kart/issues/1097)
 - `log`: Adds `--with-change-counts`. For each dataset changed by a commit, it reports the exact number of features (or tiles) inserted, updated and deleted, and how many features that dataset contains at that commit. [#1127](https://github.com/koordinates/kart/pull/1127), [#1128](https://github.com/koordinates/kart/pull/1128)
 - Adds `libkart`, a native shared library exposing a C API for reading Kart repositories in-process (without invoking the `kart` CLI). It is shipped in the bundle alongside the `kart` executable; see the libkart C API reference in the developer docs. [#1110](https://github.com/koordinates/kart/pull/1110)
 - Add pager support to `diff` and `show` commands. [#1080](https://github.com/koordinates/kart/pull/1080)

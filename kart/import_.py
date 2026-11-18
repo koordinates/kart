@@ -9,6 +9,7 @@ from kart.cli_util import (
 )
 from kart.completion_shared import file_path_completer
 from kart.import_sources import from_spec, suggest_specs, ImportType
+from kart.tabular.import_options import path_structure_options
 
 
 def list_import_formats(ctx):
@@ -71,6 +72,7 @@ def list_import_formats(ctx):
         "supported for tile-based datasets where the tiles are sourced from S3."
     ),
 )
+@path_structure_options
 @click.argument(
     "args",
     nargs=-1,
@@ -150,6 +152,15 @@ def import_(ctx, args, **kwargs):
         ImportType.OGR_TABLE,
     ):
         raise click.UsageError("--link is not supported for vector or tabular imports")
+
+    if any(
+        kwargs.get(k) is not None
+        for k in ("path_encoding", "path_levels", "path_branches")
+    ) and import_source_type.import_type in (ImportType.POINT_CLOUD, ImportType.RASTER):
+        raise click.UsageError(
+            "--path-encoding, --path-levels and --path-branches are not supported for "
+            "point-cloud or raster imports"
+        )
 
     import_cmd = import_source_type.import_cmd
     forward_context_to_command(ctx, import_cmd)

@@ -202,6 +202,7 @@ def fast_import_tables(
     replace_ids=None,
     allow_empty=False,
     limit=None,
+    path_encoder_overrides=None,
     # Advanced use - used by kart upgrade.
     header=None,
     extra_cmd_args=(),
@@ -221,6 +222,8 @@ def fast_import_tables(
     from_commit - the commit to be used as a starting point before beginning the import.
     replace_ids - list of PK values to replace, or None
     limit - maximum number of features to import per source.
+    path_encoder_overrides - optional dict of path-structure parameters ("encoding", "levels"
+        and / or "branches") that override the defaults that would be chosen from the schema.
 
     The following extra options are used by kart upgrade.
     header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
@@ -299,6 +302,7 @@ def fast_import_tables(
                     replace_ids,
                     limit,
                     verbosity,
+                    path_encoder_overrides,
                 )
 
         if import_ref is not None:
@@ -334,6 +338,7 @@ def _import_single_source(
     replace_ids,
     limit,
     verbosity,
+    path_encoder_overrides=None,
 ):
     """
     repo - the Kart repo to import into.
@@ -347,6 +352,7 @@ def _import_single_source(
         0: no progress information is printed to stdout.
         1: basic status information
         2: full output of `git-fast-import --stats ...`
+    path_encoder_overrides - optional dict of path-structure parameters - see fast_import_tables.
     """
     replacing_dataset = None
     if replace_existing == ReplaceExisting.GIVEN:
@@ -363,9 +369,15 @@ def _import_single_source(
             source=source,
         )
 
+    if path_encoder_overrides is None and replacing_dataset is not None:
+        # We are replacing an existing dataset, and the user hasn't asked for a particular
+        # path-structure - so we keep the path-structure the existing dataset already has,
+        # rather than resetting it to the default.
+        path_encoder_overrides = replacing_dataset.feature_path_encoder.to_dict()
+
     dataset_class = dataset_class_for_version(repo.table_dataset_version)
     dataset = dataset_class.new_dataset_for_writing(
-        source.dest_path, source.schema, repo
+        source.dest_path, source.schema, repo, path_encoder_overrides
     )
 
     with source:
