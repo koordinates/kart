@@ -1,5 +1,10 @@
+import json
+
 import pytest
+
+from kart.object_builder import ObjectBuilder
 from kart.repo import KartRepo
+from kart.schema import Schema
 
 
 H = pytest.helpers.helpers()
@@ -32,3 +37,75 @@ def test_fsck(data_working_copy, cli_runner):
 
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 0, r
+
+
+def _commit_raw(repo, message, changes):
+    """Commits the given {path: bytes-or-None} changes directly, bypassing Kart's dataset logic."""
+    object_builder = ObjectBuilder(repo, repo.head_tree)
+    for path, data in changes.items():
+        object_builder.insert(path, data)
+    sig = repo.author_signature()
+    object_builder.commit("HEAD", sig, sig, message, [repo.head.target])
+
+
+def _without_working_copy(repo_path):
+    repo = KartRepo(repo_path)
+    del repo.config["kart.workingcopy.location"]
+    return repo
+
+
+def test_fsck_checks_features_without_working_copy(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        _without_working_copy(repo_path)
+
+        r = cli_runner.invoke(["fsck"])
+        assert r.exit_code == 0, r.stdout
+        assert f"{H.POINTS.ROWCOUNT} features checked" in r.stdout
+
+
+def test_fsck_features_with_missing_legend(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        repo = _without_working_copy(repo_path)
+        legend_hash = repo.datasets()[H.POINTS.LAYER].schema.legend.hexhash()
+        _commit_raw(
+            repo,
+            "Remove legend",
+            {f"{H.POINTS.LAYER}/.table-dataset/meta/legend/{legend_hash}": None},
+        )
+
+        r = cli_runner.invoke(["fsck"])
+        assert r.exit_code == 1, r.stdout
+        assert f"Dataset: '{H.POINTS.LAYER}/'" in r.stdout
+        assert (
+            f"{H.POINTS.ROWCOUNT} features refer to missing legend {legend_hash}"
+            in r.stdout
+        )
+
+
+def test_fsck_schema_with_missing_legend(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        repo = _without_working_copy(repo_path)
+        new_schema = [
+            *repo.datasets()[H.POINTS.LAYER].get_meta_item("schema.json"),
+            {
+                "id": "5f3b2a1c-0d4e-4f6a-9b7c-8d9e0f1a2b3c",
+                "name": "log_url",
+                "dataType": "text",
+            },
+        ]
+        legend_hash = Schema(new_schema).legend.hexhash()
+        _commit_raw(
+            repo,
+            "Schema without legend",
+            {
+                f"{H.POINTS.LAYER}/.table-dataset/meta/schema.json": json.dumps(
+                    new_schema
+                ).encode()
+            },
+        )
+
+        r = cli_runner.invoke(["fsck"])
+        assert r.exit_code == 1, r.stdout
+        assert f"Legend {legend_hash} of the current schema is missing" in r.stdout
+        # The features themselves still use the old legend, which is present.
+        assert f"{H.POINTS.ROWCOUNT} features checked" in r.stdout

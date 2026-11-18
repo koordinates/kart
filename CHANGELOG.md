@@ -16,6 +16,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - `log`: Fixed `<dataset>:tile` and raw-path filters silently matching nothing for point-cloud and raster datasets. [#1119](https://github.com/koordinates/kart/pull/1119)
 - Update PDAL to 2.10.1. [#1121](https://github.com/koordinates/kart/pull/1121)
 - log: Fixed intermittent empty output when using helper mode. [#1125](https://github.com/koordinates/kart/pull/1125)
+- `fsck`: Now checks that each table dataset has the legends that its schema and features refer to, and reports any that are missing instead of crashing. These checks also run in repositories with no working copy.
 
 ## 0.17.1
 
