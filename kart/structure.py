@@ -37,6 +37,9 @@ _DOT = r"\."
 _NON_SLASHES = "[^/]*"
 DATASET_DIRNAME_PATTERN = re.compile(rf"{_DOT}{_NON_SLASHES}-dataset{_NON_SLASHES}")
 DATASET_PATH_PATTERN = re.compile(f"/{DATASET_DIRNAME_PATTERN.pattern}/")
+# Git-pathspec glob equivalent of DATASET_DIRNAME_PATTERN, matching the dataset
+# dirname of any dataset type (".table-dataset", ".point-cloud-dataset.v1", etc.)
+DATASET_DIRNAME_GLOB = ".*-dataset*"
 
 
 class RepoStructure:

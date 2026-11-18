@@ -16,3 +16,4 @@ Development
    development/patch_format
    development/building_git_for_kart
    development/helper
+   development/libkart

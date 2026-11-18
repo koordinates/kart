@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
 
+# On Windows CI, vcvarsall leaks a truncated (multi-line) X_VCPKG_RECURSIVE_DATA into the
+# environment, which our vcpkg then fails to parse as JSON. This project is never configured *by*
+# vcpkg, so the variable is never legitimate here — scrub it before the vcpkg toolchain runs.
+unset(ENV{X_VCPKG_RECURSIVE_DATA})
+
 if(USE_VCPKG)
   # this needs to be super-early, before the first project() call
   include("vcpkg-vendor/vcpkg-toolchain-setup.cmake")
@@ -7,7 +12,7 @@ endif()
 
 project(
   kart
-  VERSION 0.17.1
+  VERSION 0.17.2
   DESCRIPTION "Version control for geospatial data"
   HOMEPAGE_URL "https://kartproject.org"
   LANGUAGES C CXX)
@@ -159,6 +164,7 @@ if(NOT WIN32)
 endif()
 
 include(KartPy)
+include(KartLibkart)
 include(KartBundle)
 
 #

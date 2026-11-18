@@ -73,6 +73,15 @@ if(VCPKG_TARGET_IS_ANDROID AND ANDROID_PLATFORM VERSION_LESS 24 AND (VCPKG_TARGE
     list(APPEND FEATURE_OPTIONS -DBUILD_WITHOUT_64BIT_OFFSET=ON)
 endif()
 
+# The vcpkg "arrow" port's headers (arrow/parquet) use C++20 library features
+# (std::span, std::popcount, std::has_single_bit) starting from the Arrow version
+# pinned by our vcpkg baseline. GDAL's own CMake defaults to C++17
+# (cmake/helpers/GdalCAndCXXStandards.cmake) unless CMAKE_CXX_STANDARD is already
+# set, so bump it here when the arrow/parquet feature is in use.
+if("arrow" IN_LIST FEATURES)
+    list(APPEND FEATURE_OPTIONS -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_STANDARD_REQUIRED=ON)
+endif()
+
 string(REPLACE "dynamic" "" qhull_target "Qhull::qhull${VCPKG_LIBRARY_LINKAGE}_r")
 
 vcpkg_cmake_configure(

@@ -1,4 +1,5 @@
 import contextlib
+import io
 import json
 import os
 import re
@@ -22,6 +23,29 @@ def test_version(cli_runner):
         r"^Kart v(\d+\.\d+.*?)\n» GDAL v",
         r.stdout,
     )
+
+
+def test_force_utf8_output_reconfigures_piped_stream():
+    # A non-tty text stream defaulting to a non-utf-8 codepage (as on Windows)
+    # must be switched to utf-8 so piped output is consistently utf-8 (#1115).
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="cp1252")
+    assert not stream.isatty()
+    cli._force_utf8_output(stream)
+    stream.write("»")
+    stream.flush()
+    assert raw.getvalue() == "»".encode("utf-8")
+
+
+def test_force_utf8_output_leaves_tty_alone():
+    # Interactive consoles keep their own codepage to avoid mojibake.
+    class TtyTextIO(io.TextIOWrapper):
+        def isatty(self):
+            return True
+
+    stream = TtyTextIO(io.BytesIO(), encoding="cp1252")
+    cli._force_utf8_output(stream)
+    assert stream.encoding == "cp1252"
 
 
 def test_cli_help():

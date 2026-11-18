@@ -115,6 +115,10 @@ def get_directory_from_url(url, is_bare):
         "may be necessary if the remote doesn't support spatially filtered clones."
     ),
 )
+@click.option(
+    "--bundle-uri",
+    help="Before fetching from the remote, fetch a bundle from the given <uri> and unbundle the data into the local repository.",
+)
 @click.argument("url", nargs=1)
 @click.argument(
     "directory",
@@ -132,6 +136,7 @@ def clone(
     branch,
     spatial_filter_spec,
     spatial_filter_after_clone,
+    bundle_uri,
     url,
     directory,
 ):
@@ -158,6 +163,8 @@ def clone(
         # for the various forms it can take, see
         # https://git-scm.com/docs/git-rev-list#Documentation/git-rev-list.txt---filterltfilter-specgt
         args.append(f"--filter={filterspec}")
+    if bundle_uri is not None:
+        args.append(f"--bundle-uri={bundle_uri}")
 
     repo = KartRepo.clone_repository(
         url,

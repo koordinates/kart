@@ -25,7 +25,7 @@ from kart.exceptions import (
 from kart.lfs_util import get_local_path_from_lfs_oid, dict_to_pointer_file_bytes
 from kart.lfs_commands import fetch_lfs_blobs_for_pointer_files
 from kart.key_filters import RepoKeyFilter
-from kart.output_util import InputMode, get_input_mode
+from kart.output_util import is_interactive
 from kart.reflink_util import try_reflink
 from kart.sqlalchemy import TableSet
 from kart.sqlalchemy.sqlite import sqlite_engine
@@ -168,7 +168,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         click.echo("\n".join(self.COPY_ON_WRITE_WARNING), err=True)
 
-        if get_input_mode() is not InputMode.INTERACTIVE:
+        if not is_interactive():
             # Can't ask the user what they think - we've logged a warning, carry on regardless.
             return True
 

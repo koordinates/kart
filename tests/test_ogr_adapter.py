@@ -47,8 +47,7 @@ def test_ogr_geometry_type_roundtrip():
         "GEOMETRYCOLLECTION",
         "GEOMETRY",
     ]:
-        suffixes = ["", " Z", " M", " ZM"] if base_type != "GEOMETRY" else [""]
-        for suffix in suffixes:
+        for suffix in ["", " Z", " M", " ZM"]:
             kart_type = base_type + suffix
             ogr_type = kart_geometry_type_to_ogr_geometry_type(kart_type)
             roundtripped_type = ogr_geometry_type_to_kart_geometry_type(ogr_type)

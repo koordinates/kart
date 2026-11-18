@@ -1,3 +1,4 @@
+import io
 import sys
 import logging
 from datetime import datetime, timedelta, timezone
@@ -10,9 +11,14 @@ from kart.completion_shared import ref_or_repo_path_completer
 from kart.exceptions import NotYetImplemented, SubprocessError
 from kart import subprocess_util as subprocess
 from kart.key_filters import RepoKeyFilter
-from kart.output_util import dump_json_output
+from kart.output_util import (
+    can_output_colour,
+    dump_json_output,
+    resolve_output_path,
+)
 from kart.parse_args import PreserveDoubleDash, parse_revisions_and_filters
 from kart.repo import KartRepoState
+from kart.structure import DATASET_DIRNAME_GLOB, DATASET_PATH_PATTERN
 from kart.timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
 L = logging.getLogger("kart.log")
@@ -66,10 +72,9 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     finds the path encoding for the dataset they apply to and converts them to the feature's path, eg:
     path/to/dataset/.table-dataset/feature/F/9/o/6/kc4F9o6L
     """
-    DATASET_DIRNAME = repo.dataset_class.DATASET_DIRNAME
     # Specially handle raw paths, because we can and it's nice for Kart developers
-    result = [p for p in paths if f"/{DATASET_DIRNAME}/" in p]
-    normal_paths = [p for p in paths if f"/{DATASET_DIRNAME}/" not in p]
+    result = [p for p in paths if DATASET_PATH_PATTERN.search(p)]
+    normal_paths = [p for p in paths if not DATASET_PATH_PATTERN.search(p)]
     repo_filter = RepoKeyFilter.build_from_user_patterns(normal_paths)
     if repo_filter.match_all:
         return result
@@ -90,7 +95,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
         else:
             for ds_part, part_filter in ds_filter.items():
                 if part_filter.match_all:
-                    result.append(f"{ds_path}/{DATASET_DIRNAME}/{ds_part}/*")
+                    result.append(f"{ds_path}/{DATASET_DIRNAME_GLOB}/{ds_part}/*")
                     continue
 
                 for item_key in part_filter:
@@ -109,7 +114,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
                             )
                     else:
                         result.append(
-                            f"{ds_path}/{DATASET_DIRNAME}/{ds_part}/{item_key}"
+                            f"{ds_path}/{DATASET_DIRNAME_GLOB}/{ds_part}/{item_key}"
                         )
     return result
 
@@ -137,6 +142,12 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     hidden=True,
 )
 @click.option(
+    "--output",
+    "output_path",
+    help="Output to a specific file/directory instead of stdout.",
+    type=click.Path(writable=True, allow_dash=True),
+)
+@click.option(
     "--with-feature-count",
     default=None,
     type=click.Choice(diff_estimation.ACCURACY_CHOICES),
@@ -145,6 +156,17 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
         "If the value is 'exact', the feature count is exact (this may be slow.) "
         "Otherwise, the feature count will be approximated with varying levels of accuracy. "
         "For non-tabular datasets, the feature count is always exact, and refers to the number of tiles."
+    ),
+)
+@click.option(
+    "--with-change-counts",
+    is_flag=True,
+    help=(
+        "Adds a 'featureChangeCounts' object to JSON output. For each dataset changed by "
+        "the commit, it gives the exact number of features inserted, updated and deleted "
+        "relative to the commit's first parent, plus 'features' - how many features that "
+        "dataset contains at the commit. For non-tabular datasets these are numbers of "
+        "tiles. Counts are always exact (this may be slow for large tabular datasets)."
     ),
 )
 # Some standard git options
@@ -240,8 +262,10 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
 def log(
     ctx,
     output_format,
+    output_path,
     dataset_changes,
     with_feature_count,
+    with_change_counts,
     args,
     **kwargs,
 ):
@@ -260,61 +284,97 @@ def log(
     paths = convert_user_patterns_to_raw_paths(filters, repo, commits)
     output_type, fmt = output_format
 
-    # TODO: should we check paths exist here? git doesn't!
-    if output_type == "text":
-        if fmt:
-            options.append(f"--format={fmt}")
-        cmd = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
-        subprocess.run_then_exit(cmd)
-
-    elif output_type in ("json", "json-lines"):
-        if kwargs.get("graph"):
-            raise click.UsageError("JSON output and --graph and not compatible")
-
-        try:
-            cmd = [
-                "git",
-                "-C",
-                repo.path,
-                "log",
-                "--format=%H,%D",
-                *options,
-                *commits,
-                "--",
-                *paths,
-            ]
-            r = subprocess.run(
-                cmd,
-                encoding="utf8",
-                check=True,
-                capture_output=True,
-            )
-        except subprocess.CalledProcessError as e:
-            raise SubprocessError(
-                f"There was a problem with git log: {e}", called_process_error=e
-            )
-
-        commit_ids_and_refs_log = _parse_git_log_output(r.stdout.splitlines())
-        dataset_change_cache = {}
-
-        commit_log = (
-            commit_obj_to_json(
-                repo[commit_id],
-                repo,
-                refs,
-                dataset_changes,
-                dataset_change_cache,
-                with_feature_count,
-            )
-            for (commit_id, refs) in commit_ids_and_refs_log
+    if with_change_counts and output_type == "text":
+        raise click.UsageError(
+            "--with-change-counts requires --output-format=json or json-lines"
         )
-        if output_type == "json-lines":
-            for item in commit_log:
-                # hardcoded style here; each item must be on one line.
-                dump_json_output(item, sys.stdout, "compact")
 
-        else:
-            dump_json_output(commit_log, sys.stdout, fmt)
+    log_cmd = [
+        "git",
+        "-C",
+        repo.path,
+        "--no-pager",
+        "log",
+    ]
+
+    with resolve_output_path(output_path) as output_fp:
+        if can_output_colour(output_fp):
+            options.append("--color=always")
+
+        # TODO: should we check paths exist here? git doesn't!
+        if output_type == "text":
+            if fmt:
+                options.append(f"--format={fmt}")
+
+            cmd = [*log_cmd, *options, *commits, "--", *paths]
+            sys.exit(_run_git_log_to_output(cmd, output_fp))
+
+        elif output_type in ("json", "json-lines"):
+            if kwargs.get("graph"):
+                raise click.UsageError("JSON output and --graph and not compatible")
+
+            try:
+                r = subprocess.run(
+                    [
+                        *log_cmd,
+                        "--format=%H,%D",
+                        *options,
+                        *commits,
+                        "--",
+                        *paths,
+                    ],
+                    encoding="utf8",
+                    check=True,
+                    capture_output=True,
+                )
+            except subprocess.CalledProcessError as e:
+                raise SubprocessError(
+                    f"There was a problem with git log: {e}", called_process_error=e
+                )
+
+            commit_ids_and_refs_log = _parse_git_log_output(r.stdout.splitlines())
+            dataset_change_cache = {}
+
+            commit_log = (
+                commit_obj_to_json(
+                    repo[commit_id],
+                    repo,
+                    refs,
+                    dataset_changes,
+                    dataset_change_cache,
+                    with_feature_count,
+                    with_change_counts,
+                )
+                for (commit_id, refs) in commit_ids_and_refs_log
+            )
+            if output_type == "json-lines":
+                for item in commit_log:
+                    # hardcoded style here; each item must be on one line.
+                    dump_json_output(item, output_fp, "compact")
+
+            else:
+                dump_json_output(commit_log, output_fp, fmt)
+
+
+def _run_git_log_to_output(cmd, output_fp):
+    """
+    Runs `git log`, sending its stdout to output_fp, and returns the exit code.
+
+    When output_fp has a real file descriptor (normal operation, including
+    writing to a pager or a file) git streams directly into it. Under the Click
+    test harness the output stream has no fileno, so we capture git's output and
+    write it through output_fp.write() instead.
+    """
+    try:
+        output_fp.fileno()
+    except (AttributeError, io.UnsupportedOperation):
+        p = subprocess.run(cmd, encoding="utf-8", capture_output=True)
+        output_fp.write(p.stdout)
+        output_fp.flush()
+        return p.returncode
+
+    p = subprocess.run(cmd, encoding="utf-8", stdout=output_fp)
+    return p.returncode
 
 
 def _parse_git_log_output(lines):
@@ -332,6 +392,7 @@ def commit_obj_to_json(
     dataset_changes=False,
     dataset_change_cache={},
     with_feature_count=None,
+    with_change_counts=False,
 ):
     """Given a commit object, returns a dict ready for dumping as JSON."""
     author = commit.author
@@ -369,7 +430,8 @@ def commit_obj_to_json(
         result["datasetChanges"] = get_dataset_changes(
             repo, commit, dataset_change_cache
         )
-    if with_feature_count:
+    if with_feature_count or with_change_counts:
+        # Both of these describe the diff between this commit and its first parent.
         if (not dataset_changes) or result["datasetChanges"]:
             try:
                 parent_commit = commit.parents[0]
@@ -379,14 +441,38 @@ def commit_obj_to_json(
             else:
                 base = parent_commit
 
-            result["featureChanges"] = diff_estimation.estimate_diff_feature_counts(
-                repo,
-                base=base,
-                target=commit,
-                accuracy=with_feature_count,
-            )
+            if with_feature_count:
+                result["featureChanges"] = diff_estimation.estimate_diff_feature_counts(
+                    repo,
+                    base=base,
+                    target=commit,
+                    accuracy=with_feature_count,
+                )
+            if with_change_counts:
+                change_counts = diff_estimation.get_diff_feature_type_counts(
+                    repo,
+                    base=base,
+                    target=commit,
+                )
+                # How big each dataset is, alongside how much of it changed. Only for the
+                # datasets this commit changed: counting one is O(its size), and a commit
+                # that didn't touch a dataset leaves it the same size as its parent did.
+                totals = diff_estimation.get_dataset_feature_totals(
+                    repo, commit, change_counts.keys()
+                )
+                result["featureChangeCounts"] = {
+                    ds_path: (
+                        {**counts, "features": totals[ds_path]}
+                        if ds_path in totals
+                        else counts
+                    )
+                    for ds_path, counts in change_counts.items()
+                }
         else:
-            result["featureChanges"] = {}
+            if with_feature_count:
+                result["featureChanges"] = {}
+            if with_change_counts:
+                result["featureChangeCounts"] = {}
     return result
 
 

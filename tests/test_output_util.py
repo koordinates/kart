@@ -1,4 +1,11 @@
-from kart.output_util import format_wkt_for_output
+import os
+import sys
+
+from kart.output_util import (
+    format_wkt_for_output,
+    is_empty_stream,
+    resolve_output_path,
+)
 
 NZGD_2000 = """
 PROJCS["NZGD2000 / New Zealand Transverse Mercator 2000",
@@ -56,3 +63,57 @@ def test_format_wkt_for_output():
         '    AXIS["Easting", EAST],',
         '    AXIS["Northing", NORTH]]',
     ]
+
+
+def _mock_pager_file(mocker):
+    """Patches click.get_pager_file to yield a sentinel, and returns (mock, sentinel)."""
+    sentinel = object()
+    pager_cm = mocker.MagicMock()
+    pager_cm.__enter__.return_value = sentinel
+    mock = mocker.patch("kart.output_util.click.get_pager_file", return_value=pager_cm)
+    return mock, sentinel
+
+
+def test_resolve_output_path_pages_when_interactive(mocker):
+    mocker.patch.dict(os.environ, {"KART_PAGER": "cat"})
+    mocker.patch("kart.output_util.is_interactive", return_value=True)
+    get_pager_file, sentinel = _mock_pager_file(mocker)
+
+    with resolve_output_path("-") as fp:
+        assert fp is sentinel
+    get_pager_file.assert_called_once()
+
+
+def test_resolve_output_path_no_pager_when_disabled(mocker):
+    mocker.patch("kart.output_util.is_interactive", return_value=True)
+    get_pager_file, _ = _mock_pager_file(mocker)
+
+    with resolve_output_path("-", allow_pager=False) as fp:
+        assert fp is sys.stdout
+    get_pager_file.assert_not_called()
+
+
+def test_resolve_output_path_no_pager_when_not_interactive(mocker):
+    mocker.patch("kart.output_util.is_interactive", return_value=False)
+    get_pager_file, _ = _mock_pager_file(mocker)
+
+    with resolve_output_path("-") as fp:
+        assert fp is sys.stdout
+    get_pager_file.assert_not_called()
+
+
+def test_is_empty_stream_does_not_block_on_pipe():
+    """
+    A pipe that is never written to and never closed must not be read from: on Windows
+    such a pipe reports seekable() as True and tell() as 0, so reading it would block
+    forever (github.com/koordinates/kart - Windows CI e2e hang).
+    """
+    read_fd, write_fd = os.pipe()
+    try:
+        with os.fdopen(read_fd, "r") as stream:
+            read_fd = None
+            assert is_empty_stream(stream) is False
+    finally:
+        if read_fd is not None:
+            os.close(read_fd)
+        os.close(write_fd)

@@ -4,13 +4,30 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-# Unreleased
+## UNRELEASED
+
+- `import`/`export`: Adds support for reading and writing (Geo)Parquet files directly, via GDAL's OGR Parquet driver.
+- `import`: Speeds up importing from any OGR-backed source (Shapefile, Parquet, generic OGR) by caching each field's index instead of re-resolving it by name on every feature.
+- `log`: Adds `--with-change-counts`. For each dataset changed by a commit, it reports the exact number of features (or tiles) inserted, updated and deleted, and how many features that dataset contains at that commit. [#1127](https://github.com/koordinates/kart/pull/1127), [#1128](https://github.com/koordinates/kart/pull/1128)
+- Adds `libkart`, a native shared library exposing a C API for reading Kart repositories in-process (without invoking the `kart` CLI). It is shipped in the bundle alongside the `kart` executable; see the libkart C API reference in the developer docs. [#1110](https://github.com/koordinates/kart/pull/1110)
+- Add pager support to `diff` and `show` commands. [#1080](https://github.com/koordinates/kart/pull/1080)
+- Piped (non-tty) output is now always UTF-8 on all platforms. Previously text output used the locale codepage on Windows (e.g. cp1252), inconsistent with JSON output (which is always UTF-8). [#1115](https://github.com/koordinates/kart/issues/1115)
+- `export`: Fixed a crash (`KeyError: 'GEOMETRY Z'`) when exporting datasets whose geometry type is the generic `GEOMETRY` with a `Z`, `M`, or `ZM` suffix. [#1063](https://github.com/koordinates/kart/issues/1063)
+- `log`: Fixed `<dataset>:tile` and raw-path filters silently matching nothing for point-cloud and raster datasets. [#1119](https://github.com/koordinates/kart/pull/1119)
+- Update PDAL to 2.10.1. [#1121](https://github.com/koordinates/kart/pull/1121)
+- log: Fixed intermittent empty output when using helper mode. [#1125](https://github.com/koordinates/kart/pull/1125)
+- `commit-files`: Now writes the schema's legend when committing a table dataset's `schema.json`. Previously the legend was left out, so features later committed with that schema couldn't be read back (`KeyError: No data found at rel-path meta/legend/...`). [#1135](https://github.com/koordinates/kart/pull/1135)
+- `fsck`: Now checks that each table dataset has the legends that its schema and features refer to, and reports any that are missing instead of crashing. These checks also run in repositories with no working copy. Also fixed the `git fsck` step, which failed in every repository that has a locked index (all but bare repositories), and whose failure was ignored. [#1136](https://github.com/koordinates/kart/pull/1136)
+
+## 0.17.1
 
 - Fixes a crash when branch names contain a slash. [#1089](https://github.com/koordinates/kart/issues/1089)
 - Helper mode: Fixed crashes when environment variables contain invalid UTF-8 sequences. [#1085](https://github.com/koordinates/kart/issues/1085)
 - import: `--replace-existing` now preserves attachments (files at the dataset root level, such as licenses or READMEs) instead of deleting them along with the dataset data. [#1083](https://github.com/koordinates/kart/pull/1083)
 - Fixes the HTML diff viewer (`-o html`) failing to load the page if the data contained `<`, `>`, or `/` characters. [#1081](https://github.com/koordinates/kart/issues/1081)
 - Adds support for an env-var flag `KART_ALLOW_FROM_GIT=1` that turns off the safe-guard that stops Kart from running on what appear to be Git repositories. [#1100](https://github.com/koordinates/kart/pull/1100)
+- Adds support for cloning from git bundles to speed up initial clones of large repositories [#1106](https://github.com/koordinates/kart/pull/1106)
+- Removes dev/test-only Python packages (IPython, pytest, etc.) that were being included in release bundles, slightly reducing bundle size. [#1108](https://github.com/koordinates/kart/pull/1108)
 - Adds support for ArcGIS REST services as import sources. [#1102](https://github.com/koordinates/kart/pull/1102)
 
 ## 0.17.0

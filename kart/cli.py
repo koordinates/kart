@@ -332,8 +332,29 @@ def load_commands_from_args(args, skip_first_arg=True):
             load_all_commands()
 
 
+def _force_utf8_output(*streams):
+    """
+    Ensure non-interactive (piped) text streams use utf-8.
+
+    Kart's JSON output is always utf-8 (msgspec writes raw utf-8 bytes), but
+    human-readable text is written through Python's text streams, which on
+    Windows default to the locale ANSI codepage (e.g. cp1252). That makes piped
+    output inconsistently encoded and breaks consumers that decode it as utf-8
+    (e.g. the QGIS plugin under QGIS 4 - see #1115). Leave interactive ttys
+    alone so console output still matches the terminal's codepage.
+    """
+    for stream in streams:
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None or stream.isatty():
+            continue
+        if (getattr(stream, "encoding", "") or "").lower().replace("-", "") == "utf8":
+            continue
+        reconfigure(encoding="utf-8")
+
+
 def entrypoint():
     freeze_support()
+    _force_utf8_output(sys.stdout, sys.stderr)
     load_commands_from_args(sys.argv)
     # Don't let helper mode mess up the usage-text, or the shell complete environment variables.
     prog_name = "kart" if os.path.basename(sys.argv[0]) == "kart_cli" else None

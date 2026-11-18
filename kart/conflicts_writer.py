@@ -23,7 +23,7 @@ from .merge_util import (
     rich_conflicts,
     ensure_conflicts_ready,
 )
-from .output_util import dump_json_output, resolve_output_path
+from .output_util import can_output_colour, dump_json_output, resolve_output_path
 from .repo import KartRepo
 from . import diff_util
 
@@ -72,6 +72,12 @@ class BaseConflictsWriter:
         if merge_context is None:
             merge_context = MergeContext.read_from_repo(repo)
         self.merge_context = merge_context
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
 
     @classmethod
     def _normalize_output_path(cls, output_path: str | Path) -> str | Path:
@@ -233,8 +239,19 @@ class TextConflictsWriter(BaseConflictsWriter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fp = resolve_output_path(self.output_path)
-        self.pecho = {"file": self.fp, "color": self.fp.isatty()}
+        self._fp_context = None
+        self.fp = None
+        self.pecho = None
+
+    def __enter__(self):
+        self._fp_context = resolve_output_path(self.output_path)
+        self.fp = self._fp_context.__enter__()
+        self.pecho = {"file": self.fp, "color": can_output_colour(self.fp)}
+        return self
+
+    def __exit__(self, *args):
+        if self._fp_context:
+            return self._fp_context.__exit__(*args)
 
     @classmethod
     def _check_output_path(

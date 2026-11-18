@@ -121,6 +121,12 @@ ALL_IMPORT_SOURCE_TYPES = [
         file_ext=(".shp", ".shx", ".dbf"),
     ),
     ImportSourceType(
+        "(Geo)Parquet",
+        "PATH.parquet",
+        ImportType.OGR_TABLE,
+        file_ext=".parquet",
+    ),
+    ImportSourceType(
         "ESRI Rest Service",
         "esri:https://HOST/PATH/FeatureServer/[LAYER_ID]",
         ImportType.ESRI_REST_TABLE,

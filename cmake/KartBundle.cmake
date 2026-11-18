@@ -39,7 +39,7 @@ endif()
 
 add_custom_command(
   OUTPUT pyinstaller.stamp ${BUNDLE_EXE}
-  DEPENDS bundleEnv kart.spec VERSION ${BUNDLE_DEPENDS} # ${KART_EXE_VENV}
+  DEPENDS bundleEnv kart.spec VERSION ${BUNDLE_DEPENDS} ${LIBKART_LIB} # ${KART_EXE_VENV}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_CURRENT_BINARY_DIR}/pyinstaller/
   COMMAND

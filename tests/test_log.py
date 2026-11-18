@@ -1,5 +1,6 @@
 import re
 import json
+import click
 import pytest
 
 
@@ -191,6 +192,92 @@ def test_log_with_feature_count_pointcloud(data_archive, cli_runner):
         assert result == [{"auckland": 16}]
 
 
+def test_log_with_change_counts_tabular(data_archive, cli_runner):
+    with data_archive("points"):
+        r = cli_runner.invoke(["log", "--output-format=json", "--with-change-counts"])
+        assert r.exit_code == 0, r
+        result = [c["featureChangeCounts"] for c in json.loads(r.stdout)]
+        assert result == [
+            {"nz_pa_points_topo_150k": {"updates": 5, "features": 2143}},
+            # the initial import, so everything is an insert
+            {"nz_pa_points_topo_150k": {"inserts": 2143, "features": 2143}},
+        ]
+        # the change counts add up to the totals reported by --with-feature-count=exact
+        assert [
+            sum(v for k, v in counts.items() if k != "features")
+            for counts in result[0].values()
+        ] == [5]
+        assert [
+            sum(v for k, v in counts.items() if k != "features")
+            for counts in result[1].values()
+        ] == [2143]
+
+        # not reported unless asked for
+        r = cli_runner.invoke(["log", "--output-format=json"])
+        assert r.exit_code == 0, r
+        assert "featureChangeCounts" not in json.loads(r.stdout)[0]
+
+
+def test_log_with_change_counts_pointcloud(data_archive, cli_runner):
+    with data_archive("point-cloud/auckland.tgz"):
+        r = cli_runner.invoke(["log", "--output-format=json", "--with-change-counts"])
+        assert r.exit_code == 0, r
+        result = [c["featureChangeCounts"] for c in json.loads(r.stdout)]
+        assert result == [{"auckland": {"inserts": 16, "features": 16}}]
+
+
+def test_log_with_change_counts_reverse_diff(data_archive, cli_runner):
+    """
+    Type counts aren't the same in both directions, so they're cached against an
+    ordered key - and a diff we've already done in the other direction is inverted
+    rather than recomputed.
+    """
+    with data_archive("points") as repo_path:
+        from kart import diff_estimation
+        from kart.repo import KartRepo
+
+        repo = KartRepo(repo_path)
+        head = repo.head_commit
+        parent = head.parents[0]
+
+        forwards = diff_estimation.get_diff_feature_type_counts(
+            repo, base=parent, target=head
+        )
+        assert forwards == {"nz_pa_points_topo_150k": {"updates": 5}}
+
+        # cached; same answer
+        assert (
+            diff_estimation.get_diff_feature_type_counts(repo, base=parent, target=head)
+            == forwards
+        )
+
+        # the reverse diff of an update is still an update...
+        assert diff_estimation.get_diff_feature_type_counts(
+            repo, base=head, target=parent
+        ) == {"nz_pa_points_topo_150k": {"updates": 5}}
+
+        # ... but inserts and deletes swap over.
+        empty_tree = repo.empty_tree
+        forwards = diff_estimation.get_diff_feature_type_counts(
+            repo, base=empty_tree, target=parent
+        )
+        assert forwards == {"nz_pa_points_topo_150k": {"inserts": 2143}}
+        assert diff_estimation.get_diff_feature_type_counts(
+            repo, base=parent, target=empty_tree
+        ) == {"nz_pa_points_topo_150k": {"deletes": 2143}}
+
+
+def test_log_with_change_counts_text_output(data_archive, cli_runner):
+    with data_archive("points"):
+        # NOTE: checking the exception rather than r.stderr, since the test runner
+        # doesn't capture stderr separately with the Click version we target.
+        with pytest.raises(
+            click.UsageError,
+            match="--with-change-counts requires --output-format=json or json-lines",
+        ):
+            cli_runner.invoke(["log", "--with-change-counts"], standalone_mode=False)
+
+
 @pytest.mark.parametrize("output_format", ["text", "json"])
 def test_log_arg_handling(data_archive, cli_runner, output_format):
     def num_commits(r):
@@ -300,6 +387,61 @@ def test_path_handling(data_archive, cli_runner, output_format):
         r = cli_runner.invoke(["log", "-o", output_format, "--", "non-existant"])
         assert r.exit_code == 0, r.stderr
         assert num_commits(r) == 0
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
+@pytest.mark.parametrize(
+    "archive,ds_name,dirname",
+    [
+        pytest.param(
+            "point-cloud/auckland.tgz",
+            "auckland",
+            ".point-cloud-dataset.v1",
+            id="point-cloud",
+        ),
+        pytest.param("raster/aerial.tgz", "aerial", ".raster-dataset.v1", id="raster"),
+    ],
+)
+def test_path_handling_tile_datasets(
+    data_archive, cli_runner, output_format, archive, ds_name, dirname
+):
+    def num_commits(r):
+        if output_format == "text":
+            return len(re.findall(r"(?m)^commit [0-9a-f]{40}$", r.stdout))
+        else:
+            return len(json.loads(r.stdout))
+
+    with data_archive(archive):
+        # Make a metadata-only commit so we can check that :tile filters exclude it.
+        r = cli_runner.invoke(["meta", "set", ds_name, "title=A new title"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["log", "-o", output_format, "--", ds_name])
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 2
+
+        r = cli_runner.invoke(["log", "-o", output_format, "--", f"{ds_name}:tile"])
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+        r = cli_runner.invoke(["log", "-o", output_format, "--", f"{ds_name}:meta"])
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 2
+
+        # The import commit didn't create a title meta item, so only the
+        # meta-set commit touches it:
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", f"{ds_name}:meta:title"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+        # Raw path syntax works for tile datasets too:
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", f"{ds_name}/{dirname}/tile"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
 
 
 @pytest.mark.parametrize("output_format", ["text", "json"])

@@ -214,7 +214,7 @@ find_package(PostgreSQL REQUIRED)
 if(WIN32)
   set(PG_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/libpq/pg_config.exe")
 else()
-  set(PG_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/libpq/bin/pg_config")
+  set(PG_CONFIG_EXE "${CURRENT_PACKAGES_DIR}/tools/libpq/pg_config")
 endif()
 
 file(
@@ -549,6 +549,11 @@ else()
       "prefix=/"
       "V=1"
       "CC=${CMAKE_C_COMPILER}"
+      # Git 2.47 predates C23; newer glibc/GCC default to a dialect where
+      # C23 keywords/macros like `thread_local` and `unreachable()` collide
+      # with git's own identifiers of the same name. Pin an older C dialect
+      # for git's own build so those aren't reserved.
+      "CFLAGS=-std=gnu17"
       "NO_GETTEXT=YesPlease"
       "INSTALL_SYMLINKS=1"
       "USE_LIBPCRE=1"

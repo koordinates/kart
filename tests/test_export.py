@@ -3,6 +3,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from osgeo import ogr
 import pytest
 from sqlalchemy.orm import sessionmaker
 
@@ -72,6 +73,15 @@ def test_export_datasets(archive, layer, geometry, data_archive, cli_runner):
         ("GPKG:output.gpkg", "GPKG", "output.gpkg"),
         ("output.shp", "ESRI Shapefile", "output.shp"),
         ("ESRI Shapefile:output.shp", "ESRI Shapefile", "output.shp"),
+        pytest.param(
+            "output.parquet",
+            "Parquet",
+            "output.parquet",
+            marks=pytest.mark.skipif(
+                ogr.GetDriverByName("Parquet") is None,
+                reason="GDAL build does not include the Parquet driver",
+            ),
+        ),
         (r"/abs/path/to/output.gpkg", "GPKG", r"/abs/path/to/output.gpkg"),
         (r"C:\Users\me\output.gpkg", "GPKG", r"C:\Users\me\output.gpkg"),
         (r"GPKG:C:\Users\me\output.gpkg", "GPKG", r"C:\Users\me\output.gpkg"),
