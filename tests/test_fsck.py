@@ -130,3 +130,30 @@ def test_fsck_many_refs(data_archive, cli_runner, monkeypatch):
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 0, r.stdout
         assert f"{H.POINTS.ROWCOUNT} features checked" in r.stdout
+
+
+def test_fsck_legend_is_not_a_blob(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        repo = _without_working_copy(repo_path)
+        legend_hash = repo.datasets()[H.POINTS.LAYER].schema.legend.hexhash()
+        legend_path = f"{H.POINTS.LAYER}/.table-dataset/meta/legend/{legend_hash}"
+        _commit_raw(repo, "Remove legend", {legend_path: None})
+        _commit_raw(repo, "Add a tree in its place", {f"{legend_path}/x": b"y"})
+
+        r = cli_runner.invoke(["fsck"])
+        assert r.exit_code == 1, r.stdout
+        assert f"Legend {legend_hash} of the current schema is missing" in r.stdout
+        assert (
+            f"{H.POINTS.ROWCOUNT} features refer to missing legend {legend_hash}"
+            in r.stdout
+        )
+
+
+def test_fsck_spatially_filtered_clone(data_archive, cli_runner):
+    with data_archive("points-spatial-filtered") as repo_path:
+        _without_working_copy(repo_path)
+
+        r = cli_runner.invoke(["fsck"])
+        assert r.exit_code == 0, r.stdout
+        assert "1326 features not present locally were skipped" in r.stdout
+        assert "817 features checked" in r.stdout

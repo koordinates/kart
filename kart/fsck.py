@@ -2,6 +2,7 @@ import os
 from collections import Counter
 
 import click
+import pygit2
 
 from kart.cli_util import KartCommand
 from kart.exceptions import NO_WORKING_COPY, NotFound
@@ -80,7 +81,11 @@ def _fsck_table_dataset(dataset):
     and can't be read without it. Returns True if no problems were found.
     """
     try:
-        legends_present = {blob.name for blob in dataset.meta_tree / "legend"}
+        legends_present = {
+            entry.name
+            for entry in dataset.meta_tree / "legend"
+            if entry.type == pygit2.GIT_OBJ_BLOB
+        }
     except KeyError:
         legends_present = set()
 
@@ -92,18 +97,18 @@ def _fsck_table_dataset(dataset):
             f"✘ Legend {schema_legend} of the current schema is missing", fg="red"
         )
 
-    feature_count = 0
+    checked_count = 0
     not_present_count = 0
     unreadable_count = 0
     missing_legend_counts = Counter()
     for blob in dataset.feature_blobs():
-        feature_count += 1
         try:
             data = memoryview(blob)
         except KeyError:
             # Not fetched, as in a spatially filtered clone. `git fsck` accepts this too.
             not_present_count += 1
             continue
+        checked_count += 1
         try:
             legend_hash = _feature_legend_hash(data)
         except Exception:
@@ -123,7 +128,7 @@ def _fsck_table_dataset(dataset):
 
     features_ok = not unreadable_count and not missing_legend_counts
     if features_ok:
-        click.secho(f"✔︎ {feature_count} features checked", fg="green")
+        click.secho(f"✔︎ {checked_count} features checked", fg="green")
     return schema_ok and features_ok
 
 
