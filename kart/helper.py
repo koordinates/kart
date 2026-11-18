@@ -316,14 +316,18 @@ def helper(ctx, socket_filename, timeout, args):
                             )
 
                     try:
-                        # send a signal to caller that we are done
+                        # Tell the caller we're done. Don't write to the log after this:
+                        # the caller exits as soon as it gets the signal, and whatever ran
+                        # it may then remove the directory the log file is in.
                         _helper_log(
-                            f"sending SIGALRM to pid {calling_environment['pid']}"
+                            f"sending SIGALRM to pid {calling_environment['pid']}, bye(0)"
                         )
                         os.kill(calling_environment["pid"], signal.SIGALRM)
-                    except ProcessLookupError as e:
-                        _helper_log(f"error signalling caller: {e}")
+                    except ProcessLookupError:
+                        # The caller has already gone, and its cleanup may be running too,
+                        # so don't log this either.
                         pass
+                    sys.exit()
 
                 _helper_log("bye(0)")
                 sys.exit()
