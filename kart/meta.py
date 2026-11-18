@@ -24,6 +24,9 @@ from .output_util import (
     write_with_indent,
 )
 from .pack_util import packfile_object_builder
+from .schema import Schema
+from .tabular.v2 import TableV2
+from .tabular.v3 import TableV3
 from .cli_util import KartGroup, KartCommand
 
 
@@ -214,6 +217,29 @@ def meta_set(ctx, message, amend, dataset, items):
     )
 
 
+_SCHEMA_JSON_SUFFIXES = tuple(
+    f"/{dataset_class.DATASET_DIRNAME}/{dataset_class.META_PATH}schema.json"
+    for dataset_class in (TableV2, TableV3)
+)
+
+
+def _legend_item_for_schema_json(path, content):
+    """
+    If the given file is a table dataset's schema.json, returns the (path, content) of
+    that schema's legend, which must be written too: features name their legend by hash
+    and can't be read back without it. Returns None for any other file.
+    """
+    if not path.endswith(_SCHEMA_JSON_SUFFIXES):
+        return None
+    try:
+        legend = Schema(json.loads(content)).legend
+    except (ValueError, TypeError, KeyError, AttributeError):
+        # Not a schema we understand - commit it as given.
+        return None
+    inner_path = path[: -len(f"{TableV3.META_PATH}schema.json")]
+    return f"{inner_path}{TableV3.LEGEND_PATH}{legend.hexhash()}", legend.dumps()
+
+
 @click.command("commit-files", hidden=True, cls=KartCommand)
 @click.option(
     "--message",
@@ -284,6 +310,9 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
                 object_builder.remove(key)
             else:
                 object_builder.insert(key, value)
+                legend_item = _legend_item_for_schema_json(key, value)
+                if legend_item:
+                    object_builder.insert(*legend_item)
 
     new_tree = object_builder.flush()
     if new_tree == original_tree and not amend and not allow_empty:

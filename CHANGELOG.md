@@ -16,6 +16,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - `log`: Fixed `<dataset>:tile` and raw-path filters silently matching nothing for point-cloud and raster datasets. [#1119](https://github.com/koordinates/kart/pull/1119)
 - Update PDAL to 2.10.1. [#1121](https://github.com/koordinates/kart/pull/1121)
 - log: Fixed intermittent empty output when using helper mode. [#1125](https://github.com/koordinates/kart/pull/1125)
+- `commit-files`: Now writes the schema's legend when committing a table dataset's `schema.json`. Previously the legend was left out, so features later committed with that schema couldn't be read back (`KeyError: No data found at rel-path meta/legend/...`). [#1135](https://github.com/koordinates/kart/pull/1135)
 
 ## 0.17.1
 
