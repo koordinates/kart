@@ -114,6 +114,9 @@ def _fsck_table_dataset(dataset):
         except Exception:
             unreadable_count += 1
             continue
+        if not isinstance(legend_hash, str):
+            unreadable_count += 1
+            continue
         if legend_hash not in legends_present:
             missing_legend_counts[legend_hash] += 1
 

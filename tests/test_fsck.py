@@ -5,6 +5,7 @@ import pytest
 from kart.object_builder import ObjectBuilder
 from kart.repo import KartRepo
 from kart.schema import Schema
+from kart.serialise_util import msg_pack
 
 
 H = pytest.helpers.helpers()
@@ -157,3 +158,15 @@ def test_fsck_spatially_filtered_clone(data_archive, cli_runner):
         assert r.exit_code == 0, r.stdout
         assert "1326 features not present locally were skipped" in r.stdout
         assert "817 features checked" in r.stdout
+
+
+def test_fsck_feature_with_non_string_legend(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        repo = _without_working_copy(repo_path)
+        feature_path = repo.datasets()[H.POINTS.LAYER].encode_1pk_to_path(1)
+        _commit_raw(repo, "Malformed feature", {feature_path: msg_pack([123, []])})
+
+        r = cli_runner.invoke(["fsck"])
+        assert r.exit_code == 1, r.stdout
+        assert "1 features could not be decoded" in r.stdout
+        assert "missing legend" not in r.stdout
