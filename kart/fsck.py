@@ -11,6 +11,58 @@ from kart import subprocess_util as subprocess
 from kart.sqlalchemy.gpkg import Db_GPKG
 
 
+# Each head is passed to `git fsck` as an argument, and Windows limits a command line
+# to 32,767 characters.
+MAX_HEADS_PER_GIT_FSCK = 500
+
+
+def _git_fsck(repo, fsck_args):
+    """
+    Runs `git fsck` with the given extra arguments. Returns True if it found no problems.
+
+    When `git fsck` isn't told which heads to start from, it starts from every ref and
+    also checks the index file. It rejects the index of a Kart repository, which is
+    deliberately unreadable to Git (see locked_git_index), and so fails before checking
+    anything. So unless the caller named some heads, we name them: HEAD and every ref.
+    Unlike Git's default, this doesn't include reflogs.
+    """
+    cmd = ["git", "-C", repo.path, "fsck", *fsck_args]
+    if any(not arg.startswith("-") for arg in fsck_args):
+        return subprocess.call(cmd) == 0
+
+    heads = set()
+    if not repo.head_is_unborn:
+        heads.add(str(repo.head.target))
+    for ref in repo.listall_reference_objects():
+        try:
+            heads.add(str(ref.resolve().target))
+        except KeyError:
+            # A dangling symbolic ref. Let `git fsck` report it.
+            heads.add(ref.name)
+    if not heads:
+        # An empty repository: nothing is reachable.
+        return True
+
+    heads = sorted(heads)
+    chunks = [
+        heads[i : i + MAX_HEADS_PER_GIT_FSCK]
+        for i in range(0, len(heads), MAX_HEADS_PER_GIT_FSCK)
+    ]
+    ok = True
+    for i, chunk in enumerate(chunks):
+        extra_args = []
+        if len(chunks) > 1:
+            # Each run only knows about its own heads, so it would report the objects
+            # that are reachable from the other runs' heads as dangling.
+            extra_args.append("--no-dangling")
+        if i > 0:
+            # The first run has already checked the validity of every object.
+            extra_args.append("--connectivity-only")
+        if subprocess.call(cmd + extra_args + chunk) != 0:
+            ok = False
+    return ok
+
+
 def _feature_legend_hash(data):
     """
     Returns the legend hash from a feature blob, which is msgpack([legend_hash, values]).
@@ -97,11 +149,8 @@ def fsck(ctx, reset_datasets, fsck_args):
     repo = ctx.obj.repo
 
     click.echo("Checking repository integrity...")
-    r = subprocess.call(
-        ["git", "-C", repo.path, "fsck"] + list(fsck_args),
-    )
-    if r:
-        click.Abort()
+    if not _git_fsck(repo, fsck_args):
+        raise click.Abort()
 
     # now check our stuff:
     # 1. datasets

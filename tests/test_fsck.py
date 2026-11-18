@@ -109,3 +109,24 @@ def test_fsck_schema_with_missing_legend(data_archive, cli_runner):
         assert f"Legend {legend_hash} of the current schema is missing" in r.stdout
         # The features themselves still use the old legend, which is present.
         assert f"{H.POINTS.ROWCOUNT} features checked" in r.stdout
+
+
+def test_fsck_stops_when_git_fsck_fails(data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        _without_working_copy(repo_path)
+
+        r = cli_runner.invoke(["fsck", "--not-a-git-fsck-option"])
+        assert r.exit_code == 1, r.stdout
+        assert "features checked" not in r.stdout
+
+
+def test_fsck_many_refs(data_archive, cli_runner, monkeypatch):
+    # More heads than fit in one `git fsck` invocation.
+    monkeypatch.setattr("kart.fsck.MAX_HEADS_PER_GIT_FSCK", 1)
+    with data_archive("points") as repo_path:
+        repo = _without_working_copy(repo_path)
+        repo.references.create("refs/heads/older", repo.head_commit.parents[0].id)
+
+        r = cli_runner.invoke(["fsck"])
+        assert r.exit_code == 0, r.stdout
+        assert f"{H.POINTS.ROWCOUNT} features checked" in r.stdout
