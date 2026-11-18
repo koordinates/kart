@@ -58,7 +58,7 @@ class ESRIRestImportSource(TableImportSource):
         Server URLs (no layer ID) -> ESRIRestServerSource
         Layer URLs (with layer ID) -> ESRIJSONImportSource
         """
-        spec = str(source).lstrip("esri:")
+        spec = str(source).removeprefix("esri:")
         parsed = urlparse(spec)
 
         # Check if this is a server-level URL (MapServer/FeatureServer without layer ID)
@@ -88,7 +88,7 @@ class ESRIRestServerSource(TableImportSource):
     @classmethod
     def open(cls, source, table=None):
         """Open an ESRI Rest service and optionally select a specific layer."""
-        spec = str(source).lstrip("esri:")
+        spec = str(source).removeprefix("esri:")
         parsed = urlparse(spec)
 
         # Validate the URL points to a MapServer or FeatureServer
@@ -356,7 +356,7 @@ class ESRIJSONImportSource(OgrTableImportSource):
 
     @classmethod
     def adapt_source_for_ogr(cls, source):
-        source = str(source).lstrip("esri:")
+        source = str(source).removeprefix("esri:")
 
         parsed = urlparse(source)
 
