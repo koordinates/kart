@@ -218,6 +218,11 @@ def mock_esri_server(tmp_path):
         query_file = service_path / "query"
         shutil.copy(test_data_path, query_file)
 
+        # Layer metadata: GET .../MapServer/0?f=json redirects to .../MapServer/0/?f=json, which serves index.html
+        (service_path / "index.html").write_text(
+            json.dumps({"id": 0, "name": "Test Points", "type": "Feature Layer"})
+        )
+
         # Create a simple HTTP server
         class Handler(SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):
@@ -281,6 +286,22 @@ class TestESRIJSONImportSourceIntegration:
         feature = next(dataset.features())
         assert feature["FEATURE_TYPE"] == "Test Feature"
         assert feature["ID"] == "Test ID"
+
+    @pytest.mark.slow
+    def test_import_layer_named_from_metadata(
+        self, mock_esri_server, tmp_path, cli_runner
+    ):
+        """Without --dataset, the dataset is named after the Esri layer, not "ESRIJSON". No esri: prefix needed."""
+        repo_path = tmp_path / "repo"
+        r = cli_runner.invoke(["init", str(repo_path)])
+        assert r.exit_code == 0, r.stderr
+
+        esri_url = f"{mock_esri_server}/arcgis/rest/services/TestService/MapServer/0"
+        r = cli_runner.invoke(["-C", str(repo_path), "import", esri_url])
+        assert r.exit_code == 0, r.stderr
+
+        repo = KartRepo(repo_path)
+        assert [ds.path for ds in repo.datasets()] == ["Test Points"]
 
 
 class TestESRIRestServerSource:
@@ -446,3 +467,45 @@ class TestESRIRestImportSourceRouter:
         with pytest.raises(ImportSourceError) as exc_info:
             ESRIRestImportSource.open("https://example.com/not-a-service")
         assert "Invalid ESRI Rest service URL" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "ogr_source,expected",
+    [
+        (
+            "https://example.com/rest/services/S/MapServer/0/query?f=json&where=1%3D1&outFields=%2A",
+            "https://example.com/rest/services/S/MapServer/0?f=json&where=1%3D1&outFields=%2A",
+        ),
+        (
+            "https://example.com/rest/services/S/FeatureServer/3/query?token=abc&f=json",
+            "https://example.com/rest/services/S/FeatureServer/3?token=abc&f=json",
+        ),
+    ],
+)
+def test_layer_metadata_url(ogr_source, expected):
+    assert ESRIJSONImportSource.layer_metadata_url(ogr_source) == expected
+
+
+@pytest.mark.parametrize(
+    "spec,is_esri",
+    [
+        ("esri:https://example.com/rest/services/S/MapServer", True),
+        ("https://example.com/rest/services/S/MapServer", True),
+        ("https://example.com/rest/services/S/FeatureServer/", True),
+        ("https://example.com/rest/services/S/MapServer/0", True),
+        ("http://example.com/rest/services/S/FeatureServer/12/query?f=json", True),
+        ("https://example.com/rest/services/S/MapServer/0?where=a%3D1", True),
+        ("https://example.com/rest/services/S/MapServer/legend", False),
+        ("https://example.com/rest/services/S/MapServer/0/foo", False),
+        ("https://example.com/search?q=/MapServer", False),
+        ("https://example.com/MapServer.gpkg", False),
+    ],
+)
+def test_from_spec_detects_esri_urls(spec, is_esri):
+    from kart.import_sources import ImportType, from_spec
+
+    source_type = from_spec(spec, allow_unrecognised=True)
+    assert (
+        source_type is not None
+        and source_type.import_type == ImportType.ESRI_REST_TABLE
+    ) == is_esri

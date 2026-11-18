@@ -258,33 +258,15 @@ class ESRIRestServerSource(TableImportSource):
                 f"Available layers: {', '.join(tables.keys())}"
             )
 
-        # Get the layer metadata
         layer_info = tables[table]
-        layer_id = layer_info["id"]
-        layer_name = layer_info["name"]
-
-        # Construct the URL for this layer
-        layer_url = f"{self.base_url}/{layer_id}"
-
-        # Create and open an ESRIJSONImportSource for this layer
-        layer_source = ESRIJSONImportSource.open(layer_url, table=layer_name)
-
-        # If dest_path or other overrides are provided, clone with those settings
-        if dest_path or primary_key or meta_overrides:
-            if hasattr(layer_source, "clone_for_table"):
-                return layer_source.clone_for_table(
-                    layer_source.table,
-                    dest_path=dest_path,
-                    primary_key=primary_key,
-                    meta_overrides=meta_overrides or {},
-                )
-            else:
-                # If it doesn't have clone_for_table, just set dest_path
-                if dest_path:
-                    layer_source.dest_path = dest_path
-                return layer_source
-
-        return layer_source
+        layer_url = f"{self.base_url}/{layer_info['id']}"
+        layer_source = ESRIJSONImportSource.open(layer_url, table=layer_info["name"])
+        return layer_source.clone_for_table(
+            layer_source.table,
+            dest_path=dest_path,
+            primary_key=primary_key,
+            meta_overrides=meta_overrides or {},
+        )
 
     def __str__(self):
         if self.table:
@@ -310,6 +292,10 @@ class ESRIJSONImportSource(OgrTableImportSource):
     Handles:
     - Automatic construction of query URLs with necessary parameters
     - Layer-specific imports from MapServer/FeatureServer endpoints
+
+    The OGR datasource always has exactly one layer, named after the driver ("ESRIJSON").
+    Kart-facing, that layer is named after the Esri layer's name from the layer metadata
+    endpoint (eg ".../MapServer/0?f=json"), which gives a sensible default dataset path.
     """
 
     def __init__(
@@ -323,26 +309,12 @@ class ESRIJSONImportSource(OgrTableImportSource):
         primary_key=None,
         meta_overrides=None,
     ):
-        # For ESRI JSON sources, the datasource typically has only one layer
-        # If no table is specified or the specified table doesn't exist,
-        # use the first (and usually only) layer in the datasource
-        if table is None or ogr_ds.GetLayerByName(table) is None:
-            if ogr_ds.GetLayerCount() > 0:
-                actual_layer = ogr_ds.GetLayerByIndex(0)
-                actual_table_name = actual_layer.GetName()
-                # If a table name was requested but doesn't match, still use it for dest_path
-                # but use the actual layer name for accessing the data
-                if table and table != actual_table_name:
-                    # Store the requested name for dest_path purposes
-                    if not dest_path:
-                        dest_path = table
-                    table = actual_table_name
-                elif not table:
-                    table = actual_table_name
-            elif table is None:
-                raise ImportSourceError(
-                    f"No layers found in ESRI JSON datasource: {source}"
-                )
+        if ogr_ds.GetLayerCount() != 1:
+            raise ImportSourceError(
+                f"Expected exactly one layer in ESRI JSON datasource: {source}"
+            )
+        if table is None:
+            table = self.fetch_esri_layer_name(ogr_ds, ogr_source)
 
         super().__init__(
             ogr_ds,
@@ -353,6 +325,46 @@ class ESRIJSONImportSource(OgrTableImportSource):
             primary_key=primary_key,
             meta_overrides=meta_overrides,
         )
+
+    @classmethod
+    def layer_metadata_url(cls, ogr_source):
+        """
+        Given the adapted ".../MapServer/N/query?..." URL, returns ".../MapServer/N?f=json".
+        Other query params (eg token) are kept, since some services need them for metadata too.
+        """
+        parsed = urlparse(str(ogr_source))
+        query_params = parse_qs(parsed.query, keep_blank_values=True)
+        query_params["f"] = ["json"]
+        return urlunparse(
+            parsed._replace(
+                path=re.sub(r"/query$", "", parsed.path),
+                query=urlencode(query_params, doseq=True),
+            )
+        )
+
+    @classmethod
+    def fetch_esri_layer_name(cls, ogr_ds, ogr_source):
+        """
+        Returns the layer's name according to the Esri layer metadata.
+        Falls back to the OGR layer name ("ESRIJSON") if the metadata isn't available.
+        """
+        try:
+            with urlopen(cls.layer_metadata_url(ogr_source)) as response:
+                name = json.loads(response.read().decode("utf-8")).get("name")
+        except Exception:
+            name = None
+        if isinstance(name, str) and name.strip("/"):
+            return name
+        return ogr_ds.GetLayerByIndex(0).GetName()
+
+    def get_tables(self):
+        # The single OGR layer, keyed by the Esri layer name.
+        return {self.table: self.ds.GetLayerByIndex(0)}
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def ogrlayer(self):
+        return self.ds.GetLayerByIndex(0)
 
     @classmethod
     def adapt_source_for_ogr(cls, source):

@@ -55,8 +55,10 @@ database.
    kart import mssql://USERNAME:PASSWORD@HOST/DBNAME/DBSCHEMA table_1 table_2 table_3
    kart import mysql://USERNAME:PASSWORD@HOST/DBNAME/DBSCHEMA table_1 table_2 table_3
    kart import PATH-TO-FILE.shp
-   kart import esri:https://HOST/PATH/MapServer
-   kart import esri:https://HOST/PATH/FeatureServer/LAYER_ID
+   kart import https://HOST/PATH/MapServer
+   kart import https://HOST/PATH/FeatureServer/LAYER_ID
+
+ArcGIS REST URLs can optionally be prefixed with ``esri:``.
 
 You can also specify ``--all-tables`` to import all tables from a
 particular datasource.

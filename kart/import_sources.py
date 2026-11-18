@@ -1,5 +1,6 @@
 from enum import Enum, auto
 import os
+import re
 
 from kart.exceptions import ImportSourceError, NotYetImplemented
 
@@ -128,7 +129,7 @@ ALL_IMPORT_SOURCE_TYPES = [
     ),
     ImportSourceType(
         "ESRI Rest Service",
-        "esri:https://HOST/PATH/FeatureServer/[LAYER_ID]",
+        "[esri:]https://HOST/PATH/FeatureServer[/LAYER_ID]",
         ImportType.ESRI_REST_TABLE,
         uri_scheme="esri",
     ),
@@ -150,6 +151,12 @@ ALL_IMPORT_SOURCE_TYPES = [
         file_ext=(".tif", ".tiff"),
     ),
 ]
+
+# An Esri ArcGIS REST service or layer URL - eg https://HOST/PATH/MapServer or https://HOST/PATH/FeatureServer/0
+# Only matched at the end of the URL path, so that other URLs containing these words aren't caught.
+ESRI_REST_URL_PATTERN = re.compile(
+    r"^https?://[^?#]*/(MapServer|FeatureServer)(/\d+(/query)?)?/?([?#].*)?$", re.I
+)
 
 URI_SCHEME_TO_IMPORT_SOURCE_TYPE = {
     t.uri_scheme: t for t in ALL_IMPORT_SOURCE_TYPES if t.uri_scheme
@@ -175,6 +182,9 @@ def from_spec(spec, allow_unrecognised=False):
     result = URI_SCHEME_TO_IMPORT_SOURCE_TYPE.get(parts[0])
     if result:
         return result
+
+    if ESRI_REST_URL_PATTERN.match(spec):
+        return URI_SCHEME_TO_IMPORT_SOURCE_TYPE["esri"]
 
     ext = os.path.splitext(spec)[1]
     result = FILE_EXT_TO_IMPORT_SOURCE_TYPE.get(ext.lower())
