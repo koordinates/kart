@@ -1,32 +1,23 @@
 """
-Import source for ESRI Rest services (MapServer/FeatureServer).
+Import sources for Esri ArcGIS REST services (MapServer/FeatureServer).
 
-ESRI Rest services can be imported using the "ESRIJSON" OGR driver which does the
-heavy lifting of fetching data from the service and converting it to a format we can
-import. This module provides ESRIRestImportSource which routes to either of the following
-depending on supplied source:
+GDAL's ESRIJSON driver fetches the data; these classes build the URLs it needs.
+TableImportSource.open() routes here for "esri:" specs, and for http(s) URLs whose path
+ends in /MapServer or /FeatureServer[/LAYER_ID] (see kart.import_sources.from_spec).
+User-facing documentation is in docs/pages/command_reference.rst.
 
-ESRIRestServerSource:
-    Discovers and lists all available layers from a MapServer/FeatureServer endpoint.
-    Use this when you want to import multiple layers from a service or need to see
-    what layers are available.
+ESRIRestImportSource
+    Picks one of the classes below, depending on whether the URL has a layer ID.
 
-    Example:
-        # List all layers in a service
-        source = ESRIRestServerSource.open("https://example.com/.../MapServer")
-        tables = source.get_tables()
+ESRIRestServerSource (.../MapServer)
+    Lists the service's layers and tables from ".../MapServer?f=json".
+    clone_for_table() returns an ESRIJSONImportSource for the chosen layer.
 
-        # Import all layers from a service
-        kart import "esri:https://example.com/.../MapServer"
-
-ESRIJSONImportSource:
-    Imports a specific layer from a MapServer/FeatureServer by layer ID.
-    Automatically constructs proper query URLs with necessary parameters.
-
-    Example:
-        # Import a specific layer
-        kart import "esri:https://example.com/.../MapServer/0" --dataset my_layer
-
+ESRIJSONImportSource (.../MapServer/LAYER_ID)
+    Reads one layer. Rewrites the URL to ".../LAYER_ID/query", and adds where /
+    outFields / returnGeometry if the user hasn't set them. The OGR layer is always
+    called "ESRIJSON", so the Kart table name comes from the layer metadata
+    (".../LAYER_ID?f=json") instead, falling back to "ESRIJSON" if that can't be read.
 """
 
 import functools

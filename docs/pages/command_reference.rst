@@ -58,10 +58,43 @@ database.
    kart import https://HOST/PATH/MapServer
    kart import https://HOST/PATH/FeatureServer/LAYER_ID
 
-ArcGIS REST URLs can optionally be prefixed with ``esri:``.
-
 You can also specify ``--all-tables`` to import all tables from a
 particular datasource.
+
+Importing from ArcGIS REST services
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use the URL of a MapServer or FeatureServer to work with all of its layers,
+or add a layer ID to the end of the URL to import a single layer.
+
+.. code:: bash
+
+   # List the layers in a service
+   kart import https://HOST/PATH/MapServer --list
+
+   # Import one layer by name
+   kart import https://HOST/PATH/MapServer "Layer Name"
+
+   # Import every layer and table
+   kart import https://HOST/PATH/MapServer --all-tables
+
+   # Import one layer by ID
+   kart import https://HOST/PATH/MapServer/0
+
+Each dataset is named after its layer. To rename a layer, use
+``"Layer Name:NAME"``. When importing a single layer, ``--dataset NAME``
+also works.
+
+Query parameters in a layer URL, such as ``where`` and ``outFields``, are
+passed through to the service, so you can import a subset of features or
+fields. (Kart always sets ``f=json``.)
+
+.. code:: bash
+
+   kart import "https://HOST/PATH/MapServer/0?where=status%3D'current'&outFields=field1,field2"
+
+URLs can also be given an ``esri:`` prefix, for example
+``esri:https://HOST/PATH/MapServer``. This is optional.
 
 Import vectors / tables while creating a repository
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
