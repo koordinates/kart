@@ -698,6 +698,27 @@ def test_attachments_enabled_by_config(data_archive, cli_runner, monkeypatch):
         assert "<files>" in r.stdout
 
 
+def test_attachments_enabled_in_existing_vector_repo(
+    data_working_copy, cli_runner, monkeypatch
+):
+    # Turning attachments on in a repo that already has a working copy but no file-system workdir (ie a
+    # vector-only repo) takes effect at the next working-copy update - no need to recreate the working copy.
+    monkeypatch.delenv("X_KART_ATTACHMENTS", raising=False)
+    with data_working_copy("points") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        assert KartRepo(repo_dir).working_copy.workdir is None
+
+        KartRepo(repo_dir).config["kart.workingcopy.attachments"] = "true"
+        r = cli_runner.invoke(["commit-files", "-m", "Add readme", "README.md=hello"])
+        assert r.exit_code == 0, r.stderr
+
+        assert KartRepo(repo_dir).working_copy.workdir is not None
+        assert (repo_dir / "README.md").read_text() == "hello"
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+
 @pytest.mark.usefixtures("enable_attachments")
 def test_attachment_after_vector_import(data_archive, tmp_path, cli_runner, chdir):
     # A vector import creates the file-system workdir too (not just the tabular part), so attachments work

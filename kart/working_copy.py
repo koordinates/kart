@@ -317,6 +317,16 @@ class WorkingCopy:
         what the set of non_checkout_datasets were at last call to reset(), so each part handles this independently.
         """
 
+        if (
+            self.repo.workdir_supports_attachments
+            and self.workdir is None
+            and any(self.parts())
+        ):
+            # Attachments live in the file-system working copy. If attachments have been turned on in a repo
+            # that already has a working copy but no workdir (eg a vector-only repo), create the workdir now -
+            # otherwise turning attachments on would have no effect until the working copy was recreated.
+            create_parts_if_missing = {*create_parts_if_missing, PartType.WORKDIR}
+
         created_parts = ()
         if create_parts_if_missing:
             # Even we're only partially resetting the WC, we still need to do a full reset on anything that
