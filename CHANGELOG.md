@@ -28,6 +28,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Adds support for an env-var flag `KART_ALLOW_FROM_GIT=1` that turns off the safe-guard that stops Kart from running on what appear to be Git repositories. [#1100](https://github.com/koordinates/kart/pull/1100)
 - Adds support for cloning from git bundles to speed up initial clones of large repositories [#1106](https://github.com/koordinates/kart/pull/1106)
 - Removes dev/test-only Python packages (IPython, pytest, etc.) that were being included in release bundles, slightly reducing bundle size. [#1108](https://github.com/koordinates/kart/pull/1108)
+- Adds support for ArcGIS REST services as import sources. [#1102](https://github.com/koordinates/kart/pull/1102)
 
 ## 0.17.0
 

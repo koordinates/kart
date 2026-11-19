@@ -28,7 +28,13 @@ def list_import_formats(ctx):
     from kart.import_sources import ImportType
 
     click.echo(
-        suggest_specs(import_types=(ImportType.SQLALCHEMY_TABLE, ImportType.OGR_TABLE))
+        suggest_specs(
+            import_types=(
+                ImportType.SQLALCHEMY_TABLE,
+                ImportType.OGR_TABLE,
+                ImportType.ESRI_REST_TABLE,
+            )
+        )
     )
 
 

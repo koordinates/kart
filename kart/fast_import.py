@@ -192,7 +192,7 @@ UNSPECIFIED = object()
 
 def fast_import_tables(
     repo,
-    sources,
+    sources: list[TableImportSource],
     *,
     settings=None,
     verbosity=1,
@@ -437,15 +437,17 @@ def _import_single_source(
                 write_blob_to_stream(proc.stdin, feature_path, blob_data)
 
             if i and progress_every and i % progress_every == 0:
-                click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
+                click.echo(f"  {i:,d} features... @{time.monotonic() - t1:.1f}s")
 
             if limit is not None and i == (limit - 1):
                 click.secho(f"  Stopping at {limit:,d} features", fg="yellow")
                 break
         t2 = time.monotonic()
         if verbosity >= 1:
-            click.echo(f"Added {num_rows:,d} Features to index in {t2-t1:.1f}s")
-            click.echo(f"Overall rate: {(num_rows/(t2-t1 or 1E-3)):.0f} features/s)")
+            click.echo(f"Added {num_rows:,d} Features to index in {t2 - t1:.1f}s")
+            click.echo(
+                f"Overall rate: {(num_rows / (t2 - t1 or 1e-3)):.0f} features/s)"
+            )
 
         # Meta items - written second as certain importers generate extra metadata as they import features.
         for x in write_blobs_to_stream(
@@ -455,7 +457,7 @@ def _import_single_source(
 
     t3 = time.monotonic()
     if verbosity >= 1:
-        click.echo(f"Closed in {(t3-t2):.0f}s")
+        click.echo(f"Closed in {(t3 - t2):.0f}s")
 
 
 def write_blob_to_stream(stream, blob_path, blob_data):

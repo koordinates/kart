@@ -880,7 +880,7 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
             # not empty
             (repo_path / "a.file").touch()
             r = cli_runner.invoke(
-                ["init", "--import", f"gpkg:{data/gpkg}", str(repo_path)]
+                ["init", "--import", f"gpkg:{data / gpkg}", str(repo_path)]
             )
             assert r.exit_code == INVALID_OPERATION, r
             assert "isn't empty" in r.stderr
@@ -1117,6 +1117,7 @@ def test_import_list_formats(data_archive_readonly, cli_runner):
             "MySQL",
             "ESRI Shapefile",
             "(Geo)Parquet",
+            "ESRI Rest Service",
             "LAS (LASer)",
             "GeoTIFF",
         ]

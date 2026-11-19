@@ -8,6 +8,28 @@ from kart.tabular.ogr_import_source import postgres_url_to_ogr_conn_str
 from kart.repo import KartRepo
 
 
+@pytest.mark.parametrize(
+    "spec",
+    [
+        "OGR:ESRIJSON:https://example.com/x.json",
+        "ogr:foo.csv",
+        "ESRIJSON:https://example.com/x.json",
+        "CSV:foo.csv",
+        "foo.geojson",
+    ],
+)
+def test_unrecognised_specs_fall_back_to_ogr(spec):
+    """Specs that aren't a registered import-source type are passed through to OGR."""
+    from unittest import mock
+
+    from kart.tabular.import_source import TableImportSource
+    from kart.tabular.ogr_import_source import OgrTableImportSource
+
+    with mock.patch.object(OgrTableImportSource, "open") as mock_open:
+        TableImportSource.open(spec)
+    mock_open.assert_called_once_with(spec, table=None)
+
+
 def _dataset_col_types(dataset):
     cols = {}
     for col in dataset.schema:
