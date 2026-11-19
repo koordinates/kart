@@ -69,8 +69,8 @@ jobs:
       matrix:
         os:
           # TODO: switch to a cheaper third-party runner
-          - id: macos-14
-            label: "14/arm64"
+          - id: macos-15
+            label: "15/arm64"
             arch_triplet: arm64-osx
     runs-on: ${{ matrix.os.id }}
     name: macOS ${{ matrix.os.label }}
