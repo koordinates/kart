@@ -572,7 +572,7 @@ class Datasets:
     def working_copy_part_types(self):
         """Returns the types of working copy parts that are needed to check out these datasets.
 
-        Unless attachment support is disabled (see repo.workdir_supports_attachments), the file-system working
+        If attachment support is enabled (see repo.workdir_supports_attachments), the file-system working
         copy (WORKDIR) is included whenever there is any dataset at all - even if no dataset needs it directly -
         because it also holds attachments (standalone files), which can be added to any repo regardless of its
         dataset types. This way attachments "just work" once the repo is up and running, rather than being

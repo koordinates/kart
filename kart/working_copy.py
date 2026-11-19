@@ -216,9 +216,9 @@ class WorkingCopy:
 
         w = self.get_workdir(allow_uncreated=True)
         if w and not (w.status() == FileSystemWorkingCopyStatus.CREATED):
-            # A workdir is now always created, even for repos with no tiles, so that attachments work. But the
-            # reflink check and the "Creating ..." message are about checking out tiles - for a repo with no
-            # tiles, the workdir is just (potentially) holding attachments, so we create it quietly.
+            # When attachments are enabled, a workdir is created even for repos with no tiles, so that attachments
+            # work. But the reflink check and the "Creating ..." message are about checking out tiles - for a repo
+            # with no tiles, the workdir is just (potentially) holding attachments, so we create it quietly.
             has_tiles = any(
                 self.repo.datasets(
                     self.repo.head_commit,
@@ -682,8 +682,12 @@ class WorkingCopyPart:
             # We reset the part's contents if any dataset it controls has changed, but also whenever the
             # committed tree has changed at all (base_tree != target_tree): a part may control standalone files
             # (attachments) that have changed even when none of its datasets have - or it may control no datasets
-            # at the relevant tree but still have attachments to update.
-            if ds_inserts or ds_updates or ds_deletes or base_tree != target_tree:
+            # at the relevant tree but still have attachments to update. (Only if attachments are enabled - see
+            # repo.workdir_supports_attachments - otherwise we only reset when datasets have changed, as before.)
+            attachments_may_have_changed = (
+                self.repo.workdir_supports_attachments and base_tree != target_tree
+            )
+            if ds_inserts or ds_updates or ds_deletes or attachments_may_have_changed:
                 self._do_reset_datasets(
                     base_datasets=base_datasets,
                     target_datasets=target_datasets,

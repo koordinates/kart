@@ -1226,6 +1226,12 @@ def s3_test_data_raster(monkeypatch_session):
     return os.environ["KART_S3_TEST_DATA_RASTER"]
 
 
+@pytest.fixture
+def enable_attachments(monkeypatch):
+    """Turns on attachment support (off by default - see KartRepo.workdir_supports_attachments)."""
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "1")
+
+
 @pytest.fixture()
 def dodgy_restore(cli_runner):
     """

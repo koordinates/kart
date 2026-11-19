@@ -256,6 +256,7 @@ def test_commit_files(data_archive, cli_runner):
         assert r.exit_code == 44, r.stderr
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_commit_files_add_and_delete(data_working_copy, cli_runner):
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
         # Define file path
@@ -299,6 +300,7 @@ def test_commit_files_add_and_delete(data_working_copy, cli_runner):
         assert not file_path.exists()
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_checkout_roundtrip(data_working_copy, cli_runner):
     # Checking out a commit writes its attachments to the workdir; checking out a commit without
     # them removes them again - even though no datasets changed between the two commits.
@@ -323,6 +325,7 @@ def test_attachment_checkout_roundtrip(data_working_copy, cli_runner):
         assert file_path.read_text() == "hello"
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_create_workingcopy(data_working_copy, cli_runner):
     # Creating a working copy from scratch checks out attachments (base tree is the empty tree).
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
@@ -343,6 +346,7 @@ def test_attachment_create_workingcopy(data_working_copy, cli_runner):
         assert file_path.read_text() == "hello"
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_delete_workingcopy(data_working_copy, cli_runner):
     # Deleting the file-system working copy cleans up checked-out attachment files.
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
@@ -358,6 +362,7 @@ def test_attachment_delete_workingcopy(data_working_copy, cli_runner):
         assert not file_path.exists()
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_workingcopy_diff_status_commit(data_working_copy, cli_runner):
     # Editing/adding/deleting attachments in the workdir shows up in diff and status, and can be committed.
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
@@ -425,6 +430,7 @@ def test_attachment_workingcopy_diff_status_commit(data_working_copy, cli_runner
         )
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_workingcopy_delete_and_commit(data_working_copy, cli_runner):
     # Deleting a checked-out attachment from the filesystem is detected and can be committed.
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
@@ -464,6 +470,7 @@ def test_attachment_workingcopy_delete_and_commit(data_working_copy, cli_runner)
         assert r.returncode != 0
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_checkout_aborts_when_dirty(data_working_copy, cli_runner):
     # A checkout that would lose uncommitted attachment changes must abort (unless --discard-changes).
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
@@ -490,6 +497,7 @@ def test_attachment_checkout_aborts_when_dirty(data_working_copy, cli_runner):
         assert not file_path.exists()
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_discard_changes_restores_committed_state(
     data_working_copy, cli_runner
 ):
@@ -524,6 +532,7 @@ def test_attachment_discard_changes_restores_committed_state(
         assert "Nothing to commit, working copy clean" in r.stdout
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_filters_diff_and_commit(data_working_copy, cli_runner):
     # Attachment filters select which attachments a diff shows and a commit records, including by folder.
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
@@ -579,6 +588,7 @@ def test_attachment_filters_diff_and_commit(data_working_copy, cli_runner):
         assert "top.txt" in r.stdout
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_in_vector_repo(data_working_copy, cli_runner):
     # A vector (GPKG) repo has no tile datasets, but the file-system workdir is now created proactively, so
     # attachments still work - and the GPKG working-copy file itself isn't mistaken for an attachment.
@@ -610,13 +620,13 @@ def test_attachment_in_vector_repo(data_working_copy, cli_runner):
         assert "README.md" in r.stdout
 
 
-def test_attachments_disabled_by_config(data_archive, cli_runner):
-    # `kart.workingcopy.attachments=false` opts out: no file-system workdir is created for a vector repo, and
-    # edits to files in the repo directory are not tracked as attachments.
+def test_attachments_disabled_by_default(data_archive, cli_runner):
+    # Attachment support is off unless turned on: no file-system workdir is created for a vector repo, and
+    # files lying around in the repo directory are not reported as attachment changes. (This keeps existing
+    # repos - which may have such files - behaving as they always have.)
     with data_archive("points") as repo_path:
         repo_path = pathlib.Path(repo_path)
         repo = KartRepo(repo_path)
-        repo.config["kart.workingcopy.attachments"] = "false"
         assert not repo.workdir_supports_attachments
 
         r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
@@ -632,6 +642,63 @@ def test_attachments_disabled_by_config(data_archive, cli_runner):
         assert "Nothing to commit, working copy clean" in r.stdout
 
 
+def test_attachments_not_tracked_in_tile_repo_by_default(data_working_copy, cli_runner):
+    # A tile repo already has a file-system workdir - but unless attachments are turned on, stray files in it
+    # still aren't reported as changes.
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        (repo_dir / "notes.txt").write_text("my own notes")
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+
+@pytest.mark.parametrize(
+    "env_value,config_value,expected",
+    [
+        (None, None, False),
+        ("1", None, True),
+        ("true", None, True),
+        (None, "true", True),
+        (None, "false", False),
+        ("0", "true", False),  # The env var wins over the config.
+        ("1", "false", True),
+        ("", None, False),
+    ],
+)
+def test_attachments_enabled_by_env_or_config(
+    data_archive, monkeypatch, env_value, config_value, expected
+):
+    if env_value is None:
+        monkeypatch.delenv("X_KART_ATTACHMENTS", raising=False)
+    else:
+        monkeypatch.setenv("X_KART_ATTACHMENTS", env_value)
+    with data_archive("points") as repo_path:
+        repo = KartRepo(repo_path)
+        if config_value is not None:
+            repo.config["kart.workingcopy.attachments"] = config_value
+        assert repo.workdir_supports_attachments == expected
+
+
+def test_attachments_enabled_by_config(data_archive, cli_runner, monkeypatch):
+    # `git config kart.workingcopy.attachments true` turns attachments on for that repo (no env var needed).
+    monkeypatch.delenv("X_KART_ATTACHMENTS", raising=False)
+    with data_archive("points") as repo_path:
+        repo_path = pathlib.Path(repo_path)
+        repo = KartRepo(repo_path)
+        repo.config["kart.workingcopy.attachments"] = "true"
+
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+        assert repo.working_copy.workdir is not None
+
+        (repo_path / "README.md").write_text("hello")
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+
+
+@pytest.mark.usefixtures("enable_attachments")
 def test_attachment_after_vector_import(data_archive, tmp_path, cli_runner, chdir):
     # A vector import creates the file-system workdir too (not just the tabular part), so attachments work
     # straight after the repo's first import - no tile dataset or extra create-workingcopy needed.

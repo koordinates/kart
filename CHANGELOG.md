@@ -18,6 +18,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - log: Fixed intermittent empty output when using helper mode. [#1125](https://github.com/koordinates/kart/pull/1125)
 - `commit-files`: Now writes the schema's legend when committing a table dataset's `schema.json`. Previously the legend was left out, so features later committed with that schema couldn't be read back (`KeyError: No data found at rel-path meta/legend/...`). [#1135](https://github.com/koordinates/kart/pull/1135)
 - `fsck`: Now checks that each table dataset has the legends that its schema and features refer to, and reports any that are missing instead of crashing. These checks also run in repositories with no working copy. Also fixed the `git fsck` step, which failed in every repository that has a locked index (all but bare repositories), and whose failure was ignored. [#1136](https://github.com/koordinates/kart/pull/1136)
+- Experimental: attachments (standalone files such as licenses or READMEs, stored alongside or outside datasets) can now be checked out into the file-system working copy, and changes to them are shown by `diff`/`status`, recorded by `commit`, and can be filtered by path or folder - just like dataset changes. This is off by default, so that files already lying around in existing working copies don't suddenly show up as uncommitted changes. Turn it on with `git config kart.workingcopy.attachments true`, or with the env var `X_KART_ATTACHMENTS=1`. [#583](https://github.com/koordinates/kart/issues/583)
 
 ## 0.17.1
 
@@ -29,7 +30,6 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Adds support for cloning from git bundles to speed up initial clones of large repositories [#1106](https://github.com/koordinates/kart/pull/1106)
 - Removes dev/test-only Python packages (IPython, pytest, etc.) that were being included in release bundles, slightly reducing bundle size. [#1108](https://github.com/koordinates/kart/pull/1108)
 - Adds support for ArcGIS REST services as import sources. [#1102](https://github.com/koordinates/kart/pull/1102)
-- Attachments (standalone files such as licenses or READMEs, stored alongside or outside datasets) are now checked out into the file-system working copy, and changes to them are shown by `diff`/`status`, recorded by `commit`, and can be filtered by path or folder - just like dataset changes. [#583](https://github.com/koordinates/kart/issues/583)
 
 ## 0.17.0
 
