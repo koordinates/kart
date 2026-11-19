@@ -99,6 +99,16 @@ class TestESRIJSONImportSourceQueryParameters:
         assert "f=json" in adapted_url
         assert adapted_url.count("f=") == 1
 
+    @pytest.mark.parametrize("param", ["F", "f"])
+    def test_existing_format_overridden_case_insensitive(self, param):
+        """ArcGIS param names are case-insensitive, so F=geojson must be replaced too."""
+        source = f"https://example.com/arcgis/rest/services/MyService/MapServer/0?{param}=geojson"
+        adapted_url, _ = ESRIJSONImportSource.adapt_source_for_ogr(source)
+
+        assert "geojson" not in adapted_url
+        assert "F=" not in adapted_url
+        assert adapted_url.count("f=json") == 1
+
     def test_existing_outfields_preserved(self):
         """Test that existing outFields parameter is preserved."""
         source = "https://example.com/arcgis/rest/services/MyService/MapServer/0?outFields=NAME,POPULATION"
@@ -432,6 +442,40 @@ class TestESRIRestServerSource:
             assert "Layer 'NonExistentLayer' not found" in str(exc_info.value)
             assert "Layer0, Layer1" in str(exc_info.value)
 
+    def test_server_query_params_preserved(self):
+        """Query params on a server URL (eg token) are sent for metadata and every layer."""
+        import unittest.mock as mock
+
+        service_info = {"layers": [{"id": 4, "name": "Layer4"}]}
+
+        with (
+            mock.patch("kart.tabular.esri_rest_import_source.urlopen") as mock_urlopen,
+            mock.patch.object(ESRIJSONImportSource, "open") as mock_layer_open,
+        ):
+            mock_response = mock.MagicMock()
+            mock_response.read.return_value = json.dumps(service_info).encode("utf-8")
+            mock_response.__enter__.return_value = mock_response
+            mock_urlopen.return_value = mock_response
+
+            source = ESRIRestServerSource.open(
+                "esri:https://example.com/arcgis/rest/services/S/MapServer?token=abc&F=html"
+            )
+            assert (
+                source.base_url
+                == "https://example.com/arcgis/rest/services/S/MapServer"
+            )
+
+            source.get_tables()
+            mock_urlopen.assert_called_once_with(
+                "https://example.com/arcgis/rest/services/S/MapServer?token=abc&f=json"
+            )
+
+            source.clone_for_table("Layer4")
+            mock_layer_open.assert_called_once_with(
+                "https://example.com/arcgis/rest/services/S/MapServer/4?token=abc&F=html",
+                table="Layer4",
+            )
+
 
 class TestESRIRestImportSourceRouter:
     """Tests for ESRIRestImportSource routing logic."""
@@ -480,6 +524,10 @@ class TestESRIRestImportSourceRouter:
             "https://example.com/rest/services/S/FeatureServer/3/query?token=abc&f=json",
             "https://example.com/rest/services/S/FeatureServer/3?token=abc&f=json",
         ),
+        (
+            "https://example.com/rest/services/S/FeatureServer/3/query?F=geojson&token=abc",
+            "https://example.com/rest/services/S/FeatureServer/3?f=json&token=abc",
+        ),
     ],
 )
 def test_layer_metadata_url(ogr_source, expected):
@@ -509,3 +557,70 @@ def test_from_spec_detects_esri_urls(spec, is_esri):
         source_type is not None
         and source_type.import_type == ImportType.ESRI_REST_TABLE
     ) == is_esri
+
+
+@pytest.mark.parametrize(
+    "url,expected,expected_service",
+    [
+        (
+            "esri:https://h/rest/services/S/MapServer/0",
+            "https://h/rest/services/S/MapServer/0",
+            "https://h/rest/services/S/MapServer",
+        ),
+        (
+            "https://h/rest/services/S/MapServer/0/query?f=json&token=SECRET&WHERE=a%3D1&outFields=%2A&returnGeometry=true",
+            "https://h/rest/services/S/MapServer/0?where=a%3D1&outFields=%2A&returnGeometry=true",
+            "https://h/rest/services/S/MapServer",
+        ),
+        (
+            "esri:https://user:SECRET@h:8443/rest/services/S/FeatureServer/3?api_key=SECRET",
+            "https://h:8443/rest/services/S/FeatureServer/3",
+            "https://h:8443/rest/services/S/FeatureServer",
+        ),
+        (
+            "https://h/rest/services/S/MapServer?token=SECRET",
+            "https://h/rest/services/S/MapServer",
+            "https://h/rest/services/S/MapServer",
+        ),
+    ],
+)
+def test_display_url(url, expected, expected_service):
+    from kart.tabular.esri_rest_import_source import display_url
+
+    assert display_url(url) == expected
+    assert display_url(url, service_only=True) == expected_service
+
+
+def test_import_desc_has_no_credentials():
+    """The commit message & progress output must not include tokens or passwords."""
+    import unittest.mock as mock
+
+    def make_source(layer_id, table):
+        with mock.patch.object(ESRIJSONImportSource, "__init__", lambda *a, **k: None):
+            source = ESRIJSONImportSource()
+        source.source = (
+            f"esri:https://me:SECRET@h/rest/services/S/MapServer/{layer_id}"
+            "?token=SECRET&where=status%3D1"
+        )
+        source.table = table
+        source.dest_path = table
+        return source
+
+    roads = make_source(0, "Roads")
+    rivers = make_source(1, "Rivers")
+
+    assert (
+        roads.import_source_desc()
+        == "Import from https://h/rest/services/S/MapServer/0?where=status%3D1:Roads to Roads/"
+    )
+    assert str(roads) == "https://h/rest/services/S/MapServer/0?where=status%3D1:Roads"
+    assert roads.aggregate_import_source_desc([roads, rivers]) == (
+        "Import 2 datasets from https://h/rest/services/S/MapServer:\n"
+        " * Roads/\n"
+        " * Rivers/"
+    )
+
+    server = ESRIRestServerSource(
+        "https://me:SECRET@h/rest/services/S/MapServer", query="token=SECRET"
+    )
+    assert "SECRET" not in str(server)

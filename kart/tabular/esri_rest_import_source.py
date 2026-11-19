@@ -24,12 +24,57 @@ import functools
 import json
 import re
 import sys
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 from urllib.request import urlopen
 
 from .import_source import TableImportSource
 from .ogr_import_source import OgrTableImportSource
 from kart.exceptions import ImportSourceError
+from kart.sqlalchemy import strip_username_and_password
+
+# Query params that are shown in commit messages and progress output - they say which subset
+# of the layer was imported. All other params (eg token) may be credentials, so they are left out.
+DISPLAYED_QUERY_PARAMS = ("where", "outFields", "returnGeometry")
+
+
+def display_url(url, *, service_only=False):
+    """
+    Returns the given Esri URL in a form safe to print or put in a commit message:
+    no "esri:" prefix, no username / password, no "/query" suffix, and only the
+    DISPLAYED_QUERY_PARAMS. If service_only is set, the layer ID and query are removed too.
+    """
+    url = strip_username_and_password(str(url).removeprefix("esri:"))
+    parsed = urlparse(url)
+    path = re.sub(r"/query/?$", "", parsed.path, flags=re.I)
+    if service_only:
+        path = re.sub(r"/\d+/?$", "", path)
+        query = ""
+    else:
+        displayed = {p.lower(): p for p in DISPLAYED_QUERY_PARAMS}
+        query = urlencode(
+            [
+                (displayed[k.lower()], v)
+                for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+                if k.lower() in displayed
+            ]
+        )
+    return urlunparse(parsed._replace(path=path, query=query, fragment=""))
+
+
+def _json_format_query_params(query):
+    """
+    Parses the given URL query string, and forces the response format to JSON.
+    ArcGIS parameter names are case-insensitive, so any existing "f" / "F" params are removed.
+    """
+    query_params = {}
+    for k, v in parse_qs(query, keep_blank_values=True).items():
+        if k.lower() == "f":
+            # Replaced in place, so the param order is otherwise unchanged.
+            query_params["f"] = ["json"]
+        else:
+            query_params[k] = v
+    query_params["f"] = ["json"]
+    return query_params
 
 
 class ESRIRestImportSource(TableImportSource):
@@ -103,30 +148,35 @@ class ESRIRestServerSource(TableImportSource):
                 "esri:https://HOST/PATH/MapServer or esri:https://HOST/PATH/FeatureServer"
             )
 
-        # Build the base service URL (without layer ID)
+        # Build the base service URL (without layer ID or query)
         base_url = urlunparse(
-            (
-                parsed.scheme,
-                parsed.netloc,
-                base_path,
-                parsed.params,
-                "",
-                parsed.fragment,
-            )
+            (parsed.scheme, parsed.netloc, base_path, parsed.params, "", "")
         )
 
-        return cls(base_url, table=table)
+        return cls(base_url, table=table, query=parsed.query)
 
-    def __init__(self, base_url, table=None):
+    def __init__(self, base_url, table=None, query=""):
         """
         Initialize the ESRIRestServerSource.
 
         Args:
-            base_url: Base URL of the MapServer/FeatureServer (without layer ID)
+            base_url: Base URL of the MapServer/FeatureServer (without layer ID or query)
             table: Optional specific layer name/ID to import
+            query: Query string from the user's URL (eg token=...) - sent with every request.
         """
         self.base_url = base_url
         self.table = table
+        self.query = query
+
+    def _url_with_query(self, path_suffix="", query=None):
+        """Returns base_url + path_suffix, with the given query (default: the user's query)."""
+        parsed = urlparse(self.base_url)
+        return urlunparse(
+            parsed._replace(
+                path=parsed.path + path_suffix,
+                query=self.query if query is None else query,
+            )
+        )
 
     @functools.lru_cache(maxsize=1)
     def _get_layer_metadata(self):
@@ -136,14 +186,16 @@ class ESRIRestServerSource(TableImportSource):
         Returns:
             dict: Service metadata from the ?f=json endpoint
         """
-        metadata_url = f"{self.base_url}?f=json"
+        metadata_url = self._url_with_query(
+            query=urlencode(_json_format_query_params(self.query), doseq=True)
+        )
 
         try:
             with urlopen(metadata_url) as response:
                 return json.loads(response.read().decode("utf-8"))
         except Exception as e:
             raise ImportSourceError(
-                f"Failed to fetch service metadata from {metadata_url}: {e}"
+                f"Failed to fetch service metadata from {display_url(metadata_url, service_only=True)}: {e}"
             )
 
     @functools.lru_cache(maxsize=1)
@@ -250,7 +302,7 @@ class ESRIRestServerSource(TableImportSource):
             )
 
         layer_info = tables[table]
-        layer_url = f"{self.base_url}/{layer_info['id']}"
+        layer_url = self._url_with_query(f"/{layer_info['id']}")
         layer_source = ESRIJSONImportSource.open(layer_url, table=layer_info["name"])
         return layer_source.clone_for_table(
             layer_source.table,
@@ -260,9 +312,10 @@ class ESRIRestServerSource(TableImportSource):
         )
 
     def __str__(self):
+        url = display_url(self.base_url)
         if self.table:
-            return f"ESRIRestServerSource({self.base_url}, table={self.table})"
-        return f"ESRIRestServerSource({self.base_url})"
+            return f"ESRIRestServerSource({url}, table={self.table})"
+        return f"ESRIRestServerSource({url})"
 
     def aggregate_import_source_desc(self, import_sources):
         """Return a description of all layers being imported from this service."""
@@ -270,7 +323,7 @@ class ESRIRestServerSource(TableImportSource):
             source = next(iter(import_sources))
             return source.import_source_desc()
 
-        desc = f"Import {len(import_sources)} layers from {self.base_url}:"
+        desc = f"Import {len(import_sources)} layers from {display_url(self.base_url)}:"
         for source in import_sources:
             desc += f"\n * {source.dest_path}/"
         return desc
@@ -324,8 +377,7 @@ class ESRIJSONImportSource(OgrTableImportSource):
         Other query params (eg token) are kept, since some services need them for metadata too.
         """
         parsed = urlparse(str(ogr_source))
-        query_params = parse_qs(parsed.query, keep_blank_values=True)
-        query_params["f"] = ["json"]
+        query_params = _json_format_query_params(parsed.query)
         return urlunparse(
             parsed._replace(
                 path=re.sub(r"/query$", "", parsed.path),
@@ -347,6 +399,26 @@ class ESRIJSONImportSource(OgrTableImportSource):
         if isinstance(name, str) and name.strip("/"):
             return name
         return ogr_ds.GetLayerByIndex(0).GetName()
+
+    @property
+    def source_name(self):
+        # The full URL (not just the last path part), minus anything that might be a credential.
+        return display_url(self.source)
+
+    def __str__(self):
+        return f"{self.source_name}:{self.table}"
+
+    def aggregate_import_source_desc(self, import_sources):
+        if len(import_sources) == 1:
+            return next(iter(import_sources)).import_source_desc()
+        # Several layers from one service - name the service, not this layer.
+        desc = f"Import {len(import_sources)} datasets from {display_url(self.source, service_only=True)}:"
+        for source in import_sources:
+            if source.dest_path == source.table:
+                desc += f"\n * {source.table}/"
+            else:
+                desc += f"\n * {source.dest_path} (from {source.table})"
+        return desc
 
     def get_tables(self):
         # The single OGR layer, keyed by the Esri layer name.
@@ -384,10 +456,8 @@ class ESRIJSONImportSource(OgrTableImportSource):
                 "esri:https://HOST/PATH/MapServer/LAYER_ID or esri:https://HOST/PATH/FeatureServer/LAYER_ID"
             )
 
-        parsed = urlparse(source)
-        query_params = parse_qs(parsed.query, keep_blank_values=True)
         # always override format:
-        query_params["f"] = ["json"]
+        query_params = _json_format_query_params(parsed.query)
 
         # Create a lowercase key lookup for case-insensitive checking
         query_params_lower = {k.lower(): k for k in query_params.keys()}

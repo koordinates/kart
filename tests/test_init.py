@@ -871,7 +871,7 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
         with chdir(repo_path):
             r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
             assert r.exit_code == NO_IMPORT_SOURCE, r
-            assert "Unrecognised import-source specification: fred:thingz" in r.stderr
+            assert "fred:thingz' doesn't appear to be valid" in r.stderr
 
             r = cli_runner.invoke(["init", "--import", f"gpkg:thingz.gpkg"])
             assert r.exit_code == NO_IMPORT_SOURCE, r

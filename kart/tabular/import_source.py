@@ -28,7 +28,8 @@ class TableImportSource:
     def open(cls, source, table=None):
         spec = cls._remove_unnecessary_prefix(str(source))
 
-        source_type = from_spec(spec)
+        # Unrecognised specs (eg "CSV:foo.csv", "OGR:ESRIJSON:...") fall through to OGR.
+        source_type = from_spec(spec, allow_unrecognised=True)
 
         if source_type is not None:
             return source_type.import_source_class.open(spec, table=table)
