@@ -335,7 +335,10 @@ def resolve_conflicts_with_renumber(repo, renumber, conflict_labels):
     ]
 
     structure = repo.structure()
-    decoded_resolves = [structure.decode_path(p) for p in resolve_paths]
+    decoded_resolves = [
+        dr for dr in (structure.decode_path(p) for p in resolve_paths)
+        if dr[0] != "attachment"
+    ]
     ours_datasets = repo.datasets(merge_context.versions.ours.commit_id)
     theirs_datasets = repo.datasets(merge_context.versions.theirs.commit_id)
     merged_datasets = repo.datasets("MERGED_TREE")

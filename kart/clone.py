@@ -183,3 +183,10 @@ def clone(
         else ()
     )
     repo.working_copy.reset_to_head(create_parts_if_missing=parts_to_create)
+
+    # Restore tracked attachment files (LICENSE.txt, README.md, etc.) to the working
+    # directory — reset_to_head() only handles dataset working-copy parts.
+    if do_checkout and not repo.head_is_unborn:
+        from kart.checkout import _restore_attachments_to_head
+
+        _restore_attachments_to_head(repo, old_tree=None)
