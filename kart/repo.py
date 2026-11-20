@@ -93,6 +93,7 @@ class KartConfigKeys:
     SNO_REPOSITORY_VERSION = "sno.repository.version"
 
     KART_WORKINGCOPY_LOCATION = "kart.workingcopy.location"
+    KART_WORKINGCOPY_ATTACHMENTS = "kart.workingcopy.attachments"
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
 
     KART_SPATIALFILTER_GEOMETRY = "kart.spatialfilter.geometry"
@@ -551,6 +552,29 @@ class KartRepo(pygit2.Repository):
     @property
     def is_kart_branded(self):
         return self.branding == "kart"
+
+    @property
+    def workdir_supports_attachments(self):
+        """
+        Whether attachments (standalone files) are checked out into - and tracked by - the file-system working
+        copy. When True, the file-system working copy is created as soon as the repo has any data, so that
+        attachments work regardless of dataset types.
+
+        Off by default, since turning it on means any files the user already has lying around in the working copy
+        start showing up as uncommitted changes. It is turned on by either:
+        - the env var X_KART_ATTACHMENTS (eg X_KART_ATTACHMENTS=1), or
+        - `git config kart.workingcopy.attachments true`.
+        If both are set, the env var wins (so X_KART_ATTACHMENTS=0 turns it off for a single command).
+        Always off for legacy Sno-branded repos.
+        """
+        if not self.is_kart_branded:
+            return False
+        value = os.environ.get("X_KART_ATTACHMENTS")
+        if value is None:
+            value = self.get_config_str(KartConfigKeys.KART_WORKINGCOPY_ATTACHMENTS)
+        if value is None:
+            return False
+        return str(value).strip().lower() not in ("", "0", "false", "no", "off")
 
     def validate_gitdir_name(self):
         if not self.is_bare and self.gitdir_path.stem not in self.KART_DIR_NAMES:

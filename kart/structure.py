@@ -6,7 +6,11 @@ from typing import Optional
 import click
 import pygit2
 
-from kart.diff_structs import FILES_KEY
+from kart.diff_structs import (
+    FILES_KEY,
+    file_delta_value_is_oid,
+    file_delta_value_to_bytes,
+)
 from .exceptions import (
     NO_CHANGES,
     NO_COMMIT,
@@ -28,7 +32,7 @@ from .tabular.version import (
 )
 from .structs import CommitWithReference
 from .unsupported_dataset import UnsupportedDataset
-from .working_copy import ALL_PART_TYPES
+from .working_copy import ALL_PART_TYPES, PartType
 
 L = logging.getLogger("kart.structure")
 
@@ -361,11 +365,17 @@ class RepoStructure:
 
             # TODO - check for conflicts.
 
-            assert isinstance(delta.new_value, (bytes, type(None)))
-            if delta.new_value is not None:
-                object_builder.insert(path, delta.new_value)
-            else:
+            # A file-delta value is either a git OID (committed content, eg from a patch describing an existing
+            # blob) or raw bytes (uncommitted content, eg an edited attachment in the working copy).
+            new_value = delta.new_value
+            if new_value is None:
                 object_builder.remove(path)
+            elif file_delta_value_is_oid(new_value):
+                object_builder.insert(path, self.repo[new_value])
+            else:
+                object_builder.insert(
+                    path, file_delta_value_to_bytes(self.repo, new_value)
+                )
 
     def commit_diff(
         self,
@@ -560,9 +570,20 @@ class Datasets:
                 yield ds
 
     def working_copy_part_types(self):
-        """Returns the types of working copy parts that are needed to check out these datasets."""
+        """Returns the types of working copy parts that are needed to check out these datasets.
+
+        If attachment support is enabled (see repo.workdir_supports_attachments), the file-system working
+        copy (WORKDIR) is included whenever there is any dataset at all - even if no dataset needs it directly -
+        because it also holds attachments (standalone files), which can be added to any repo regardless of its
+        dataset types. This way attachments "just work" once the repo is up and running, rather than being
+        ignored until the first tile dataset happens to be checked out.
+        """
+        eager_workdir = self.repo.workdir_supports_attachments
         result = set()
         for ds in self:
+            if eager_workdir:
+                # Any dataset means the repo is up and running, so we want a workdir (for attachments).
+                result.add(PartType.WORKDIR)
             if ds.WORKING_COPY_PART_TYPE:
                 result.add(ds.WORKING_COPY_PART_TYPE)
             if result == ALL_PART_TYPES:

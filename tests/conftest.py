@@ -1226,6 +1226,12 @@ def s3_test_data_raster(monkeypatch_session):
     return os.environ["KART_S3_TEST_DATA_RASTER"]
 
 
+@pytest.fixture
+def enable_attachments(monkeypatch):
+    """Turns on attachment support (off by default - see KartRepo.workdir_supports_attachments)."""
+    monkeypatch.setenv("X_KART_ATTACHMENTS", "1")
+
+
 @pytest.fixture()
 def dodgy_restore(cli_runner):
     """
@@ -1249,7 +1255,10 @@ def dodgy_restore(cli_runner):
         r = cli_runner.invoke(["checkout", restore_commit])
         assert r.exit_code == 0, r.stderr
         repo.write_gitdir_file("HEAD", head_commit)
-        repo.working_copy.tabular.update_state_table_tree(head_tree)
+        # Reset every working-copy part's state tree back to HEAD (there may now be a file-system workdir
+        # alongside the tabular part), so the working copy is seen as based on HEAD with dirty changes.
+        for part in repo.working_copy.parts():
+            part.update_state_table_tree(head_tree)
 
     return _dodgy_restore
 

@@ -4,6 +4,7 @@ import click
 import pygit2
 
 from .base_diff_writer import BaseDiffWriter
+from .diff_structs import FILES_KEY
 from .key_filters import RepoKeyFilter
 from .conflicts_writer import BaseConflictsWriter
 from .crs_util import make_crs
@@ -66,6 +67,13 @@ class StatusDiffWriter(BaseDiffWriter):
                     filtered_type_counts["updates"] -= sf_conflicts_count
                     if not filtered_type_counts["updates"]:
                         del filtered_type_counts["updates"]
+
+        # Changes to standalone files (attachments) aren't part of any dataset and have no dataset-part, so
+        # (unlike datasets) the counts go directly under FILES_KEY - no redundant inner "file"/"<files>" layer.
+        file_diff = self.get_file_diff()
+        file_type_counts = file_diff.type_counts()
+        if file_type_counts:
+            repo_type_counts[FILES_KEY] = file_type_counts
 
         return repo_type_counts
 
@@ -332,6 +340,19 @@ def working_copy_status_to_text(jdict):
     return "\n\n".join(result_list)
 
 
+def flatten_file_changes(type_counts):
+    """
+    In a RepoDiff.type_counts() the <files> entry is wrapped in a redundant inner <files> layer (files are
+    addressed as <files>:<files>:<filename>, mirroring <dataset>:<part>:<pk>). Returns a copy of the given
+    type-counts dict with that inner layer removed, so file change counts sit directly under <files> - eg for
+    display in `kart commit -o json`. Other (dataset) entries are left unchanged.
+    """
+    if FILES_KEY not in type_counts:
+        return type_counts
+    file_entry = type_counts[FILES_KEY]
+    return {**type_counts, FILES_KEY: file_entry.get(FILES_KEY, file_entry)}
+
+
 def diff_status_to_text(jdict):
     change_types = (
         ("inserts", "inserts"),
@@ -343,6 +364,16 @@ def diff_status_to_text(jdict):
     message = []
     for dataset_path, dataset_changes in jdict.items():
         message.append(f"  {dataset_path}:")
+
+        if dataset_path == FILES_KEY:
+            # Files aren't a dataset and have no dataset-part, so we don't print a redundant part layer. (The
+            # counts may be wrapped one level deeper when they come straight from a RepoDiff.type_counts().)
+            file_changes = dataset_changes.get(FILES_KEY, dataset_changes)
+            for json_type, change_type in change_types:
+                if json_type in file_changes:
+                    message.append(f"    {file_changes[json_type]} {change_type}")
+            continue
+
         for dataset_part in ("meta", "feature", "tile"):
             if dataset_part not in dataset_changes:
                 continue

@@ -216,11 +216,21 @@ class WorkingCopy:
 
         w = self.get_workdir(allow_uncreated=True)
         if w and not (w.status() == FileSystemWorkingCopyStatus.CREATED):
-            if not w.check_if_reflink_okay():
-                return False
-            click.echo(
-                f"Creating {w.WORKING_COPY_TYPE_NAME} working copy in {w.path.stem} folder"
+            # When attachments are enabled, a workdir is created even for repos with no tiles, so that attachments
+            # work. But the reflink check and the "Creating ..." message are about checking out tiles - for a repo
+            # with no tiles, the workdir is just (potentially) holding attachments, so we create it quietly.
+            has_tiles = any(
+                self.repo.datasets(
+                    self.repo.head_commit,
+                    filter_dataset_type=w.SUPPORTED_DATASET_TYPE,
+                )
             )
+            if has_tiles:
+                if not w.check_if_reflink_okay():
+                    return False
+                click.echo(
+                    f"Creating {w.WORKING_COPY_TYPE_NAME} working copy in {w.path.stem} folder"
+                )
             w.create_and_initialise()
             self._workdir = w
             return True
@@ -306,6 +316,16 @@ class WorkingCopy:
         repo.non_checkout_datasets will be updated (ie, fully-written or deleted). Each dataset part independently tracks
         what the set of non_checkout_datasets were at last call to reset(), so each part handles this independently.
         """
+
+        if (
+            self.repo.workdir_supports_attachments
+            and self.workdir is None
+            and any(self.parts())
+        ):
+            # Attachments live in the file-system working copy. If attachments have been turned on in a repo
+            # that already has a working copy but no workdir (eg a vector-only repo), create the workdir now -
+            # otherwise turning attachments on would have no effect until the working copy was recreated.
+            create_parts_if_missing = {*create_parts_if_missing, PartType.WORKDIR}
 
         created_parts = ()
         if create_parts_if_missing:
@@ -669,7 +689,15 @@ class WorkingCopyPart:
         )
 
         with self.state_session() as sess:
-            if ds_inserts or ds_updates or ds_deletes:
+            # We reset the part's contents if any dataset it controls has changed, but also whenever the
+            # committed tree has changed at all (base_tree != target_tree): a part may control standalone files
+            # (attachments) that have changed even when none of its datasets have - or it may control no datasets
+            # at the relevant tree but still have attachments to update. (Only if attachments are enabled - see
+            # repo.workdir_supports_attachments - otherwise we only reset when datasets have changed, as before.)
+            attachments_may_have_changed = (
+                self.repo.workdir_supports_attachments and base_tree != target_tree
+            )
+            if ds_inserts or ds_updates or ds_deletes or attachments_may_have_changed:
                 self._do_reset_datasets(
                     base_datasets=base_datasets,
                     target_datasets=target_datasets,
