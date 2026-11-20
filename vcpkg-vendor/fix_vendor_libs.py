@@ -124,6 +124,8 @@ if PLATFORM == "Windows":
         "kernel32.dll",
         "kernel32.dll",
         "msvcp140.dll",
+        # Part of the same VC++ runtime as msvcp140.dll - needed by code using C++20 std::atomic::wait.
+        "msvcp140_atomic_wait.dll",
         "ntdll.dll",
         "ole32.dll",
         "oleaut32.dll",
