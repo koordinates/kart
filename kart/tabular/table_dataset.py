@@ -41,6 +41,7 @@ class TableDataset(BaseDataset, TableImportSource):
 
     # Only set when creating a new dataset - see new_dataset_for_writing.
     path_encoder_overrides = None
+    preserved_path_encoder = None
 
     def __init__(self, tree, path, repo, dirname=None):
         super().__init__(tree, path, repo, dirname=dirname)
@@ -53,17 +54,28 @@ class TableDataset(BaseDataset, TableImportSource):
         self.repo = repo
 
     @classmethod
-    def new_dataset_for_writing(cls, path, schema, repo, path_encoder_overrides=None):
+    def new_dataset_for_writing(
+        cls,
+        path,
+        schema,
+        repo,
+        path_encoder_overrides=None,
+        *,
+        preserved_path_encoder=None,
+    ):
         """
         Creates a new dataset instance that can be used to write to a new dataset.
 
         path_encoder_overrides - an optional dict of path-structure parameters
         ("encoding", "levels" and / or "branches") that override the defaults that
         would otherwise be chosen based on the schema. See PathEncoder.with_overrides.
+        preserved_path_encoder - an optional PathEncoder to use exactly as-is, including its
+        scheme - used when re-importing over an existing dataset, to keep its path-structure.
         """
         result = cls(None, path, repo)
         result._schema = schema
         result.path_encoder_overrides = path_encoder_overrides
+        result.preserved_path_encoder = preserved_path_encoder
         return result
 
     @classmethod

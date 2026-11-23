@@ -369,15 +369,28 @@ def _import_single_source(
             source=source,
         )
 
-    if path_encoder_overrides is None and replacing_dataset is not None:
-        # We are replacing an existing dataset, and the user hasn't asked for a particular
-        # path-structure - so we keep the path-structure the existing dataset already has,
-        # rather than resetting it to the default.
-        path_encoder_overrides = replacing_dataset.feature_path_encoder.to_dict()
-
     dataset_class = dataset_class_for_version(repo.table_dataset_version)
+
+    preserved_path_encoder = None
+    if (
+        path_encoder_overrides is None
+        and replacing_dataset is not None
+        and dataset_class.pk_scheme_unchanged(replacing_dataset.schema, source.schema)
+    ):
+        # We are replacing an existing dataset, and the user hasn't asked for a particular
+        # path-structure - so we keep the path-structure the existing dataset already has
+        # (including its scheme, which matters for legacy datasets) rather than resetting it
+        # to the default. This is required for --replace-ids, which leaves the features that
+        # aren't being replaced where they are. If the PK type has changed, every feature
+        # moves anyway, so we let the new dataset have the default path-structure instead.
+        preserved_path_encoder = replacing_dataset.feature_path_encoder
+
     dataset = dataset_class.new_dataset_for_writing(
-        source.dest_path, source.schema, repo, path_encoder_overrides
+        source.dest_path,
+        source.schema,
+        repo,
+        path_encoder_overrides,
+        preserved_path_encoder=preserved_path_encoder,
     )
 
     with source:

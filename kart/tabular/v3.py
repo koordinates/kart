@@ -205,24 +205,43 @@ class TableV3(RichTableDataset):
         if schema is None:
             return self.feature_path_encoder
 
-        default_encoder = self._default_path_encoder_for_schema(schema)
+        default_encoder = self.default_path_encoder_for_schema(schema)
 
         if self.inner_tree:
             # This dataset already exists - its features are already laid out according to
-            # its existing path-structure, so we keep using that. The exception is if the new
-            # schema needs a different scheme entirely (ie the PK is changing to or from a
-            # single integer) - then every feature's path changes anyway.
+            # its existing path-structure, so we keep using that. The exception is if the
+            # schema change changes which scheme a new dataset would get (ie the PK is changing
+            # to or from a single integer) - then every feature's path changes anyway.
             # Note that this includes datasets that are still using the legacy structure -
             # a schema change no longer quietly migrates them to the modern structure, since
             # that would only move the features that the same commit happens to modify.
-            existing_encoder = self.feature_path_encoder
-            if existing_encoder.scheme == default_encoder.scheme:
-                return existing_encoder
+            # (We compare against the default for the old schema, not against the existing
+            # encoder's scheme, since the legacy encoder hashes all PKs, even integer ones.)
+            if self.pk_scheme_unchanged(self.schema, schema):
+                return self.feature_path_encoder
             return default_encoder
 
+        if self.preserved_path_encoder is not None:
+            # We are replacing an existing dataset - see fast_import.
+            return self.preserved_path_encoder
         return default_encoder.with_overrides(self.path_encoder_overrides)
 
-    def _default_path_encoder_for_schema(self, schema):
+    @classmethod
+    def pk_scheme_unchanged(cls, old_schema, new_schema):
+        """
+        Returns True if a dataset with old_schema can keep its existing path-structure when its
+        schema changes to new_schema - ie, the PK type isn't changing in a way that changes the
+        default path-structure scheme.
+        """
+        if old_schema is None or new_schema is None:
+            return False
+        return (
+            cls.default_path_encoder_for_schema(old_schema).scheme
+            == cls.default_path_encoder_for_schema(new_schema).scheme
+        )
+
+    @classmethod
+    def default_path_encoder_for_schema(cls, schema):
         pks = schema.pk_columns
         if len(pks) == 1 and pks[0].data_type == "integer":
             return PathEncoder.INT_PK_ENCODER

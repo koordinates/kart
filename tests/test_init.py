@@ -1308,6 +1308,131 @@ def test_import_path_structure_replace_existing(
             )
 
 
+def _import_legacy_points_dataset(monkeypatch, cli_runner, data, repo_path):
+    """
+    Imports the points dataset (which has a single integer PK) using the legacy path-structure
+    (hex 2x256, all PKs hashed, no path-structure.json) - as Kart did before 0.10.
+    """
+    from kart.tabular.v3 import TableV3
+    from kart.tabular.v3_paths import PathEncoder
+
+    with monkeypatch.context() as m:
+        m.setattr(
+            TableV3,
+            "default_path_encoder_for_schema",
+            classmethod(lambda cls, schema: PathEncoder.LEGACY_ENCODER),
+        )
+        r = cli_runner.invoke(
+            ["import", data / "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER]
+        )
+        assert r.exit_code == 0, r.stderr
+
+    repo = KartRepo(repo_path)
+    ds = repo.datasets()[H.POINTS.LAYER]
+    assert ds.feature_path_encoder is PathEncoder.LEGACY_ENCODER
+    assert ds.get_meta_item("path-structure.json", missing_ok=True) is None
+    return set(_feature_paths(repo, H.POINTS.LAYER))
+
+
+def _assert_legacy_points_dataset_intact(repo_path, expected_paths):
+    from kart.tabular.v3_paths import PathEncoder
+
+    repo = KartRepo(repo_path)
+    ds = repo.datasets()[H.POINTS.LAYER]
+    assert ds.feature_path_encoder is PathEncoder.LEGACY_ENCODER
+    assert ds.get_meta_item("path-structure.json", missing_ok=True) is None
+    assert set(_feature_paths(repo, H.POINTS.LAYER)) == expected_paths
+    # Every feature can still be found at the path its PK encodes to.
+    assert sum(1 for _ in ds.features()) == len(expected_paths)
+    return ds
+
+
+def test_import_path_structure_legacy_int_pk_schema_change(
+    data_archive, tmp_path, cli_runner, chdir, monkeypatch
+):
+    """
+    A schema change to a legacy dataset with an integer PK keeps the legacy path-structure -
+    it doesn't switch to the int scheme, which would only move the features in that commit.
+    """
+    with data_archive("gpkg-points") as data:
+        repo_path = tmp_path / "emptydir"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0, r.stderr
+        with chdir(repo_path):
+            paths = _import_legacy_points_dataset(
+                monkeypatch, cli_runner, data, repo_path
+            )
+
+            repo = KartRepo(repo_path)
+            with repo.working_copy.tabular.session() as sess:
+                sess.execute(f"ALTER TABLE {H.POINTS.LAYER} ADD COLUMN colour TEXT;")
+                sess.execute(
+                    f"UPDATE {H.POINTS.LAYER} SET colour = 'red' WHERE fid = 1;"
+                )
+            r = cli_runner.invoke(["commit", "-m", "schema change"])
+            assert r.exit_code == 0, r.stderr
+
+            ds = _assert_legacy_points_dataset_intact(repo_path, paths)
+            assert ds.get_feature([1])["colour"] == "red"
+
+
+def test_import_path_structure_legacy_int_pk_replace(
+    data_archive, tmp_path, cli_runner, chdir, monkeypatch
+):
+    """
+    Re-importing over a legacy dataset with an integer PK keeps the legacy path-structure,
+    both for --replace-existing and --replace-ids.
+    """
+    with data_archive("gpkg-points") as data:
+        repo_path = tmp_path / "emptydir"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0, r.stderr
+        with chdir(repo_path):
+            paths = _import_legacy_points_dataset(
+                monkeypatch, cli_runner, data, repo_path
+            )
+            source = data / "nz-pa-points-topo-150k.gpkg"
+
+            # Re-importing the same data is a no-op.
+            r = cli_runner.invoke(
+                ["import", "--replace-existing", source, H.POINTS.LAYER]
+            )
+            assert r.exit_code == NO_CHANGES, r.stderr
+
+            with Db_GPKG.create_engine(source).connect() as conn:
+                conn.execute(
+                    f"UPDATE {H.POINTS.LAYER} SET name = 'edited' WHERE fid = 1"
+                )
+
+            # --replace-ids replaces just that feature, in place.
+            ids_file = tmp_path / "ids.txt"
+            ids_file.write_text("1\n")
+            r = cli_runner.invoke(
+                ["import", f"--replace-ids=@{ids_file}", source, H.POINTS.LAYER]
+            )
+            assert r.exit_code == 0, r.stderr
+            ds = _assert_legacy_points_dataset_intact(repo_path, paths)
+            assert ds.get_feature([1])["name"] == "edited"
+
+            r = cli_runner.invoke(["show", "-o", "json"])
+            assert r.exit_code == 0, r.stderr
+            diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"][H.POINTS.LAYER]
+            assert "meta" not in diff
+            assert len(diff["feature"]) == 1
+
+            # --replace-existing with changed data also keeps the structure.
+            with Db_GPKG.create_engine(source).connect() as conn:
+                conn.execute(
+                    f"UPDATE {H.POINTS.LAYER} SET name = 'edited again' WHERE fid = 2"
+                )
+            r = cli_runner.invoke(
+                ["import", "--replace-existing", source, H.POINTS.LAYER]
+            )
+            assert r.exit_code == 0, r.stderr
+            ds = _assert_legacy_points_dataset_intact(repo_path, paths)
+            assert ds.get_feature([2])["name"] == "edited again"
+
+
 @pytest.mark.parametrize(
     "args,message",
     [

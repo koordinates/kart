@@ -654,7 +654,10 @@ is written once when the dataset is imported and then used for all subsequent
 edits to that dataset. Re-importing over an existing dataset with
 ``--replace-existing`` keeps the structure that dataset already has, unless
 these options are given again. They cannot be used with ``--replace-ids``,
-which leaves the features it is not replacing where they already are.
+which leaves the features it is not replacing where they already are. The one
+exception is when the type of the primary key changes (to or from a single
+integer) - every feature moves to a new path anyway, so the dataset gets the
+default structure for its new primary key.
 
 Legacy path-structure
 ^^^^^^^^^^^^^^^^^^^^^
