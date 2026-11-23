@@ -1,9 +1,8 @@
 from enum import Enum, auto
 import os
+import re
 
-import click
-
-from kart.exceptions import NotYetImplemented
+from kart.exceptions import ImportSourceError, NotYetImplemented
 
 
 class ImportType(Enum):
@@ -15,12 +14,13 @@ class ImportType(Enum):
 
     SQLALCHEMY_TABLE = auto()
     OGR_TABLE = auto()
+    ESRI_REST_TABLE = auto()
     POINT_CLOUD = auto()
     RASTER = auto()
 
     @property
     def import_cmd(self):
-        if self in (self.SQLALCHEMY_TABLE, self.OGR_TABLE):
+        if self in (self.SQLALCHEMY_TABLE, self.OGR_TABLE, self.ESRI_REST_TABLE):
             from kart.tabular.import_ import table_import
 
             return table_import
@@ -39,6 +39,11 @@ class ImportType(Enum):
             from kart.tabular import SqlAlchemyTableImportSource
 
             return SqlAlchemyTableImportSource
+
+        elif self is self.ESRI_REST_TABLE:
+            from kart.tabular import ESRIRestImportSource
+
+            return ESRIRestImportSource
         elif self is self.OGR_TABLE:
             from kart.tabular import OgrTableImportSource
 
@@ -59,7 +64,6 @@ class ImportSourceType:
         *,
         uri_scheme=None,
         file_ext=None,
-        optional_prefix=None,
         hidden=False,
     ):
         self.name = name
@@ -73,7 +77,6 @@ class ImportSourceType:
             self.file_ext = (file_ext,)
         elif isinstance(file_ext, tuple):
             self.file_ext = file_ext
-        self.optional_prefix = optional_prefix
         self.hidden = hidden
 
     @property
@@ -92,7 +95,6 @@ ALL_IMPORT_SOURCE_TYPES = [
         "PATH.gpkg",
         ImportType.SQLALCHEMY_TABLE,
         file_ext=".gpkg",
-        optional_prefix="GPKG:",
     ),
     ImportSourceType(
         "PostgreSQL",
@@ -126,6 +128,12 @@ ALL_IMPORT_SOURCE_TYPES = [
         file_ext=".parquet",
     ),
     ImportSourceType(
+        "ESRI Rest Service",
+        "[esri:]https://HOST/PATH/FeatureServer[/LAYER_ID]",
+        ImportType.ESRI_REST_TABLE,
+        uri_scheme="esri",
+    ),
+    ImportSourceType(
         "OGR", "OGR:...", ImportType.OGR_TABLE, uri_scheme="OGR", hidden=True
     ),
     # Point cloud imports:
@@ -143,6 +151,12 @@ ALL_IMPORT_SOURCE_TYPES = [
         file_ext=(".tif", ".tiff"),
     ),
 ]
+
+# An Esri ArcGIS REST service or layer URL - eg https://HOST/PATH/MapServer or https://HOST/PATH/FeatureServer/0
+# Only matched at the end of the URL path, so that other URLs containing these words aren't caught.
+ESRI_REST_URL_PATTERN = re.compile(
+    r"^https?://[^?#]*/(MapServer|FeatureServer)(/\d+(/query)?)?/?([?#].*)?$", re.I
+)
 
 URI_SCHEME_TO_IMPORT_SOURCE_TYPE = {
     t.uri_scheme: t for t in ALL_IMPORT_SOURCE_TYPES if t.uri_scheme
@@ -168,6 +182,9 @@ def from_spec(spec, allow_unrecognised=False):
     result = URI_SCHEME_TO_IMPORT_SOURCE_TYPE.get(parts[0])
     if result:
         return result
+
+    if ESRI_REST_URL_PATTERN.match(spec):
+        return URI_SCHEME_TO_IMPORT_SOURCE_TYPE["esri"]
 
     ext = os.path.splitext(spec)[1]
     result = FILE_EXT_TO_IMPORT_SOURCE_TYPE.get(ext.lower())
@@ -206,7 +223,7 @@ def suggest_specs(suggestions=None, import_types=None, indent="    "):
 
 
 def bad_spec_error(spec, suggestions=None):
-    """If the user provided a bad format specification, returns a UsageError that tries to help them fix it."""
+    """If the user provided a bad format specification, returns a ImportSourceError that tries to help them fix it."""
     if suggestions is None:
         suggestion = from_spec(spec, allow_unrecognised=True)
         suggestions = (
@@ -216,9 +233,9 @@ def bad_spec_error(spec, suggestions=None):
     try_the_following = (
         "Try one of the following" if len(suggestions) >= 2 else "Try the following"
     )
-    return click.UsageError(
+    return ImportSourceError(
         f"Unrecognised import-source specification: {spec}\n"
-        f"{try_the_following}:\n{suggest_specs(suggestions)}"
+        f"{try_the_following}:\n{suggest_specs(suggestions)}",
     )
 
 

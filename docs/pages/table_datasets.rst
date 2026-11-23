@@ -24,6 +24,7 @@ Data can be imported from any of the following types of databases:
 - `Microsoft SQL Server <sql_server_>`_
 - `MySQL <mysql_>`_
 - `Shapefiles <shapefiles_>`_
+- `ESRI ArcGIS REST Services <esri_rest_>`_ (MapServer/FeatureServer)
 
 For more information, see :ref:`Import vectors / tables into an existing repository`.
 
