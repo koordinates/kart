@@ -1,10 +1,10 @@
 import json
-import os
 import pytest
 import subprocess
 import pathlib
 
 import kart
+from kart.repo import KartRepo
 
 EXPECTED_TITLE = """NZ Pa Points (Topo, 1:50k)"""
 
@@ -256,10 +256,9 @@ def test_commit_files(data_archive, cli_runner):
         assert r.exit_code == 44, r.stderr
 
 
+@pytest.mark.usefixtures("enable_attachments")
 def test_commit_files_add_and_delete(data_working_copy, cli_runner):
     with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
-        # Set the environment variable
-        os.environ["X_KART_ATTACHMENTS"] = "true"
         # Define file path
         file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
 
@@ -299,6 +298,454 @@ def test_commit_files_add_and_delete(data_working_copy, cli_runner):
 
         # Check that the file does not exist now
         assert not file_path.exists()
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_checkout_roundtrip(data_working_copy, cli_runner):
+    # Checking out a commit writes its attachments to the workdir; checking out a commit without
+    # them removes them again - even though no datasets changed between the two commits.
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
+        assert not file_path.exists()
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+        # The previous commit has no attachment - checking it out removes the file.
+        r = cli_runner.invoke(["checkout", "HEAD^"])
+        assert r.exit_code == 0, r.stderr
+        assert not file_path.exists()
+
+        # Checking out the commit with the attachment again restores it.
+        r = cli_runner.invoke(["checkout", "main"])
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_create_workingcopy(data_working_copy, cli_runner):
+    # Creating a working copy from scratch checks out attachments (base tree is the empty tree).
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+        # Remove the file then recreate the working copy from scratch - it should be checked out again.
+        # (--discard-changes since removing the file makes the working copy dirty.)
+        file_path.unlink()
+        r = cli_runner.invoke(
+            ["create-workingcopy", "--delete-existing", "--discard-changes"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_delete_workingcopy(data_working_copy, cli_runner):
+    # Deleting the file-system working copy cleans up checked-out attachment files.
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        file_path = pathlib.Path(repo_dir) / "my_attachment.txt"
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert file_path.exists()
+
+        repo = KartRepo(repo_dir)
+        repo.working_copy.workdir.delete()
+        assert not file_path.exists()
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_workingcopy_diff_status_commit(data_working_copy, cli_runner):
+    # Editing/adding/deleting attachments in the workdir shows up in diff and status, and can be committed.
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+
+        # Start with a committed attachment.
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Clean to start with.
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        # Edit the attachment, add a new one, in the filesystem.
+        (repo_dir / "my_attachment.txt").write_text("goodbye")
+        (repo_dir / "new_attachment.txt").write_text("brand new")
+
+        # status reports the file changes.
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+
+        # diff reports the file changes.
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert "my_attachment.txt" in r.stdout
+        assert "new_attachment.txt" in r.stdout
+
+        # diff --diff-files shows the actual (uncommitted) contents.
+        r = cli_runner.invoke(["diff", "--diff-files"])
+        assert r.exit_code == 0, r.stderr
+        assert "goodbye" in r.stdout
+        assert "brand new" in r.stdout
+
+        # Commit the changes - the JSON change summary reports files directly under <files>, with no
+        # redundant inner "file:" layer.
+        r = cli_runner.invoke(["commit", "-m", "Edit attachments", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        changes = json.loads(r.stdout)["kart.commit/v1"]["changes"]
+        assert changes == {"<files>": {"inserts": 1, "updates": 1}}
+
+        # Working copy is clean again, and the changes are committed.
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        assert (
+            subprocess.check_output(
+                ["git", "show", "HEAD:my_attachment.txt"],
+                cwd=repo_dir,
+                encoding="utf-8",
+            )
+            == "goodbye"
+        )
+        assert (
+            subprocess.check_output(
+                ["git", "show", "HEAD:new_attachment.txt"],
+                cwd=repo_dir,
+                encoding="utf-8",
+            )
+            == "brand new"
+        )
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_workingcopy_delete_and_commit(data_working_copy, cli_runner):
+    # Deleting a checked-out attachment from the filesystem is detected and can be committed.
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Delete the attachment from the filesystem.
+        (repo_dir / "my_attachment.txt").unlink()
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        # Files are reported directly under <files>, with no redundant "file:" sub-layer.
+        assert r.stdout.splitlines()[-2:] == ["  <files>:", "    1 deletes"]
+
+        r = cli_runner.invoke(["status", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        changes = json.loads(r.stdout)["kart.status/v2"]["workingCopy"]["changes"]
+        assert changes == {"<files>": {"deletes": 1}}
+
+        r = cli_runner.invoke(["commit", "-m", "Delete attachment"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        # The file is no longer in the tree.
+        r = subprocess.run(
+            ["git", "show", "HEAD:my_attachment.txt"],
+            cwd=repo_dir,
+            capture_output=True,
+        )
+        assert r.returncode != 0
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_checkout_aborts_when_dirty(data_working_copy, cli_runner):
+    # A checkout that would lose uncommitted attachment changes must abort (unless --discard-changes).
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        file_path = repo_dir / "my_attachment.txt"
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Edit the attachment in the workdir (now dirty).
+        file_path.write_text("dirty edit")
+
+        # Switching to the previous commit without --discard-changes must abort, leaving the edit intact.
+        r = cli_runner.invoke(["checkout", "HEAD^"])
+        assert r.exit_code != 0
+        assert "uncommitted changes" in r.stderr.lower()
+        assert file_path.read_text() == "dirty edit"
+
+        # With --discard-changes the checkout proceeds, and the attachment (absent at HEAD^) is removed.
+        r = cli_runner.invoke(["checkout", "HEAD^", "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+        assert not file_path.exists()
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_discard_changes_restores_committed_state(
+    data_working_copy, cli_runner
+):
+    # `reset --discard-changes` on the same commit restores attachments to their committed state.
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        committed = repo_dir / "my_attachment.txt"
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "Add attachment", "my_attachment.txt=hello"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Make a mess in the workdir: edit a committed attachment, delete it... and add an untracked one.
+        committed.write_text("dirty edit")
+        untracked = repo_dir / "untracked.txt"
+        untracked.write_text("should be discarded")
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+
+        # Discard all changes (same commit).
+        r = cli_runner.invoke(["reset", "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+
+        # The committed attachment is restored, the untracked one is removed, and the WC is clean.
+        assert committed.read_text() == "hello"
+        assert not untracked.exists()
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_filters_diff_and_commit(data_working_copy, cli_runner):
+    # Attachment filters select which attachments a diff shows and a commit records, including by folder.
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "Add attachments",
+                "top.txt=one",
+                "docs/inner.txt=two",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Edit both attachments in the workdir.
+        (repo_dir / "top.txt").write_text("one-edited")
+        (repo_dir / "docs" / "inner.txt").write_text("two-edited")
+
+        # A folder filter shows only the attachment inside that folder.
+        r = cli_runner.invoke(["diff", "docs"])
+        assert r.exit_code == 0, r.stderr
+        assert "docs/inner.txt" in r.stdout
+        assert "top.txt" not in r.stdout
+
+        # A filename filter shows only that attachment.
+        r = cli_runner.invoke(["diff", "top.txt"])
+        assert r.exit_code == 0, r.stderr
+        assert "top.txt" in r.stdout
+        assert "docs/inner.txt" not in r.stdout
+
+        # Committing with a folder filter records only that attachment; the other stays dirty.
+        r = cli_runner.invoke(["commit", "-m", "Commit docs only", "docs"])
+        assert r.exit_code == 0, r.stderr
+
+        assert (
+            subprocess.check_output(
+                ["git", "show", "HEAD:docs/inner.txt"], cwd=repo_dir, encoding="utf-8"
+            )
+            == "two-edited"
+        )
+        # top.txt was not committed - still the original content in the tree...
+        assert (
+            subprocess.check_output(
+                ["git", "show", "HEAD:top.txt"], cwd=repo_dir, encoding="utf-8"
+            )
+            == "one"
+        )
+        # ... and still dirty in the working copy.
+        r = cli_runner.invoke(["diff", "top.txt"])
+        assert r.exit_code == 0, r.stderr
+        assert "top.txt" in r.stdout
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_in_vector_repo(data_working_copy, cli_runner):
+    # A vector (GPKG) repo has no tile datasets, but the file-system workdir is now created proactively, so
+    # attachments still work - and the GPKG working-copy file itself isn't mistaken for an attachment.
+    with data_working_copy("points") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        file_path = repo_dir / "README.md"
+
+        # Sanity check: a fresh vector working copy is clean (despite now having a workdir + GPKG in the dir).
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        # Committing an attachment checks it out, even though there are no tile datasets.
+        r = cli_runner.invoke(["commit-files", "-m", "Add readme", "README.md=hello"])
+        assert r.exit_code == 0, r.stderr
+        assert file_path.read_text() == "hello"
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+        # Editing the attachment is detected.
+        file_path.write_text("goodbye")
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert "README.md" in r.stdout
+
+
+def test_attachments_disabled_by_default(data_archive, cli_runner):
+    # Attachment support is off unless turned on: no file-system workdir is created for a vector repo, and
+    # files lying around in the repo directory are not reported as attachment changes. (This keeps existing
+    # repos - which may have such files - behaving as they always have.)
+    with data_archive("points") as repo_path:
+        repo_path = pathlib.Path(repo_path)
+        repo = KartRepo(repo_path)
+        assert not repo.workdir_supports_attachments
+
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+
+        # No file-system workdir was created (the repo has no tile datasets).
+        assert repo.working_copy.workdir is None
+
+        # A stray file in the repo directory is not reported as an attachment change.
+        (repo_path / "README.md").write_text("hello")
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+
+def test_attachments_not_tracked_in_tile_repo_by_default(data_working_copy, cli_runner):
+    # A tile repo already has a file-system workdir - but unless attachments are turned on, stray files in it
+    # still aren't reported as changes.
+    with data_working_copy("point-cloud/auckland") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        (repo_dir / "notes.txt").write_text("my own notes")
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+
+@pytest.mark.parametrize(
+    "env_value,config_value,expected",
+    [
+        (None, None, False),
+        ("1", None, True),
+        ("true", None, True),
+        (None, "true", True),
+        (None, "false", False),
+        ("0", "true", False),  # The env var wins over the config.
+        ("1", "false", True),
+        ("", None, False),
+    ],
+)
+def test_attachments_enabled_by_env_or_config(
+    data_archive, monkeypatch, env_value, config_value, expected
+):
+    if env_value is None:
+        monkeypatch.delenv("X_KART_ATTACHMENTS", raising=False)
+    else:
+        monkeypatch.setenv("X_KART_ATTACHMENTS", env_value)
+    with data_archive("points") as repo_path:
+        repo = KartRepo(repo_path)
+        if config_value is not None:
+            repo.config["kart.workingcopy.attachments"] = config_value
+        assert repo.workdir_supports_attachments == expected
+
+
+def test_attachments_enabled_by_config(data_archive, cli_runner, monkeypatch):
+    # `git config kart.workingcopy.attachments true` turns attachments on for that repo (no env var needed).
+    monkeypatch.delenv("X_KART_ATTACHMENTS", raising=False)
+    with data_archive("points") as repo_path:
+        repo_path = pathlib.Path(repo_path)
+        repo = KartRepo(repo_path)
+        repo.config["kart.workingcopy.attachments"] = "true"
+
+        r = cli_runner.invoke(["create-workingcopy", "--delete-existing"])
+        assert r.exit_code == 0, r.stderr
+        assert repo.working_copy.workdir is not None
+
+        (repo_path / "README.md").write_text("hello")
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "<files>" in r.stdout
+
+
+def test_attachments_enabled_in_existing_vector_repo(
+    data_working_copy, cli_runner, monkeypatch
+):
+    # Turning attachments on in a repo that already has a working copy but no file-system workdir (ie a
+    # vector-only repo) takes effect at the next working-copy update - no need to recreate the working copy.
+    monkeypatch.delenv("X_KART_ATTACHMENTS", raising=False)
+    with data_working_copy("points") as (repo_dir, wc):
+        repo_dir = pathlib.Path(repo_dir)
+        assert KartRepo(repo_dir).working_copy.workdir is None
+
+        KartRepo(repo_dir).config["kart.workingcopy.attachments"] = "true"
+        r = cli_runner.invoke(["commit-files", "-m", "Add readme", "README.md=hello"])
+        assert r.exit_code == 0, r.stderr
+
+        assert KartRepo(repo_dir).working_copy.workdir is not None
+        assert (repo_dir / "README.md").read_text() == "hello"
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to commit, working copy clean" in r.stdout
+
+
+@pytest.mark.usefixtures("enable_attachments")
+def test_attachment_after_vector_import(data_archive, tmp_path, cli_runner, chdir):
+    # A vector import creates the file-system workdir too (not just the tabular part), so attachments work
+    # straight after the repo's first import - no tile dataset or extra create-workingcopy needed.
+    repo_path = tmp_path / "myproj"
+    r = cli_runner.invoke(["init", str(repo_path)])
+    assert r.exit_code == 0, r.stderr
+
+    with data_archive("gpkg-points") as data:
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    f"GPKG:{data / 'nz-pa-points-topo-150k.gpkg'}",
+                    "nz_pa_points_topo_150k",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            repo = KartRepo(repo_path)
+            assert repo.working_copy.workdir is not None
+
+            r = cli_runner.invoke(
+                ["commit-files", "-m", "Add readme", "README.md=hello"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert (repo_path / "README.md").read_text() == "hello"
 
 
 def test_commit_files_remove_empty(data_archive, cli_runner):
