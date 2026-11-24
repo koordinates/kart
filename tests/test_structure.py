@@ -14,7 +14,12 @@ from memory_repo import MemoryRepo
 
 from kart import init, fast_import
 from kart.tabular.v3 import TableV3
-from kart.tabular.v3_paths import IntPathEncoder, MsgpackHashPathEncoder
+from kart.tabular.v3_paths import (
+    IntPathEncoder,
+    MsgpackHashPathEncoder,
+    PathEncoder,
+    validate_path_structure_overrides,
+)
 from kart.exceptions import (
     WORKING_COPY_OR_IMPORT_CONFLICT,
     NO_CHANGES,
@@ -919,6 +924,133 @@ def test_pk_encoder_int_pk():
     assert (
         ds.encode_1pk_to_path(-(64**5))
         == "mytable/.table-dataset/feature/A/A/A/A/kdLAAAAA"
+    )
+
+
+TEXT_PK_SCHEMA = Schema([{"name": "mypk", "dataType": "text", "id": "abc123"}])
+
+INT_PK_SCHEMA = Schema(
+    [
+        {
+            "name": "mypk",
+            "dataType": "integer",
+            "size": 64,
+            "id": "abc123",
+            "primaryKeyIndex": 0,
+        }
+    ]
+)
+
+
+def test_pk_encoder_overrides_string_pk():
+    ds = TableV3.new_dataset_for_writing(
+        "mytable",
+        TEXT_PK_SCHEMA,
+        MemoryRepo(),
+        {"encoding": "hex", "levels": 1, "branches": 256},
+    )
+    e = ds.feature_path_encoder
+    assert isinstance(e, MsgpackHashPathEncoder)
+    assert e.encoding == "hex"
+    assert e.levels == 1
+    assert e.branches == 256
+    assert e.to_dict() == {
+        "scheme": "msgpack/hash",
+        "encoding": "hex",
+        "levels": 1,
+        "branches": 256,
+    }
+    # The same structure is recreated when the path-structure meta item is read back.
+    assert PathEncoder.get(**e.to_dict()) == e
+
+    assert ds.encode_1pk_to_path("") == "mytable/.table-dataset/feature/23/kaA="
+    assert ds.encode_1pk_to_path("Dave") == "mytable/.table-dataset/feature/b2/kaREYXZl"
+
+
+def test_pk_encoder_overrides_int_pk():
+    ds = TableV3.new_dataset_for_writing(
+        "mytable", INT_PK_SCHEMA, MemoryRepo(), {"encoding": "hex", "branches": 256}
+    )
+    e = ds.feature_path_encoder
+    # The scheme is still chosen based on the PK type - only the other parameters are overridden.
+    assert isinstance(e, IntPathEncoder)
+    assert e.encoding == "hex"
+    assert e.branches == 256
+    assert e.levels == 4
+
+    assert ds.encode_1pk_to_path(0) == "mytable/.table-dataset/feature/00/00/00/00/kQA="
+    assert ds.encode_1pk_to_path(1) == "mytable/.table-dataset/feature/00/00/00/00/kQE="
+    # 256 features per tree, so PK 256 is the first feature in the second tree.
+    assert ds.encode_1pk_to_path(256) == (
+        "mytable/.table-dataset/feature/00/00/00/01/kc0BAA=="
+    )
+
+
+def test_pk_encoder_partial_overrides():
+    """Parameters that aren't overridden keep their default values."""
+    ds = TableV3.new_dataset_for_writing(
+        "mytable", TEXT_PK_SCHEMA, MemoryRepo(), {"levels": 2}
+    )
+    e = ds.feature_path_encoder
+    assert e.encoding == "base64"
+    assert e.branches == 64
+    assert e.levels == 2
+    assert (
+        ds.encode_1pk_to_path("Dave") == "mytable/.table-dataset/feature/s/v/kaREYXZl"
+    )
+
+
+@pytest.mark.parametrize("overrides", [None, {}, {"levels": None}])
+def test_pk_encoder_no_overrides(overrides):
+    ds = TableV3.new_dataset_for_writing(
+        "mytable", TEXT_PK_SCHEMA, MemoryRepo(), overrides
+    )
+    assert ds.feature_path_encoder is PathEncoder.GENERAL_ENCODER
+
+
+@pytest.mark.parametrize(
+    "overrides,message",
+    [
+        ({"branches": 256}, "must be one of: 64, 4096"),
+        ({"encoding": "hex", "branches": 64}, "must be one of: 16, 256, 4096"),
+        # The default branch-count of 64 isn't a power of 16, so hex needs a branch-count.
+        (
+            {"encoding": "hex"},
+            "hex path encoding requires --path-branches to be specified",
+        ),
+        (
+            {"encoding": "hex", "levels": 1},
+            "hex path encoding requires --path-branches to be specified",
+        ),
+        ({"branches": 0}, "must be one of: 64, 4096"),
+        ({"levels": 0}, "must be at least 1"),
+        ({"levels": 99}, "must be at most 8"),
+        ({"encoding": "nope"}, "must be one of: hex, base64"),
+    ],
+)
+def test_validate_path_structure_overrides_invalid(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        validate_path_structure_overrides(**overrides)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"encoding": "hex", "levels": 1, "branches": 256},
+        {"encoding": "hex", "levels": 2, "branches": 16},
+        {"levels": 1, "branches": 4096},
+        {"levels": 3},
+    ],
+)
+def test_validate_path_structure_overrides_valid(overrides):
+    assert validate_path_structure_overrides(**overrides) == overrides
+
+
+def test_validate_path_structure_overrides_empty():
+    assert validate_path_structure_overrides() is None
+    assert (
+        validate_path_structure_overrides(encoding=None, levels=None, branches=None)
+        is None
     )
 
 

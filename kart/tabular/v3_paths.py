@@ -39,9 +39,33 @@ def _calculate_group_length(encoding, base, branches):
     group_length = int(math.log(max(branches, 1)) / math.log(max(base, 1)))
     if base**group_length != branches:
         raise ValueError(
-            f"Invalid path specification: {encoding} encoding and {branches} branches are incompatible"
+            f"Invalid path specification: {encoding} encoding and {branches} branches are incompatible - "
+            f"branches must be a power of {base}, eg: {valid_branch_counts_str(encoding)}"
         )
     return group_length
+
+
+def valid_branch_counts(encoding, max_count=4096):
+    """Yields the branch-counts that are compatible with the given encoding, in increasing order."""
+    base = len(alphabet_for_encoding(encoding))
+    branches = base
+    while branches <= max_count:
+        yield branches
+        branches *= base
+
+
+def valid_branch_counts_str(encoding):
+    return ", ".join(str(b) for b in valid_branch_counts(encoding))
+
+
+def alphabet_for_encoding(encoding):
+    if encoding == "hex":
+        return _LOWERCASE_HEX_ALPHABET
+    elif encoding == "base64":
+        return _BASE64_URLSAFE_ALPHABET
+    raise NotYetImplemented(
+        f"Sorry, this repo uses {encoding!r} path encoding, which isn't supported by this version of Kart"
+    )
 
 
 class FixedLengthIntEncoder:
@@ -128,21 +152,39 @@ class PathEncoder:
                 f"Sorry, this repo uses {scheme!r} feature path scheme, which isn't supported by this version of Kart"
             )
 
+    def with_overrides(self, overrides):
+        """
+        Returns a PathEncoder that is the same as this one, except for the given overrides.
+        overrides is a dict which may contain any of "encoding", "levels" and "branches" -
+        entries that are missing or None are left as they are in this encoder.
+        The scheme is never overridden, since it is determined by the type of the primary key.
+        Returns self if there is nothing to override.
+        """
+        if not overrides:
+            return self
+        params = self.to_dict()
+        changes = {
+            k: v
+            for k, v in overrides.items()
+            if k in ("encoding", "levels", "branches") and v is not None
+        }
+        if not changes or all(params[k] == v for k, v in changes.items()):
+            return self
+        params.update(changes)
+        return PathEncoder.get(**params)
+
     def __init__(self, *, scheme: str, levels: int, branches: int, encoding: str):
         self.scheme = scheme
         self.levels = levels
         self.branches = branches
         self.encoding = encoding
 
-        if encoding == "hex":
-            self.alphabet = _LOWERCASE_HEX_ALPHABET
-            self._hash = hexhash
-        elif encoding == "base64":
-            self.alphabet = _BASE64_URLSAFE_ALPHABET
-            self._hash = b64hash
-        else:
-            raise NotYetImplemented(
-                f"Sorry, this repo uses {encoding!r} path encoding, which isn't supported by this version of Kart"
+        self.alphabet = alphabet_for_encoding(encoding)
+        self._hash = hexhash if encoding == "hex" else b64hash
+
+        if not isinstance(levels, int) or levels < 1:
+            raise ValueError(
+                f"Invalid path specification: {levels} levels - levels must be a positive integer"
             )
 
         base = len(self.alphabet)
@@ -175,6 +217,15 @@ class PathEncoder:
         """Yields all possible tree names according to this encoding + branch-factor."""
         for i in range(self.branches):
             yield self._single_tree_int_encoder.encode_int(i)
+
+    def __eq__(self, other):
+        return isinstance(other, PathEncoder) and self.to_dict() == other.to_dict()
+
+    def __hash__(self):
+        return hash(tuple(sorted(self.to_dict().items())))
+
+    def __repr__(self):
+        return f"<{type(self).__name__}: {self.encoding} {self.levels}x{self.branches}>"
 
     def _nonrecursive_diff(self, tree_a, tree_b):
         """
@@ -462,13 +513,23 @@ class IntPathEncoder(PathEncoder):
             best_last_seen = last_seen
 
         if best_last_seen is None:
-            return 0
+            # Every possible tree is already occupied, which means the PK range has wrapped
+            # around (or is exactly full) - so the gaps between trees tell us nothing about
+            # where the largest PK is. This can happen for a dataset with more than
+            # branches ** (levels + 1) features. Fall back to finding the largest PK the
+            # slow-but-certain way - if we guessed wrong here, we would hand out PKs that
+            # are already in use.
+            return self._find_max_pk_by_scanning(dataset) + 1
 
         current_tree = feature_tree[best_last_seen]
 
+        # Tree names are self.group_length characters long - not necessarily a single character -
+        # so we search through all the possible tree names, not through the alphabet.
+        reversed_tree_names = list(self.tree_names())[::-1]
+
         while any(current_tree) and next(iter(current_tree)).type_str == "tree":
             max_child = next(
-                current_tree[c] for c in reversed(self.alphabet) if c in current_tree
+                current_tree[t] for t in reversed_tree_names if t in current_tree
             )
             current_tree = max_child
 
@@ -477,6 +538,22 @@ class IntPathEncoder(PathEncoder):
 
         max_pk = max(dataset.decode_path_to_1pk(c.name) for c in current_tree)
         return max_pk + 1
+
+    def _find_max_pk_by_scanning(self, dataset):
+        """
+        Returns the largest PK in the given dataset by looking at every feature path,
+        or -1 if it has no features. Only used as a fallback when the structure of the
+        feature tree doesn't tell us where the largest PK is.
+        """
+        L.debug(
+            "All %d trees are occupied in %s - scanning all features to find the largest PK",
+            self.branches,
+            dataset.path,
+        )
+        max_pk = -1
+        for blob in dataset.feature_blobs():
+            max_pk = max(max_pk, dataset.decode_path_to_1pk(blob.name))
+        return max_pk
 
 
 # The encoder that was previously used for all datasets.
@@ -493,3 +570,70 @@ PathEncoder.INT_PK_ENCODER = PathEncoder.get(
 PathEncoder.GENERAL_ENCODER = PathEncoder.get(
     scheme="msgpack/hash", branches=64, levels=4, encoding="base64"
 )
+
+# The encoders that a dataset can end up with if the user doesn't specify a path-structure.
+_DEFAULT_ENCODERS = (PathEncoder.INT_PK_ENCODER, PathEncoder.GENERAL_ENCODER)
+
+# The encodings / branch-counts that a dataset can end up with if the user doesn't specify one.
+DEFAULT_ENCODINGS = frozenset(e.encoding for e in _DEFAULT_ENCODERS)
+DEFAULT_BRANCH_COUNTS = frozenset(e.branches for e in _DEFAULT_ENCODERS)
+
+MAX_LEVELS = 8
+
+
+def validate_path_structure_overrides(*, encoding=None, levels=None, branches=None):
+    """
+    Given the path-structure parameters the user has asked for - any or all of which may be None,
+    meaning "use the default" - returns them as a dict of overrides suitable for
+    PathEncoder.with_overrides, or None if the user didn't ask for anything.
+    Raises ValueError with a user-facing message if the given parameters can't be used.
+    """
+    overrides = {
+        k: v
+        for k, v in (
+            ("encoding", encoding),
+            ("levels", levels),
+            ("branches", branches),
+        )
+        if v is not None
+    }
+    if not overrides:
+        return None
+
+    if encoding is not None and encoding not in ("hex", "base64"):
+        raise ValueError(
+            f"Invalid path encoding {encoding!r} - must be one of: hex, base64"
+        )
+
+    if levels is not None and levels < 1:
+        raise ValueError(f"Invalid number of path levels {levels} - must be at least 1")
+    if levels is not None and levels > MAX_LEVELS:
+        raise ValueError(
+            f"Invalid number of path levels {levels} - must be at most {MAX_LEVELS}"
+        )
+
+    # The encoding and the branch-count have to be compatible with each other. Either of them
+    # may be unspecified, in which case it keeps whichever value the default encoder for this
+    # dataset turns out to have - so an unspecified value has to work with all of the defaults.
+    encodings = [encoding] if encoding is not None else sorted(DEFAULT_ENCODINGS)
+    branch_counts = (
+        [branches] if branches is not None else sorted(DEFAULT_BRANCH_COUNTS)
+    )
+    for e in encodings:
+        valid = set(valid_branch_counts(e))
+        for b in branch_counts:
+            if b in valid:
+                continue
+            if branches is not None:
+                raise ValueError(
+                    f"Invalid number of path branches {b} for {e} path encoding - "
+                    f"must be one of: {valid_branch_counts_str(e)}"
+                )
+            # The user asked for an encoding that the default branch-count doesn't work with,
+            # so they need to supply a branch-count too.
+            raise ValueError(
+                f"{e} path encoding requires --path-branches to be specified as well - "
+                f"must be one of: {valid_branch_counts_str(e)}"
+            )
+
+    return overrides
